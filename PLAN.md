@@ -2,6 +2,7 @@
 
 > `me`（`taiwan-stock-analyzer-v3`）的升級版。**完全獨立的專案**，暫訂本地跑。
 > 定案日 2026-09-07。這份是計劃，還沒開工。
+> `me` 原始碼現在在 `d:\g\claudeooks\claude\me	aiwan-stock-analyzer-v3\`（2026-09-07 整理）。
 
 ---
 
@@ -59,7 +60,7 @@
 ### 2C. AI 敘事層（選配，後期）
 
 - 「複製給 AI」：把數據 + 因子整理成文字 → 貼給 GPT/Gemini/DeepSeek 問產業趨勢、
-  買入價、要不要投入。或整合 DeepSeek API（參考 `me/ai/analyzer.py`）。
+  買入價、要不要投入。或整合 DeepSeek API（參考 `books/claude/me/taiwan-stock-analyzer-v3/ai/analyzer.py`）。
 - 只傳整理過的數據，不傳原始母表。
 
 ---
@@ -70,7 +71,7 @@
 | :--- | :--- | :--- |
 | **財報三表 + 股利政策** | FinMind（`TaiwanStockFinancialStatements` / `BalanceSheet` / `CashFlowsStatement` / `Dividend`） | 移植 tw-swing 的 `fetch_fundamentals.py`（週限速抓、邊抓邊整併 pivot、checkpoint、市值前 500） |
 | **PER / PBR / 殖利率** | FinMind `TaiwanStockPER` | 逐日；「vs 自身歷史區間」要用 |
-| **日線股價** | FinMind `TaiwanStockPrice` + **還原** | 移植 `me/data/price_adjuster.py`（除權息/減資/面額變更的價格斷層） |
+| **日線股價** | FinMind `TaiwanStockPrice` + **還原** | 移植 `books/claude/me/taiwan-stock-analyzer-v3/data/price_adjuster.py`（除權息/減資/面額變更的價格斷層） |
 | **月營收** | FinMind `TaiwanStockMonthRevenue` | 營收動能因子、長波段基本面順風 |
 | **即時個股補抓** | 查詢不在 500 大時觸發 | 抓完存本地快取，設過期時間 |
 | **FinMind 額度** | token 走環境變數 `FINMIND_TOKEN` | me2 自己的節流器，**上限守 500/hr**。⚠️ 跟 tw-swing 的 Y 系 fetch 共用同一帳號額度——排程錯開，或 me2 撞到就等 |
@@ -82,7 +83,7 @@
 
 ---
 
-## 4. 個股圖表清單（§2B；參考 `me/ui/waterfall_charts.py`，升級為互動圖）
+## 4. 個股圖表清單（§2B；參考 `books/claude/me/taiwan-stock-analyzer-v3/ui/waterfall_charts.py`，升級為互動圖）
 
 | 類別 | 圖 |
 | :--- | :--- |
@@ -274,8 +275,8 @@ g = clip( 綜合成長率, -0.10, +0.30 )
 **複製到 me2 當參考**（tw-swing 保留原件）：
 - `src/twswing/data/finmind.py`（FinMind client + 節流器）
 - `src/twswing/indicators/`（`core` `ma_rules` `pivots` `trendlines` → 長波段 screener）
-- `me/data/price_adjuster.py`（還原股價）
-- `me/data/fetcher.py`（即時個股補抓）
+- `books/claude/me/taiwan-stock-analyzer-v3/data/price_adjuster.py`（還原股價）
+- `books/claude/me/taiwan-stock-analyzer-v3/data/fetcher.py`（即時個股補抓）
 
 **tw-swing STATUS 要改**：
 - 〈tw-swing 當 me2 的上游〉整節作廢 → 改成「價值/定存已遷 me2，tw-swing 純短線/短波段」
