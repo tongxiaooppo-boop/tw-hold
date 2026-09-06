@@ -73,7 +73,7 @@
 | 資料 | 誰負責 | 說明 |
 | :--- | :--- | :--- |
 | 財報三表 + 股利政策（整併 parquet） | tw-swing | tw-hold 讀 `tw-swing/data/fundamentals/{income,balance,cashflow,dividend}.parquet` |
-| PER / PBR / 殖利率 | tw-swing（`fetch_finmind.py` 的 `per`） | tw-hold 讀 `tw-swing/data/finmind/per/`；估值「vs 自身歷史區間」要用（要不要請 tw-swing 整併成一張表，M1 再看） |
+| PER / PBR / 殖利率 | tw-swing（`fetch_finmind.py` 的 `per`） | tw-hold 讀 `tw-swing/data/finmind/per/`；估值「vs 自身歷史區間」要用（要不要請 tw-swing 整併成一張表，M2 前決定） |
 | 日線股價（前 500，已還原） | tw-swing（`data/store/`） | tw-hold 讀 |
 | 月營收 | tw-swing | `import twswing.data.fundamentals` |
 | panel 組裝 | `twswing.value.loader` | `import` |
@@ -218,17 +218,35 @@ g = clip( 0.5×(近4季營收YoY) + 0.5×(近8季EPS年化成長率),  -0.10,  +
 
 ---
 
-## 9. 分期
+## 9. 分期 · **v1 目標：一個月內（使用者 2026-09-07）**
 
-| 階段 | 內容 | 產出 |
-| :-- | :--- | :--- |
-| **M0 遷移 + 骨架** | §10：`factors/screen` + `build_value_factors` + `test_value` 搬進 tw-hold；repo 結構；讀 tw-swing parquet；最陽春三清單 | 能跑、看得到價值/定存清單 |
-| **M1 個股查詢** | 代號 → 前 500 讀 / 不在則即時補 → 數據表 + 4 個核心圖 | 個股頁能用 |
-| **M2 圖表完整** | §4 全部 + 本益比河流圖 + F-Score 分項 | 個股頁完整 |
-| **M3 長波段 screener** | §5，第三份清單 | 三清單到齊 |
-| **M4 推薦判定** | §6 買入建議價 + verdict + 篩選 UI | 推薦模式完整 |
-| **M5 AI 敘事層** | 「複製給 AI」or DeepSeek（選配） | |
-| **M6 hosting** | HF Spaces 私有 or 本地（選配） | |
+> **能，但有條件**（見 §9.1）。順序**刻意重排**：先把「三清單 + 買入建議」做完
+> （核心交付），個股查詢頁擺後面——它是加分，真的來不及可以溢出一個月。
+
+| # | 階段 | 內容 | timebox | 產出 |
+| :-: | :-- | :--- | :--: | :--- |
+| **M0** | 遷移 + 骨架 | §10：4 個檔搬進 tw-hold、repo 結構、讀 tw-swing parquet、最陽春價值/定存清單 | 1 session | 能跑、看得到兩清單 |
+| **M1** | 長波段 screener | §5，第三清單。指標運算複製 tw-swing 的 `core`/`ma_rules`/`pivots`/`trendlines`。**純規則預設、不調參** | 2–3 | 三清單到齊 |
+| **M2** | 推薦判定 | §6 選股 rank + forward EPS + 市況 PE + 目標價 + 買入區間 + verdict。**照 §6 寫死，不重議** | 2 | 清單有買入建議價 / 不推薦 |
+| **M3** | 清單 UI + 匯出 | 篩選、排序、「複製給 AI」的文字格式 | 1 | 推薦模式完整 |
+| **M4** | 個股查詢 | 代號 → 前 500 讀 / 不在則即時補 → 數據表 + 核心圖（K線、營收、EPS、三率、股利、**本益比河流圖**、F-Score 分項） | 3 | 個股頁能用 |
+| — | M5 AI 整合 / M6 hosting | **v1 不做**。「複製給 AI」的文字格式在 M3 就夠 | — | 之後有興趣再說 |
+
+**≈ 9–10 個 session。** 使用者一週 3 個 session、不發散 → 3–4 週，一個月內。
+
+### 9.1 一個月內的條件（沒做到就會拖）
+
+1. **這份 PLAN 凍結**，跟 tw-swing 的 pool1 一樣。**不再有架構討論、不再改因子設計、
+   不再改估值公式**——要改記 backlog，v2 再說。
+2. **M5/M6 明確不做**。
+3. **圖表「夠用就好」**：`me` 的圖直接搬成 plotly，不重新設計。只有本益比河流圖值得做好。
+4. **長波段 screener v1 = 規則 + 合理預設，零參數調校**。先出貨，refine 進 v2。
+5. **估值引擎照 §6 逐條實作，不 re-litigate**。§6 的 spec 就是 spec。
+6. **v1 允許粗糙**。這是嗜好決策支援工具不是產品，「會動、清單合理、個股頁能看」就是門檻。
+7. tw-swing 的 11 月關鍵路徑（G-5、10 月分池揭露）**優先**——tw-hold 是 tw-swing 顧好之後的空檔工。
+
+⚠️ 這場對話已經有過 ~4 次架構改判。一個月內做完的**最大變數不是工作量，是發散**。
+PLAN 凍結是那個變數的解藥。
 
 ---
 
@@ -273,6 +291,6 @@ g = clip( 0.5×(近4季營收YoY) + 0.5×(近8季EPS年化成長率),  -0.10,  +
 
 **待定**：
 - repo/目錄改名 `me2` → `tw-hold`：目錄被 IDE 鎖住，關掉編輯器再 `mv me2 tw-hold`。
-- 長波段參數：純規則預設 vs 拿歷史挑一次不尷尬的參數（不是 gate 校準）。→ M3 前。
-- 產業逆風怎麼判（§6.4）：用同產業其他股票的營收/EPS 動能中位數當代理？→ M4 前。
-- PER/PBR/殖利率要不要請 tw-swing 整併成一張表（現在是逐檔）。→ M1 前。
+- 長波段參數：v1 純規則預設（§9.1 條件 4）。要不要拿歷史挑一次 → v2。
+- 產業逆風怎麼判（§6.4）：用同產業其他股票的營收/EPS 動能中位數當代理。→ M2 實作時定。
+- PER/PBR/殖利率要不要請 tw-swing 整併成一張表（現在是逐檔）。→ M2 前（估值要用）。
