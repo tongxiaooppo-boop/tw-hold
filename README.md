@@ -1,6 +1,8 @@
-# me2
+# tw-hold
 
-`me`（`taiwan-stock-analyzer-v3`）的升級版。**完全獨立的專案**，與 tw-swing 無關。
+`me`（`taiwan-stock-analyzer-v3`）的升級版。長波段/價值/定存推薦 + 個股查詢。
+**資料層與 tw-swing 共用**（tw-swing 週抓財報、tw-hold 讀），domain 與 UI 是 tw-hold 自己的。
+建議改名 `tw-hold`（跟 `tw-swing` 成對）。
 
 - 產出：長波段（2–12 週+）/ 價值 / 定存 三種推薦清單
 - 個股查詢：不打分，用數據展開常見圖表；不在市值前 500 大的即時補 FinMind
@@ -22,5 +24,5 @@
 
 ## 跟其他專案的關係
 
-- **tw-swing**：只是「可以參考的程式碼」，**零 runtime 依賴**。tw-swing 改東西不會弄壞 me2。
+- **tw-swing**：上游。tw-hold `import twswing.data.finmind` / `twswing.value.loader` / `twswing.data.fundamentals`（資料層），讀 `tw-swing/data/fundamentals/*.parquet`。domain 邏輯（factors/screen/screener/UI）是 tw-hold native。
 - **me (v3)**：參考程式碼來源，不 import、不執行依賴。
