@@ -303,4 +303,8 @@ g = clip( 綜合成長率, -0.10, +0.30 )
 - **長波段參數**：純規則預設，還是拿歷史挑一次不尷尬的參數（不是 gate 校準）。→ M3 前。
 - **產業逆風怎麼判**（§6.4 的「不推薦（品質）」有這條）：用同產業其他股票的
   營收/EPS 動能中位數當代理？→ M4 前。
-- **repo 名稱**：`me2` 只是暫名。建 GitHub repo 時定（`tw-value`？`stock-advisor`？）。
+- **repo 名稱**：`me2` 是暫名。**建議 `tw-hold`**——跟 `tw-swing` 成對：
+  swing = 進出頻繁的短線；hold = 長波段/價值/定存，全是「抱得住」的東西。
+  名字自帶對照，且不跟 `books/claude/tw-invest-suite-main` 撞。
+  （次選 `tw-invest`，但有上面那個撞名。）目錄改名待使用者關掉 IDE 上的 me2
+  再執行（`mv me2 tw-hold`）。
