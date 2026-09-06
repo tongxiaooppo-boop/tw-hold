@@ -19,7 +19,7 @@
 
 | 是 | 不是 |
 | :--- | :--- |
-| `me` 的下一版，獨立 repo（`d:\g\claude\me2\`），獨立 git、獨立 Actions | tw-swing 的一部分、tw-swing 的下游 |
+| `me` 的下一版，獨立 repo（`d:\g\claude\me2\`），獨立 git，push 到 GitHub | tw-swing 的一部分、tw-swing 的下游 |
 | **自己**抓財報三表 + 股利、**自己**算因子（F-Score / normalized PE / 存股安全分…） | 讀 tw-swing 產的因子表 |
 | **複製**參考程式碼進來：FinMind client、`price_adjuster`、指標運算 | `import twswing.*`（零 runtime 依賴，tw-swing 改東西不會弄壞 me2） |
 | 長波段（2–12 週以上）/ 價值 / 定存 三清單 + 個股查詢 | 短線 / 短波段（那是 tw-swing 的事，維持現狀） |
@@ -114,32 +114,123 @@
 
 ---
 
-## 6. 價值區設計（移植 tw-swing `twswing.value` 的邏輯進 me2）
+## 6. 選股 + 買入建議價 + 推薦判定（投信經理人視角）
 
-- **品質門檻**：Piotroski F-Score ≥ 6（9 分項，全從財報三表；跟去年同期比）
-- **盈餘正常化**：近 5–7 年平均 EPS 算 normalized PE（Shiller CAPE 精神，擋景氣循環頂點假象）
-- **便宜度 rank**：normalized 盈餘殖利率 + FCF 殖利率 + EV/EBIT + PB（分產業）
-- **綜合**：Magic Formula 精神 rank(品質) + rank(便宜)
-- **剔除**：營收連 3 季衰退 / 毛利率 5 年下滑 / FCF 長期負 / 股利連降
+> 使用者 2026-09-07：帶投信經理人的角度。核心是「找相對優秀的股票 + 用市況
+> 調整的 PE 倍數估目標價」。這一節同時是**長波段清單**與**價值清單**的推薦引擎
+> （兩者選股邏輯不同、估值方法共用）。
 
-## 7. 定存區設計（移植 + 參考 5 檔高股息 ETF）
+### 6.1 選股：相對優秀（rank，不是絕對門檻）
+
+投信不看「有沒有到某個絕對標準」，看「**現在這產業／這個池子裡，它算不算相對
+好的**」。用 rank（分位數），不用硬門檻。
+
+| 面向 | 免費資料指標 |
+| :--- | :--- |
+| **營收動能**（台股投信最看重） | 月營收 YoY、YoY 加速度、近 3 月營收 vs 12 月均、創新高與否 |
+| **獲利成長** | 季 EPS YoY、TTM EPS YoY、成長的**穩定度**（連續幾季正成長） |
+| **獲利品質** | ROE、三率（毛利／營益／淨利）走勢向上 |
+| **財務體質** | Piotroski F-Score（≥ 5 才進入 rank，< 5 直接不推薦） |
+| **籌碼**（選配，之後） | 外資 + 投信近 N 日同買 |
+
+- **長波段清單**：上述 rank + §5 的技術時機（趨勢 + 相對強度 + 進場時機）
+- **價值清單**：上述 rank 偏重「品質 + 便宜」，且加 §6.4 的價值陷阱剔除
+
+### 6.2 目標價：forward EPS × 市況調整 PE
+
+```
+目標價 = forward_EPS × target_PE
+```
+
+**forward_EPS**（沒有付費財測 → 保守自估）：
+```
+forward_EPS = TTM_EPS × (1 + g)
+g = clip( 綜合成長率, -0.10, +0.30 )
+綜合成長率 = 0.5 × (近 4 季營收 YoY) + 0.5 × (近 8 季 EPS 年化成長率)
+```
+（上限 +30%：投信不會用超過 30% 的成長率去 justify 估值；下限 −10%：衰退股給折價但不歸零。）
+
+**target_PE**（市況調整，使用者給的錨）：
+
+| 市況（複製 `twswing.data.regime`：MA200 + 60 日報酬 + 回撤） | 基準 target_PE |
+| :--- | :--- |
+| 空頭 `bear` | **15** |
+| 中等 `chop` | **20** |
+| 多頭 `bull` | **22** |
+
+再依個股微調（各 ±20% 為限）：
+- **成長溢價**：g > 20% → ×1.15；g < 5% → ×0.85（PEG 精神）
+- **自身歷史錨**：若基準 target_PE 高於「該股近 5 年 PE 的 80 分位」→ 拉回到 80 分位
+  （不給一支歷史上從沒享受過 20 倍的成熟股 20 倍）
+- **產業**：金融／營建等資產型，改用 PB 估（目標價 = forward_BVPS × target_PB，
+  target_PB 同樣分市況：0.8 / 1.2 / 1.5），不用 PE
+
+### 6.3 買入建議價：目標價打安全邊際，且不追高
+
+```
+估值買價 = 目標價 × (1 − 安全邊際)      安全邊際 = 15%（chop）/ 25%（bear）/ 10%（bull）
+技術買價 = max(季線, 近 20 週前低)       （回檔支撐，不追高）
+買入區間 = [ 技術買價 , min(估值買價, 現價) ]  ——若現價已低於估值買價，區間上緣就是現價
+```
+
+### 6.4 推薦判定（明確、寫死）
+
+| 條件 | verdict |
+| :--- | :--- |
+| F-Score < 5 / 營收連 3 季衰退 / EPS 連 2 季 YoY 負 / 產業逆風 | **不推薦（品質）** |
+| 現價 ≥ 目標價 | **不推薦（已達目標價 / 高估）** |
+| 買入區間上緣 < 現價 < 目標價 | **觀望（合理但無安全邊際）** |
+| 現價 ≤ 買入區間上緣 | **推薦** ＋ 標出買入區間、目標價、預期報酬 |
+| 流動性不足（日均量 < 門檻） | **不推薦（流動性）** |
+
+### 6.5 展示（給人 + 給 AI）
+
+每一檔推薦附：選股 rank 明細（哪幾個因子讓它上榜）、forward_EPS 與 g 的推算、
+市況與 target_PE、目標價、買入區間、預期報酬、以及「不推薦」時的**確切原因**。
+
+---
+
+## 7. 定存區設計（估值方法不同——殖利率導向，不用 target PE）
+
+參考 5 檔高股息 ETF（00713 最像存股經理人）：
 
 - **硬門檻**：近 4 季 EPS 每季為正 / 連續配息 ≥ 5 年無減配 / 近 3 年 FCF 覆蓋現金股利 /
   現金股利主要來自盈餘（非公積/減資）/ 負債比 ≤ 產業中位數 × 1.5
 - **存股安全分**（rank 平均）：FCF 殖利率 + 價格低波動 + ROE 品質 + 填息率 +
   配息穩定度 × **景氣循環懲罰**（營收/毛利波動）
+- **買入價（殖利率法，不用 target PE）**：
+  ```
+  買入殖利率門檻 = max( 該股近 5 年平均殖利率 , 4% )
+  估值買價 = 近 3 年平均現金股利 ÷ 買入殖利率門檻
+  買入區間 = [ max(季線, 近20週前低) , min(估值買價, 現價) ]
+  ```
+- **推薦判定**：現價殖利率 ≥ 買入殖利率門檻 且 過所有硬門檻 → **推薦**；
+  現價殖利率 < 門檻 → **觀望**；硬門檻沒過 → **不推薦（原因）**
 - **揭露欄**：當期殖利率、近 3 年平均殖利率、殖利率 vs 5 年區間、產業
 
 > §6/§7 的因子計算已在 tw-swing `twswing.value` 寫好（loader / factors / screen），
-> **整包搬進 me2**，改成 me2 native、去掉 `twswing` import。
+> **整包搬進 me2**，改成 me2 native、去掉 `twswing` import。市況分期（`regime`）
+> 也複製一份進 me2（target PE 要用）。
 
 ---
 
-## 8. 技術棧
+## 8. 技術棧 · repo · 週更（2026-09-07 定案）
 
 - Python 3.14、Streamlit、**plotly**、pandas、pyarrow、requests
-- 新 repo `d:\g\claude\me2\`，獨立 git（獨立 Actions 給週更財報用）
-- FinMind token：環境變數 `FINMIND_TOKEN`
+- **repo**：`d:\g\claude\me2\`，獨立 git；**推到 GitHub**（同帳號 `tongxiaooppo-boop`，
+  新 repo，使用者已同意）——為了 code 備份 + 版控 + 版控的財報 parquet。
+- **週更財報：跑本地，不用 GitHub Actions**（我的建議，理由見下）：
+  - Windows 工作排程器每週跑一次 `python build_factors.py --refresh`，或 app 啟動時
+    偵測資料 stale（> 7 天）就跳一顆「更新」按鈕。
+  - 為什麼不用 Actions：① 同帳號的 Actions 免費額度（2000 分/月）tw-swing 的
+    G-5 關鍵管線已用 ~1100 分，me2 再吃 ~340 分 → 71%，能塞但擠掉 tw-swing 的
+    餘裕不值得；② me2 本來就本地跑、電腦開著，本地排程零成本、零額度、零 secret 管理；
+    ③ me2 週更斷了只是資料晚一週，不像 tw-swing 的處置股快照漏了永遠補不回來。
+  - **新 GitHub 帳號：不需要**。FinMind 額度是綁 FinMind 帳號不是 GitHub 帳號，
+    開新 GitHub 帳號不會多給 FinMind 配額；而 Actions 額度問題用「跑本地」就解了。
+- **FinMind token**：環境變數 `FINMIND_TOKEN`，同一個 FinMind 帳號。me2 的節流器
+  上限守 **500/hr**（同 tw-swing 的裁決）。⚠️ 之後 tw-swing 的 Y 系規則若也要每日
+  抓 FinMind，兩邊排程要錯開（現在 tw-swing 每日管線不碰 FinMind，無衝突）。
 - 不要 gunicorn（Streamlit 內建）
 - **零 `import twswing`**——要的程式碼用複製的
 
@@ -156,7 +247,7 @@
 | **M4 推薦判定** | 買入建議價 + 「不推薦」標記 + 篩選 UI | 推薦模式完整 |
 | **M5 AI 敘事層** | 「複製給 AI」or DeepSeek（選配） | |
 | **M6 hosting** | HF Spaces 私有 or 本地（選配） | |
-| **M7 週更財報** | me2 自己的 Actions（移植 `fundamentals.yml`）or 本地排程 | 資料自動更新 |
+| **M7 週更財報** | 本地排程（Windows 工作排程）跑 `build_factors.py --refresh`，或 app 偵測 stale 跳更新鈕。**不用 Actions**（見 §8） | 資料自動更新 |
 
 ---
 
@@ -169,7 +260,7 @@
 | `src/twswing/value/`（`loader.py` `factors.py` `screen.py`） | `me2/factors/`，去 `twswing` import |
 | `scripts/fetch_fundamentals.py` | `me2/data/fetch_fundamentals.py` |
 | `scripts/build_value_factors.py` | `me2/build_factors.py` |
-| `.github/workflows/fundamentals.yml` | `me2/.github/workflows/`（M7） |
+| `.github/workflows/fundamentals.yml` | 拆成 `me2/build_factors.py` 的 `--refresh` 模式（本地排程跑，不做 Actions） |
 | `data/fundamentals/*.parquet`（backfill 成果） | `me2/data/` |
 | `tests/test_value.py` `test_fetch_fundamentals.py` `test_fetch_finmind_bundles.py` | `me2/tests/` |
 | `fetch_finmind.py` 的 `financials/balance/cashflow/divpolicy` + `BUNDLES` + `--bundle` | `me2` 的 fetcher（`fetch_fundamentals.py` 已自足） |
@@ -193,14 +284,22 @@
 
 ---
 
-## 11. 開放問題（開工前要定）
+## 11. 決定與待定（2026-09-07 使用者回覆）
 
-1. **買入建議價怎麼算？** 支撐位（前低/均線）、估值回歸（normalized PE × normalized EPS）、
-   或給區間。→ M4 前定。
-2. **即時補抓的快取**：不在 500 大的個股，抓一次存哪、多久過期。
-3. **長波段參數**：純規則預設，還是拿歷史挑一次不尷尬的參數（不是 gate）。
-4. **F-Score 顯示**：使用者說「不打分」——9 分項當診斷清單顯示、不強調總分，
-   算不算打分？（我的理解：不算，總分是診斷不是 verdict。）
-5. **週更財報跑哪**：me2 自己的 GitHub Actions（要新 repo + secret）、還是本地排程
-   （電腦要開）。M7 前定。
-6. **me2 repo 要不要上 GitHub**：本地 git 就夠開發；但週更 Actions 需要 remote。
+**已定**：
+1. **買入建議價 / 推薦判定** → 投信經理人視角，見 §6（forward EPS × 市況調整 PE
+   〔空頭 15 / 中等 20 / 多頭 22〕→ 目標價 → 安全邊際 → 買入區間 → 明確 verdict）。
+   定存區用殖利率法（§7）。
+2. **即時補抓快取**（我決定）：`me2/data/cache/<ticker>/`（gitignore）。TTL：
+   財報 30 天、逐日 PE 7 天、股價 1 天、月營收 7 天。每 ticker 一個 `_meta.json`
+   記各資料的抓取時間。查詢時 stale 就重抓。
+3. **F-Score 顯示**：9 分項當診斷清單（打勾/打叉），不加總、不當 verdict——**不算打分**。
+4. **週更財報跑哪**（我建議、使用者授權我決定）：**跑本地**（Windows 工作排程
+   或 app 內「更新」按鈕），不用 GitHub Actions。理由見 §8。**不開新 GitHub 帳號**。
+5. **me2 上 GitHub**：要（同帳號新 repo）。M0 遷移後建。
+
+**待定**（開工中再決）：
+- **長波段參數**：純規則預設，還是拿歷史挑一次不尷尬的參數（不是 gate 校準）。→ M3 前。
+- **產業逆風怎麼判**（§6.4 的「不推薦（品質）」有這條）：用同產業其他股票的
+  營收/EPS 動能中位數當代理？→ M4 前。
+- **repo 名稱**：`me2` 只是暫名。建 GitHub repo 時定（`tw-value`？`stock-advisor`？）。
