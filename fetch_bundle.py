@@ -39,9 +39,12 @@ BUNDLE_FILES = {
     "fundamentals/cashflow.parquet": "u1a",
     "fundamentals/dividend.parquet": "u1a",
     "fundamentals/per.parquet": "u1a",
-    "fundamentals/universe.parquet": "u1a",
     "_meta.json": "u1a",
     # U1b（日更，`publish_bundle.yml`）——缺這些只是「日線類特徵不可用」
+    # universe.parquet 在 U1b：算市值要全宇宙最新日線，只有 publish_bundle 的
+    # job 有 store（fundamentals.yml 的 runner 沒有）。M0a 沒有它 → 清單不做
+    # 市值前500 過濾（可接受，M0a 是退化里程碑）。
+    "fundamentals/universe.parquet": "u1b",
     "prices_adj.parquet": "u1b",
     "prices_raw_close.parquet": "u1b",
     "revenue.parquet": "u1b",
