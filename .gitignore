@@ -2,6 +2,11 @@ __pycache__/
 *.pyc
 .env
 .venv/
+# 上游 bundle：拉下來的，可重建，不進版控（PRD §3.2）
+data/upstream/
 data/cache/
 data/finmind_raw/
+
+# ⚠️ data/derived/ **刻意進版控**（每日 Action commit 三清單，app 只讀這裡），
+#    不要加進來
 .streamlit/secrets.toml
