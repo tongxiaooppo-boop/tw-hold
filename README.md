@@ -1,20 +1,23 @@
 # tw-hold
 
 `me`（`taiwan-stock-analyzer-v3`）的升級版。長波段/價值/定存推薦 + 個股查詢。
-**資料層與 tw-swing 共用**（tw-swing 週抓財報、tw-hold 讀），domain 與 UI 是 tw-hold 自己的。
-建議改名 `tw-hold`（跟 `tw-swing` 成對）。
+**核心宇宙（前 500 大）資料上游 = tw-swing**：tw-swing 抓 FinMind 財報/日線/估值、
+整併成 data bundle 發佈到 **tw-swing 私有 repo 的 Release（tag `data-latest`）**；
+tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
+執行期對 `twswing` package 零依賴（共用碼複製，`loader.py` 是搬移）。
 
-- 產出：長波段（2–12 週+）/ 價值 / 定存 三種推薦清單
-- 個股查詢：不打分，用數據展開常見圖表；不在市值前 500 大的即時補 FinMind
-- 本地跑（暫訂 Streamlit）
+- 產出：長波段（2–12 週+，**主動擇時**）/ 價值 / 定存（**規則化因子指數、季換股**）三清單
+- 每清單：買入建議價 或「不推薦」＋原因；每期揭露「新進/移除 + 移除原因」= 出場訊號
+- 個股查詢：不打分，數據 + plotly 圖表；不在前 500 大的即時補 FinMind（僅本地）
+- 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）
 
-計劃見 [PLAN.md](PLAN.md)。開發現況見 STATUS.md（尚未建立）。
+規格見 [PRD.md](PRD.md)（凍結）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜介面草模 `scratchpad/tw-hold-mock.html`。
 
 ## 目錄
 
 | | |
 | :--- | :--- |
-| `data/` | 財報整併檔（版控）+ 快取 |
+| `data/` | `upstream/` 拉下來的 bundle（**不版控**）、`derived/` 重算產出（**版控**）、`cache/` 個股即時查快取（不版控） |
 | `factors/` | 因子計算（F-Score、normalized PE、存股安全分…）——移植自 tw-swing `twswing.value` |
 | `screener/` | 三清單的篩選邏輯 |
 | `charts/` | plotly 圖表 |
@@ -24,5 +27,5 @@
 
 ## 跟其他專案的關係
 
-- **tw-swing**：上游。tw-hold `import twswing.data.finmind` / `twswing.value.loader` / `twswing.data.fundamentals`（資料層），讀 `tw-swing/data/fundamentals/*.parquet`。domain 邏輯（factors/screen/screener/UI）是 tw-hold native。
+- **tw-swing**：上游資料源。發佈 bundle 到**自己私有 repo 的 Release**（tag `data-latest`；財報/日線/PER/月營收/universe），分 **U1a 週更 / U1b 日更**兩條管線（PRD §3.1.1）。tw-hold 用 PAT 拉，**不 import `twswing`、不讀 tw-swing 磁碟**。共用碼（regime/indicators/finmind client）複製進 `reference/`；`loader.py` 是**搬移**（tw-swing 端刪除）。
 - **me (v3)**：參考程式碼來源，不 import、不執行依賴。
