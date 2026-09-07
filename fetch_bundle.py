@@ -28,7 +28,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent
 UPSTREAM = REPO / "data" / "upstream"
 
-BUNDLE_REPO = "USER/tw-swing"          # TODO(M0.2): 填實際 owner/repo
+BUNDLE_REPO = "tongxiaooppo-boop/tw-swing"   # 私有 repo，bundle 走其 Release
 RELEASE_TAG = "data-latest"
 SCHEMA_VERSION = 1                     # G1：與 tw-swing publish step 對齊
 
