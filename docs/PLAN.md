@@ -215,7 +215,10 @@
 | `me/.../data/price_adjuster.py` | `reference/price_adjuster.py` | 500 大以外還原股價（M4） | 無（me 已凍結） |
 | `me/.../data/fetcher.py` | `reference/fetcher.py` | 即時個股補抓參考（M4） | 無（同上） |
 
-- [ ] regime / finmind_client 複製進來（indicators / price_adjuster 可延到 M1/M4）
+- [x] regime / finmind_client 複製進來（2026-09-07）——`reference/regime.py`、
+      `reference/finmind_client.py`，檔頭標 `複製自 tw-swing @c310b60`。
+      `finmind_client.read_token()` 的 .env 路徑改成 tw-hold repo 根。
+      登錄在 `reference/UPSTREAM.md`（G5）。indicators / price_adjuster 延到 M1/M4
 - [ ] ⚠️ **不抽獨立 pip package**——一個人、兩個 repo、共 ~200 行共用碼，
       維護第三個 repo 的版本相依比漂移貴。複製 + 檔頭註記就夠
 
