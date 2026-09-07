@@ -155,11 +155,14 @@
 ### M0.2 tw-hold repo + 佈署地基
 
 - [ ] 推 GitHub（同帳號新 repo，**public**——使用者裁決 2026-09-07，PRD §10.1）
-- [ ] ⚠️ 建 repo 前掃一次：`.env` / token / 個人持倉有沒有混進版控
-      （`positions.json` 之後會有進場價，**要進 `.gitignore`**）
-- [ ] ~~建公開 repo `tw-hold-data`~~ → **不建**，bundle 走 tw-swing Release + PAT（PRD §3.1）
-- [ ] repo 結構：`factors/ screener/ charts/ app/ reference/ tests/ data/{upstream,derived,cache}/`
-- [ ] `.gitignore` 補 `data/upstream/`（✅ 已補）
+      ⏳ **等使用者點頭**（M0.2 骨架已鋪，push 是 outward action）
+- [x] ⚠️ 建 repo 前掃一次（2026-09-07）：工作區 + git 全歷史掃過 `.env`/token/PAT/持倉
+      → **乾淨**（只有程式碼裡的變數名 `FINMIND_TOKEN`，無實際憑證）。
+      `positions.json` / `*.token` / `*.pat` / `.env.*` 已加進 `.gitignore`
+- [x] ~~建公開 repo `tw-hold-data`~~ → **不建**，bundle 走 tw-swing Release + PAT（PRD §3.1）
+- [x] repo 結構（2026-09-07）：`factors/ screener/ charts/ app/ reference/ tests/`
+      `data/{upstream,derived,cache}/`；`data/derived/README.md` 說明產出
+- [x] `.gitignore` 補 `data/upstream/`（✅）＋ `positions.json` ＋ `data/derived/*.parquet`
 - [ ] `.github/workflows/rebuild.yml`（每日重算骨架，先手動跑也行）
 - [ ] 🔴 **rebuild 由 tw-swing publish 完成後 `repository_dispatch` 觸發**，
       不要自己排 cron 空跑（tw-hold 公開後額度已免費，但省冷啟與無意義的 commit）
@@ -168,9 +171,11 @@
 - [ ] ⚠️ **`data/derived/` 只 commit 清單 JSON**（小、可 diff）；
       `factors.parquet` 放 Release 覆蓋——每天 commit 一個 parquet blob，
       一年會讓 repo 長到數百 MB，而 Streamlit Cloud 每次冷啟都要 clone
-- [ ] Streamlit App 骨架**寫成雲端可佈署**：無絕對路徑、**bundle PAT 走 `st.secrets`**
-      （雲端**不要**放 `FINMIND_TOKEN`，即時補抓在雲端是停用的）、
-      偵測環境變數決定「本地進階模式」開關
+- [x] Streamlit App 骨架（2026-09-07）：`app/streamlit_app.py`——無絕對路徑
+      （`Path(__file__).parents[1]`）、只讀 `data/derived/*.json`、
+      `LOCAL_ADVANCED` 偵測 `FINMIND_TOKEN`/`.env` 決定進階模式開關。
+      `fetch_bundle.py` 骨架（G1/G3/G5 待接線，`main()` 目前拋清楚的 NotImplemented 訊息）。
+      `requirements.txt`（pandas/pyarrow/streamlit/plotly）
 - [ ] 🔴 **PAT 用 fine-grained、只給 tw-swing 一個 repo 的 `contents: read`**——
       tw-hold 是公開 repo，權限要有界（PRD §10.1）。到期日記進 `reference/UPSTREAM.md`
 
