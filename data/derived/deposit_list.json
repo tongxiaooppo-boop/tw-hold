@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-08-28",
-    "rebuilt_at": "2026-09-07T23:43:48+00:00",
+    "rebuilt_at": "2026-09-07T23:49:07+00:00",
     "bundle_schema": 1,
     "universe_filtered": false,
     "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
@@ -11,20 +11,20 @@
   "holdings": [
     {
       "ticker": "6196",
-      "safety_score": 0.7155,
+      "safety_score": 0.7156,
       "div_years": 12.0,
       "last_cash_dividend": 6.4488,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.2697,
       "payout_ratio_ttm": 0.4179,
-      "cyclical_penalty": 0.9019,
+      "cyclical_penalty": 0.902,
       "debt_ratio": 0.7275,
       "reject_reason": null
     },
     {
       "ticker": "3218",
-      "safety_score": 0.7052,
+      "safety_score": 0.7053,
       "div_years": 12.0,
       "last_cash_dividend": 7.75,
       "fcf_yield": null,
@@ -44,7 +44,7 @@
       "ann_vol": null,
       "roe": 0.5149,
       "payout_ratio_ttm": 0.3183,
-      "cyclical_penalty": 0.7982,
+      "cyclical_penalty": 0.7983,
       "debt_ratio": 0.6532,
       "reject_reason": null
     },
@@ -63,14 +63,14 @@
     },
     {
       "ticker": "2330",
-      "safety_score": 0.6863,
+      "safety_score": 0.6864,
       "div_years": 12.0,
       "last_cash_dividend": 22.0001,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.3477,
       "payout_ratio_ttm": 0.332,
-      "cyclical_penalty": 0.8074,
+      "cyclical_penalty": 0.8075,
       "debt_ratio": 0.3094,
       "reject_reason": null
     },
@@ -89,7 +89,7 @@
     },
     {
       "ticker": "3324",
-      "safety_score": 0.6744,
+      "safety_score": 0.6745,
       "div_years": 12.0,
       "last_cash_dividend": 11.9033,
       "fcf_yield": null,
@@ -135,7 +135,7 @@
       "ann_vol": null,
       "roe": 0.2509,
       "payout_ratio_ttm": 0.1587,
-      "cyclical_penalty": 0.7398,
+      "cyclical_penalty": 0.7397,
       "debt_ratio": 0.3854,
       "reject_reason": null
     },
@@ -148,20 +148,20 @@
       "ann_vol": null,
       "roe": 0.1169,
       "payout_ratio_ttm": 0.2871,
-      "cyclical_penalty": 0.9427,
+      "cyclical_penalty": 0.9428,
       "debt_ratio": 0.2338,
       "reject_reason": null
     },
     {
       "ticker": "3583",
-      "safety_score": 0.5765,
+      "safety_score": 0.5766,
       "div_years": 12.0,
       "last_cash_dividend": 5.7476,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.1382,
       "payout_ratio_ttm": 0.3288,
-      "cyclical_penalty": 0.8915,
+      "cyclical_penalty": 0.8916,
       "debt_ratio": 0.648,
       "reject_reason": null
     },
@@ -180,14 +180,14 @@
     },
     {
       "ticker": "3443",
-      "safety_score": 0.5578,
+      "safety_score": 0.5577,
       "div_years": 12.0,
       "last_cash_dividend": 20.0,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.3883,
       "payout_ratio_ttm": 0.711,
-      "cyclical_penalty": 0.7783,
+      "cyclical_penalty": 0.7782,
       "debt_ratio": 0.6398,
       "reject_reason": null
     },
@@ -206,27 +206,27 @@
     },
     {
       "ticker": "8390",
-      "safety_score": 0.5551,
+      "safety_score": 0.5552,
       "div_years": 12.0,
       "last_cash_dividend": 3.8,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.2284,
       "payout_ratio_ttm": 0.5758,
-      "cyclical_penalty": 0.8045,
+      "cyclical_penalty": 0.8046,
       "debt_ratio": 0.215,
       "reject_reason": null
     },
     {
       "ticker": "6805",
-      "safety_score": 0.553,
+      "safety_score": 0.5532,
       "div_years": 6.0,
       "last_cash_dividend": 10.5,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.3836,
       "payout_ratio_ttm": 0.3387,
-      "cyclical_penalty": 0.8234,
+      "cyclical_penalty": 0.8236,
       "debt_ratio": 0.4774,
       "reject_reason": null
     },
@@ -239,7 +239,7 @@
       "ann_vol": null,
       "roe": 0.2582,
       "payout_ratio_ttm": 0.8671,
-      "cyclical_penalty": 0.9796,
+      "cyclical_penalty": 0.9797,
       "debt_ratio": 0.7224,
       "reject_reason": null
     },
@@ -252,20 +252,20 @@
       "ann_vol": null,
       "roe": 0.3545,
       "payout_ratio_ttm": 0.9375,
-      "cyclical_penalty": 0.9659,
+      "cyclical_penalty": 0.966,
       "debt_ratio": 0.3902,
       "reject_reason": null
     },
     {
       "ticker": "3044",
-      "safety_score": 0.5463,
+      "safety_score": 0.5464,
       "div_years": 12.0,
       "last_cash_dividend": 12.7,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.2202,
       "payout_ratio_ttm": 0.653,
-      "cyclical_penalty": 0.8536,
+      "cyclical_penalty": 0.8538,
       "debt_ratio": 0.488,
       "reject_reason": null
     },
@@ -278,20 +278,20 @@
       "ann_vol": null,
       "roe": 0.2744,
       "payout_ratio_ttm": 0.8727,
-      "cyclical_penalty": 0.9455,
+      "cyclical_penalty": 0.9456,
       "debt_ratio": 0.4642,
       "reject_reason": null
     },
     {
       "ticker": "2535",
-      "safety_score": 0.5446,
+      "safety_score": 0.5447,
       "div_years": 12.0,
       "last_cash_dividend": 4.6,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.2437,
       "payout_ratio_ttm": 0.7077,
-      "cyclical_penalty": 0.8554,
+      "cyclical_penalty": 0.8556,
       "debt_ratio": 0.6406,
       "reject_reason": null
     },
@@ -310,7 +310,7 @@
     },
     {
       "ticker": "1514",
-      "safety_score": 0.5379,
+      "safety_score": 0.538,
       "div_years": 12.0,
       "last_cash_dividend": 2.0,
       "fcf_yield": null,
@@ -343,7 +343,7 @@
       "ann_vol": null,
       "roe": 0.169,
       "payout_ratio_ttm": 0.6821,
-      "cyclical_penalty": 0.9732,
+      "cyclical_penalty": 0.9733,
       "debt_ratio": 0.5906,
       "reject_reason": null
     },
@@ -362,7 +362,7 @@
     },
     {
       "ticker": "2317",
-      "safety_score": 0.5316,
+      "safety_score": 0.5317,
       "div_years": 12.0,
       "last_cash_dividend": 7.1718,
       "fcf_yield": null,
@@ -382,30 +382,26 @@
       "ann_vol": null,
       "roe": 0.2845,
       "payout_ratio_ttm": 0.975,
-      "cyclical_penalty": 0.9781,
+      "cyclical_penalty": 0.9782,
       "debt_ratio": 0.6542,
       "reject_reason": null
     },
     {
       "ticker": "5515",
-      "safety_score": 0.5229,
+      "safety_score": 0.523,
       "div_years": 12.0,
       "last_cash_dividend": 3.3,
       "fcf_yield": null,
       "ann_vol": null,
       "roe": 0.3401,
       "payout_ratio_ttm": 0.7366,
-      "cyclical_penalty": 0.7805,
+      "cyclical_penalty": 0.7806,
       "debt_ratio": 0.5443,
       "reject_reason": null
     }
   ],
   "changes": {
-    "added": [
-      "5515"
-    ],
-    "removed": [
-      "1203"
-    ]
+    "added": [],
+    "removed": []
   }
 }

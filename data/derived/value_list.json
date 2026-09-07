@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-08-28",
-    "rebuilt_at": "2026-09-07T23:43:48+00:00",
+    "rebuilt_at": "2026-09-07T23:49:07+00:00",
     "bundle_schema": 1,
     "universe_filtered": false,
     "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
@@ -10,7 +10,7 @@
   "holdings": [
     {
       "ticker": "6805",
-      "value_score": 0.9532,
+      "value_score": 0.9534,
       "f_score": 9.0,
       "roe": 0.3836,
       "norm_pe": null,
@@ -23,7 +23,7 @@
     },
     {
       "ticker": "3017",
-      "value_score": 0.918,
+      "value_score": 0.9184,
       "f_score": 8.0,
       "roe": 0.5819,
       "norm_pe": null,
@@ -36,7 +36,7 @@
     },
     {
       "ticker": "2707",
-      "value_score": 0.9065,
+      "value_score": 0.907,
       "f_score": 8.0,
       "roe": 0.4751,
       "norm_pe": null,
@@ -49,7 +49,7 @@
     },
     {
       "ticker": "3006",
-      "value_score": 0.9042,
+      "value_score": 0.9047,
       "f_score": 8.0,
       "roe": 0.4747,
       "norm_pe": null,
@@ -62,7 +62,7 @@
     },
     {
       "ticker": "8210",
-      "value_score": 0.8973,
+      "value_score": 0.8978,
       "f_score": 8.0,
       "roe": 0.3935,
       "norm_pe": null,
@@ -75,7 +75,7 @@
     },
     {
       "ticker": "8462",
-      "value_score": 0.879,
+      "value_score": 0.8796,
       "f_score": 8.0,
       "roe": 0.3509,
       "norm_pe": null,
@@ -88,7 +88,7 @@
     },
     {
       "ticker": "2330",
-      "value_score": 0.8744,
+      "value_score": 0.875,
       "f_score": 8.0,
       "roe": 0.3477,
       "norm_pe": null,
@@ -101,7 +101,7 @@
     },
     {
       "ticker": "6291",
-      "value_score": 0.8675,
+      "value_score": 0.8682,
       "f_score": 8.0,
       "roe": 0.344,
       "norm_pe": null,
@@ -114,7 +114,7 @@
     },
     {
       "ticker": "2344",
-      "value_score": 0.8385,
+      "value_score": 0.8393,
       "f_score": 9.0,
       "roe": 0.2431,
       "norm_pe": null,
@@ -127,7 +127,7 @@
     },
     {
       "ticker": "6788",
-      "value_score": 0.8285,
+      "value_score": 0.8293,
       "f_score": 8.0,
       "roe": 0.282,
       "norm_pe": null,
@@ -140,7 +140,7 @@
     },
     {
       "ticker": "2408",
-      "value_score": 0.8217,
+      "value_score": 0.8225,
       "f_score": 8.0,
       "roe": 0.2756,
       "norm_pe": null,
@@ -153,7 +153,7 @@
     },
     {
       "ticker": "7769",
-      "value_score": 0.8211,
+      "value_score": 0.8219,
       "f_score": null,
       "roe": 0.3068,
       "norm_pe": null,
@@ -166,7 +166,7 @@
     },
     {
       "ticker": "2101",
-      "value_score": 0.8194,
+      "value_score": 0.8202,
       "f_score": 8.0,
       "roe": 0.2749,
       "norm_pe": null,
@@ -179,7 +179,7 @@
     },
     {
       "ticker": "7751",
-      "value_score": 0.8165,
+      "value_score": 0.8174,
       "f_score": null,
       "roe": 0.2949,
       "norm_pe": null,
@@ -192,7 +192,7 @@
     },
     {
       "ticker": "1808",
-      "value_score": 0.8148,
+      "value_score": 0.8156,
       "f_score": 8.0,
       "roe": 0.2737,
       "norm_pe": null,
@@ -205,7 +205,7 @@
     },
     {
       "ticker": "5234",
-      "value_score": 0.8056,
+      "value_score": 0.8065,
       "f_score": 8.0,
       "roe": 0.2596,
       "norm_pe": null,
@@ -218,7 +218,7 @@
     },
     {
       "ticker": "2539",
-      "value_score": 0.7987,
+      "value_score": 0.7997,
       "f_score": 8.0,
       "roe": 0.2509,
       "norm_pe": null,
@@ -231,7 +231,7 @@
     },
     {
       "ticker": "3293",
-      "value_score": 0.7822,
+      "value_score": 0.7833,
       "f_score": 7.0,
       "roe": 0.807,
       "norm_pe": null,
@@ -244,7 +244,7 @@
     },
     {
       "ticker": "3529",
-      "value_score": 0.773,
+      "value_score": 0.7741,
       "f_score": 7.0,
       "roe": 0.653,
       "norm_pe": null,
@@ -257,7 +257,7 @@
     },
     {
       "ticker": "2472",
-      "value_score": 0.7643,
+      "value_score": 0.7654,
       "f_score": 8.0,
       "roe": 0.2342,
       "norm_pe": null,
@@ -270,7 +270,7 @@
     },
     {
       "ticker": "2059",
-      "value_score": 0.7638,
+      "value_score": 0.765,
       "f_score": 7.0,
       "roe": 0.5121,
       "norm_pe": null,
@@ -283,7 +283,7 @@
     },
     {
       "ticker": "5904",
-      "value_score": 0.7615,
+      "value_score": 0.7627,
       "f_score": 7.0,
       "roe": 0.4994,
       "norm_pe": null,
@@ -296,7 +296,7 @@
     },
     {
       "ticker": "8390",
-      "value_score": 0.7551,
+      "value_score": 0.7563,
       "f_score": 8.0,
       "roe": 0.2284,
       "norm_pe": null,
@@ -309,7 +309,7 @@
     },
     {
       "ticker": "6903",
-      "value_score": 0.7547,
+      "value_score": 0.7559,
       "f_score": 7.0,
       "roe": 0.3984,
       "norm_pe": null,
@@ -322,7 +322,7 @@
     },
     {
       "ticker": "1476",
-      "value_score": 0.7528,
+      "value_score": 0.754,
       "f_score": 8.0,
       "roe": 0.2282,
       "norm_pe": null,
@@ -335,7 +335,7 @@
     },
     {
       "ticker": "2442",
-      "value_score": 0.7524,
+      "value_score": 0.7536,
       "f_score": 7.0,
       "roe": 0.3977,
       "norm_pe": null,
@@ -348,7 +348,7 @@
     },
     {
       "ticker": "7744",
-      "value_score": 0.7477,
+      "value_score": 0.7489,
       "f_score": null,
       "roe": 0.2572,
       "norm_pe": null,
@@ -361,7 +361,7 @@
     },
     {
       "ticker": "6138",
-      "value_score": 0.7455,
+      "value_score": 0.7467,
       "f_score": 7.0,
       "roe": 0.3741,
       "norm_pe": null,
@@ -374,7 +374,7 @@
     },
     {
       "ticker": "5536",
-      "value_score": 0.7432,
+      "value_score": 0.7444,
       "f_score": 7.0,
       "roe": 0.3725,
       "norm_pe": null,
@@ -387,7 +387,7 @@
     },
     {
       "ticker": "6561",
-      "value_score": 0.7386,
+      "value_score": 0.7399,
       "f_score": 7.0,
       "roe": 0.3599,
       "norm_pe": null,
@@ -400,11 +400,7 @@
     }
   ],
   "changes": {
-    "added": [
-      "6561"
-    ],
-    "removed": [
-      "1103"
-    ]
+    "added": [],
+    "removed": []
   }
 }
