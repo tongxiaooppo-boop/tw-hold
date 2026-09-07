@@ -49,6 +49,7 @@ BUNDLE_FILES = {
     "prices_raw_close.parquet": "u1b",
     "revenue.parquet": "u1b",
     "index_0050.parquet": "u1b",
+    "chips.parquet": "u1b",          # 法人買賣超（PRD §3.1 / §5.2.1，M1 候選池要用）
 }
 
 
