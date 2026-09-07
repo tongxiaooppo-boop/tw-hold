@@ -191,10 +191,15 @@
 > 然後還要擔心它跟 tw-hold 那份漂移。**不要留兩份。**
 > `value/` 整包從 tw-swing 移除（`__init__.py` 一併刪）。
 
-- [ ] **五**個檔搬進 tw-hold、改 import
-- [ ] tw-swing 端刪掉 `src/twswing/value/`（整包）＋ `scripts/build_value_factors.py`
-      ＋ `tests/test_value.py`，跑 `pytest` 確認仍綠（應為 786 − test_value 的數量）
-- [ ] tw-hold `tests/` 綠
+- [x] **五**個檔搬進 tw-hold、改 import（2026-09-07）
+      — `factors/factors.py`、`screener/screen.py`、`reference/loader.py`、
+      `build_factors.py`、`tests/test_value.py`；`loader.py` 改讀 bundle
+      （`TWHOLD_BUNDLE_DIR`，預設 `data/upstream/`），帶 `equity_parent` 修正
+- [x] tw-swing 端刪掉 `src/twswing/value/`（整包）＋ `scripts/build_value_factors.py`
+      ＋ `tests/test_value.py`，`pytest` **780 passed**（786 − 6）
+- [x] tw-hold `tests/` 綠（**6 passed**）
+- [ ] ⚠️ `build_factors.py` 目前是退化版：bundle 未發佈，日線類欄位留 NaN、
+      universe 用 capital_stock×收盤 估市值前 500。待 U1a/U1b/U3 補齊（M0.5 收尾）
 
 ### M0.4 複製參考碼（tw-swing 保留原件、不再 import）
 
