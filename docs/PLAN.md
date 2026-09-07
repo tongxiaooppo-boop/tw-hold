@@ -241,7 +241,8 @@ U2 per.parquet ✅ / U3 `build_universe.py` ✅（等背景補抓）。
 - [x] 🔴 **G1 schema assert**：`schema_version` 對不上 raise `BundleError`；每檔比
       sha256 + parquet 欄位清單 vs `_meta.json`
 - [x] **G3**：`trading_date` 距今 > 5 天 → warning（不失敗），帶進 `_fetch_result.json`
-- [ ] **G5**：`check_upstream_drift.py` 比 hash（`reference/UPSTREAM.md` 已建）—— 延後
+- [x] **G5**：`check_upstream_drift.py`（2026-09-07）——比 tw-swing 來源檔現在的
+      SHA-256 vs baseline（記在檔內 `BASELINE`）；`[DRIFT]` 提醒、永遠回 0
 - [x] ⚠️ **只有 U1a 資產時正常收工**——U1b 檔（universe/prices/revenue/chips）缺 →
       `u1b_available=False` + warning，不拋錯
 - [x] `build_factors.py`：`screen_all()`（`build_lists` 共用）跑 `screen_value/deposit`；
