@@ -1,12 +1,24 @@
 __pycache__/
 *.pyc
-.env
 .venv/
+.env
+.env.*
+*.token
+*.pat
+
+# ⚠️ 個人持倉——進場價 / 部位大小 / 投入金額。tw-hold 之後會是**公開 repo**
+#    （PRD §10.1 裁決），這個檔一旦 commit 進公開歷史就洗不掉。
+positions.json
+positions.*.json
+data/positions/
+
 # 上游 bundle：拉下來的，可重建，不進版控（PRD §3.2）
 data/upstream/
 data/cache/
 data/finmind_raw/
 
-# ⚠️ data/derived/ **刻意進版控**（每日 Action commit 三清單，app 只讀這裡），
-#    不要加進來
+# ⚠️ data/derived/ **刻意進版控**——但只 commit 清單 JSON（小、可 diff、app 只讀這裡）。
+#    factors.parquet 每天一顆 blob，一年會把 repo 撐到數百 MB → 放 Release 覆蓋。
+data/derived/*.parquet
+
 .streamlit/secrets.toml
