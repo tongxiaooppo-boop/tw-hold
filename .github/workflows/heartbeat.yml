@@ -1,0 +1,50 @@
+name: 心跳（清單新鮮度守門）
+
+# 守門員 G4（PLAN §M0.2）：rebuild 由 tw-swing 的 repository_dispatch 觸發——
+# 若 tw-swing publish 斷了、dispatch 不再來，rebuild **不會失敗、只是不再跑**，
+# 沒人會發現。這支每週醒來檢查 data/derived/_meta.json 的重算時間，
+# 太舊就告警。
+#
+# ⚠️ 這個 job 自己不可以失敗（同 notify-failure 的理由）——檢查不過是 warning + 告警，
+#    不是 exit 1。
+#
+# GitHub 排程政策：repo 連續 60 天無活動會自動停用 cron。rebuild 每天 commit
+# → 只要 rebuild 還活著這支就不會被停；這支要抓的正是「rebuild 不再活著」。
+
+on:
+  schedule:
+    - cron: "0 1 * * 1"        # 每週一 UTC 01:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 檢查清單新鮮度
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          MAX_AGE_HOURS: "180"      # 7.5 天——季換股清單不會每天變，但重算應每日跑
+        run: |
+          META=data/derived/_meta.json
+          if [ ! -f "$META" ]; then
+            echo "::warning::$META 不存在——rebuild 還沒產出過任何清單（M0 未完成則正常）"
+            exit 0
+          fi
+          REBUILT=$(jq -r '.rebuilt_at // empty' "$META")
+          echo "上次重算：${REBUILT:-未知}"
+          if [ -z "$REBUILT" ]; then exit 0; fi
+          AGE=$(( ( $(date -u +%s) - $(date -u -d "$REBUILT" +%s) ) / 3600 ))
+          echo "距今 ${AGE} 小時（門檻 ${MAX_AGE_HOURS}）"
+          if [ "$AGE" -le "$MAX_AGE_HOURS" ]; then echo "OK"; exit 0; fi
+          MSG="🟠 tw-hold 清單 ${AGE}h 沒重算了（門檻 ${MAX_AGE_HOURS}h）。
+          可能 tw-swing publish 斷了 → repository_dispatch 不再觸發 rebuild。
+          查 tw-swing 的 fundamentals.yml / publish_bundle.yml。"
+          echo "$MSG"
+          [ -z "$WEBHOOK" ] && { echo "::warning::無 ALERT_WEBHOOK"; exit 0; }
+          curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content: $m, text: $m}')" || true
+          exit 0

@@ -154,8 +154,8 @@
 
 ### M0.2 tw-hold repo + 佈署地基
 
-- [ ] 推 GitHub（同帳號新 repo，**public**——使用者裁決 2026-09-07，PRD §10.1）
-      ⏳ **等使用者點頭**（M0.2 骨架已鋪，push 是 outward action）
+- [x] 推 GitHub（2026-09-07）：`github.com/tongxiaooppo-boop/tw-hold`（**public**），
+      預設分支 `main`（本地 `master` → `main`）
 - [x] ⚠️ 建 repo 前掃一次（2026-09-07）：工作區 + git 全歷史掃過 `.env`/token/PAT/持倉
       → **乾淨**（只有程式碼裡的變數名 `FINMIND_TOKEN`，無實際憑證）。
       `positions.json` / `*.token` / `*.pat` / `.env.*` 已加進 `.gitignore`
@@ -163,11 +163,14 @@
 - [x] repo 結構（2026-09-07）：`factors/ screener/ charts/ app/ reference/ tests/`
       `data/{upstream,derived,cache}/`；`data/derived/README.md` 說明產出
 - [x] `.gitignore` 補 `data/upstream/`（✅）＋ `positions.json` ＋ `data/derived/*.parquet`
-- [ ] `.github/workflows/rebuild.yml`（每日重算骨架，先手動跑也行）
+- [x] `.github/workflows/rebuild.yml`（骨架，2026-09-07）：`workflow_dispatch` +
+      `repository_dispatch: [bundle-published]`，**無 cron**。拉 bundle / 算因子 /
+      commit data/derived 三 step 目前是 TODO placeholder（等 fetch_bundle 接線 + build_lists）
+- [x] `.github/workflows/heartbeat.yml`（骨架）：週一檢查 `_meta.json.rebuilt_at` 新鮮度
 - [ ] 🔴 **rebuild 由 tw-swing publish 完成後 `repository_dispatch` 觸發**，
       不要自己排 cron 空跑（tw-hold 公開後額度已免費，但省冷啟與無意義的 commit）
-- [ ] `heartbeat` + `notify-failure`（守門員 G4：連續失敗沒人看，60 天後
-      GitHub 會自動停用排程）
+- [x] `heartbeat` + `notify-failure`（守門員 G4）——見上；`notify-failure` job
+      抄自 tw-swing `daily.yml`（自己絕不失敗：無 webhook → warning + exit 0）
 - [ ] ⚠️ **`data/derived/` 只 commit 清單 JSON**（小、可 diff）；
       `factors.parquet` 放 Release 覆蓋——每天 commit 一個 parquet blob，
       一年會讓 repo 長到數百 MB，而 Streamlit Cloud 每次冷啟都要 clone
