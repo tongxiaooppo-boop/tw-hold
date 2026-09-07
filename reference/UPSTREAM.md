@@ -27,3 +27,11 @@ tw-hold 從 tw-swing 借來的東西。**上游改動不會自動同步**——�
 
 bundle 內容與 schema：見 `PRD.md` §3、`PLAN.md` §M0.1a/M0.1b。
 `_meta.json` 帶 `schema_version` + 每檔欄位清單，`fetch_bundle.py` 的 G1 對不上就大聲失敗。
+
+## 漂移偵測（G5）
+
+`check_upstream_drift.py` 比對 tw-swing 那份**現在**的 SHA-256 vs 複製當時的 baseline
+（記在該檔的 `BASELINE` dict）。上游動過 → 印 `[DRIFT]`、永遠回 0（提醒不是門檻）。
+手動 merge 上游改動後：更新 `check_upstream_drift.py` 的 `BASELINE` + 上表的 commit 欄。
+
+目前 baseline @ tw-swing `c310b60`（regime.py / finmind.py 自 M0.3 起未動）。
