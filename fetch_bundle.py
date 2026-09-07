@@ -228,7 +228,7 @@ def main() -> int:
           f"U1b {'可用' if r['u1b_available'] else '不可用（只有 U1a）'}")
     print(f"檔案 {len(r['files'])}：" + ", ".join(r["files"]))
     for w in r["warnings"]:
-        print(f"  ⚠️ {w}")
+        print(f"  [warn] {w}")
     return 0
 
 

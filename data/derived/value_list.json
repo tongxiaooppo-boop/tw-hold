@@ -1,13 +1,26 @@
 {
   "_meta": {
     "trading_date": "2026-08-28",
-    "rebuilt_at": "2026-09-07T15:43:26+00:00",
+    "rebuilt_at": "2026-09-07T23:35:12+00:00",
     "bundle_schema": 1,
-    "universe_filtered": true,
-    "note": "universe.parquet：611 檔",
+    "universe_filtered": false,
+    "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
     "u1b_pending": true
   },
   "holdings": [
+    {
+      "ticker": "1103",
+      "value_score": 1.0,
+      "f_score": null,
+      "roe": 7.6906,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.1821,
+      "reject_reason": null
+    },
     {
       "ticker": "6805",
       "value_score": 0.9511,
@@ -71,6 +84,19 @@
       "ev_ebit": null,
       "net_cash_to_mktcap": null,
       "gross_margin": 0.3166,
+      "reject_reason": null
+    },
+    {
+      "ticker": "8462",
+      "value_score": 0.8769,
+      "f_score": 8.0,
+      "roe": 0.3509,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.3358,
       "reject_reason": null
     },
     {
@@ -282,6 +308,19 @@
       "reject_reason": null
     },
     {
+      "ticker": "8390",
+      "value_score": 0.7537,
+      "f_score": 8.0,
+      "roe": 0.2284,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.2506,
+      "reject_reason": null
+    },
+    {
       "ticker": "6903",
       "value_score": 0.7525,
       "f_score": 7.0,
@@ -305,6 +344,19 @@
       "ev_ebit": null,
       "net_cash_to_mktcap": null,
       "gross_margin": 0.3025,
+      "reject_reason": null
+    },
+    {
+      "ticker": "2442",
+      "value_score": 0.7502,
+      "f_score": 7.0,
+      "roe": 0.3977,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.3173,
       "reject_reason": null
     },
     {
@@ -345,114 +397,20 @@
       "net_cash_to_mktcap": null,
       "gross_margin": 0.211,
       "reject_reason": null
-    },
-    {
-      "ticker": "6561",
-      "value_score": 0.7365,
-      "f_score": 7.0,
-      "roe": 0.3599,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.4917,
-      "reject_reason": null
-    },
-    {
-      "ticker": "2727",
-      "value_score": 0.7342,
-      "f_score": 7.0,
-      "roe": 0.3571,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.4746,
-      "reject_reason": null
-    },
-    {
-      "ticker": "2731",
-      "value_score": 0.7228,
-      "f_score": 7.0,
-      "roe": 0.3468,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.1602,
-      "reject_reason": null
-    },
-    {
-      "ticker": "1513",
-      "value_score": 0.7194,
-      "f_score": 8.0,
-      "roe": 0.2115,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.2687,
-      "reject_reason": null
     }
   ],
   "changes": {
     "added": [
-      "2330",
-      "2344",
-      "2408",
-      "2472",
-      "2539",
-      "2707",
-      "2727",
-      "2731",
-      "3006",
-      "3017",
-      "3293",
-      "3529",
-      "5234",
-      "5536",
-      "5904",
-      "6138",
-      "6291",
-      "6561",
-      "6788",
-      "6805",
-      "6903",
-      "7744",
-      "7751",
-      "7769",
-      "8210"
+      "1103",
+      "2442",
+      "8390",
+      "8462"
     ],
     "removed": [
-      "1103",
-      "1215",
-      "1232",
-      "1307",
-      "1316",
-      "1342",
-      "1503",
-      "1514",
-      "1522",
-      "1560",
-      "1612",
-      "1616",
-      "1618",
-      "1623",
-      "1708",
-      "1712",
-      "1736",
-      "1773",
-      "1784",
-      "1786",
-      "2010",
-      "2027",
-      "2207",
-      "2211",
-      "2303"
+      "1513",
+      "2727",
+      "2731",
+      "6561"
     ]
   }
 }
