@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "trading_date": "2026-09-02",
+    "rebuilt_at": "2026-09-07T11:39:51+00:00",
+    "bundle_schema": 1,
+    "universe_filtered": false,
+    "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
+    "u1b_pending": true
+  },
+  "holdings": [],
+  "changes": {
+    "added": [],
+    "removed": []
+  },
+  "note": "M1 主動選股候選池未實作（PLAN §M1，前置 M0b）"
+}

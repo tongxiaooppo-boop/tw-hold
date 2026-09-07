@@ -157,7 +157,9 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
     quality = _rank_avg(ok, {"f_score": +1, "roe": +1})
     cheap = _rank_avg(ok, {"norm_ey": +1, "fcf_yield": +1, "ev_ebit": -1,
                            "net_cash_to_mktcap": +1})
-    ok["value_score"] = (quality + cheap) / 2.0
+    # 沒有股價時（M0a：bundle 只有 U1a）便宜度算不出來 → 只用品質排序，
+    # 不要讓整個 value_score 變 NaN（那樣清單就完全無序）。
+    ok["value_score"] = np.where(cheap.isna(), quality, (quality + cheap) / 2.0)
     d = d.join(ok["value_score"])
     return d.reset_index().sort_values(
         ["passes", "value_score"], ascending=[False, False])
