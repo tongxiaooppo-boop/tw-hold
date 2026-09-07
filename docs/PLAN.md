@@ -236,17 +236,21 @@ U2 per.parquet ✅ / U3 `build_universe.py` ✅（等背景補抓）。
 
 ### M0.5 拉 + 算 + 顯示
 
-- [ ] `fetch_bundle.py`：從 tw-swing Release（PAT）下載 bundle → `data/upstream/` + `_meta.json`
-- [ ] 🔴 **守門員 G1：schema assert**——`_meta.json` 帶 `schema_version` + 每檔欄位清單，
-      對不上就**大聲失敗**。這是兩個 repo 之間唯一的正式介面，不要「盡力而為」
-- [ ] **守門員 G3**：比對 `_meta.json` 的 `trading_date` 與預期最新交易日，
-      不符**不失敗**、在清單頁標記資料日期
-- [ ] **守門員 G5**：`reference/UPSTREAM.md`（檔案 / 來源路徑 / commit / PAT 到期日）
-      ＋ `check_upstream_drift.py` 比 hash（只提醒、不自動同步）
-- [ ] ⚠️ **`fetch_bundle.py` 要能在「只有 U1a 資產」時正常運作**——缺 U1b 的日線檔就
-      標記「日線類特徵不可用」而**不是拋錯**。M0a 才跑得起來
-- [ ] `build_factors.py`：跑 `screen_value()` / `screen_deposit()` → `data/derived/`
-- [ ] 最陽春 Streamlit：顯示價值 / 定存兩清單（先剔除、再 rank 的原樣）
+- [x] `fetch_bundle.py`（2026-09-07）：GitHub API 抓 Release `data-latest` 資產（PAT，
+      stdlib urllib）→ `data/upstream/`（rel 路徑照 `_meta.json`）+ `_fetch_result.json`
+- [x] 🔴 **G1 schema assert**：`schema_version` 對不上 raise `BundleError`；每檔比
+      sha256 + parquet 欄位清單 vs `_meta.json`
+- [x] **G3**：`trading_date` 距今 > 5 天 → warning（不失敗），帶進 `_fetch_result.json`
+- [ ] **G5**：`check_upstream_drift.py` 比 hash（`reference/UPSTREAM.md` 已建）—— 延後
+- [x] ⚠️ **只有 U1a 資產時正常收工**——U1b 檔（universe/prices/revenue/chips）缺 →
+      `u1b_available=False` + warning，不拋錯
+- [x] `build_factors.py`：`screen_all()`（`build_lists` 共用）跑 `screen_value/deposit`；
+      讀 bundle universe.parquet（有就用、沒有退化估市值前500 / 不篩）
+- [x] `build_lists.py`：`screen_all()` → `data/derived/{value,deposit,swing}_list.json`
+      + `_meta.json`。「新進/移除」讀上一期 JSON `holdings` 比對（不靠 git diff）。
+      swing_list 是 M1 placeholder。tests：`tests/test_lists.py`（3 個，合成 bundle）
+- [x] screen.py：沒股價時 `value_score` 只用品質排序、不變全 NaN（M0a 清單才有序）
+- [ ] Streamlit：`app/streamlit_app.py` 骨架已能讀這些 JSON；接真 bundle 後驗一次 UI
 
 **M0a 驗收**：本機 `streamlit run` 看得到兩清單（財報類欄位齊、日線類欄位標「不可用」）；
 `fetch_bundle.py` 從 Release 拉得到；tw-hold `tests/` 綠；tw-swing `pytest` 仍綠。

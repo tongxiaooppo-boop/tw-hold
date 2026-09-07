@@ -19,6 +19,7 @@ M0.3 從 `tw-swing/scripts/build_value_factors.py` 搬走。與 tw-swing 版差�
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -93,9 +94,22 @@ def _weekly_vol(prices_hist: pd.DataFrame | None) -> pd.DataFrame | None:
     return vol.reset_index()
 
 
+def _universe_top500() -> tuple[set[str] | None, str]:
+    """U3：讀 bundle 的 universe.parquet 取 `in_universe`（市值前500 ∪ 成交值前500）。
+    沒有這個檔（M0a 只有 U1a）→ (None, 理由)。"""
+    p = BUNDLE_DIR / "fundamentals" / "universe.parquet"
+    if not p.exists():
+        return None, "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾"
+    u = pd.read_parquet(p)
+    col = "in_universe" if "in_universe" in u.columns else None
+    if col is None:
+        return None, "universe.parquet 缺 in_universe 欄"
+    return set(u.loc[u[col], "ticker"].astype(str)), f"universe.parquet：{int(u[col].sum())} 檔"
+
+
 def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str] | None:
-    """TODO(U3): 換成讀 universe.parquet（市值前 500 ∪ 成交值前 500）。
-    現在只用「capital_stock × 最新收盤」估市值前 500；缺收盤就不篩（回 None）。"""
+    """退化估法：universe.parquet 不在時，用「capital_stock × 最新收盤」估市值前 500；
+    缺收盤就不篩（回 None）。"""
     if prices is None or "capital_stock" not in qf.columns:
         return None
     latest = (qf.sort_values("period_end").groupby("ticker")
@@ -105,9 +119,9 @@ def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str]
     return set(mc.dropna(subset=["market_cap"]).nlargest(500, "market_cap")["ticker"])
 
 
-def main() -> int:
-    print(f"bundle 目錄：{BUNDLE_DIR}", flush=True)
-    print("載入財報整併檔…", flush=True)
+def screen_all() -> dict:
+    """跑價值 / 定存篩選，回傳 `{deposit, value, context}`。
+    `build_factors.main()`（parquet + md）與 `build_lists.main()`（JSON）共用。"""
     q = load_quarterly()
     qf = quarterly_factors(q)
     div = load_dividends()
@@ -115,16 +129,39 @@ def main() -> int:
 
     prices = _read_bundle_prices()
     vol = _weekly_vol(None)  # TODO(M0b): 傳 bundle 日線歷史
-    top500 = _top500_by_mktcap(qf, prices)
-    print(f"  季度面板 {qf.shape} · {qf.ticker.nunique()} 檔 · 股利 {divf.shape} · "
-          f"收盤 {'—' if prices is None else len(prices)} · "
-          f"波動 {'—' if vol is None else len(vol)} · "
-          f"市值前500 {'未篩' if top500 is None else len(top500)}", flush=True)
+    top500, uni_note = _universe_top500()
+    if top500 is None:
+        est = _top500_by_mktcap(qf, prices)
+        if est is not None:
+            top500, uni_note = est, uni_note + "；改用 capital_stock×收盤 估市值前500"
 
     dep = screen_deposit(qf, divf, prices=prices, vol=vol)
     val = screen_value(qf, prices=prices)
     dep["in_top500"] = True if top500 is None else dep["ticker"].isin(top500)
     val["in_top500"] = True if top500 is None else val["ticker"].isin(top500)
+
+    meta_p = BUNDLE_DIR / "_meta.json"
+    bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
+    return {
+        "deposit": dep, "value": val,
+        "context": {
+            "quarters": list(qf.shape), "tickers": int(qf.ticker.nunique()),
+            "has_prices": prices is not None, "has_vol": vol is not None,
+            "universe_filtered": top500 is not None, "universe_note": uni_note,
+            "trading_date": bundle_meta.get("trading_date"),
+            "bundle_schema": bundle_meta.get("schema_version"),
+        },
+    }
+
+
+def main() -> int:
+    print(f"bundle 目錄：{BUNDLE_DIR}", flush=True)
+    print("載入財報整併檔…", flush=True)
+    r = screen_all()
+    dep, val, ctx = r["deposit"], r["value"], r["context"]
+    print(f"  季度面板 {ctx['quarters']} · {ctx['tickers']} 檔 · "
+          f"收盤 {'有' if ctx['has_prices'] else '—'} · 波動 {'有' if ctx['has_vol'] else '—'} · "
+          f"{ctx['universe_note']}", flush=True)
 
     DERIVED.mkdir(parents=True, exist_ok=True)
     dep.to_parquet(DERIVED / "factors_deposit.parquet", index=False)
