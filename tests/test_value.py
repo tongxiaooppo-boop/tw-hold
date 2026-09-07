@@ -78,6 +78,24 @@ def test_normalized_eps_攤平循環():
     assert 3.0 < latest["normalized_eps"] < 7.0
 
 
+def test_缺資產負債表的被剔除_不會因離群roe排前面():
+    good = _synth_quarterly("GOOD", growing=True)
+    # NOBAL：只有損益，資產負債表欄位全 NaN（bundle 抓取有洞時的實況，如 1103）
+    nobal = _synth_quarterly("NOBAL", growing=True)
+    for c in ["total_assets", "total_liabilities", "current_assets",
+              "current_liabilities", "equity_parent"]:
+        nobal[c] = np.nan
+    qf = factors.quarterly_factors(_panel(good, nobal))
+    for fn in (screen.screen_value, screen.screen_deposit):
+        kw = {} if fn is screen.screen_value else {"divf": factors.dividend_factors(
+            pd.DataFrame([dict(ticker="NOBAL", year=y, cash_dividend=2.0, cash_earnings=2.0)
+                          for y in range(2017, 2025)]))}
+        res = fn(qf, asof=pd.Timestamp("2024-06-30"), **kw) if kw else fn(qf, asof=pd.Timestamp("2024-06-30"))
+        r = res.set_index("ticker")
+        assert r.loc["NOBAL", "passes"] == False
+        assert "財報不完整" in r.loc["NOBAL", "reject_reason"]
+
+
 def test_價值篩選_fscore低的被剔除():
     good = _synth_quarterly("GOOD", growing=True)
     # BAD：獲利衰退、毛利下滑、現金流轉負

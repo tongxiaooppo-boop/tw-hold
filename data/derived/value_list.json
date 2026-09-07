@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-08-28",
-    "rebuilt_at": "2026-09-07T23:35:12+00:00",
+    "rebuilt_at": "2026-09-07T23:43:48+00:00",
     "bundle_schema": 1,
     "universe_filtered": false,
     "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
@@ -9,21 +9,8 @@
   },
   "holdings": [
     {
-      "ticker": "1103",
-      "value_score": 1.0,
-      "f_score": null,
-      "roe": 7.6906,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.1821,
-      "reject_reason": null
-    },
-    {
       "ticker": "6805",
-      "value_score": 0.9511,
+      "value_score": 0.9532,
       "f_score": 9.0,
       "roe": 0.3836,
       "norm_pe": null,
@@ -36,7 +23,7 @@
     },
     {
       "ticker": "3017",
-      "value_score": 0.9158,
+      "value_score": 0.918,
       "f_score": 8.0,
       "roe": 0.5819,
       "norm_pe": null,
@@ -49,7 +36,7 @@
     },
     {
       "ticker": "2707",
-      "value_score": 0.9043,
+      "value_score": 0.9065,
       "f_score": 8.0,
       "roe": 0.4751,
       "norm_pe": null,
@@ -62,7 +49,7 @@
     },
     {
       "ticker": "3006",
-      "value_score": 0.9021,
+      "value_score": 0.9042,
       "f_score": 8.0,
       "roe": 0.4747,
       "norm_pe": null,
@@ -75,7 +62,7 @@
     },
     {
       "ticker": "8210",
-      "value_score": 0.8952,
+      "value_score": 0.8973,
       "f_score": 8.0,
       "roe": 0.3935,
       "norm_pe": null,
@@ -88,7 +75,7 @@
     },
     {
       "ticker": "8462",
-      "value_score": 0.8769,
+      "value_score": 0.879,
       "f_score": 8.0,
       "roe": 0.3509,
       "norm_pe": null,
@@ -101,7 +88,7 @@
     },
     {
       "ticker": "2330",
-      "value_score": 0.8724,
+      "value_score": 0.8744,
       "f_score": 8.0,
       "roe": 0.3477,
       "norm_pe": null,
@@ -114,7 +101,7 @@
     },
     {
       "ticker": "6291",
-      "value_score": 0.8655,
+      "value_score": 0.8675,
       "f_score": 8.0,
       "roe": 0.344,
       "norm_pe": null,
@@ -127,7 +114,7 @@
     },
     {
       "ticker": "2344",
-      "value_score": 0.8369,
+      "value_score": 0.8385,
       "f_score": 9.0,
       "roe": 0.2431,
       "norm_pe": null,
@@ -140,7 +127,7 @@
     },
     {
       "ticker": "6788",
-      "value_score": 0.8267,
+      "value_score": 0.8285,
       "f_score": 8.0,
       "roe": 0.282,
       "norm_pe": null,
@@ -153,7 +140,7 @@
     },
     {
       "ticker": "2408",
-      "value_score": 0.8199,
+      "value_score": 0.8217,
       "f_score": 8.0,
       "roe": 0.2756,
       "norm_pe": null,
@@ -165,21 +152,8 @@
       "reject_reason": null
     },
     {
-      "ticker": "2101",
-      "value_score": 0.8176,
-      "f_score": 8.0,
-      "roe": 0.2749,
-      "norm_pe": null,
-      "norm_ey": null,
-      "fcf_yield": null,
-      "ev_ebit": null,
-      "net_cash_to_mktcap": null,
-      "gross_margin": 0.3741,
-      "reject_reason": null
-    },
-    {
       "ticker": "7769",
-      "value_score": 0.8174,
+      "value_score": 0.8211,
       "f_score": null,
       "roe": 0.3068,
       "norm_pe": null,
@@ -191,21 +165,21 @@
       "reject_reason": null
     },
     {
-      "ticker": "1808",
-      "value_score": 0.813,
+      "ticker": "2101",
+      "value_score": 0.8194,
       "f_score": 8.0,
-      "roe": 0.2737,
+      "roe": 0.2749,
       "norm_pe": null,
       "norm_ey": null,
       "fcf_yield": null,
       "ev_ebit": null,
       "net_cash_to_mktcap": null,
-      "gross_margin": 0.3064,
+      "gross_margin": 0.3741,
       "reject_reason": null
     },
     {
       "ticker": "7751",
-      "value_score": 0.8128,
+      "value_score": 0.8165,
       "f_score": null,
       "roe": 0.2949,
       "norm_pe": null,
@@ -217,8 +191,21 @@
       "reject_reason": null
     },
     {
+      "ticker": "1808",
+      "value_score": 0.8148,
+      "f_score": 8.0,
+      "roe": 0.2737,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.3064,
+      "reject_reason": null
+    },
+    {
       "ticker": "5234",
-      "value_score": 0.8039,
+      "value_score": 0.8056,
       "f_score": 8.0,
       "roe": 0.2596,
       "norm_pe": null,
@@ -231,7 +218,7 @@
     },
     {
       "ticker": "2539",
-      "value_score": 0.797,
+      "value_score": 0.7987,
       "f_score": 8.0,
       "roe": 0.2509,
       "norm_pe": null,
@@ -244,7 +231,7 @@
     },
     {
       "ticker": "3293",
-      "value_score": 0.7799,
+      "value_score": 0.7822,
       "f_score": 7.0,
       "roe": 0.807,
       "norm_pe": null,
@@ -257,7 +244,7 @@
     },
     {
       "ticker": "3529",
-      "value_score": 0.7708,
+      "value_score": 0.773,
       "f_score": 7.0,
       "roe": 0.653,
       "norm_pe": null,
@@ -270,7 +257,7 @@
     },
     {
       "ticker": "2472",
-      "value_score": 0.7628,
+      "value_score": 0.7643,
       "f_score": 8.0,
       "roe": 0.2342,
       "norm_pe": null,
@@ -283,7 +270,7 @@
     },
     {
       "ticker": "2059",
-      "value_score": 0.7616,
+      "value_score": 0.7638,
       "f_score": 7.0,
       "roe": 0.5121,
       "norm_pe": null,
@@ -296,7 +283,7 @@
     },
     {
       "ticker": "5904",
-      "value_score": 0.7593,
+      "value_score": 0.7615,
       "f_score": 7.0,
       "roe": 0.4994,
       "norm_pe": null,
@@ -309,7 +296,7 @@
     },
     {
       "ticker": "8390",
-      "value_score": 0.7537,
+      "value_score": 0.7551,
       "f_score": 8.0,
       "roe": 0.2284,
       "norm_pe": null,
@@ -322,7 +309,7 @@
     },
     {
       "ticker": "6903",
-      "value_score": 0.7525,
+      "value_score": 0.7547,
       "f_score": 7.0,
       "roe": 0.3984,
       "norm_pe": null,
@@ -335,7 +322,7 @@
     },
     {
       "ticker": "1476",
-      "value_score": 0.7514,
+      "value_score": 0.7528,
       "f_score": 8.0,
       "roe": 0.2282,
       "norm_pe": null,
@@ -348,7 +335,7 @@
     },
     {
       "ticker": "2442",
-      "value_score": 0.7502,
+      "value_score": 0.7524,
       "f_score": 7.0,
       "roe": 0.3977,
       "norm_pe": null,
@@ -361,7 +348,7 @@
     },
     {
       "ticker": "7744",
-      "value_score": 0.7443,
+      "value_score": 0.7477,
       "f_score": null,
       "roe": 0.2572,
       "norm_pe": null,
@@ -374,7 +361,7 @@
     },
     {
       "ticker": "6138",
-      "value_score": 0.7434,
+      "value_score": 0.7455,
       "f_score": 7.0,
       "roe": 0.3741,
       "norm_pe": null,
@@ -387,7 +374,7 @@
     },
     {
       "ticker": "5536",
-      "value_score": 0.7411,
+      "value_score": 0.7432,
       "f_score": 7.0,
       "roe": 0.3725,
       "norm_pe": null,
@@ -397,20 +384,27 @@
       "net_cash_to_mktcap": null,
       "gross_margin": 0.211,
       "reject_reason": null
+    },
+    {
+      "ticker": "6561",
+      "value_score": 0.7386,
+      "f_score": 7.0,
+      "roe": 0.3599,
+      "norm_pe": null,
+      "norm_ey": null,
+      "fcf_yield": null,
+      "ev_ebit": null,
+      "net_cash_to_mktcap": null,
+      "gross_margin": 0.4917,
+      "reject_reason": null
     }
   ],
   "changes": {
     "added": [
-      "1103",
-      "2442",
-      "8390",
-      "8462"
+      "6561"
     ],
     "removed": [
-      "1513",
-      "2727",
-      "2731",
-      "6561"
+      "1103"
     ]
   }
 }

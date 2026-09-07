@@ -89,6 +89,9 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
 
     # ── 硬門檻（剔除）────────────────────────────────────────
     reasons: dict[str, pd.Series] = {
+        # 缺資產負債表 → roe/負債比/FCF 全算不出（bundle 抓取有洞時會發生）。
+        # 不擋的話這種股票的離群 roe 會把它排到清單前面。
+        "財報不完整（缺資產負債表）": d["total_assets"].isna() | d["equity_parent"].isna(),
         "eps 近4季非全正": ~d["eps_4q_positive"],
         "連續配息 < 5 年": d["div_years"].fillna(0) < 5,
         "近5年有減配": d["div_cut_5y"].fillna(False),
@@ -145,6 +148,7 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
             d[c] = np.nan
 
     reasons = {
+        "財報不完整（缺資產負債表）": d["total_assets"].isna() | d["equity_parent"].isna(),
         "F-Score < 6": d["f_score"] < 6,
         "營收連3季衰退": weak_rev.reindex(d.index).fillna(False),
         "毛利率5年下滑": (gm_now.reindex(d.index) < gm_old.reindex(d.index)),
