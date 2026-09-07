@@ -1,0 +1,86 @@
+name: 每日重算三清單
+
+# tw-swing publish（U1a/U1b）完成後，用 repository_dispatch 觸發這支：
+# 拉 bundle → 算因子 → 產三清單 JSON → commit 回 data/derived/。
+#
+# ⚠️ **不排 cron**（PLAN §M0.2）：cron 空跑會冷啟 + 產生無意義 commit。
+#    tw-swing 那邊 publish 成功後發 dispatch；沒有新 bundle 就不重算。
+#    手動重算用 workflow_dispatch。
+#
+# 🔴 **現況（M0.2）：這支還不能實際跑完**——fetch_bundle.py 尚未接線
+#    （等 M0.1a 第一個 Release `data-latest`），清單產生腳本（build lists）待寫。
+#    先放結構 + notify-failure，逐步補 step。
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [bundle-published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 拉上游 bundle
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: |
+          echo "TODO(M0.5): python fetch_bundle.py  — 現在會 raise NotImplemented"
+          # python fetch_bundle.py
+
+      - name: 算因子 + 三清單
+        run: |
+          echo "TODO: python build_factors.py && python build_lists.py"
+          # python build_factors.py
+          # python build_lists.py   # → data/derived/{value,deposit,swing}_list.json + _meta.json
+
+      - name: commit data/derived/
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/derived/ || true
+          git diff --cached --quiet && { echo "無變更"; exit 0; }
+          git commit -m "rebuild: 三清單 $(date -u +%F) (${{ github.event_name }})"
+          git push
+
+  # ⚠️ 這個 job 自己絕對不可以失敗（抄自 tw-swing daily.yml）。
+  notify-failure:
+    needs: rebuild
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 送出失敗通知
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="🔴 tw-hold 每日重算失敗（觸發：${{ github.event_name }}）
+          ${RUN_URL}
+          清單沒更新不影響真錢（tw-hold 是決策支援不上真錢），但 app 會顯示舊日期。
+          先看是哪一步紅的：拉 bundle 失敗（上游 Release / PAT）還是算因子失敗。"
+          echo "$MSG"
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::沒設 ALERT_WEBHOOK Secret，這次失敗只留在 Actions 紀錄裡"
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content: $m, text: $m}')" \
+            || echo "::warning::告警送不出去，但失敗這件事仍記在 Actions 紀錄裡"
+          exit 0
