@@ -1,10 +1,10 @@
 {
   "_meta": {
     "trading_date": "2026-08-28",
-    "rebuilt_at": "2026-09-07T15:43:26+00:00",
+    "rebuilt_at": "2026-09-07T23:35:12+00:00",
     "bundle_schema": 1,
-    "universe_filtered": true,
-    "note": "universe.parquet：611 檔",
+    "universe_filtered": false,
+    "note": "universe.parquet 不在 bundle（U1b 未發佈）→ 清單不做市值前500 過濾",
     "u1b_pending": true
   },
   "holdings": [],
