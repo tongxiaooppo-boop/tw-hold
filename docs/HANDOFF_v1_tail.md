@@ -24,7 +24,7 @@
 - **個股查詢**：輸入代號 → 7 類 plotly 圖（K線 / 季EPS / 三率 / 現金流 / 股利 / 本益比河流圖 / F-Score 9 分項）。
 - **警語**：每個分頁頂部 + 底部都有；長波段另加「無回測支撐」。
 
-**commit 位置**：tw-hold `main` @ `d955267`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
+**commit 位置**：tw-hold `main` @ `b0b35aa`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
 tests：tw-hold 全套 **43 passed**。個股查詢分頁 Cloud crash 已修（見 §5b，真因是 `import charts` 撞到 repo 根的空套件）。
 
 **進度細節**（權威）：記憶 `tw-hold-m1-progress` / `tw-hold-m2-progress` / `tw-hold-m3-progress` / `tw-hold-m4-progress`。
