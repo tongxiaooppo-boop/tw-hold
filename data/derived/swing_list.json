@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-07",
-    "rebuilt_at": "2026-09-08T04:57:00+00:00",
+    "rebuilt_at": "2026-09-08T08:09:54+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -27,6 +27,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.26562787821842826,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 1164397.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -74,6 +75,7 @@
       "support": [
         "季 EPS YoY +92%（遠超 25% 門檻）",
         "月營收 YoY +27%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 1,164 張",
         "距 50MA 僅 +5%（進場點貼近支撐）"
       ],
@@ -91,7 +93,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -113,6 +115,7 @@
       "f_score": 8.0,
       "revenue_yoy": 0.4611671250325682,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 39791274.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -160,6 +163,7 @@
       "support": [
         "季 EPS YoY +360%（遠超 25% 門檻）",
         "月營收 YoY +46%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 39,791 張"
       ],
       "oppose": [
@@ -176,7 +180,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -198,6 +202,7 @@
       "f_score": 7.0,
       "revenue_yoy": 3.555224648845101,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 250257.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -245,6 +250,7 @@
       "support": [
         "季 EPS YoY +1053%（遠超 25% 門檻）",
         "月營收 YoY +356%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 250 張"
       ],
       "oppose": [
@@ -262,7 +268,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -284,6 +290,7 @@
       "f_score": 7.0,
       "revenue_yoy": 0.1898196955506446,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 23868781.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -335,7 +342,7 @@
         "距 52 週高 -20%（尚有空間）"
       ],
       "oppose": [
-        "（未發現反對證據——這代表檢查不足，不代表完美）"
+        "月營收 YoY 較上月減速"
       ],
       "invalidation": [
         {
@@ -348,7 +355,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -370,6 +377,7 @@
       "f_score": 8.0,
       "revenue_yoy": 0.4468755126916979,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 19391099.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -421,6 +429,7 @@
         "距 50MA 僅 +3%（進場點貼近支撐）"
       ],
       "oppose": [
+        "月營收 YoY 較上月減速",
         "距 52 週高僅 -2%（追高風險）",
         "股價 2460 元（高價股，零股以外難分批）"
       ],
@@ -435,7 +444,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -457,6 +466,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.4511594327460249,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 17702953.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -504,6 +514,7 @@
       "support": [
         "季 EPS YoY +475%（遠超 25% 門檻）",
         "月營收 YoY +45%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 17,703 張"
       ],
       "oppose": [
@@ -521,7 +532,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -543,6 +554,7 @@
       "f_score": 6.0,
       "revenue_yoy": 1.9658747366830234,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 50646729.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -590,6 +602,7 @@
       "support": [
         "季 EPS YoY +442%（遠超 25% 門檻）",
         "月營收 YoY +197%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 50,647 張",
         "距 50MA 僅 +6%（進場點貼近支撐）"
       ],
@@ -607,7 +620,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -629,6 +642,7 @@
       "f_score": 8.0,
       "revenue_yoy": 0.5739113833331853,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 7605773.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -679,6 +693,7 @@
         "法人 20 日淨買超 7,606 張"
       ],
       "oppose": [
+        "月營收 YoY 較上月減速",
         "距 50MA +26%（乖離大、追漲風險）",
         "到停損位 +14%（停損位遠、單筆風險高）",
         "股價 3420 元（高價股，零股以外難分批）"
@@ -694,7 +709,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -716,6 +731,7 @@
       "f_score": 6.0,
       "revenue_yoy": 1.7653575803052206,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 2777599.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -763,6 +779,7 @@
       "support": [
         "季 EPS YoY +340%（遠超 25% 門檻）",
         "月營收 YoY +177%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 2,778 張"
       ],
       "oppose": [
@@ -781,7 +798,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -803,6 +820,7 @@
       "f_score": 6.0,
       "revenue_yoy": 3.3129143292143484,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 9285516.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -850,6 +868,7 @@
       "support": [
         "季 EPS YoY +1078%（遠超 25% 門檻）",
         "月營收 YoY +331%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 9,286 張",
         "距 50MA 僅 +3%（進場點貼近支撐）",
         "距 52 週高 -19%（尚有空間）"
@@ -868,7 +887,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -890,6 +909,7 @@
       "f_score": 7.0,
       "revenue_yoy": 0.5226332695833094,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 6337918.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -937,6 +957,7 @@
       "support": [
         "季 EPS YoY +105%（遠超 25% 門檻）",
         "月營收 YoY +52%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 6,338 張",
         "距 50MA 僅 +5%（進場點貼近支撐）"
       ],
@@ -954,7 +975,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -976,6 +997,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.06551860148771449,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 1627662.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1022,6 +1044,7 @@
       ],
       "support": [
         "季 EPS YoY +217%（遠超 25% 門檻）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 1,628 張",
         "距 50MA 僅 +5%（進場點貼近支撐）"
       ],
@@ -1039,7 +1062,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1061,6 +1084,7 @@
       "f_score": 9.0,
       "revenue_yoy": 0.01626575297753763,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 9452301.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1111,6 +1135,7 @@
       ],
       "oppose": [
         "月營收 YoY 僅 +2%（勉強過門檻）",
+        "月營收 YoY 較上月減速",
         "距 50MA +53%（乖離大、追漲風險）",
         "到停損位 +18%（停損位遠、單筆風險高）"
       ],
@@ -1125,7 +1150,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1147,6 +1172,7 @@
       "f_score": 7.0,
       "revenue_yoy": 0.13582157910215908,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 1122760.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1197,7 +1223,7 @@
         "距 50MA 僅 +8%（進場點貼近支撐）"
       ],
       "oppose": [
-        "（未發現反對證據——這代表檢查不足，不代表完美）"
+        "月營收 YoY 較上月減速"
       ],
       "invalidation": [
         {
@@ -1210,7 +1236,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1232,6 +1258,7 @@
       "f_score": 7.0,
       "revenue_yoy": 0.9095964446430735,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 2504375.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1279,6 +1306,7 @@
       "support": [
         "季 EPS YoY +101%（遠超 25% 門檻）",
         "月營收 YoY +91%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 2,504 張"
       ],
       "oppose": [
@@ -1297,7 +1325,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1319,6 +1347,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.43152484885491416,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 3255780.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1366,6 +1395,7 @@
       "support": [
         "季 EPS YoY +176%（遠超 25% 門檻）",
         "月營收 YoY +43%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 3,256 張",
         "距 50MA 僅 +1%（進場點貼近支撐）"
       ],
@@ -1383,7 +1413,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1405,6 +1435,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.9759287014515903,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 434135.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1452,6 +1483,7 @@
       "support": [
         "季 EPS YoY +166%（遠超 25% 門檻）",
         "月營收 YoY +98%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 434 張"
       ],
       "oppose": [
@@ -1471,7 +1503,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1493,6 +1525,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.1741756969783823,
       "c_rev_yoy": true,
+      "revenue_accel": false,
       "inst_net20": 1082268.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1543,7 +1576,7 @@
         "距 50MA 僅 +5%（進場點貼近支撐）"
       ],
       "oppose": [
-        "（未發現反對證據——這代表檢查不足，不代表完美）"
+        "月營收 YoY 較上月減速"
       ],
       "invalidation": [
         {
@@ -1556,7 +1589,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1578,6 +1611,7 @@
       "f_score": 6.0,
       "revenue_yoy": 0.3787145230218789,
       "c_rev_yoy": true,
+      "revenue_accel": true,
       "inst_net20": 182804.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1625,6 +1659,7 @@
       "support": [
         "季 EPS YoY +238%（遠超 25% 門檻）",
         "月營收 YoY +38%（成長明確）",
+        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 183 張",
         "距 52 週高 -19%（尚有空間）"
       ],
@@ -1643,7 +1678,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（加速判定待 revenue 歷史進 bundle）"
+          "目前": "未觸發（YoY 仍加速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
