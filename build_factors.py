@@ -82,6 +82,19 @@ def _read_bundle_prices() -> pd.DataFrame | None:
     return None
 
 
+def _read_bundle_price_history(lookback_weeks: int = 160) -> pd.DataFrame | None:
+    """從 bundle `prices_adj.parquet` 取還原日線歷史 `[date, ticker, close]`
+    （近 ~3 年，週波動足夠）。缺檔就回 None。"""
+    p = BUNDLE_DIR / "prices_adj.parquet"
+    if not p.exists():
+        return None
+    d = pd.read_parquet(p, columns=["date", "ticker", "close"])
+    d["date"] = pd.to_datetime(d["date"])
+    d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
+    cutoff = d["date"].max() - pd.Timedelta(weeks=lookback_weeks)
+    return d[d["date"] >= cutoff].reset_index(drop=True)
+
+
 def _weekly_vol(prices_hist: pd.DataFrame | None) -> pd.DataFrame | None:
     """年化週報酬標準差——低波動是定存區的核心因子。缺日線歷史就回 None。"""
     if prices_hist is None or {"date", "ticker", "close"} - set(prices_hist.columns):
@@ -128,7 +141,7 @@ def screen_all() -> dict:
     divf = dividend_factors(div, annual_eps(qf))
 
     prices = _read_bundle_prices()
-    vol = _weekly_vol(None)  # TODO(M0b): 傳 bundle 日線歷史
+    vol = _weekly_vol(_read_bundle_price_history())
     top500, uni_note = _universe_top500()
     if top500 is None:
         est = _top500_by_mktcap(qf, prices)
