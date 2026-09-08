@@ -34,8 +34,18 @@ def test_自訂日期欄_period_end():
     assert out["eps"].tolist() == [3.0, 3.0]
 
 
+def test_減資_factor小於1_放大分割日前的價(monkeypatch):
+    import reference.corporate_actions as ca
+    monkeypatch.setitem(ca.SPLITS, "9999", [{"date": "2026-01-01", "factor": 0.5}])
+    df = pd.DataFrame({"ticker": ["9999", "9999"],
+                       "date": pd.to_datetime(["2025-12-31", "2026-01-02"]),
+                       "close": [30.0, 60.0]})
+    out = ca.adjust_per_share(df, ["close"])
+    assert out["close"].tolist() == [60.0, 60.0]   # 減資後股價往上，舊價被放大
+
+
 def test_對照表格式():
     for tk, events in SPLITS.items():
         assert tk.isdigit()
         for e in events:
-            assert pd.Timestamp(e["date"]) and e["factor"] > 1
+            assert pd.Timestamp(e["date"]) and e["factor"] > 0 and e["factor"] != 1

@@ -119,6 +119,46 @@ def _read_bundle_per_history() -> pd.DataFrame | None:
     return d
 
 
+def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
+    """掃 `prices_adj` 近期有沒有「非除息日的 ~Nx 單日跳空」——上游沒還原的面額變更
+    / 股票分割的症狀。已在 reference.corporate_actions.SPLITS 的不算。
+
+    回傳警示字串（每檔一條）。build_lists 會印出來（rebuild.yml log 看得到）
+    + 塞進清單 warning。這是「提醒去 TWSE 查基準日+比例、加進 SPLITS」的觸發器，
+    不自動還原（啟發式會誤傷）。"""
+    from reference.corporate_actions import SPLITS
+    p = BUNDLE_DIR / "prices_adj.parquet"
+    if not p.exists():
+        return []
+    d = pd.read_parquet(p, columns=["date", "ticker", "close"])
+    d["date"] = pd.to_datetime(d["date"])
+    d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
+    d = d[(d["date"] >= d["date"].max() - pd.Timedelta(days=lookback_days))
+          & (d["close"] > 0)].sort_values(["ticker", "date"])
+    known = set(SPLITS)
+    out = []
+    for tk, g in d.groupby("ticker", sort=False):
+        if tk in known or len(g) < 12:
+            continue
+        c = g["close"].to_numpy()
+        dt = g["date"].to_numpy()
+        r = c[1:] / c[:-1]
+        idx = [i for i in np.where((r < 0.55) | (r > 1.8))[0]
+               if 5 <= i <= len(c) - 6]
+        # 前 5 日 vs 後 5 日中位數也差一個量級才算「站得住」（濾單日壞值）
+        idx = [i for i in idx
+               if not 0.6 < np.median(c[i + 1:i + 6]) / np.median(c[i - 4:i + 1]) < 1.7]
+        # 同檔 25 日內有反向跳空 = 一段壞資料來回，不是分割 → 整檔略過
+        if any((r[i] - 1) * (r[j] - 1) < 0 and abs(i - j) <= 17
+               for a, i in enumerate(idx) for j in idx[a + 1:]):
+            continue
+        for i in idx:
+            out.append(f"{tk} {pd.Timestamp(dt[i + 1]).date()} 還原收盤 ×{r[i]:.2f}"
+                       f"——疑似未還原的面額變更/分割，去 TWSE 查基準日+比例加進 "
+                       f"reference.corporate_actions.SPLITS")
+    return out
+
+
 def _read_bundle_ohlc() -> pd.DataFrame | None:
     """bundle `prices_adj.parquet` 全欄（date/ticker/OHLC/volume）——候選池趨勢模板 + ATR 用。"""
     p = BUNDLE_DIR / "prices_adj.parquet"
