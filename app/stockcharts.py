@@ -82,6 +82,27 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
     return _style(fig, f"{name} 月營收 + YoY", 360)
 
 
+def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
+    """法人買賣超：外資／投信／自營柱狀（張，堆疊）+ 三大合計 20 日累計線（右軸）。
+    `start` 只裁 x 軸，累計線用完整歷史算。"""
+    d = chips.copy().sort_values("date")
+    d["date"] = pd.to_datetime(d["date"])
+    d["cum20"] = (d["foreign"] + d["trust"] + d["dealer"]).rolling(20).sum()
+    fig = go.Figure([
+        go.Bar(x=d["date"], y=d["foreign"], name="外資", marker_line_width=0),
+        go.Bar(x=d["date"], y=d["trust"], name="投信", marker_line_width=0),
+        go.Bar(x=d["date"], y=d["dealer"], name="自營", marker_line_width=0),
+        go.Scatter(x=d["date"], y=d["cum20"], name="三大合計20日累計", yaxis="y2",
+                   line=dict(width=2, color="#e9ece6")),
+    ])
+    fig.update_layout(barmode="relative",
+                      yaxis2=dict(overlaying="y", side="right", showgrid=False,
+                                  zeroline=True, zerolinecolor="rgba(233,236,230,.25)"))
+    if start is not None:
+        fig.update_xaxes(range=[pd.Timestamp(start), d["date"].max()])
+    return _style(fig, f"{name} 法人買賣超（張）", 360)
+
+
 def quarterly_eps(qf: pd.DataFrame, name: str) -> go.Figure:
     d = qf.tail(20)
     fig = go.Figure([

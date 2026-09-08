@@ -75,6 +75,16 @@ def test_margins_三率():
     assert {t.name for t in fig.data} == {"毛利率", "營益率", "稅後淨利率"}
 
 
+def test_institutional_net_三法人柱加累計線():
+    dates = pd.date_range("2026-01-01", periods=40, freq="B")
+    c = pd.DataFrame({"date": dates, "foreign": np.arange(40) - 20.0,
+                      "trust": 1.0, "dealer": -0.5})
+    fig = ch.institutional_net(c, "測試")
+    names = {t.name for t in fig.data}
+    assert {"外資", "投信", "自營", "三大合計20日累計"} <= names
+    assert fig.layout.barmode == "relative"
+
+
 def test_monthly_revenue_柱加YoY線():
     m = pd.period_range("2022-01", periods=30, freq="M").astype(str)
     rev = pd.DataFrame({"month": pd.to_datetime(m),
