@@ -34,8 +34,13 @@ def _dest(name: str) -> Path:
 
 
 def ensure_assets() -> dict:
-    """把個股頁要的 bundle 檔下載到 `data/upstream/`（已存在且非空就跳過）。
-    回傳 `{name: bool 有沒有}`。呼叫端用 `st.cache_resource` 包一次。"""
+    """把個股頁要的 bundle 檔下載到 `data/upstream/`。
+    回傳 `{name: bool 有沒有}`。呼叫端用 `st.cache_resource` 包一次。
+
+    ⚠️ 本地檔大小和 Release 資產不一致就**重抓**——bundle schema 換過（如
+    revenue.parquet 從單月快照改長表）而容器沒重建時，舊版「存在且非空」會被
+    永遠留著。比對 `size` 最省（不用雜湊）。
+    """
     pat = fb._read_pat()
     if not pat:
         return {n: _dest(n).exists() for n in _ASSETS}
@@ -43,12 +48,14 @@ def ensure_assets() -> dict:
     got = {}
     for name in _ASSETS:
         d = _dest(name)
-        if d.exists() and d.stat().st_size > 0:
+        asset = by_name.get(name)
+        want_size = asset.get("size") if asset else None
+        if d.exists() and d.stat().st_size > 0 and (
+                want_size is None or d.stat().st_size == want_size):
             got[name] = True
             continue
-        asset = by_name.get(name)
         if asset is None:
-            got[name] = False
+            got[name] = d.exists()
             continue
         d.parent.mkdir(parents=True, exist_ok=True)
         d.write_bytes(fb._api(asset["url"], pat, accept="application/octet-stream"))
