@@ -230,6 +230,13 @@ def main() -> int:
     }
     DERIVED.mkdir(parents=True, exist_ok=True)
 
+    from build_factors import detect_unhandled_splits
+    split_warn = detect_unhandled_splits()
+    for w in split_warn:
+        print(f"  ⚠ 疑似未還原分割：{w}")
+    if split_warn:
+        meta["split_warning"] = "；".join(split_warn)
+
     _write("value", _build("value", r["value"], "value_score", VALUE_COLS,
                            meta, has_ind, asof))
     _write("deposit", _build("deposit", r["deposit"], "safety_score", DEPOSIT_COLS,
