@@ -1,5 +1,8 @@
 # tw-hold v1 收尾交接 — 給下一輪
 
+> 🔴 **已被 `docs/HANDOFF_2026-09-08.md` 取代**——v1 收尾（⑤④⑥③）全數完成 2026-09-08。
+> 這份留作過程紀錄；新的一輪讀 `HANDOFF_2026-09-08.md`。
+
 > **自足執行指令。你在全新對話、沒有上下文。** 讀完這份就能動工。
 > 環境：Windows，`d:\g\claude\` 底下有 `tw-swing\`、`tw-hold\`、`books\`。
 > ⚠️ **bash 工具的 cwd 是 `d:\g\claude`**——跑腳本先 `cd /d/g/claude/tw-hold` 或 `tw-swing`。
