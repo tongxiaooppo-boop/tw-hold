@@ -98,12 +98,17 @@ def cashflow(qf: pd.DataFrame, name: str) -> go.Figure:
 
 def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
     d = div[div["year"] >= div["year"].max() - 12] if not div.empty else div
+    # 一年多次配息（季配／半年配）→ 每筆各自一段疊在同一年的柱子上。給每段描邊，
+    # 段跟段之間才看得出「今年配了幾次、各配多少」。按實際配息日排序讓疊放依時序。
+    if "pay_date" in d.columns:
+        d = d.sort_values(["year", "pay_date"])
+    edge = dict(marker_line_color="rgba(233,236,230,.55)", marker_line_width=1)
     fig = go.Figure([
-        go.Bar(x=d["year"], y=d["CashEarningsDistribution"], name="現金股利"),
-        go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利"),
+        go.Bar(x=d["year"], y=d["CashEarningsDistribution"], name="現金股利", **edge),
+        go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利", **edge),
     ])
     fig.update_layout(barmode="stack")
-    return _style(fig, f"{name} 逐年股利（元/股）", 340)
+    return _style(fig, f"{name} 逐年股利（元/股，同年多段＝分次配息）", 340)
 
 
 def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.Figure:
