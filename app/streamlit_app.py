@@ -264,7 +264,7 @@ def _stock_data(code: str) -> dict:
 
 
 def _stock_page() -> None:
-    import charts as ch
+    import stockcharts as ch
     _disclaimer()
     st.header("個股查詢")
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
