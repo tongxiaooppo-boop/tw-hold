@@ -16,10 +16,21 @@ app：**https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/**（Streamlit Comm
 
 | | commit | 測試 |
 | :-- | :-- | :-- |
-| tw-hold `main` | `1a11d9b` | `pytest -q` → **55 passed** |
-| tw-swing `master` | `32351a9` | 782 passed |
+| tw-hold `main` | `8450be1` | `pytest -q` → **66 passed** |
+| tw-swing `master` | `8030d87` | 782 passed |
 
 兩 repo clean + push。
+
+**2026-09-08 下半天續做**（UI 收尾後）：
+- UI：清單代號可點跳個股查詢（`st.tabs`→`st.radio` 導覽 + `?code=` 連結）、股利圖分次配息
+  描邊、原始季度數據改千元+千分號。
+- **股票分割還原**：`reference/corporate_actions.py`（`SPLITS` 5904/0052/4747/6949 +
+  `IGNORE_JUMPS`）+ `build_factors.detect_unhandled_splits()` build 時自動偵測。5904 verdict
+  資料不足→觀望。見記憶 `tw-hold-split-adjustment-gap`。
+- **④ 月營收歷史**：bundle `revenue.parquet` 改長表（tw-swing `build_revenue_history.py` +
+  版控 `revenue_history.parquet`）→ 個股頁月營收圖 + 候選池 `revenue_accel`。
+  ⚠️ **需 `publish_bundle.yml` 跑一次**（每日 06:00 UTC 或手動 dispatch）新 schema 才生效。
+  見記憶 `tw-hold-revenue-history`。
 
 - **價值 / 定存清單**：各 15 檔，季表凍結（換股日 3/31、5/15、8/14、11/14）+ 候補變動 + 產業 ≤ 40% cap。
 - **長波段候選池**：19 檔，CANSLIM + Minervini 8/8 全狀態，無 verdict / 無排名，支持/反對 + §5.3 風控。
@@ -92,22 +103,16 @@ commit：tw-swing `32351a9`、tw-hold `9731273`。
 ⚠️ 改 app 一定本地 `PYTHONIOENCODING=utf-8 python -m pytest -q` + AppTest 過再 push
 （`streamlit run` 本機無瀏覽器截不了圖，靠使用者看 Cloud）。
 
-### A2. 已知分割待人工核 🟡
-`detect_unhandled_splits()` 2026-09-08 偵測到 6 個未還原跳空候選：0052 / 2380 / 4747 /
-4950（疑減資）/ 5314 / 7772。查 TWSE 基準日+比例，真的是分割/減資就加進
-`reference/corporate_actions.py` 的 `SPLITS`。5904 寶雅已處理。見記憶 `tw-hold-split-adjustment-gap`。
+### ✅ A2. 分割待人工核 —— 2026-09-08 核完
+使用者提供官方拆分日+比例。`SPLITS`：5904 / 0052 / 4747 / 6949。2327 / 4763 / 6781
+data_pack 已還原。`IGNORE_JUMPS`：2380 / 4950 / 7772（疑減資缺比例）/ 5314（2026 事件待查）。
+6949 日期在資料尾端、bundle 完整後回頭校。見記憶 `tw-hold-split-adjustment-gap`。
 
-### B. ④ 月營收歷史 🟡 —— **要動 bundle**
-`app/stockcharts.py` 的月營收圖是 `st.info` placeholder；M1 候選池 `revenue_accel`
-「加速」判定也略過（只用 `revenue_yoy > 0`）。根因：bundle `revenue.parquet` 只有
-**單月快照**（每檔 1 筆）。
-- 修 tw-swing `scripts/build_u1b_bundle.py`：把 `data/revenue/` 逐月快照（`fundamentals.yml`
-  已在抓）疊成歷史表打進 bundle，或改用 TWSE 整批檔。
-- 補完：`stockcharts.py` 加 `monthly_revenue()` 圖（YoY / MoM 柱狀）；
-  `screener/candidate_pool.py` 的 `revenue_yoy()` 加回 `revenue_accel`（本月 YoY > 上月 YoY）。
-- ⚠️ 動 `build_u1b_bundle.py` / `publish_bundle.yml` 可以，**不碰 daily.yml / pipeline / 回測**。
+### ✅ B. ④ 月營收歷史 —— 2026-09-08 完成
+見上方「續做」+ 記憶 `tw-hold-revenue-history`。**下一輪確認 `publish_bundle` 跑過、
+tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N 個月」）。
 
-### C. ⑥ 小尾巴 🟢 —— **④ 做完再做**
+### C. ⑥ 小尾巴 🟢 —— **下一個做**
 
 | 項 | 說明 |
 | :-- | :-- |
