@@ -30,9 +30,9 @@ except Exception:
 TOP_N = 30
 
 #: 每個清單在 holdings 裡揭露的欄位（存在才帶）。
-VALUE_COLS = ["value_score", "f_score", "roe", "norm_pe", "norm_ey", "fcf_yield",
-              "ev_ebit", "net_cash_to_mktcap", "gross_margin", "reject_reason"]
-DEPOSIT_COLS = ["safety_score", "div_years", "last_cash_dividend", "fcf_yield",
+VALUE_COLS = ["close", "value_score", "f_score", "roe", "norm_pe", "norm_ey",
+              "fcf_yield", "ev_ebit", "net_cash_to_mktcap", "gross_margin", "reject_reason"]
+DEPOSIT_COLS = ["close", "safety_score", "div_years", "last_cash_dividend", "fcf_yield",
                 "ann_vol", "roe", "payout_ratio_ttm", "cyclical_penalty",
                 "debt_ratio", "reject_reason"]
 
