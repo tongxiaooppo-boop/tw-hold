@@ -11,7 +11,7 @@ tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
 - 個股查詢：不打分，數據 + plotly 圖表；不在前 500 大的即時補 FinMind（僅本地）
 - 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）
 
-規格見 [PRD.md](PRD.md)（凍結）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜進度 [docs/M0_HANDOFF.md](docs/M0_HANDOFF.md)｜v1 收尾 [docs/HANDOFF_v1_tail.md](docs/HANDOFF_v1_tail.md)｜AI 解說層設計 [docs/AI_LAYER.md](docs/AI_LAYER.md)（v2、未實作）｜介面草模 `scratchpad/tw-hold-mock.html`。
+規格見 [PRD.md](PRD.md)（凍結）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜**最新交接 [docs/HANDOFF_2026-09-08.md](docs/HANDOFF_2026-09-08.md)**（v1 收尾完成，下一步 AI 層）｜AI 解說層設計 [docs/AI_LAYER.md](docs/AI_LAYER.md)（未實作）｜介面草模 `scratchpad/tw-hold-mock.html`。
 
 > ⚠️ **PRD §8/§9〈已定〉區塊部分過時**（寫於 opus 審核前）：提到的「`tw-data` 公開 repo 唯一抓取者 / 匿名零 token / tw-hold 私有」已被 §10.1 取代——**現行：tw-hold public、bundle 走 tw-swing 私有 Release + fine-grained PAT、不建 `tw-data`**。以 §3.1.1 / §10.1 / `docs/M0_HANDOFF.md` 為準。
 
