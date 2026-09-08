@@ -1,0 +1,10 @@
+# tw-hold — 固定深色主題（使用者裁決 2026-09-08：不用 Streamlit 明亮模式）。
+# 這裡定的是「地基色」；字體、卡片、圖表細節在 app/streamlit_app.py 的 _inject_css()
+# 與 app/stockcharts.py 裡對齊同一組色票（見那邊的 --thc-* 變數）。
+[theme]
+base = "dark"
+primaryColor = "#5fb89e"                 # 松綠 accent（深底調亮版）
+backgroundColor = "#131511"              # 主畫布：帶一點綠的近黑
+secondaryBackgroundColor = "#1e211a"     # 卡片 / 側欄 / 程式碼區 / 表格底
+textColor = "#e9ece6"
+font = "sans serif"
