@@ -3,11 +3,19 @@ name: 每日重算三清單
 # tw-swing publish（U1a/U1b）完成後，用 repository_dispatch 觸發這支：
 # 拉 bundle → 算因子 → 產三清單 JSON → commit 回 data/derived/。
 #
-# ⚠️ **不排 cron**（PLAN §M0.2）：cron 空跑會冷啟 + 產生無意義 commit。
-#    tw-swing 那邊 publish 成功後發 dispatch；沒有新 bundle 就不重算。
-#    手動重算用 workflow_dispatch。
-#
 # M0b：已接線——fetch_bundle → build_lists → commit data/derived/。
+#
+# ## 自動觸發（M3——目前刻意手動，PLAN §M3「先手動跑幾天再開排程」）
+#
+# 兩條路，擇一，等使用者觀察幾天後決定：
+#  (a) 【建議】tw-swing `publish_bundle.yml` 末尾加 curl 發 repository_dispatch
+#      `bundle-published` → 本檔。需 tw-hold 給一顆 PAT、設成 tw-swing 的
+#      secret `TWHOLD_DISPATCH_PAT`（contents:write 或 actions:write）。
+#      好處：只有真的有新 bundle 才重算，不會空跑。
+#  (b) 直接在下面 `on:` 加 cron（平日 UTC 07:30，publish_bundle 06:00 之後）：
+#        schedule:
+#          - cron: "30 7 * * 1-5"
+#      壞處：bundle 沒更新的日子也會冷啟 + 產生只有 rebuilt_at 變的 commit。
 
 on:
   workflow_dispatch:

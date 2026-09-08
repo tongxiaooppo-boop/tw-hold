@@ -160,13 +160,18 @@ def _universe_top500() -> tuple[set[str] | None, str]:
     return set(u.loc[u[col], "ticker"].astype(str)), f"universe.parquet：{int(u[col].sum())} 檔"
 
 
-def _industry_map() -> dict[str, str]:
-    """ticker → 產業別（bundle universe.parquet 的 `industry` 欄）。缺檔 → 空 dict。"""
+def _universe_maps() -> tuple[dict[str, str], dict[str, str]]:
+    """(ticker→產業別, ticker→股名)，都來自 bundle `universe.parquet`。缺檔 → 空 dict。"""
     p = BUNDLE_DIR / "fundamentals" / "universe.parquet"
-    if not p.exists() or "industry" not in pd.read_parquet(p, columns=None).columns:
-        return {}
-    u = pd.read_parquet(p, columns=["ticker", "industry"])
-    return dict(zip(u["ticker"].astype(str), u["industry"].fillna("未分類")))
+    if not p.exists():
+        return {}, {}
+    cols = set(pd.read_parquet(p, columns=None).columns)
+    want = ["ticker"] + [c for c in ("industry", "stock_name") if c in cols]
+    u = pd.read_parquet(p, columns=want)
+    tk = u["ticker"].astype(str)
+    ind = dict(zip(tk, u["industry"].fillna("未分類"))) if "industry" in u else {}
+    nm = dict(zip(tk, u["stock_name"].fillna(""))) if "stock_name" in u else {}
+    return ind, nm
 
 
 def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str] | None:
@@ -215,9 +220,10 @@ def screen_all() -> dict:
     # M2 §7.1/§7.3/§7.4：定存兩道新硬門檻 + 殖利率法買價 + verdict
     dep = add_deposit_verdict(dep, raw_close_hist, price_hist, per_hist, div)
 
-    ind = _industry_map()
+    ind, names = _universe_maps()
     for df in (val, dep):
         df["industry"] = df["ticker"].astype(str).map(ind)
+        df["name"] = df["ticker"].astype(str).map(names)
 
     # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
     pool, pool_note = [], "候選池未算"
@@ -228,6 +234,9 @@ def screen_all() -> dict:
     if all(x is not None for x in (ohlc, idx0050, chips, rev)):
         uni = top500 if isinstance(top500, set) else None
         pool = build_candidate_pool(qf, ohlc, idx0050, chips, rev, uni)
+        for rec in pool:
+            rec["name"] = names.get(rec["ticker"], "")
+            rec["industry"] = ind.get(rec["ticker"], "")
         pool_note = f"候選池 {len(pool)} 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）"
     else:
         pool_note = "候選池缺料（需 prices_adj / index_0050 / chips / revenue）"

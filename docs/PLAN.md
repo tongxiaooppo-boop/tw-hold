@@ -348,17 +348,20 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
 
 ---
 
-## M3 · 清單 UI + 匯出 + Action 上線
+## M3 · 清單 UI + 匯出 + Action 上線 · **✅ 完成 2026-09-08**
 
-**目標**：推薦模式完整、每日自動重算。**timebox 1 session。**
+- [x] 清單頁：卡片式（大代號+股名+verdict icon + 3–4 個 metric，其餘收 expander 明細）；
+      verdict 篩選（multiselect）+ 排序（分數/空間%/殖利率/現價）
+- [x] 中文欄名（`LABELS`）、股名（`universe.parquet` `stock_name` → 三清單都帶 `name`）
+- [x] 「複製給 AI」：每個分頁 expander 裡 `st.code` 一段結構化文字
+- [x] 🔴 每個分頁頂部+底部警語（使用者要求）；長波段另加無回測支撐警語
+- [x] `rebuild.yml` 已接線並實測（workflow_dispatch + repository_dispatch）
+- [x] Streamlit Cloud 已佈署（M0a）+ app 密碼（使用者設）
+- [ ] ⚠️ **自動排程刻意還沒開**（PLAN 原則「先手動跑幾天」）——`rebuild.yml` 註解寫了
+      兩條路（tw-swing 發 repository_dispatch / 加 cron），等使用者觀察後決定
 
-- [ ] 清單頁：篩選、排序、展開明細（照草模）
-- [ ] 「複製給 AI」文字格式
-- [ ] `rebuild.yml` 正式上線：每日 `fetch_bundle` → `build_factors` → commit `data/derived/`
-- [ ] Streamlit Community Cloud 佈署 + app 密碼
-- [ ] ⚠️ 先手動跑幾天再開排程（知道正常長什麼樣，才分得出不正常）
-
-**M3 驗收**：雲端打得開、三清單完整、每日自動更新。
+**M3 驗收**：✅ 雲端打得開、三清單卡片式完整、篩選排序、複製給 AI、警語齊。
+自動重算「能開」（一行 uncomment / 加一顆 PAT），使用者決定何時開。
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-07",
-    "rebuilt_at": "2026-09-08T02:31:10+00:00",
+    "rebuilt_at": "2026-09-08T02:35:24+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -19,6 +19,7 @@
   "holdings": [
     {
       "ticker": "1232",
+      "name": "大統益",
       "close": 157.5,
       "verdict": "觀望（現價殖利率 4.4% < 門檻 5.0%）",
       "safety_score": 0.645,
@@ -46,6 +47,7 @@
     },
     {
       "ticker": "3596",
+      "name": "智易",
       "close": 159.5,
       "verdict": "觀望（現價殖利率 4.3% < 門檻 5.0%）",
       "safety_score": 0.6267,
@@ -73,6 +75,7 @@
     },
     {
       "ticker": "2535",
+      "name": "達欣工",
       "close": 89.2,
       "verdict": "觀望（現價殖利率 4.2% < 門檻 6.7%）",
       "safety_score": 0.6233,
@@ -100,6 +103,7 @@
     },
     {
       "ticker": "6196",
+      "name": "帆宣",
       "close": 514.0,
       "verdict": "觀望（現價殖利率 1.2% < 門檻 5.0%）",
       "safety_score": 0.6095,
@@ -127,6 +131,7 @@
     },
     {
       "ticker": "2480",
+      "name": "敦陽科",
       "close": 157.5,
       "verdict": "觀望（現價殖利率 4.6% < 門檻 5.5%）",
       "safety_score": 0.5999,
@@ -154,6 +159,7 @@
     },
     {
       "ticker": "9911",
+      "name": "櫻花",
       "close": 81.7,
       "verdict": "推薦",
       "safety_score": 0.5939,
@@ -181,6 +187,7 @@
     },
     {
       "ticker": "9917",
+      "name": "中保科",
       "close": 106.5,
       "verdict": "推薦",
       "safety_score": 0.5927,
@@ -208,6 +215,7 @@
     },
     {
       "ticker": "4904",
+      "name": "遠傳",
       "close": 102.0,
       "verdict": "觀望（現價殖利率 3.0% < 門檻 5.0%）",
       "safety_score": 0.5764,
@@ -235,6 +243,7 @@
     },
     {
       "ticker": "6509",
+      "name": "聚和",
       "close": 46.3,
       "verdict": "觀望（現價殖利率 2.9% < 門檻 5.0%）",
       "safety_score": 0.5696,
@@ -262,6 +271,7 @@
     },
     {
       "ticker": "2539",
+      "name": "櫻花建",
       "close": 35.15,
       "verdict": "觀望（現價殖利率 1.4% < 門檻 5.0%）",
       "safety_score": 0.5619,
@@ -289,6 +299,7 @@
     },
     {
       "ticker": "2330",
+      "name": "台積電",
       "close": 2460.0,
       "verdict": "觀望（現價殖利率 0.7% < 門檻 5.0%）",
       "safety_score": 0.5564,
@@ -316,6 +327,7 @@
     },
     {
       "ticker": "9939",
+      "name": "宏全",
       "close": 129.0,
       "verdict": "觀望（現價殖利率 4.6% < 門檻 5.0%）",
       "safety_score": 0.5518,
@@ -343,6 +355,7 @@
     },
     {
       "ticker": "1513",
+      "name": "中興電",
       "close": 167.0,
       "verdict": "觀望（現價殖利率 2.8% < 門檻 5.0%）",
       "safety_score": 0.5478,
@@ -370,6 +383,7 @@
     },
     {
       "ticker": "3217",
+      "name": "優群",
       "close": 136.0,
       "verdict": "推薦",
       "safety_score": 0.5254,
@@ -397,6 +411,7 @@
     },
     {
       "ticker": "8464",
+      "name": "億豐",
       "close": 361.0,
       "verdict": "觀望（現價殖利率 3.9% < 門檻 5.0%）",
       "safety_score": 0.506,
