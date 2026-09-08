@@ -305,6 +305,14 @@ def screen_all() -> dict:
         df["industry"] = df["ticker"].astype(str).map(ind)
         df["name"] = df["ticker"].astype(str).map(names)
 
+    # ③ 產業逆風旗標（只顯示、不進 verdict——比照循環高峰旗標，PRD §9 待定）
+    from screener.industry import add_industry_headwind
+    _asof = (pd.Timestamp(price_hist["date"].max())
+             if price_hist is not None and not price_hist.empty
+             else pd.Timestamp.now())
+    val = add_industry_headwind(val, price_hist, ind, _asof)
+    dep = add_industry_headwind(dep, price_hist, ind, _asof)
+
     # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
     pool, pool_note = [], "候選池未算"
     ohlc = _read_bundle_ohlc()
