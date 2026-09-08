@@ -22,8 +22,9 @@ tw-hold 從 tw-swing 借來的東西。**上游改動不會自動同步**——�
 | 項目 | 來源 | 拉法 |
 | :--- | :--- | :--- |
 | bundle Release | tw-swing 私有 repo，移動 tag `data-latest` | `fetch_bundle.py`（PAT 走 `st.secrets`） |
-| PAT | fine-grained，只給 tw-swing 一個 repo 的 `contents: read` | ⏳ 待建 |
-| PAT 到期日 | — | ⏳ 待記（建 PAT 時填） |
+| PAT | fine-grained、只給 `tongxiaooppo-boop/tw-swing` 的 `contents: read` | ✅ 2026-09-08 建（名稱 `tw-hold-bundle-read`） |
+| PAT 放哪 | tw-hold `.env` `TWSWING_BUNDLE_PAT` + tw-hold Actions secret 同名 + Streamlit Cloud secret | ✅ 三處到位 |
+| **PAT 到期日** | **~2026-12-07**（建立日 +90 天） | 🔴 **到期前換**：GitHub 撤銷→產新→更新上述三處。約 2026-11-30 開始提醒 |
 
 bundle 內容與 schema：見 `PRD.md` §3、`PLAN.md` §M0.1a/M0.1b。
 `_meta.json` 帶 `schema_version` + 每檔欄位清單，`fetch_bundle.py` 的 G1 對不上就大聲失敗。
