@@ -55,7 +55,14 @@ jobs:
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
           git add data/derived/ || true
-          git diff --cached --quiet && { echo "無變更"; exit 0; }
+          # 三張清單 JSON 沒實質變動就整批跳過——不為「只有 _meta.json 的 rebuilt_at
+          # 變了」留 commit（假日 publish_bundle 照跑、bundle 內容沒動時會發生）。
+          if git diff --cached --quiet -- \
+               data/derived/value_list.json \
+               data/derived/deposit_list.json \
+               data/derived/swing_list.json; then
+            echo "三清單無實質變更——跳過 commit"; exit 0
+          fi
           git commit -m "rebuild: 三清單 $(date -u +%F) (${{ github.event_name }})"
           git push
 
