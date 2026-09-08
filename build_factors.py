@@ -119,13 +119,12 @@ def _read_bundle_per_history() -> pd.DataFrame | None:
     return d
 
 
-def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
-    """掃 `prices_adj` 近期有沒有「非除息日的 ~Nx 單日跳空」——上游沒還原的面額變更
-    / 股票分割的症狀。已在 reference.corporate_actions.SPLITS 的不算。
+def scan_price_jumps(lookback_days: int = 400) -> list[dict]:
+    """掃 `prices_adj` 近期「非除息日的 ~Nx 單日跳空」——上游沒還原的面額變更/分割/減資
+    的症狀。已在 `SPLITS` / `IGNORE_JUMPS` 的不算。
 
-    回傳警示字串（每檔一條）。build_lists 會印出來（rebuild.yml log 看得到）
-    + 塞進清單 warning。這是「提醒去 TWSE 查基準日+比例、加進 SPLITS」的觸發器，
-    不自動還原（啟發式會誤傷）。"""
+    回傳 `[{ticker, date "YYYY-MM-DD", ratio}]`（ratio<1 疑分割/面額變更，>1 疑減資/雜訊）。
+    純結構化——`detect_unhandled_splits()` 拿去組字串、`scripts/resolve_splits.py` 拿去對 FinMind。"""
     from reference.corporate_actions import SPLITS, IGNORE_JUMPS
     p = BUNDLE_DIR / "prices_adj.parquet"
     if not p.exists():
@@ -148,15 +147,22 @@ def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
         # 前 5 日 vs 後 5 日中位數也差一個量級才算「站得住」（濾單日壞值）
         idx = [i for i in idx
                if not 0.6 < np.median(c[i + 1:i + 6]) / np.median(c[i - 4:i + 1]) < 1.7]
-        # 同檔 25 日內有反向跳空 = 一段壞資料來回，不是分割 → 整檔略過
+        # 同檔 17 日內有反向跳空 = 一段壞資料來回，不是分割 → 整檔略過
         if any((r[i] - 1) * (r[j] - 1) < 0 and abs(i - j) <= 17
                for a, i in enumerate(idx) for j in idx[a + 1:]):
             continue
         for i in idx:
-            out.append(f"{tk} {pd.Timestamp(dt[i + 1]).date()} 還原收盤 ×{r[i]:.2f}"
-                       f"——疑似未還原的面額變更/分割，去 TWSE 查基準日+比例加進 "
-                       f"reference.corporate_actions.SPLITS")
+            out.append({"ticker": tk,
+                        "date": str(pd.Timestamp(dt[i + 1]).date()),
+                        "ratio": round(float(r[i]), 4)})
     return out
+
+
+def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
+    """`scan_price_jumps()` 的字串版——build_lists 印進 rebuild.yml log + `_meta.split_warning`。"""
+    return [f"{j['ticker']} {j['date']} 還原收盤 ×{j['ratio']:.2f}"
+            f"——疑似未還原的面額變更/分割/減資，`scripts/resolve_splits.py` 會試著自動解析"
+            for j in scan_price_jumps(lookback_days)]
 
 
 def _read_bundle_ohlc() -> pd.DataFrame | None:
