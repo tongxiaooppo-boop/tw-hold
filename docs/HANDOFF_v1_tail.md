@@ -99,14 +99,14 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 
 ## 4. 月營收歷史（要動 bundle）
 
-**現況**：`app/charts.py` 的月營收圖是 `st.info` placeholder；M1 候選池的 `revenue_accel`
+**現況**：`app/stockcharts.py` 的月營收圖是 `st.info` placeholder；M1 候選池的 `revenue_accel`
 「加速」判定也略過了（只用 `revenue_yoy > 0`）。兩者同一個根因——bundle 的
 `revenue.parquet` 只有**單月快照**（1975 列 = 每檔 1 筆）。
 
 **修法**（tw-swing `scripts/build_u1b_bundle.py`）：把 `data/revenue/` 的逐月快照
 （tw-swing `fundamentals.yml` 已在抓）疊成一張歷史表打進 bundle，或改用 TWSE 整批檔。
 補完：
-- `app/charts.py` 加 `monthly_revenue()` 圖（YoY / MoM 柱狀）
+- `app/stockcharts.py` 加 `monthly_revenue()` 圖（YoY / MoM 柱狀）
 - `screener/candidate_pool.py` 的 `revenue_yoy()` → 加回 `revenue_accel`（本月 YoY > 上月 YoY）
 
 ---
@@ -127,8 +127,8 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 - `ModuleNotFoundError`（`from app import charts`）→ `streamlit_app.py` 頂端把 repo 根 + `app/`
   塞進 `sys.path`、內部改 bare import。commit `b8b0712`。
 - **真因**：加了 repo 根到 `sys.path` 後，`import charts` 撞到 **`tw-hold/charts/`**——
-  M0.2 留下的一個空 `__init__.py` 套件（在 repo 根），不是 `app/charts.py` → `ch.kline`
-  不存在 → `AttributeError`。→ 刪掉空 `charts/`、`app/charts.py` 改名 **`app/stockcharts.py`**。
+  M0.2 留下的一個空 `__init__.py` 套件（在 repo 根），不是 `app/stockcharts.py` → `ch.kline`
+  不存在 → `AttributeError`。→ 刪掉空 `charts/`、`app/stockcharts.py` 改名 **`app/stockcharts.py`**。
   commit `d955267`。
 - 附帶硬化（留著）：`requirements.txt` 釘死版本（`pandas==3.0.3 / pyarrow==24.0.0 /
   streamlit==1.60.0 / plotly==6.9.0`）；`_stock_page` 每張圖包 try/except（`_chart` helper，
@@ -143,7 +143,7 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 | 項 | 說明 |
 | :-- | :-- |
 | `per.parquet` 不自動更新 | valuation 分位帶 max_date 2026-08-28，會慢慢舊。tw-swing 用 TWSE `BWIBBU_ALL` 每日整批刷 PER/PBR/殖利率，併進 U1b |
-| 個股頁法人買賣超圖 | bundle 有 `chips.parquet`，`app/bundle_data.py` 加 reader + `charts.py` 加圖 |
+| 個股頁法人買賣超圖 | bundle 有 `chips.parquet`，`app/bundle_data.py` 加 reader + `stockcharts.py` 加圖 |
 | `price_adjuster.py` 移植 | 本地進階模式、500 大以外個股的還原股價（雲端唯讀模式不需要）。PRD §M4 |
 | 實驗 B 報告更新 | `research/backtest_rebalance.py` 用完整填息率重跑 → 更新 `docs/reports/expectations_20260907.md`（研究文件，非產品） |
 | PRD §8/§9〈已定〉過時 | 寫於 opus 審核前，講 `tw-data` 公開 repo。現行以 §3.1.1 / §10.1 為準——README 已標，有空校準 |
