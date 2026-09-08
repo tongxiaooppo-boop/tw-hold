@@ -270,36 +270,24 @@
 > 「主動選股候選池」**——狀態型條件、**不給 verdict、不給買價、買賣由人決定**。
 > 完整脈絡 PRD §5.0。pool3 的東西不要重做（`BACKTEST_HANDOFF.md` 實驗 A）。
 
-**目標**：第三清單到齊。狀態型候選池，守則見 PRD §5.1（不給 verdict / 不合成總分 /
-強制並列支持+反對 / 必給失效條件）。**timebox 1.5–2 session。**
+**目標**：第三清單到齊。狀態型候選池，守則見 PRD §5.1。**✅ 主體完成 2026-09-08**。
+`screener/candidate_pool.py` + `build_lists.py` swing_list + app 長波段分頁。實測 **19 檔**。
 
-**前置**：**M0b**（bundle 要有每日還原股價 + `chips.parquet` + `revenue` + `index_0050`）。
-可與 M2 並行（兩者都只卡 M0b）。
+- [x] `chips.parquet` 已在 bundle（publish_bundle.yml，M0b 就打包了）
+- [x] indicators 直接 pandas 算，**沒搬** tw-swing `reference/indicators`（簡化，PRD §9）
+- [x] `screener/candidate_pool.py`：CANSLIM 基本面（EPS YoY>25%、3 年 TTM EPS 成長、
+      ROE>15%、毛利率未連兩季惡化、F-Score≥6）+ 月營收 YoY>0（**加速判定待 revenue
+      歷史進 bundle**，實驗 D 說 revenue 非綁定關卡）+ 法人 20 日淨買超>0 + Minervini 8/8
+- [x] §5.3 風控：停損位 = max(50MA, 20週前低, 現價−2×ATR14)、風險%、可買上限 = 停損位÷0.9、位置揭露
+- [x] §5.2.3 失效條件檢查表（目前狀態，v3.1 不追蹤持倉）
+- [x] 🔴 支持/反對並列——放「門檻之外」的判斷證據；反對空 → 標「檢查不足」
+- [x] 🔴 UI 警語（`SWING_DISCLAIMER`）+ 🔴 **每個分頁頂部+底部都放 `_disclaimer()`**（使用者要求 2026-09-08）
+- [x] `build_lists.py` → `swing_list.json`（`candidates_pool` + 本週新增/退出）
+- [x] app 長波段分頁（卡片式：代號/現價/停損/可買上限 + 支持反對 + 展開明細）
+- [x] 措辭：「條件成立狀態」不叫「建議進場」；「候選池」不叫「推薦清單」；無 verdict/總分/排名
+- [ ] 每週排程（跟其他清單一起在 rebuild.yml，目前手動 dispatch）——M3 處理
 
-**現成**：邏輯已在 `research/candidate_pool_survey.py` 驗證（實驗 D：2019+ 每週中位數
-3–5 檔、空頭近空——可行；使用者已確認 0–5 檔可接受）。搬進來改讀 bundle 即可。
-
-- [ ] U1b 的 `publish_bundle.yml` 加打包 `chips.parquet`（法人買賣超，§5.2.1「法人 20 日
-      淨買超」要用；TWSE 整批檔，tw-swing 已在抓）——⚠️ v3.1 新增，M0.1b 若還沒做就補
-- [ ] `reference/indicators/`：只複製均線需求（`core` / `ma_rules`）。
-      **不要** `pivots` / `trendlines`——候選池是狀態不是型態（PRD §9 已裁決簡化）
-- [ ] `screener/candidate_pool.py`：搬 `candidate_pool_survey.py`、改讀 bundle
-  - CANSLIM 基本面（§5.2.1）：季 EPS YoY > 25%、近三年年度 EPS 成長、`revenue_accel`、
-    ROE > 15%、毛利率未連兩季惡化、F-Score ≥ 6、法人 20 日淨買超 > 0
-  - Minervini 趨勢模板 8 條（§5.2.2，全狀態）：顯示「過幾條」**不加總成分數**
-- [ ] §5.3 風控推導（**不是估值**）：停損參考位 = max(50MA, 20 週前低, 現價−2×ATR14)、
-      風險 %、可買上限 = 停損位 ÷ (1−10%)、位置揭露（距 50MA / 52 週高 / 200MA）
-- [ ] §5.2.3 失效條件檢查表：跌破 50MA（收盤）／趨勢模板 < 5/8／月營收 YoY 轉負連 2 月／
-      季 EPS YoY 轉負——對候選標「條件狀態」，v3.1 **不追蹤持倉**（無 `positions.json`）
-- [ ] 🔴 每檔強制並列「支持 / 反對」兩欄；反對欄空白 → 標「檢查不足」不是「完美」（守則 3）
-- [ ] 🔴 UI 印警語（不是只寫 PRD）：**「這個區間沒有回測支撐，是風控算術不是驗證過的
-      買點——只回答承擔多少風險，不回答會不會賺」**（§5.3）
-- [ ] `build_lists.py` 加候選池 → `data/derived/swing_list.json`
-- [ ] Streamlit 長波段分頁接上（`app/streamlit_app.py` 骨架已有）
-- [ ] ⚠️ 措辭：欄位「條件成立狀態」不叫「建議進場」；產出「候選池」不叫「推薦清單」
-
-**M1 驗收**：三清單到齊；候選池每檔有 8+N 條件狀態 + 支持/反對 + 風控可買上限 +
-失效條件檢查表；每週重算；UI 有「無回測支撐」警語。
+**M1 驗收**：✅ 三清單到齊；候選池每檔有 8 條件狀態 + 支持/反對 + 風控可買上限 + 失效條件檢查表 + 無回測支撐警語。細節見記憶 `tw-hold-m1-progress`。
 
 **不做**（v3.1 明確，PRD §5.0.1 / §9.8.5）：verdict、目標價 / 合理價、單一總分、
 排名次、配權重、回測、資金池、`positions.json`（持倉失效條件靠使用者週末自己看 +
