@@ -16,21 +16,22 @@ app：**https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/**（Streamlit Comm
 
 | | commit | 測試 |
 | :-- | :-- | :-- |
-| tw-hold `main` | `8450be1` | `pytest -q` → **66 passed** |
-| tw-swing `master` | `8030d87` | 782 passed |
+| tw-hold `main` | `e012ad9`（+CI rebuild） | `pytest -q` → **67 passed** |
+| tw-swing `master` | `3bab9fa` | 789 passed |
 
 兩 repo clean + push。
 
-**2026-09-08 下半天續做**（UI 收尾後）：
+**2026-09-08 下半天續做**（UI 收尾後）——記憶：`tw-hold-split-adjustment-gap` /
+`tw-hold-revenue-history` / `tw-swing-valuation-daily` / `github-actions-quota-check`：
 - UI：清單代號可點跳個股查詢（`st.tabs`→`st.radio` 導覽 + `?code=` 連結）、股利圖分次配息
-  描邊、原始季度數據改千元+千分號。
+  描邊、原始季度數據千元+千分號。三軌門檻檢視使用者**再確認先不做**（§E）。
 - **股票分割還原**：`reference/corporate_actions.py`（`SPLITS` 5904/0052/4747/6949 +
-  `IGNORE_JUMPS`）+ `build_factors.detect_unhandled_splits()` build 時自動偵測。5904 verdict
-  資料不足→觀望。見記憶 `tw-hold-split-adjustment-gap`。
-- **④ 月營收歷史**：bundle `revenue.parquet` 改長表（tw-swing `build_revenue_history.py` +
-  版控 `revenue_history.parquet`）→ 個股頁月營收圖 + 候選池 `revenue_accel`。
-  ⚠️ **需 `publish_bundle.yml` 跑一次**（每日 06:00 UTC 或手動 dispatch）新 schema 才生效。
-  見記憶 `tw-hold-revenue-history`。
+  `IGNORE_JUMPS` 2380/4950/7772/5314）+ `detect_unhandled_splits()` build 偵測 +
+  `rebuild.yml` webhook 告警。5904 verdict 資料不足→觀望。
+- **④ 月營收歷史** ✅ 已 publish 生效：bundle `revenue.parquet` 改長表 2015~ → 個股頁月營收圖
+  + 候選池 `revenue_accel`。
+- **⑥**：✅ 個股頁法人買賣超圖、✅ per.parquet 每日刷新（tw-swing TWSE/TPEx OpenAPI 增量）。
+- GitHub 額度：Free 未綁卡不可能收費，~9/15 複查。
 
 - **價值 / 定存清單**：各 15 檔，季表凍結（換股日 3/31、5/15、8/14、11/14）+ 候補變動 + 產業 ≤ 40% cap。
 - **長波段候選池**：19 檔，CANSLIM + Minervini 8/8 全狀態，無 verdict / 無排名，支持/反對 + §5.3 風控。
@@ -121,7 +122,7 @@ tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N
 | ✅ 個股頁法人買賣超圖 | `bundle_data.chips()` + `stockcharts.institutional_net()`（外資/投信/自營柱＋20日累計線，張）。2026-09-08。 |
 | `price_adjuster.py` 移植 | 本地進階模式、500 大以外個股的還原股價（雲端唯讀不需要）。PRD §M4。 |
 | PRD §8/§9〈已定〉過時 | 寫於 opus 審核前，講舊的 `tw-data` 公開 repo。現以 §3.1.1 / §10.1 為準，README 已標。 |
-| `div_years` 全 = 12 | 股利資料從 2015 起，連續年數上限 ~12，定存排序時該分項飽和。要更長要補抓更早股利。 |
+| ~~`div_years` 全=12~~ | **不做**（使用者 2026-09-08 裁決）：股價只到 2015、配息 >10 年夠用。定存排序時該分項飽和 = 接受。 |
 
 ### D. ③ 產業逆風判定 🟢 —— **最後做**（PRD §6.5 / §7，PLAN 未打勾）
 同產業近 N 個月動能中位數當代理，判斷某產業是不是集體走弱 → 清單明細標「產業逆風」旗標
