@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +18,11 @@ import streamlit as st
 
 REPO = Path(__file__).resolve().parents[1]
 DERIVED = REPO / "data" / "derived"
+# Streamlit Cloud 只把 app/ 放進 sys.path——把 repo 根也加進去，factors / fetch_bundle
+# / screener 這些頂層模組才 import 得到。
+for _p in (str(REPO), str(REPO / "app")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
 
@@ -86,6 +92,12 @@ def _fmt(field: str, v) -> str:
 def _fmt_removed(removed: list) -> list[str]:
     return [f"{r['ticker']}（{r.get('reason', '')}）" if isinstance(r, dict) else str(r)
             for r in removed]
+
+
+def _bullets(items: list, empty: str = "—") -> str:
+    """list → markdown 條列（取代醜的 st.write(list) JSON 樹）。"""
+    items = [x for x in (items or []) if x not in (None, "")]
+    return "\n".join(f"- {x}" for x in items) if items else empty
 
 
 def _verdict_icon(v: str) -> str:
@@ -173,17 +185,15 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
         if changes.get("turnover_pct") is not None:
             st.caption(f"換手率 {changes['turnover_pct']:.0%}")
         cc = st.columns(2)
-        cc[0].markdown("**新進**"); cc[0].write(changes.get("added", []) or "—")
-        cc[1].markdown("**移除（= 出場訊號）**")
-        cc[1].write(_fmt_removed(changes.get("removed", [])) or "—")
+        cc[0].markdown("**新進**\n\n" + _bullets(changes.get("added")))
+        cc[1].markdown("**移除（= 出場訊號）**\n\n" + _bullets(_fmt_removed(changes.get("removed", []))))
 
     cand = payload.get("candidates", {})
     if cand.get("likely_in") or cand.get("likely_out"):
         st.subheader("候補變動（若今天重選；提示，非正式換股）")
         cc = st.columns(2)
-        cc[0].markdown("**擠進前 15**"); cc[0].write(cand.get("likely_in", []) or "—")
-        cc[1].markdown("**掉出前 15**")
-        cc[1].write(_fmt_removed(cand.get("likely_out", [])) or "—")
+        cc[0].markdown("**擠進前 15**\n\n" + _bullets(cand.get("likely_in")))
+        cc[1].markdown("**掉出前 15**\n\n" + _bullets(_fmt_removed(cand.get("likely_out", []))))
 
     with st.expander("複製給 AI"):
         st.code(_copy_for_ai(title, meta, rows), language="markdown")
@@ -205,23 +215,23 @@ def _swing_page(payload: dict | None) -> None:
     st.caption(f"資料日期 {meta.get('trading_date', '—')}　·　{meta.get('pool_note', '')}"
                f"　·　重算 {meta.get('rebuilt_at', '—')}")
 
-    ch = payload.get("changes", {})
-    if ch.get("added") or ch.get("removed"):
+    chg = payload.get("changes", {})
+    if chg.get("added") or chg.get("removed"):
         cc = st.columns(2)
-        cc[0].markdown("**本週新增候選**"); cc[0].write(ch.get("added", []) or "—")
-        cc[1].markdown("**本週退出候選（條件不再成立）**"); cc[1].write(ch.get("removed", []) or "—")
+        cc[0].markdown("**本週新增候選**\n\n" + _bullets(chg.get("added")))
+        cc[1].markdown("**本週退出候選（條件不再成立）**\n\n" + _bullets(chg.get("removed")))
 
     for c in payload["candidates_pool"]:
         with st.container(border=True):
             top = st.columns([3, 2, 2, 2])
-            top[0].markdown(f"### {c['ticker']} {c.get('name', '')}\n{c.get('industry', '')}")
+            top[0].markdown(f"### {c['ticker']}　{c.get('name', '')}\n{c.get('industry', '')}")
             top[1].metric("現價", _fmt("close", c.get("close")))
             top[2].metric("停損參考位", _fmt("close", c.get("risk_stop")),
                           f"{(c.get('risk_pct_at_close') or 0):+.0%} 風險")
             top[3].metric("可買上限", _fmt("close", c.get("max_buy")))
             s1, s2 = st.columns(2)
-            s1.markdown("**支持**"); s1.write(c.get("support") or ["（未發現額外支持證據）"])
-            s2.markdown("**反對**"); s2.write(c.get("oppose") or ["—"])
+            s1.markdown("**支持**\n\n" + _bullets(c.get("support"), "（未發現額外支持證據）"))
+            s2.markdown("**反對**\n\n" + _bullets(c.get("oppose")))
             with st.expander("條件成立狀態 + 失效條件檢查表"):
                 st.markdown("**進場條件（全部成立才進候選池）**")
                 st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, width="stretch")
@@ -239,13 +249,13 @@ def _swing_page(payload: dict | None) -> None:
 
 @st.cache_resource(show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
 def _ensure_bundle():
-    from app.bundle_data import ensure_assets
+    from bundle_data import ensure_assets
     return ensure_assets()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _stock_data(code: str) -> dict:
-    from app import bundle_data as bd
+    import bundle_data as bd
     from factors.factors import quarterly_factors
     px, per, fin, div = (bd.prices(code), bd.per_history(code),
                          bd.financials(code), bd.dividends(code))
@@ -254,7 +264,7 @@ def _stock_data(code: str) -> dict:
 
 
 def _stock_page() -> None:
-    from app import charts as ch
+    import charts as ch
     _disclaimer()
     st.header("個股查詢")
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
