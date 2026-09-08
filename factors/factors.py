@@ -31,7 +31,30 @@ def _ttm(df: pd.DataFrame, col: str) -> pd.Series:
               .transform(lambda s: s.rolling(4, min_periods=4).sum()))
 
 
-def quarterly_factors(q: pd.DataFrame) -> pd.DataFrame:
+def _deaccum_ytd(q: pd.DataFrame, col: str, tickers: set[str]) -> pd.Series:
+    """把「當年累計」（YTD）的損益流量項還原成單季值——同 ticker、同曆年內
+    `val − 上一季 val`，曆年首季（Q1）保持原值。
+
+    只對 `tickers` 內、`period_end` 在 2026 年起、且該 (ticker, 曆年) 序列**年內
+    單調不減**的群組動手。理由：金控的 FinMind `IncomeAfterTax` 2023–2025 是單季值
+    （Q4 常因獎金/提存而下降），2026 起改成 YTD 累計（實測 2881/2882 等）。限定
+    2026+ 才動、又要單調不減，確保永遠不會誤傷已知正確的單季歷史。"""
+    s = q[col].astype("float64")
+    if not tickers:
+        return s
+    yr = q["period_end"].dt.year
+    out = s.copy()
+    for (tk, y), idx in q.groupby([q["ticker"], yr], sort=False).groups.items():
+        if tk not in tickers or y < 2026 or len(idx) < 2:
+            continue
+        vals = s.loc[idx]
+        if (vals.diff().dropna() >= 0).all():             # 年內單調不減 → 視為 YTD 累計
+            out.loc[idx] = vals.diff().fillna(vals.iloc[0])
+    return out
+
+
+def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
+                      shares: dict | None = None) -> pd.DataFrame:
     """輸入 `load_quarterly()` 的面板，輸出每 (ticker, period_end) 一列的因子。
 
     回傳欄位（除既有）：
@@ -42,6 +65,21 @@ def quarterly_factors(q: pd.DataFrame) -> pd.DataFrame:
       normalized_eps（近 5 年年度 EPS 均值）。
     """
     q = q.sort_values(["ticker", "period_end"]).reset_index(drop=True).copy()
+    fin_tickers = fin_tickers or set()
+
+    # 金融軌：金控的 FinMind 淨利 2026 起改用 YTD 累計口徑 → 還原單季
+    # （見 _deaccum_ytd，限 2026+ 且年內單調不減）。只動 net_income——金控 revenue
+    # 在現行 bundle 品質不穩，且不進任何定存門檻 / 排序項，不碰。
+    if fin_tickers and "net_income" in q.columns:
+        q["net_income"] = _deaccum_ytd(q, "net_income", fin_tickers)
+
+    # 金融軌：FinMind 近期對金控完全沒給 EPS type → 用「單季淨利 ÷ 股數」補。
+    # 股數來自 universe（market_cap / close），非金融不受影響。
+    if fin_tickers and shares and "eps" in q.columns:
+        sh = q["ticker"].map(shares)
+        est_eps = q["net_income"] / sh
+        need = q["ticker"].isin(fin_tickers) & q["eps"].isna() & sh.notna()
+        q.loc[need, "eps"] = est_eps[need]
 
     for c in _FLOW:
         q[f"ttm_{c}"] = _ttm(q, c)
@@ -137,9 +175,17 @@ def dividend_factors(div: pd.DataFrame, ann_eps: pd.DataFrame | None = None) -> 
                 yrs += 1
             else:
                 break
-        # 近 5 年有無減配（某年 < 前一年 × 0.9）
-        recent = cash.sort_index().tail(6)
-        cut = bool((recent < recent.shift(1) * 0.9).tail(5).any())
+        # 減配判定（某年 < 前一年 × 0.9）。PRD 原文「近 5 年無減配」太鈍——
+        # 會永久記恨一次性衝擊（金控 2022 防疫險 + 升息債損，之後逐年回升創高）。
+        # 改為：近 3 年內有減配 → 一律剔除；第 4–5 年前的減配 → 只有「最新股利
+        # 仍低於減配前自身高點 95%」（沒真的回復）才算數。全業種適用。
+        s = cash.sort_index()
+        chg = s < s.shift(1) * 0.9
+        cut_recent = bool(chg.tail(3).any())
+        older = chg.iloc[-5:-3] if len(chg) >= 4 else chg.iloc[0:0]
+        peak6 = s.tail(6).max()
+        recovered = bool(len(s) and s.iloc[-1] >= peak6 * 0.95)
+        cut = cut_recent or (bool(older.any()) and not recovered)
         last = float(cash.sort_index().iloc[-1]) if len(cash) else np.nan
         avg3 = float(cash.sort_index().tail(3).mean()) if len(cash) else np.nan
         ce = g.set_index("year")["cash_earnings"].sort_index()

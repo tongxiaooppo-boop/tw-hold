@@ -174,6 +174,34 @@ def _universe_maps() -> tuple[dict[str, str], dict[str, str]]:
     return ind, nm
 
 
+#: 金融軌適用的 universe 產業別（FinMind `industry_category`）。金控/銀行/保險
+#: 的損益表用不同 XBRL（YTD 累計、無 EPS type）、資產負債表無 capital_stock。
+_FIN_INDUSTRIES = {"金融保險", "金融業"}
+
+
+def _universe_financials() -> tuple[set[str], dict[str, float], pd.Series, pd.Series]:
+    """(金融股 ticker 集合, ticker→股數, ticker→市值, ticker→產業別)。
+    股數 = universe.market_cap ÷ close（金融股資產負債表沒有 capital_stock，只能這樣推）。
+    缺 universe.parquet → 全空。"""
+    p = BUNDLE_DIR / "fundamentals" / "universe.parquet"
+    if not p.exists():
+        return set(), {}, pd.Series(dtype=float), pd.Series(dtype=str)
+    cols = set(pd.read_parquet(p, columns=None).columns)
+    want = ["ticker"] + [c for c in ("industry", "close", "market_cap") if c in cols]
+    u = pd.read_parquet(p, columns=want)
+    u["ticker"] = u["ticker"].astype(str)
+    u = u.drop_duplicates("ticker").set_index("ticker")
+    ind = u["industry"] if "industry" in u else pd.Series(dtype=str)
+    fin = set(ind[ind.isin(_FIN_INDUSTRIES)].index) if not ind.empty else set()
+    mc = u["market_cap"] if "market_cap" in u else pd.Series(dtype=float)
+    if "market_cap" in u and "close" in u:
+        shares = (u["market_cap"] / u["close"]).replace([float("inf"), -float("inf")], pd.NA)
+        shares = {t: float(v) for t, v in shares.dropna().items()}
+    else:
+        shares = {}
+    return fin, shares, mc, ind
+
+
 def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str] | None:
     """退化估法：universe.parquet 不在時，用「capital_stock × 最新收盤」估市值前 500；
     缺收盤就不篩（回 None）。"""
@@ -190,7 +218,8 @@ def screen_all() -> dict:
     """跑價值 / 定存篩選，回傳 `{deposit, value, context}`。
     `build_factors.main()`（parquet + md）與 `build_lists.main()`（JSON）共用。"""
     q = load_quarterly()
-    qf = quarterly_factors(q)
+    fin_tickers, fin_shares, fin_mktcap, uni_industry = _universe_financials()
+    qf = quarterly_factors(q, fin_tickers=fin_tickers, shares=fin_shares)
     div = load_dividends()
     divf = dividend_factors(div, annual_eps(qf))
 
@@ -210,7 +239,9 @@ def screen_all() -> dict:
         if est is not None:
             top500, uni_note = est, uni_note + "；改用 capital_stock×收盤 估市值前500"
 
-    dep = screen_deposit(qf, divf, prices=prices, vol=vol)
+    dep = screen_deposit(qf, divf, prices=prices, vol=vol,
+                         industry=uni_industry if not uni_industry.empty else None,
+                         market_cap=fin_mktcap if not fin_mktcap.empty else None)
     val = screen_value(qf, prices=prices)
     dep["in_top500"] = True if top500 is None else dep["ticker"].isin(top500)
     val["in_top500"] = True if top500 is None else val["ticker"].isin(top500)
@@ -306,7 +337,8 @@ def _write_report(dep: pd.DataFrame, val: pd.DataFrame) -> None:
         "## 定存區（存股安全分）",
         "",
         "門檻：近 4 季 EPS 全正 / 連續配息 ≥ 5 年無減配 / FCF 覆蓋股利 / "
-        "配息來自盈餘 / 負債比 ≤ 0.75 / 近 5 年填息率 ≥ 60% / 近 3 年含息報酬 ≥ 0。"
+        "配息來自盈餘 / 負債比 ≤ 0.75（金融業改用產業中位數）/ "
+        "近 5 年填息率 ≥ 60% / 近 3 年含息報酬 ≥ 0。"
         "排序 = FCF 殖利率 × 低波動 × ROE × 連續年數 × (−payout) × 景氣循環懲罰。"
         "買價（§7.3）= 近 3 年均現金股利 ÷ max(近 5 年均殖利率, 5%)。",
         f"> verdict（§7.4）："

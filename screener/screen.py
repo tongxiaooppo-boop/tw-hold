@@ -16,6 +16,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+#: 結構性高槓桿產業——資產負債表本來就 ~90% 是負債（銀行的存款、保險的準備金）。
+#: 這些產業的負債比門檻用「產業中位數 × 1.1」，不套固定 0.75（PRD §7.1）。
+_LEVERAGED_INDUSTRIES = {"金融保險", "金融業"}
+
 
 def _latest_per_ticker(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     """每檔取「`disclosure_date` <= asof 的最新一期」。"""
@@ -27,8 +31,13 @@ def _latest_per_ticker(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
 def _last_n_eps_positive(qf: pd.DataFrame, asof: pd.Timestamp, n: int = 4) -> pd.Series:
     v = qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
     tail = v.groupby("ticker", sort=False).tail(n)
-    cnt = tail.groupby("ticker")["eps"].count()
-    pos = tail.assign(_p=tail["eps"] > 0).groupby("ticker")["_p"].sum()
+    # eps 缺值時退看單季 net_income（金融軌：金控歷史 eps 有洞，但 net_income
+    # 去累計後可用）——兩者擇一為正即算該季獲利為正。
+    e = tail["eps"]
+    if "net_income" in tail.columns:
+        e = e.fillna(tail["net_income"])
+    cnt = e.groupby(tail["ticker"]).count()
+    pos = (e > 0).groupby(tail["ticker"]).sum()
     return (pos == n) & (cnt == n)
 
 
@@ -59,11 +68,17 @@ def _market_cap(row_capital_stock: pd.Series, close: pd.Series) -> pd.Series:
 def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
                    prices: pd.DataFrame | None = None,
                    vol: pd.DataFrame | None = None,
-                   asof: pd.Timestamp | None = None) -> pd.DataFrame:
+                   asof: pd.Timestamp | None = None,
+                   industry: pd.Series | None = None,
+                   market_cap: pd.Series | None = None) -> pd.DataFrame:
     """定存區篩選。
 
     prices: `[ticker, close]`（最新收盤）；vol: `[ticker, ann_vol]`（年化週報酬標準差）。
     兩者沒給 → 相關因子留 NaN、排序退化但仍可跑。
+    industry: `ticker → 產業別`（來自 universe）——結構性高槓桿產業（金融）的負債比
+    門檻改用產業中位數（PRD §7.1「或產業中位數 × 1.5」的精神）。沒給 → 一律 `> 0.75`。
+    market_cap: `ticker → 市值`（來自 universe，已算好）——金融股資產負債表沒有
+    `capital_stock`，市值只能靠這個。沒給 → 退回 `capital_stock × 收盤`。
     """
     asof = pd.Timestamp(asof or pd.Timestamp.now()).normalize()
     d = _latest_per_ticker(qf, asof).merge(divf, on="ticker", how="left")
@@ -72,11 +87,14 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
     eps4 = _last_n_eps_positive(qf, asof)
     d["eps_4q_positive"] = eps4.reindex(d.index).fillna(False)
     d["cyclical_penalty"] = _cyclical_penalty(qf, asof).reindex(d.index).fillna(1.0)
+    ind = industry.reindex(d.index) if industry is not None else None
 
     if prices is not None:
         px = prices.set_index("ticker")["close"]
         d["close"] = px.reindex(d.index)
         d["market_cap"] = _market_cap(d.get("capital_stock", np.nan), d["close"])
+        if market_cap is not None:
+            d["market_cap"] = market_cap.reindex(d.index).fillna(d["market_cap"])
         shares = d.get("capital_stock", np.nan) / 10.0
         d["fcf_cover"] = d["ttm_fcf"] / (d["last_cash_dividend"] * shares)
         d["fcf_yield"] = d["ttm_fcf"] / d["market_cap"]
@@ -86,6 +104,18 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
         d["ann_vol"] = vol.set_index("ticker")["ann_vol"].reindex(d.index)
     else:
         d["ann_vol"] = np.nan
+
+    # 負債比門檻：PRD §7.1「≤ 0.75，或產業中位數 × 1.5」。銀行/金控資產負債表
+    # 本來就 ~90% 是負債（存款），固定 0.75 會結構性擋掉整個金融業。「產業中位數
+    # × 1.5」對小樣本產業會退化（單檔＝自己的中位數，門檻恆過），所以只對**結構性
+    # 高槓桿**的產業（金融）放寬到產業中位數 × 1.1，其餘一律 0.75。
+    debt_cap = pd.Series(0.75, index=d.index)
+    if ind is not None:
+        lev = ind.isin(_LEVERAGED_INDUSTRIES)
+        if lev.any():
+            med = d.loc[lev, "debt_ratio"].median()
+            if pd.notna(med):
+                debt_cap = debt_cap.mask(lev, max(0.75, med * 1.1))
 
     # ── 硬門檻（剔除）────────────────────────────────────────
     reasons: dict[str, pd.Series] = {
@@ -97,7 +127,7 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
         "近5年有減配": d["div_cut_5y"].fillna(False),
         "FCF 不覆蓋股利": d["fcf_cover"].notna() & (d["fcf_cover"] < 1.0),
         "配息主要來自公積": d["earnings_div_ratio"].notna() & (d["earnings_div_ratio"] < 0.5),
-        "負債比 > 0.75": d["debt_ratio"] > 0.75,
+        "負債比過高": d["debt_ratio"] > debt_cap,
     }
     d["reject_reason"] = _first_reason(reasons, d.index)
     d["passes"] = d["reject_reason"].isna()
