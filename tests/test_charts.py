@@ -32,6 +32,25 @@ def test_kline_有均線():
     assert "還原K線" in names and "季線" in names and "年線" in names
 
 
+def test_kline_有區間_用短均線且設x軸範圍():
+    import pandas as pd
+    px = _px(400)
+    start = pd.Timestamp(px["date"].max()) - pd.Timedelta(days=92)
+    fig = ch.kline(px, "測試", start=start, ma=ch._MA_SHORT)
+    names = {t.name for t in fig.data}
+    assert "MA5" in names and "MA20" in names and "年線" not in names
+    assert fig.layout.xaxis.range is not None       # 有裁顯示窗
+
+
+def test_pe_river_有區間():
+    import pandas as pd
+    px = _px(400)
+    per = pd.DataFrame({"date": px["date"], "per": 15.0})
+    start = pd.Timestamp(px["date"].max()) - pd.Timedelta(days=180)
+    fig = ch.pe_river(px, per, "測試", start=start)
+    assert fig.layout.xaxis.range is not None
+
+
 def test_pe_river_空_per_不爆():
     fig = ch.pe_river(_px(), pd.DataFrame(columns=["date", "per"]), "測試")
     assert "無 per 資料" in fig.layout.title.text

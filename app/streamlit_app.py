@@ -118,8 +118,10 @@ _CSS = """
   --thc-flag:#d5894f;
   --thc-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
+.thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:start;margin-top:.3rem;}
+@media (min-width:900px){.thc-grid{grid-template-columns:1fr 1fr;}}
 .thc-card{display:flex;background:var(--thc-surface);border:1px solid var(--thc-line);
-  border-radius:10px;overflow:hidden;margin:.55rem 0;}
+  border-radius:10px;overflow:hidden;}
 .thc-card .thc-stripe{width:4px;flex-shrink:0;background:var(--thc-neutral);}
 .thc-card.thc-good .thc-stripe{background:var(--thc-good);}
 .thc-card.thc-warn .thc-stripe{background:var(--thc-warn);}
@@ -282,7 +284,7 @@ def _detail_html(r: dict, kind: str) -> str:
     return f"<details class='thc-details'><summary>明細</summary><table>{rows}</table></details>"
 
 
-def _render_card_b(r: dict, kind: str) -> None:
+def _card_b_html(r: dict, kind: str) -> str:
     v = r.get("verdict", "")
     sev = _sev(v)
     pill = "推薦" if sev == "good" else ("觀望" if sev == "warn" else (
@@ -321,12 +323,21 @@ def _render_card_b(r: dict, kind: str) -> None:
         f'<div class="thc-chips">{_chips(r, kind)}</div>'
         f'{_detail_html(r, kind)}'
         f'</div></div>')
-    st.markdown(html, unsafe_allow_html=True)
+    return html
 
 
-def _render_swing_b(c: dict) -> None:
+def _cond_table_html(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    body = "".join(
+        "<tr>" + "".join(f"<td>{_esc(v)}</td>" for v in row.values()) + "</tr>"
+        for row in rows)
+    return f"<table>{body}</table>"
+
+
+def _swing_b_html(c: dict) -> str:
     """長波段候選卡——同 B 視覺語言，但沒有 verdict / 買價（狀態型）。
-    支持 / 反對並列進卡片本體；條件表 + 複製給 AI 仍是外面的 st.expander。"""
+    支持/反對 + 條件表 + 失效條件全進卡片；只有「複製給 AI」在外面。"""
     def _ul(items, empty):
         items = [x for x in (items or []) if x not in (None, "")]
         lis = "".join(f"<li>{_esc(x)}</li>" for x in items) or f"<li>{_esc(empty)}</li>"
@@ -339,7 +350,11 @@ def _render_swing_b(c: dict) -> None:
         f"可買上限 {c['max_buy']:,.2f}" if c.get("max_buy") is not None else "",
         f"停損 {c['risk_stop']:,.2f}" if c.get("risk_stop") is not None else "",
     ] if x)
-    html = (
+    dist = "　·　".join([
+        f"距 50MA {(c.get('dist_50ma') or 0):+.0%}",
+        f"距 52 週高 {(c.get('dist_52w_high') or 0):+.0%}",
+        f"距 200MA {(c.get('dist_200ma') or 0):+.0%}"])
+    return (
         f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
         f'<div class="thc-head"><span class="thc-tk">{_esc(c.get("ticker"))}</span>'
         f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
@@ -348,8 +363,15 @@ def _render_swing_b(c: dict) -> None:
         f'<div class="sw-cols">'
         f'<div><div class="sw-h sup">支持</div>{_ul(c.get("support"), "（未發現額外支持證據）")}</div>'
         f'<div><div class="sw-h">反對</div>{_ul(c.get("oppose"), "（未發現反對證據——代表檢查不足）")}</div>'
-        f'</div></div></div>')
-    st.markdown(html, unsafe_allow_html=True)
+        f'</div>'
+        f'<details class="thc-details"><summary>條件成立狀態 + 失效條件</summary>'
+        f'<div class="sw-h" style="margin-top:.5rem">進場條件（全部成立才進候選池）</div>'
+        f'{_cond_table_html(c.get("conditions", []))}'
+        f'<div class="sw-h" style="margin-top:.6rem">失效條件（目前狀態；v3.1 不追蹤持倉）</div>'
+        f'{_cond_table_html(c.get("invalidation", []))}'
+        f'<div class="thc-barcap" style="margin-top:.5rem">{_esc(dist)}</div>'
+        f'</details>'
+        f'</div></div>')
 
 
 def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
@@ -399,8 +421,9 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
     rows.sort(key=lambda h: (h.get(sk) is None, -(h.get(sk) or 0)))
 
     st.subheader(f"本季成分（{len(rows)}/{len(holdings)} 檔）")
-    for r in rows:
-        _render_card_b(r, kind)
+    st.markdown(
+        '<div class="thc-grid">' + "".join(_card_b_html(r, kind) for r in rows) + "</div>",
+        unsafe_allow_html=True)
 
     changes = payload.get("changes", {})
     if changes.get("added") or changes.get("removed"):
@@ -444,16 +467,10 @@ def _swing_page(payload: dict | None) -> None:
         cc[0].markdown("**本週新增候選**\n\n" + _bullets(chg.get("added")))
         cc[1].markdown("**本週退出候選（條件不再成立）**\n\n" + _bullets(chg.get("removed")))
 
-    for c in payload["candidates_pool"]:
-        _render_swing_b(c)
-        with st.expander("條件成立狀態 + 失效條件檢查表"):
-            st.markdown("**進場條件（全部成立才進候選池）**")
-            st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, use_container_width=True)
-            st.markdown("**失效條件（目前狀態；v3.1 不追蹤持倉）**")
-            st.dataframe(pd.DataFrame(c.get("invalidation", [])), hide_index=True, use_container_width=True)
-            st.caption(f"距 50MA {(c.get('dist_50ma') or 0):+.0%}　·　"
-                       f"距 52 週高 {(c.get('dist_52w_high') or 0):+.0%}　·　"
-                       f"距 200MA {(c.get('dist_200ma') or 0):+.0%}")
+    st.markdown(
+        '<div class="thc-grid">'
+        + "".join(_swing_b_html(c) for c in payload["candidates_pool"]) + "</div>",
+        unsafe_allow_html=True)
 
     with st.expander("複製給 AI"):
         st.code(_copy_for_ai("長波段候選池", meta, payload["candidates_pool"]),
@@ -519,9 +536,20 @@ def _stock_page() -> None:
             target.warning(f"「{getattr(fn, '__name__', '圖')}」畫不出來：{type(e).__name__}: {e}")
 
     if not d["px"].empty:
-        _chart(ch.kline, d["px"], name)
+        end = pd.Timestamp(pd.to_datetime(d["px"]["date"]).max())
+        rng = st.segmented_control("顯示區間", ["3月", "今年至資料日期", "1年", "2年", "全部"],
+                                   default="1年", key="_px_range") or "1年"
+        if rng == "今年至資料日期":
+            start = pd.Timestamp(end.year, 1, 1)
+        elif rng == "全部":
+            start = None
+        else:
+            start = end - pd.Timedelta(days={"3月": 92, "1年": 365, "2年": 730}[rng])
+        short = rng in ("3月", "今年至資料日期", "1年")
+        ma = ch._MA_SHORT if short else ch._MA_LONG
+        _chart(ch.kline, d["px"], name, start, ma)
         if not d["per"].empty:
-            _chart(ch.pe_river, d["px"], d["per"], name)
+            _chart(ch.pe_river, d["px"], d["per"], name, start)
 
     if not d["qf"].empty:
         c1, c2 = st.columns(2)

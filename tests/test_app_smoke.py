@@ -37,7 +37,7 @@ def test_卡片HTML有進到頁面():
     assert "thc-card" in md and "thc-hero" in md
 
 
-def test_render_card_b_單張_不炸():
+def test_card_b_html_單張():
     import sys
     sys.path.insert(0, "app")
     import streamlit_app as app
@@ -46,9 +46,15 @@ def test_render_card_b_單張_不炸():
            "est_buy_price": 85.41, "div_years": 12.0, "ret3y_incl": 0.15,
            "fill_rate": None, "buy_note": "支撐位（82.8）已在買點之上 → 等回檔",
            "industry": "其他", "buy_low": None, "buy_high": None}
-    html_parts = []
-    app.st.markdown = lambda h, **k: html_parts.append(h)   # 攔截
-    app._render_card_b(row, "deposit")
-    out = html_parts[-1]
+    out = app._card_b_html(row, "deposit")
     assert "9911" in out and "櫻花" in out and "5.5%" in out
     assert "thc-good" in out and "估值買價" in out
+
+
+def test_verdict_cat_定存內嵌數字歸類():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    assert app._verdict_cat("觀望（現價殖利率 4.4% < 門檻 5.0%）") == "觀望"
+    assert app._verdict_cat("推薦") == "推薦"
+    assert app._verdict_cat("資料不足（EPS 基準存疑）") == "資料不足"
