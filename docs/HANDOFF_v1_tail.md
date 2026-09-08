@@ -105,10 +105,12 @@ commit：tw-swing `32351a9`、tw-hold `9731273`。
 ⚠️ 改 app 一定本地 `PYTHONIOENCODING=utf-8 python -m pytest -q` + AppTest 過再 push
 （`streamlit run` 本機無瀏覽器截不了圖，靠使用者看 Cloud）。
 
-### ✅ A2. 分割待人工核 —— 2026-09-08 核完
-使用者提供官方拆分日+比例。`SPLITS`：5904 / 0052 / 4747 / 6949。2327 / 4763 / 6781
-data_pack 已還原。`IGNORE_JUMPS`：2380 / 4950 / 7772（疑減資缺比例）/ 5314（2026 事件待查）。
-6949 日期在資料尾端、bundle 完整後回頭校。見記憶 `tw-hold-split-adjustment-gap`。
+### ✅ A2. 分割還原 —— 2026-09-08 自動化
+`rebuild.yml` 在 build_lists 前跑 `scripts/resolve_splits.py --write`：偵測器抓 bundle 跳空
+→ FinMind 事件表自動算 factor（date=跳空日）→ `corporate_actions_resolved.json`。
+FinMind 也沒有的才發 webhook 等人。`_MANUAL`（5904/6949）+ `IGNORE_JUMPS`（2380/4950/5314/7772）
+仍是手動覆寫層。tw-hold repo 沒設 FINMIND_TOKEN secret（匿名夠用；要加 headroom 才設）。
+6949 日期待完整 bundle 後回頭校。見記憶 `tw-hold-split-adjustment-gap`。
 
 ### ✅ B. ④ 月營收歷史 —— 2026-09-08 完成
 見上方「續做」+ 記憶 `tw-hold-revenue-history`。**下一輪確認 `publish_bundle` 跑過、
