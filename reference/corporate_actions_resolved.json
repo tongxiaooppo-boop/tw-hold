@@ -1,0 +1,17 @@
+{
+  "splits": {
+    "0052": [
+      {
+        "date": "2025-11-17",
+        "factor": 7
+      }
+    ],
+    "4747": [
+      {
+        "date": "2026-08-12",
+        "factor": 2
+      }
+    ]
+  },
+  "_note": "scripts/resolve_splits.py 自動產出——手動改請改 reference/corporate_actions.py 的 _MANUAL（會覆寫這裡）"
+}

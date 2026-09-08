@@ -57,6 +57,10 @@ FREE_DATASETS = {
     "TaiwanStockBalanceSheet",
     "TaiwanStockCashFlowsStatement",
     "TaiwanStockInfo",
+    # 公司行動事件（2026-09-08 實測匿名可取，含 before_price/after_price）——
+    # scripts/resolve_splits.py 用來算分割/減資 factor。
+    "TaiwanStockSplitPrice",
+    "TaiwanStockCapitalReductionReferencePrice",
 }
 
 ANON_LIMIT = 300
