@@ -1,6 +1,8 @@
 # tw-hold — Streamlit Community Cloud + 本地
 # 刻意控依賴（比照 tw-swing）：pandas / pyarrow / streamlit / plotly，其餘不加。
-pandas>=2.2
-pyarrow>=16
-streamlit>=1.37
-plotly>=5.22
+# 🔴 釘死版本：Cloud 用 >= 會抓到跟本地測試不同的版本，個股頁 plotly 圖曾因此炸
+#    （AttributeError in go.Candlestick）。改版本前先本地 pytest + streamlit run 過。
+pandas==3.0.3
+pyarrow==24.0.0
+streamlit==1.60.0
+plotly==6.9.0

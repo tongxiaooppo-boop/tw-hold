@@ -14,15 +14,20 @@ _MA = {"季線": 60, "年線": 240}
 
 
 def kline(px: pd.DataFrame, name: str) -> go.Figure:
+    d = px.copy()
+    x = pd.to_datetime(d["date"]).tolist()
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
-        x=px["date"], open=px["open"], high=px["high"], low=px["low"],
-        close=px["close"], name="還原K線", increasing_line_color="#d62728",
-        decreasing_line_color="#2ca02c"))
+        x=x, open=d["open"].astype(float).tolist(), high=d["high"].astype(float).tolist(),
+        low=d["low"].astype(float).tolist(), close=d["close"].astype(float).tolist(),
+        name="還原K線",
+        increasing=dict(line=dict(color="#d62728")),
+        decreasing=dict(line=dict(color="#2ca02c"))))
     for label, w in _MA.items():
-        if len(px) >= w:
-            fig.add_trace(go.Scatter(x=px["date"], y=px["close"].rolling(w).mean(),
-                                     name=label, line=dict(width=1)))
+        if len(d) >= w:
+            fig.add_trace(go.Scatter(
+                x=x, y=d["close"].astype(float).rolling(w).mean().tolist(),
+                name=label, line=dict(width=1)))
     fig.update_layout(title=f"{name} 還原日K + 均線", xaxis_rangeslider_visible=False,
                       height=420, margin=dict(t=40, b=20))
     return fig

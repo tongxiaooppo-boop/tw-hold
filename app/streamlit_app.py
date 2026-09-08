@@ -177,7 +177,7 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
                 st.markdown(f"**買入區間**：{bn}")
             with st.expander("明細"):
                 st.dataframe(_detail_table(r, {"ticker", "name"}),
-                             hide_index=True, width="stretch")
+                             hide_index=True, use_container_width=True)
 
     changes = payload.get("changes", {})
     if changes.get("added") or changes.get("removed"):
@@ -234,9 +234,9 @@ def _swing_page(payload: dict | None) -> None:
             s2.markdown("**反對**\n\n" + _bullets(c.get("oppose")))
             with st.expander("條件成立狀態 + 失效條件檢查表"):
                 st.markdown("**進場條件（全部成立才進候選池）**")
-                st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, width="stretch")
+                st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, use_container_width=True)
                 st.markdown("**失效條件（目前狀態；v3.1 不追蹤持倉）**")
-                st.dataframe(pd.DataFrame(c.get("invalidation", [])), hide_index=True, width="stretch")
+                st.dataframe(pd.DataFrame(c.get("invalidation", [])), hide_index=True, use_container_width=True)
                 st.caption(f"距 50MA {(c.get('dist_50ma') or 0):+.0%}　·　"
                            f"距 52 週高 {(c.get('dist_52w_high') or 0):+.0%}　·　"
                            f"距 200MA {(c.get('dist_200ma') or 0):+.0%}")
@@ -289,19 +289,27 @@ def _stock_page() -> None:
         return
 
     name = code
+
+    def _chart(fn, *args, target=st):
+        """單張圖爆掉不要整頁掛——就地顯示錯誤、繼續下一張。"""
+        try:
+            target.plotly_chart(fn(*args), use_container_width=True)
+        except Exception as e:  # noqa: BLE001
+            target.warning(f"「{getattr(fn, '__name__', '圖')}」畫不出來：{type(e).__name__}: {e}")
+
     if not d["px"].empty:
-        st.plotly_chart(ch.kline(d["px"], name), width='stretch')
+        _chart(ch.kline, d["px"], name)
         if not d["per"].empty:
-            st.plotly_chart(ch.pe_river(d["px"], d["per"], name), width='stretch')
+            _chart(ch.pe_river, d["px"], d["per"], name)
 
     if not d["qf"].empty:
         c1, c2 = st.columns(2)
-        c1.plotly_chart(ch.quarterly_eps(d["qf"], name), width='stretch')
-        c2.plotly_chart(ch.margins(d["qf"], name), width='stretch')
-        st.plotly_chart(ch.cashflow(d["qf"], name), width='stretch')
+        _chart(ch.quarterly_eps, d["qf"], name, target=c1)
+        _chart(ch.margins, d["qf"], name, target=c2)
+        _chart(ch.cashflow, d["qf"], name)
 
     if not d["div"].empty:
-        st.plotly_chart(ch.dividends_chart(d["div"], name), width='stretch')
+        _chart(ch.dividends_chart, d["div"], name)
 
     st.info("📊 月營收走勢圖：bundle 目前只有單月快照，歷史圖待 revenue 歷史併入 bundle。")
 
@@ -309,10 +317,10 @@ def _stock_page() -> None:
         st.subheader("Piotroski F-Score 9 分項")
         st.caption("**只打勾、不加總、不當買賣依據。** 加總分數在價值清單裡當品質門檻，"
                    "這裡是診斷用。")
-        st.dataframe(ch.fscore_table(d["qf"]), hide_index=True, width="stretch")
+        st.dataframe(ch.fscore_table(d["qf"]), hide_index=True, use_container_width=True)
 
     with st.expander("原始季度數據"):
-        st.dataframe(d["qf"] if not d["qf"].empty else d["fin"], width="stretch")
+        st.dataframe(d["qf"] if not d["qf"].empty else d["fin"], use_container_width=True)
 
     _disclaimer()
 
