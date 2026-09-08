@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-_MA = {"季線": 60, "年線": 240}
+#: 均線集合——依顯示區間切換（短區間看短均線，長區間看長均線）。
+_MA_SHORT = [("MA5", 5), ("MA20", 20), ("季線", 60)]
+_MA_LONG = [("MA20", 20), ("季線", 60), ("年線", 240)]
 
 #: 固定深色（app 主題也是深色）。圖例橫排放在**圖下方**——放上方會跟標題重疊、
 #: 手機放右邊會吃掉半個繪圖區。
@@ -30,22 +32,33 @@ def _style(fig: go.Figure, title: str, height: int) -> go.Figure:
     return fig
 
 
-def kline(px: pd.DataFrame, name: str) -> go.Figure:
-    d = px.copy()
-    x = pd.to_datetime(d["date"]).tolist()
+def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go.Figure:
+    """`start`：只顯示這天以後（均線仍用完整歷史算，左緣才不缺）。
+    `ma`：均線集合 [(label, window)]；None → 依有沒有給 start 猜短/長。"""
+    d = px.copy().sort_values("date")
+    d["date"] = pd.to_datetime(d["date"])
+    x = d["date"].tolist()
+    close = d["close"].astype(float)
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
         x=x, open=d["open"].astype(float).tolist(), high=d["high"].astype(float).tolist(),
-        low=d["low"].astype(float).tolist(), close=d["close"].astype(float).tolist(),
+        low=d["low"].astype(float).tolist(), close=close.tolist(),
         name="還原K線",
-        increasing=dict(line=dict(color="#d62728")),
+        increasing=dict(line=dict(color="#d62728")),      # 台股慣例：紅漲綠跌
         decreasing=dict(line=dict(color="#2ca02c"))))
-    for label, w in _MA.items():
+    ma = ma or (_MA_SHORT if start is not None else _MA_LONG)
+    for i, (label, w) in enumerate(ma):
         if len(d) >= w:
             fig.add_trace(go.Scatter(
-                x=x, y=d["close"].astype(float).rolling(w).mean().tolist(),
-                name=label, line=dict(width=1)))
+                x=x, y=close.rolling(w).mean().tolist(), name=label,
+                line=dict(width=1 if i == 0 else 1.4)))
     fig.update_layout(xaxis_rangeslider_visible=False)
+    if start is not None:
+        fig.update_xaxes(range=[pd.Timestamp(start), d["date"].max()])
+        vis = close[d["date"] >= pd.Timestamp(start)]
+        if len(vis):
+            pad = (vis.max() - vis.min()) * 0.06 or 1
+            fig.update_yaxes(range=[vis.min() - pad, vis.max() + pad])
     return _style(fig, f"{name} 還原日K + 均線", 440)
 
 
@@ -93,7 +106,7 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
     return _style(fig, f"{name} 逐年股利（元/股）", 340)
 
 
-def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str) -> go.Figure:
+def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.Figure:
     """本益比河流圖：股價 + 「TTM EPS(t) × 自身 PE 分位」的河道。
     TTM EPS(t) ≈ 收盤 ÷ per（TWSE 報的 per 本來就是 trailing）。"""
     if per.empty:
@@ -102,19 +115,28 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str) -> go.Figure:
     m = m[m["per"] > 0]
     if m.empty:
         return _style(go.Figure(), f"{name} 本益比河流圖（per 全為 0/負）", 380)
+    m = m.assign(date=pd.to_datetime(m["date"]))
     m["ttm_eps"] = m["close"] / m["per"]
     qs = m["per"].quantile([0.1, 0.3, 0.5, 0.7, 0.9])
     fig = go.Figure()
-    # accent 綠加不同透明度的河道——深底/淺底都看得到，不寫死近白色
-    fills = ["rgba(95,184,158,.05)", "rgba(95,184,158,.10)", "rgba(95,184,158,.16)",
-             "rgba(95,184,158,.10)", "rgba(95,184,158,.05)"]
+    # 三段有意義的顏色：便宜區（P10–P30）綠、中性（P30–P70）灰、偏貴（P70–P90）琥珀
+    fills = [None, "rgba(104,183,132,.30)", "rgba(150,158,148,.16)",
+             "rgba(150,158,148,.16)", "rgba(214,159,87,.28)"]
     for (q, mult), col in zip(qs.items(), fills):
         fig.add_trace(go.Scatter(x=m["date"], y=m["ttm_eps"] * mult,
                                  name=f"PE {mult:.0f}x（P{int(q*100)}）",
-                                 line=dict(width=0.5, color="rgba(95,184,158,.35)"),
-                                 fill="tonexty" if q > 0.1 else None, fillcolor=col))
+                                 line=dict(width=0.6, color="rgba(160,168,158,.35)"),
+                                 fill="tonexty" if col else None, fillcolor=col))
     fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
                              line=dict(color="#e9ece6", width=1.6)))
+    if start is not None:
+        fig.update_xaxes(range=[pd.Timestamp(start), m["date"].max()])
+        vis = m.loc[m["date"] >= pd.Timestamp(start)]
+        if not vis.empty:
+            lo = min(vis["close"].min(), (vis["ttm_eps"] * qs.iloc[0]).min())
+            hi = max(vis["close"].max(), (vis["ttm_eps"] * qs.iloc[-1]).max())
+            pad = (hi - lo) * 0.06 or 1
+            fig.update_yaxes(range=[lo - pad, hi + pad])
     return _style(fig, f"{name} 本益比河流圖", 440)
 
 
