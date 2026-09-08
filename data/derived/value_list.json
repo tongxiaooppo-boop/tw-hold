@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-07",
-    "rebuilt_at": "2026-09-08T02:08:22+00:00",
+    "rebuilt_at": "2026-09-08T02:10:37+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -11,7 +11,7 @@
     "has_industry": true,
     "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2015-07-16：raw -3.4%；1216 2015-08-06：raw -6.8%；2884 2015-07-30：raw -7.1%；2892 2015-07-31：raw -10.3%",
     "period": "2026-08-14",
-    "frozen": false,
+    "frozen": true,
     "n_target": 15,
     "industry_cap": 0.4
   },
