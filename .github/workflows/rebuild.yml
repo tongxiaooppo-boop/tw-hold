@@ -7,9 +7,7 @@ name: 每日重算三清單
 #    tw-swing 那邊 publish 成功後發 dispatch；沒有新 bundle 就不重算。
 #    手動重算用 workflow_dispatch。
 #
-# 🔴 **現況（M0.2）：這支還不能實際跑完**——fetch_bundle.py 尚未接線
-#    （等 M0.1a 第一個 Release `data-latest`），清單產生腳本（build lists）待寫。
-#    先放結構 + notify-failure，逐步補 step。
+# M0b：已接線——fetch_bundle → build_lists → commit data/derived/。
 
 on:
   workflow_dispatch:
@@ -39,15 +37,10 @@ jobs:
       - name: 拉上游 bundle
         env:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
-        run: |
-          echo "TODO(M0.5): python fetch_bundle.py  — 現在會 raise NotImplemented"
-          # python fetch_bundle.py
+        run: python fetch_bundle.py
 
       - name: 算因子 + 三清單
-        run: |
-          echo "TODO: python build_factors.py && python build_lists.py"
-          # python build_factors.py
-          # python build_lists.py   # → data/derived/{value,deposit,swing}_list.json + _meta.json
+        run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
       - name: commit data/derived/
         run: |
