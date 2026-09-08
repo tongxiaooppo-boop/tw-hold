@@ -129,6 +129,8 @@ _CSS = """
 .thc-body{flex:1;min-width:0;padding:.8rem 1rem .85rem;}
 .thc-head{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;}
 .thc-tk{font-family:var(--thc-mono);font-weight:600;font-size:1.18rem;color:var(--thc-ink);}
+.thc-tk a{color:inherit;text-decoration:none;border-bottom:1px dashed var(--thc-faint);}
+.thc-tk a:hover{color:var(--thc-accent);border-bottom-color:var(--thc-accent);}
 .thc-cn{font-family:"Noto Serif TC",serif;font-weight:600;font-size:1.03rem;}
 .thc-pill{display:inline-flex;align-items:center;gap:.34rem;font-size:.78rem;font-weight:600;
   padding:.14rem .55rem;border-radius:99px;white-space:nowrap;}
@@ -219,6 +221,12 @@ def _paren(verdict: str) -> str:
 
 def _esc(s) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _tk_link(ticker) -> str:
+    """代號 → 指向個股查詢的連結（`?code=` 由 _route() 接手）。"""
+    t = _esc(ticker)
+    return f'<span class="thc-tk"><a href="?code={t}" target="_self">{t}</a></span>'
 
 
 def _ctx_line(r: dict, kind: str) -> str:
@@ -314,7 +322,7 @@ def _card_b_html(r: dict, kind: str) -> str:
 
     html = (
         f'<div class="thc-card thc-{sev}"><div class="thc-stripe"></div><div class="thc-body">'
-        f'<div class="thc-head"><span class="thc-tk">{_esc(r.get("ticker"))}</span>'
+        f'<div class="thc-head">{_tk_link(r.get("ticker"))}'
         f'<span class="thc-cn">{_esc(r.get("name",""))}</span>'
         f'<span class="thc-pill thc-{sev}">{_esc(pill)}</span>{flags}</div>'
         f'<div class="thc-ctx">{_ctx_line(r, kind)}</div>'
@@ -357,7 +365,7 @@ def _swing_b_html(c: dict) -> str:
         f"距 200MA {(c.get('dist_200ma') or 0):+.0%}"])
     return (
         f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
-        f'<div class="thc-head"><span class="thc-tk">{_esc(c.get("ticker"))}</span>'
+        f'<div class="thc-head">{_tk_link(c.get("ticker"))}'
         f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
         + (f'<span class="sw-risk">{risk:+.0%} 風險</span>' if risk is not None else "")
         + f'</div><div class="thc-ctx">{ctx}</div>'
@@ -576,25 +584,40 @@ def _stock_page() -> None:
     _disclaimer()
 
 
+NAV = ["價值", "定存", "長波段", "個股查詢"]
+
+
+def _route() -> None:
+    """卡片上的代號連結 `?code=XXXX` → 預填個股查詢 + 切分頁。
+    處理完就把 query param 清掉，否則每次 rerun 都被鎖在個股查詢分頁。"""
+    code = (st.query_params.get("code") or "").strip()
+    if code:
+        st.session_state["_stock_code"] = code
+        st.session_state["_nav"] = "個股查詢"
+        del st.query_params["code"]
+
+
 def main() -> None:
     st.set_page_config(page_title="tw-hold", layout="wide")
     _inject_css()
+    _route()
     st.title("tw-hold")
     st.caption("長波段 / 價值 / 定存三清單 + 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
-    tabs = st.tabs(["價值", "定存", "長波段", "個股查詢"])
-    with tabs[0]:
+    nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
+                   label_visibility="collapsed")
+    if nav == "價值":
         _card_list("value", "價值清單", _load("value_list.json"),
                    "F-Score ≥ 6 + Magic Formula 精神。月看、季換（3/31、5/15、8/14、11/14），"
                    "前 15、單一產業 ≤ 40%。verdict 只由便宜門檻驅動（§6.3）。")
-    with tabs[1]:
+    elif nav == "定存":
         _card_list("deposit", "定存清單", _load("deposit_list.json"),
                    "殖利率 ≥ 5%（目標 5.5%）+ 硬門檻（含填息率 ≥ 60%、近 3 年含息報酬 ≥ 0），"
                    "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（§7.3）。")
-    with tabs[2]:
+    elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
-    with tabs[3]:
+    else:
         _stock_page()
 
 

@@ -25,9 +25,28 @@ def test_app_不丟例外():
 
 
 def test_三清單分頁都有標題():
+    # 改成 session_state 導覽後只渲染選中分頁——逐頁切過去確認標題都在。
     at = _run()
-    heads = " ".join(h.value for h in at.header)
-    assert "價值清單" in heads and "定存清單" in heads and "長波段候選池" in heads
+    assert "價值清單" in " ".join(h.value for h in at.header)
+    for label, want in [("定存", "定存清單"), ("長波段", "長波段候選池")]:
+        at.radio(key="_nav").set_value(label).run()
+        assert want in " ".join(h.value for h in at.header)
+
+
+def test_代號連結指向個股查詢():
+    at = _run()
+    md = " ".join(m.value for m in at.markdown)
+    assert 'href="?code=' in md and 'target="_self"' in md
+
+
+def test_query_param_code_切到個股查詢():
+    at = AppTest.from_file(REPO_APP, default_timeout=30)
+    at.query_params["code"] = "2330"
+    at.run()
+    assert not at.exception
+    assert at.session_state["_nav"] == "個股查詢"
+    assert at.session_state["_stock_code"] == "2330"
+    assert "code" not in at.query_params  # 用完就清，不然被鎖在該分頁
 
 
 def test_卡片HTML有進到頁面():
