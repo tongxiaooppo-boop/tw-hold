@@ -23,8 +23,8 @@ import fetch_bundle as fb   # noqa: E402  reuse _read_pat / _api / _release_asse
 
 UPSTREAM = _REPO / "data" / "upstream"
 
-#: 個股頁要的檔（不含 chips——法人買賣超個股頁 v1 先不畫）
 _ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet", "revenue.parquet",
+           "chips.parquet",
            "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"]
 _FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"}
 
@@ -107,6 +107,21 @@ def revenue(code: str) -> pd.DataFrame:
     return (d.dropna(subset=["month", "revenue"])
              .drop_duplicates("month", keep="last")
              .sort_values("month").reset_index(drop=True))
+
+
+def chips(code: str, lookback_days: int = 400) -> pd.DataFrame:
+    """法人買賣超 → `[date, foreign, trust, dealer]`（單位：張＝÷1000），近 `lookback_days` 天。"""
+    d = _read("chips.parquet", code, True,
+              ["date", "ticker", "foreign_net", "trust_net", "dealer_net"])
+    if d.empty:
+        return pd.DataFrame(columns=["date", "foreign", "trust", "dealer"])
+    d["date"] = pd.to_datetime(d["date"])
+    for c in ("foreign_net", "trust_net", "dealer_net"):
+        d[c] = pd.to_numeric(d[c], errors="coerce") / 1000.0
+    d = d.rename(columns={"foreign_net": "foreign", "trust_net": "trust", "dealer_net": "dealer"})
+    cut = d["date"].max() - pd.Timedelta(days=lookback_days)
+    return (d[d["date"] >= cut][["date", "foreign", "trust", "dealer"]]
+            .sort_values("date").reset_index(drop=True))
 
 
 def per_history(code: str) -> pd.DataFrame:
