@@ -12,6 +12,20 @@ import plotly.graph_objects as go
 
 _MA = {"季線": 60, "年線": 240}
 
+#: 固定深色（app 主題也是深色）——圖例橫排在上方，手機時不吃掉右半繪圖區。
+_LAYOUT = dict(
+    template="plotly_dark",
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#d7dbd4"),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    margin=dict(t=52, b=24, l=8, r=8),
+)
+
+
+def _style(fig: go.Figure, title: str, height: int) -> go.Figure:
+    fig.update_layout(title=title, height=height, **_LAYOUT)
+    return fig
+
 
 def kline(px: pd.DataFrame, name: str) -> go.Figure:
     d = px.copy()
@@ -28,9 +42,8 @@ def kline(px: pd.DataFrame, name: str) -> go.Figure:
             fig.add_trace(go.Scatter(
                 x=x, y=d["close"].astype(float).rolling(w).mean().tolist(),
                 name=label, line=dict(width=1)))
-    fig.update_layout(title=f"{name} 還原日K + 均線", xaxis_rangeslider_visible=False,
-                      height=420, margin=dict(t=40, b=20))
-    return fig
+    fig.update_layout(xaxis_rangeslider_visible=False)
+    return _style(fig, f"{name} 還原日K + 均線", 440)
 
 
 def quarterly_eps(qf: pd.DataFrame, name: str) -> go.Figure:
@@ -40,9 +53,8 @@ def quarterly_eps(qf: pd.DataFrame, name: str) -> go.Figure:
         go.Scatter(x=d["period_end"], y=d["ttm_eps"], name="TTM EPS", yaxis="y2",
                    line=dict(width=2)),
     ])
-    fig.update_layout(title=f"{name} 季 EPS", height=340, margin=dict(t=40, b=20),
-                      yaxis2=dict(overlaying="y", side="right", showgrid=False))
-    return fig
+    fig.update_layout(yaxis2=dict(overlaying="y", side="right", showgrid=False))
+    return _style(fig, f"{name} 季 EPS", 360)
 
 
 def margins(qf: pd.DataFrame, name: str) -> go.Figure:
@@ -53,8 +65,7 @@ def margins(qf: pd.DataFrame, name: str) -> go.Figure:
     for col, label in [("gross_margin", "毛利率"), ("op_margin", "營益率"),
                        ("net_margin", "稅後淨利率")]:
         fig.add_trace(go.Scatter(x=d["period_end"], y=d[col] * 100, name=label))
-    fig.update_layout(title=f"{name} 三率（%）", height=340, margin=dict(t=40, b=20))
-    return fig
+    return _style(fig, f"{name} 三率（%）", 360)
 
 
 def cashflow(qf: pd.DataFrame, name: str) -> go.Figure:
@@ -65,9 +76,8 @@ def cashflow(qf: pd.DataFrame, name: str) -> go.Figure:
         go.Bar(x=d["period_end"], y=-d["capex"].abs() / 1e8, name="資本支出"),
         go.Scatter(x=d["period_end"], y=d["fcf"] / 1e8, name="自由現金流", line=dict(width=2)),
     ])
-    fig.update_layout(title=f"{name} 現金流（億元）", barmode="relative", height=340,
-                      margin=dict(t=40, b=20))
-    return fig
+    fig.update_layout(barmode="relative")
+    return _style(fig, f"{name} 現金流（億元）", 360)
 
 
 def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
@@ -76,33 +86,33 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
         go.Bar(x=d["year"], y=d["CashEarningsDistribution"], name="現金股利"),
         go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利"),
     ])
-    fig.update_layout(title=f"{name} 逐年股利（元/股）", barmode="stack", height=320,
-                      margin=dict(t=40, b=20))
-    return fig
+    fig.update_layout(barmode="stack")
+    return _style(fig, f"{name} 逐年股利（元/股）", 340)
 
 
 def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str) -> go.Figure:
     """本益比河流圖：股價 + 「TTM EPS(t) × 自身 PE 分位」的河道。
     TTM EPS(t) ≈ 收盤 ÷ per（TWSE 報的 per 本來就是 trailing）。"""
     if per.empty:
-        return go.Figure().update_layout(title=f"{name} 本益比河流圖（無 per 資料）", height=380)
+        return _style(go.Figure(), f"{name} 本益比河流圖（無 per 資料）", 380)
     m = px[["date", "close"]].merge(per[["date", "per"]], on="date", how="inner")
     m = m[m["per"] > 0]
     if m.empty:
-        return go.Figure().update_layout(title=f"{name} 本益比河流圖（per 全為 0/負）", height=380)
+        return _style(go.Figure(), f"{name} 本益比河流圖（per 全為 0/負）", 380)
     m["ttm_eps"] = m["close"] / m["per"]
     qs = m["per"].quantile([0.1, 0.3, 0.5, 0.7, 0.9])
     fig = go.Figure()
-    colors = ["#eef", "#dde", "#ccd", "#dde", "#eef"]
-    for (q, mult), col in zip(qs.items(), colors):
+    # accent 綠加不同透明度的河道——深底/淺底都看得到，不寫死近白色
+    fills = ["rgba(95,184,158,.05)", "rgba(95,184,158,.10)", "rgba(95,184,158,.16)",
+             "rgba(95,184,158,.10)", "rgba(95,184,158,.05)"]
+    for (q, mult), col in zip(qs.items(), fills):
         fig.add_trace(go.Scatter(x=m["date"], y=m["ttm_eps"] * mult,
                                  name=f"PE {mult:.0f}x（P{int(q*100)}）",
-                                 line=dict(width=0.5), fill="tonexty" if q > 0.1 else None,
-                                 fillcolor=col))
+                                 line=dict(width=0.5, color="rgba(95,184,158,.35)"),
+                                 fill="tonexty" if q > 0.1 else None, fillcolor=col))
     fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
-                             line=dict(color="#111", width=1.5)))
-    fig.update_layout(title=f"{name} 本益比河流圖", height=420, margin=dict(t=40, b=20))
-    return fig
+                             line=dict(color="#e9ece6", width=1.6)))
+    return _style(fig, f"{name} 本益比河流圖", 440)
 
 
 F_LABELS = {

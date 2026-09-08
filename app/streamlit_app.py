@@ -59,10 +59,14 @@ PCT_FIELDS = {"roe", "fcf_yield", "norm_ey", "gross_margin", "upside_pct", "cur_
               "yield_floor", "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
               "yield_pctile_5y", "net_cash_to_mktcap", "payout_ratio_ttm", "debt_ratio"}
 
-# 卡片臉上顯示的欄位（其餘收進明細）
-FACE = {
-    "value": ["close", "cheap_threshold", "upside_pct", "value_score"],
-    "deposit": ["close", "cur_yield", "est_buy_price", "fill_rate"],
+# 卡片臉上（明細以外）不重複顯示的欄位——這些已在卡片臉上以其他形式出現。
+FACE_SKIP = {
+    "value": {"ticker", "name", "verdict", "upside_pct", "value_score", "f_score",
+              "roe", "close", "cheap_threshold", "industry", "reject_reason",
+              "buy_low", "buy_high", "buy_note", "cyclical_peak_flag", "eps_basis_suspect"},
+    "deposit": {"ticker", "name", "verdict", "cur_yield", "yield_floor", "est_buy_price",
+                "close", "div_years", "ret3y_incl", "fill_rate", "safety_score",
+                "industry", "reject_reason", "buy_low", "buy_high", "buy_note"},
 }
 SORT_KEYS = {
     "value": {"價值分數": "value_score", "空間%": "upside_pct", "現價": "close"},
@@ -100,14 +104,205 @@ def _bullets(items: list, empty: str = "—") -> str:
     return "\n".join(f"- {x}" for x in items) if items else empty
 
 
-def _verdict_icon(v: str) -> str:
-    if not v:
-        return ""
-    if v.startswith("推薦"):
-        return "🟢"
-    if v.startswith("觀望"):
-        return "🟡"
-    return "⚪"
+# ── 版型 B：判斷卡（使用者裁決 2026-09-08）──────────────────────────────
+_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Serif+TC:wght@600&display=swap');
+:root{
+  --thc-surface:#1e211a; --thc-surface2:#262a20; --thc-line:#333a2d;
+  --thc-ink:#e9ece6; --thc-soft:#a3ada2; --thc-faint:#7c8677;
+  --thc-accent:#5fb89e;
+  --thc-good:#68b784; --thc-good-bg:#1e2c22;
+  --thc-warn:#d69f57; --thc-warn-bg:#2e2717;
+  --thc-neutral:#9aa39a; --thc-neutral-bg:#262b24;
+  --thc-flag:#d5894f;
+  --thc-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+.thc-card{display:flex;background:var(--thc-surface);border:1px solid var(--thc-line);
+  border-radius:10px;overflow:hidden;margin:.55rem 0;}
+.thc-card .thc-stripe{width:4px;flex-shrink:0;background:var(--thc-neutral);}
+.thc-card.thc-good .thc-stripe{background:var(--thc-good);}
+.thc-card.thc-warn .thc-stripe{background:var(--thc-warn);}
+.thc-body{flex:1;min-width:0;padding:.8rem 1rem .85rem;}
+.thc-head{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;}
+.thc-tk{font-family:var(--thc-mono);font-weight:600;font-size:1.18rem;color:var(--thc-ink);}
+.thc-cn{font-family:"Noto Serif TC",serif;font-weight:600;font-size:1.03rem;}
+.thc-pill{display:inline-flex;align-items:center;gap:.34rem;font-size:.78rem;font-weight:600;
+  padding:.14rem .55rem;border-radius:99px;white-space:nowrap;}
+.thc-pill::before{content:"";width:.48rem;height:.48rem;border-radius:99px;background:currentColor;}
+.thc-pill.thc-good{color:var(--thc-good);background:var(--thc-good-bg);}
+.thc-pill.thc-warn{color:var(--thc-warn);background:var(--thc-warn-bg);}
+.thc-pill.thc-neutral{color:var(--thc-neutral);background:var(--thc-neutral-bg);}
+.thc-flag{font-size:.74rem;color:var(--thc-flag);font-weight:600;white-space:nowrap;}
+.thc-ctx{font-size:.85rem;color:var(--thc-soft);margin-top:.2rem;}
+.thc-hero{display:flex;align-items:flex-end;gap:.5rem;margin:.55rem 0 .1rem;}
+.thc-big{font-family:var(--thc-mono);font-weight:600;font-size:1.9rem;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+.thc-big.up{color:var(--thc-good);}
+.thc-cap{font-size:.78rem;color:var(--thc-faint);padding-bottom:.18rem;}
+.thc-bar{margin:.6rem 0 .2rem;height:6px;border-radius:99px;background:var(--thc-surface2);position:relative;}
+.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:var(--thc-good-bg);border-radius:99px;}
+.thc-bar .n{position:absolute;top:-3px;width:2px;height:12px;background:var(--thc-accent);border-radius:2px;}
+.thc-barcap{font-size:.72rem;color:var(--thc-faint);font-family:var(--thc-mono);
+  display:flex;justify-content:space-between;gap:.5rem;}
+.thc-note{font-size:.8rem;color:var(--thc-soft);margin:.5rem 0 .1rem;}
+.thc-chips{display:flex;flex-wrap:wrap;gap:.38rem;margin:.7rem 0 .1rem;}
+.thc-chip{font-size:.77rem;background:var(--thc-surface2);border:1px solid var(--thc-line);
+  border-radius:6px;padding:.2rem .5rem;white-space:nowrap;color:var(--thc-soft);}
+.thc-chip b{font-family:var(--thc-mono);font-weight:600;font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+.thc-details{margin-top:.55rem;font-size:.85rem;}
+.thc-details summary{cursor:pointer;color:var(--thc-faint);font-size:.82rem;list-style:none;}
+.thc-details summary::-webkit-details-marker{display:none;}
+.thc-details summary::before{content:"▸ ";color:var(--thc-accent);}
+.thc-details[open] summary::before{content:"▾ ";}
+.thc-details table{width:100%;border-collapse:collapse;margin-top:.45rem;}
+.thc-details td{padding:.22rem .1rem;border-bottom:1px solid var(--thc-line);}
+.thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
+.thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+/* Streamlit 元件微調——深底下的線 / 字提亮 */
+[data-testid="stExpander"] details{border-color:var(--thc-line)!important;}
+.stCaption,[data-testid="stCaptionContainer"]{color:var(--thc-soft)!important;}
+/* 手機：把並排欄位改直向堆疊（個股查詢圖表擠壓 + 卡片篩選列 + 支持/反對） */
+@media (max-width:640px){
+  [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important;}
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  [data-testid="stHorizontalBlock"] > [data-testid="column"]{
+    flex:1 1 100%!important;min-width:100%!important;width:100%!important;}
+  .thc-big{font-size:1.65rem;}
+  .thc-tk{font-size:1.1rem;}
+}
+</style>
+"""
+
+
+def _inject_css() -> None:
+    st.markdown(_CSS, unsafe_allow_html=True)
+
+
+def _sev(verdict: str) -> str:
+    if verdict.startswith("推薦"):
+        return "good"
+    if verdict.startswith("觀望"):
+        return "warn"
+    return "neutral"          # 資料不足 / 不推薦 / 其他
+
+
+def _paren(verdict: str) -> str:
+    """把「觀望（現價殖利率 4.4% < 門檻 5.0%）」取出括號裡那句。沒有括號 → 空字串。"""
+    if "（" in verdict and verdict.endswith("）"):
+        return verdict[verdict.index("（") + 1:-1]
+    return ""
+
+
+def _esc(s) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _ctx_line(r: dict, kind: str) -> str:
+    """卡片頭下的一句話依據。優先用 verdict 括號內容，否則自己組。"""
+    p = _paren(r.get("verdict", ""))
+    ind = r.get("industry") or ""
+    if p:
+        return _esc(f"{ind}　·　{p}" if ind else p)
+    if kind == "value":
+        ct, cl = r.get("cheap_threshold"), r.get("close")
+        if ct is not None and cl is not None:
+            rel = "之下（有安全邊際）" if cl <= ct else "之上（無安全邊際）"
+            return _esc(f"{ind}　·　現價 {cl:,.2f} 在便宜門檻 {ct:,.2f} {rel}")
+    else:
+        cy, yf = r.get("cur_yield"), r.get("yield_floor")
+        if cy is not None and yf is not None:
+            rel = "≥" if cy >= yf else "<"
+            return _esc(f"{ind}　·　現價殖利率 {cy*100:.1f}% {rel} 門檻 {yf*100:.1f}%")
+    return _esc(ind)
+
+
+def _buy_block(r: dict, kind: str) -> str:
+    """買入區間視覺：有數字買區 → 長條；只有 buy_note → 一句話；都沒有 → 空。"""
+    bl, bh, bn = r.get("buy_low"), r.get("buy_high"), r.get("buy_note")
+    if bl and bh:
+        return (f'<div class="thc-note"><b>買入區間</b>　{bl:,.2f} – {bh:,.2f}</div>')
+    cl = r.get("close")
+    ref = r.get("est_buy_price") if kind == "deposit" else r.get("cheap_threshold")
+    label = "估值買價" if kind == "deposit" else "便宜門檻"
+    out = ""
+    if cl is not None and ref is not None and ref > 0:
+        top = max(cl, ref) * 1.12
+        zw = min(100.0, ref / top * 100)
+        nx = min(100.0, cl / top * 100)
+        out += (f'<div class="thc-bar"><span class="z" style="width:{zw:.0f}%"></span>'
+                f'<span class="n" style="left:{nx:.0f}%"></span></div>'
+                f'<div class="thc-barcap"><span>{label} {ref:,.2f}</span>'
+                f'<span>現價 {cl:,.2f}</span></div>')
+    if bn:
+        out += f'<div class="thc-note">{_esc(bn)}</div>'
+    return out
+
+
+def _chips(r: dict, kind: str) -> str:
+    if kind == "value":
+        pairs = [("價值分數", _fmt("value_score", r.get("value_score"))),
+                 ("F-Score", _fmt("f_score", r.get("f_score"))),
+                 ("ROE", _fmt("roe", r.get("roe")))]
+    else:
+        pairs = [("估值買價", _fmt("est_buy_price", r.get("est_buy_price"))),
+                 ("連配", (f"{int(r['div_years'])} 年" if r.get("div_years") else "—")),
+                 ("3年含息", _fmt("ret3y_incl", r.get("ret3y_incl")))]
+        if r.get("fill_rate") is not None:
+            pairs.append(("填息率", _fmt("fill_rate", r.get("fill_rate"))))
+    return "".join(f'<span class="thc-chip"><b>{_esc(v)}</b> {k}</span>' for k, v in pairs)
+
+
+def _detail_html(r: dict, kind: str) -> str:
+    rows = "".join(
+        f"<tr><td>{_esc(LABELS.get(k, k))}</td><td>{_esc(_fmt(k, v))}</td></tr>"
+        for k, v in r.items()
+        if k not in FACE_SKIP[kind] and v not in (None, "")
+        and not isinstance(v, (list, dict)))
+    return f"<details class='thc-details'><summary>明細</summary><table>{rows}</table></details>"
+
+
+def _render_card_b(r: dict, kind: str) -> None:
+    v = r.get("verdict", "")
+    sev = _sev(v)
+    pill = "推薦" if sev == "good" else ("觀望" if sev == "warn" else (
+        "資料不足" if v.startswith("資料不足") else (v.split("（")[0] or "—")))
+    flags = ""
+    if r.get("cyclical_peak_flag"):
+        flags += '<span class="thc-flag">⚠ 循環高位</span>'
+    if r.get("eps_basis_suspect"):
+        flags += '<span class="thc-flag">⚠ EPS 存疑</span>'
+
+    if kind == "value":
+        up = r.get("upside_pct")
+        if sev == "good" and up is not None:
+            big, cap, is_up = f"+{up*100:.0f}%", "到估值上緣的空間", up > 0
+        else:
+            # 無安全邊際 / 資料不足時，「空間%」會誤導——臉上放便宜門檻，現價當註腳
+            ct, cl = r.get("cheap_threshold"), r.get("close")
+            big = f"{ct:,.2f}" if ct is not None else "—"
+            cap = f"便宜門檻（現價 {cl:,.2f}）" if cl is not None else "便宜門檻"
+            is_up = False
+    else:
+        cy = r.get("cur_yield")
+        big = f"{cy*100:.1f}%" if cy is not None else "—"
+        cap = "現價殖利率"
+        is_up = cy is not None and cy >= (r.get("yield_floor") or 0.05)
+
+    html = (
+        f'<div class="thc-card thc-{sev}"><div class="thc-stripe"></div><div class="thc-body">'
+        f'<div class="thc-head"><span class="thc-tk">{_esc(r.get("ticker"))}</span>'
+        f'<span class="thc-cn">{_esc(r.get("name",""))}</span>'
+        f'<span class="thc-pill thc-{sev}">{_esc(pill)}</span>{flags}</div>'
+        f'<div class="thc-ctx">{_ctx_line(r, kind)}</div>'
+        f'<div class="thc-hero"><span class="thc-big{" up" if is_up else ""}">{_esc(big)}</span>'
+        f'<span class="thc-cap">{cap}</span></div>'
+        f'{_buy_block(r, kind)}'
+        f'<div class="thc-chips">{_chips(r, kind)}</div>'
+        f'{_detail_html(r, kind)}'
+        f'</div></div>')
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
@@ -121,13 +316,6 @@ def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
                 continue
             lines.append(f"    {LABELS.get(k, k)}: {_fmt(k, v)}")
     return "\n".join(lines)
-
-
-def _detail_table(r: dict, skip: set[str]) -> pd.DataFrame:
-    return pd.DataFrame(
-        [(LABELS.get(k, k), _fmt(k, v)) for k, v in r.items()
-         if k not in skip and not isinstance(v, (list, dict))],
-        columns=["項目", "值"])
 
 
 def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
@@ -162,22 +350,7 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
 
     st.subheader(f"本季成分（{len(rows)}/{len(holdings)} 檔）")
     for r in rows:
-        with st.container(border=True):
-            head = st.columns([3, 2, 2, 2, 2])
-            flags = ("　⚠循環高位" if r.get("cyclical_peak_flag") else "") + \
-                    ("　⚠EPS存疑" if r.get("eps_basis_suspect") else "")
-            head[0].markdown(f"### {r.get('ticker')} {r.get('name', '')}\n"
-                             f"{_verdict_icon(r.get('verdict', ''))} {r.get('verdict', '')}{flags}")
-            for col, field in zip(head[1:], FACE[kind]):
-                col.metric(LABELS.get(field, field), _fmt(field, r.get(field)))
-            bl, bh, bn = r.get("buy_low"), r.get("buy_high"), r.get("buy_note")
-            if bl and bh:
-                st.markdown(f"**買入區間**：{bl:,.2f} – {bh:,.2f}")
-            elif bn:
-                st.markdown(f"**買入區間**：{bn}")
-            with st.expander("明細"):
-                st.dataframe(_detail_table(r, {"ticker", "name"}),
-                             hide_index=True, use_container_width=True)
+        _render_card_b(r, kind)
 
     changes = payload.get("changes", {})
     if changes.get("added") or changes.get("removed"):
@@ -327,6 +500,7 @@ def _stock_page() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="tw-hold", layout="wide")
+    _inject_css()
     st.title("tw-hold")
     st.caption("長波段 / 價值 / 定存三清單 + 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
