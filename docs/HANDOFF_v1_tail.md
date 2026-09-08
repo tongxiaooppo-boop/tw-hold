@@ -24,8 +24,8 @@
 - **個股查詢**：輸入代號 → 7 類 plotly 圖（K線 / 季EPS / 三率 / 現金流 / 股利 / 本益比河流圖 / F-Score 9 分項）。
 - **警語**：每個分頁頂部 + 底部都有；長波段另加「無回測支撐」。
 
-**commit 位置**：tw-hold `main` @ `ba1aa6d`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
-tests：tw-hold 全套 **43 passed**。
+**commit 位置**：tw-hold `main` @ `d955267`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
+tests：tw-hold 全套 **43 passed**。個股查詢分頁 Cloud crash 已修（見 §5b，真因是 `import charts` 撞到 repo 根的空套件）。
 
 **進度細節**（權威）：記憶 `tw-hold-m1-progress` / `tw-hold-m2-progress` / `tw-hold-m3-progress` / `tw-hold-m4-progress`。
 PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
@@ -121,17 +121,20 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 
 ---
 
-## 5b. ⚠️ 個股查詢分頁在 Cloud 曾兩次炸（已修，但要盯）
+## 5b. 個股查詢分頁 Cloud crash（✅ 已修，留紀錄）
 
-- `ModuleNotFoundError`（`from app import charts`）→ 已修：`streamlit_app.py` 頂端把
-  repo 根 + `app/` 塞進 `sys.path`、內部 import 改 bare（`import charts` / `import bundle_data`）。
-- `AttributeError` in `go.Candlestick`（Cloud 抓到跟本地不同的 plotly）→ 已修：
-  **`requirements.txt` 釘死版本**（`pandas==3.0.3 / pyarrow==24.0.0 / streamlit==1.60.0 / plotly==6.9.0`，
-  本地測過的），`charts.kline` 改用純 list 餵 plotly，`_stock_page` 每張圖包 try/except
-  （`_chart` helper——單張爆掉顯示 `type(e).__name__: e`、不整頁掛）。
-- **下一輪盯**：Cloud 重建環境後（改 requirements 會觸發）再開個股頁確認。若某張圖還是
-  `_chart` 印出錯誤，那串 `AttributeError: ...` 就是要 debug 的線索。改版本前一定本地
-  `python -m pytest -q` + `streamlit run` + AppTest 過。
+三次才修對：
+- `ModuleNotFoundError`（`from app import charts`）→ `streamlit_app.py` 頂端把 repo 根 + `app/`
+  塞進 `sys.path`、內部改 bare import。commit `b8b0712`。
+- **真因**：加了 repo 根到 `sys.path` 後，`import charts` 撞到 **`tw-hold/charts/`**——
+  M0.2 留下的一個空 `__init__.py` 套件（在 repo 根），不是 `app/charts.py` → `ch.kline`
+  不存在 → `AttributeError`。→ 刪掉空 `charts/`、`app/charts.py` 改名 **`app/stockcharts.py`**。
+  commit `d955267`。
+- 附帶硬化（留著）：`requirements.txt` 釘死版本（`pandas==3.0.3 / pyarrow==24.0.0 /
+  streamlit==1.60.0 / plotly==6.9.0`）；`_stock_page` 每張圖包 try/except（`_chart` helper，
+  單張爆掉就地顯示 `type(e).__name__: e`、不整頁掛）。
+- ⚠️ **教訓**：repo 根有 `charts/` `reference/` `screener/` `factors/` 這些頂層套件——
+  app 內的模組**不要跟它們同名**。改依賴版本前一定本地 `pytest -q` + `streamlit run` + AppTest 過。
 
 ---
 
@@ -157,7 +160,7 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 | M1/M2/M3/M4 進度細節 | 記憶 `tw-hold-m1-progress` … `tw-hold-m4-progress` |
 | 四個回測實驗 | `tw-hold/docs/BACKTEST_HANDOFF.md` |
 | tw-swing 現況 | `tw-swing/docs/STATUS.md`、記憶 `tw-hold-m0-progress`〈上游交付〉 |
-| 產品碼 | `build_factors.py`（screen_all 主入口）、`build_lists.py`（季表 + 候補 + JSON）、`screener/{pricing,deposit_pricing,candidate_pool,gates,screen}.py`、`app/{streamlit_app,bundle_data,charts}.py` |
+| 產品碼 | `build_factors.py`（screen_all 主入口）、`build_lists.py`（季表 + 候補 + JSON）、`screener/{pricing,deposit_pricing,candidate_pool,gates,screen}.py`、`app/{streamlit_app,bundle_data,stockcharts}.py` |
 
 ⚠️ **開工前**：`cd /d/g/claude/tw-hold && git status`（應乾淨）+ `python -m pytest -q`（43 passed）。
 tw-swing 開工前先 `cd /d/g/claude/tw-swing && python scripts/check_daily.py`（G-5 沒斷再動）。
