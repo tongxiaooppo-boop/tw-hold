@@ -151,5 +151,6 @@ F_LABELS = {
 def fscore_table(qf: pd.DataFrame) -> pd.DataFrame:
     """Piotroski F-Score 9 分項——**打勾，不加總、不給 verdict**（PRD §4.1）。"""
     last = qf.iloc[-1]
-    rows = [{"項目": lab, "狀態": "✓" if last.get(k) else "✗"} for k, lab in F_LABELS.items()]
+    rows = [{"項目": lab, "狀態": "✅ 成立" if last.get(k) else "⬜ 未達"}
+            for k, lab in F_LABELS.items()]
     return pd.DataFrame(rows)
