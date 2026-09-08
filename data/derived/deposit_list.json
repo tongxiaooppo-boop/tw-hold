@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-07",
-    "rebuilt_at": "2026-09-08T08:41:47+00:00",
+    "rebuilt_at": "2026-09-08T08:54:56+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -43,6 +43,8 @@
       "payout_ratio_ttm": 0.8727,
       "cyclical_penalty": 0.9451,
       "debt_ratio": 0.4642,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -71,6 +73,8 @@
       "payout_ratio_ttm": 0.7077,
       "cyclical_penalty": 0.8553,
       "debt_ratio": 0.6406,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -99,6 +103,8 @@
       "payout_ratio_ttm": 0.6349,
       "cyclical_penalty": 0.9709,
       "debt_ratio": 0.6948,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -127,6 +133,8 @@
       "payout_ratio_ttm": 0.4179,
       "cyclical_penalty": 0.9014,
       "debt_ratio": 0.7275,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -155,6 +163,8 @@
       "payout_ratio_ttm": 0.7987,
       "cyclical_penalty": 0.9731,
       "debt_ratio": 0.3715,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -183,6 +193,8 @@
       "payout_ratio_ttm": 0.8419,
       "cyclical_penalty": 0.9951,
       "debt_ratio": 0.5836,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -211,6 +223,8 @@
       "payout_ratio_ttm": 0.975,
       "cyclical_penalty": 0.9779,
       "debt_ratio": 0.6542,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -239,6 +253,8 @@
       "payout_ratio_ttm": 0.9027,
       "cyclical_penalty": 0.9898,
       "debt_ratio": 0.5158,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -267,6 +283,8 @@
       "payout_ratio_ttm": 0.4856,
       "cyclical_penalty": 0.8823,
       "debt_ratio": 0.3253,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -295,6 +313,8 @@
       "payout_ratio_ttm": 0.1587,
       "cyclical_penalty": 0.7396,
       "debt_ratio": 0.3854,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -323,6 +343,8 @@
       "payout_ratio_ttm": 0.6821,
       "cyclical_penalty": 0.9733,
       "debt_ratio": 0.5906,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -351,6 +373,8 @@
       "payout_ratio_ttm": 0.7435,
       "cyclical_penalty": 0.9308,
       "debt_ratio": 0.563,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -379,6 +403,8 @@
       "payout_ratio_ttm": 0.332,
       "cyclical_penalty": 0.8071,
       "debt_ratio": 0.3094,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -407,6 +433,8 @@
       "payout_ratio_ttm": 0.788,
       "cyclical_penalty": 0.8931,
       "debt_ratio": 0.3194,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     },
     {
@@ -435,6 +463,8 @@
       "payout_ratio_ttm": 0.7102,
       "cyclical_penalty": 0.9214,
       "debt_ratio": 0.2549,
+      "industry_headwind": false,
+      "industry_ret_6m": null,
       "reject_reason": null
     }
   ],
