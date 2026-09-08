@@ -142,3 +142,96 @@ def test_剔除理由取第一個成立的():
     }
     out = screen._first_reason(reasons, idx)
     assert out["a"] == "R1" and out["b"] == "R2" and pd.isna(out["c"])
+
+
+# ── 金融軌（金控進定存清單）──────────────────────────────────
+
+def _synth_fin_quarterly(ticker: str, start_year: int = 2021, n_years: int = 6,
+                         q_ni: float = 100.0, ytd_from_2026: bool = True,
+                         eps_nan_from_2026: bool = True) -> pd.DataFrame:
+    """金控口徑：2026 起損益表 YTD 累計、近期沒有 EPS、資產負債表沒有 capital_stock。"""
+    rows = []
+    start = pd.Timestamp(f"{start_year}-03-31")
+    for i in range(n_years * 4):
+        pe = start + pd.DateOffset(months=3 * i)
+        qtr = i % 4
+        ytd = ytd_from_2026 and pe.year >= 2026
+        ni = q_ni * (qtr + 1) if ytd else q_ni
+        eps = np.nan if (eps_nan_from_2026 and pe.year >= 2026) else 1.0
+        rows.append(dict(
+            ticker=ticker, period_end=pe,
+            revenue=np.nan, eps=eps,
+            net_income=ni, gross_profit=np.nan, op_income=np.nan,
+            pretax_income=ni * 1.2,
+            total_assets=100000.0, equity=8000.0, equity_parent=np.nan,
+            total_liabilities=92000.0, current_assets=np.nan,
+            current_liabilities=np.nan,
+            ocf=np.nan, ocf_net=np.nan, capex=np.nan,
+            capital_stock=np.nan,
+        ))
+    return pd.DataFrame(rows)
+
+
+def test_金融軌_2026起YTD淨利還原單季_歷史不動():
+    q = _panel(_synth_fin_quarterly("FIN1", q_ni=100.0))
+    qf = factors.quarterly_factors(q, fin_tickers={"FIN1"}).sort_values("period_end")
+    g = qf[qf["ticker"] == "FIN1"]
+    pre = g[g["period_end"].dt.year < 2026]["net_income"]
+    post = g[g["period_end"].dt.year >= 2026]["net_income"]
+    assert np.allclose(pre.values, 100.0)           # 單季歷史沒被動
+    assert np.allclose(post.values, 100.0)          # 2026 YTD 還原成單季 100
+    # 非金融即使在 2026 也不動
+    qf2 = factors.quarterly_factors(_panel(_synth_fin_quarterly("NF1", q_ni=100.0)),
+                                    fin_tickers=set()).sort_values("period_end")
+    g2 = qf2[qf2["ticker"] == "NF1"]
+    post2 = g2[g2["period_end"].dt.year == 2026]["net_income"].tolist()
+    assert post2[:2] == [100.0, 200.0]
+
+
+def test_金融軌_2026缺EPS從淨利股數推算後過門檻():
+    q = _panel(_synth_fin_quarterly("FIN2", q_ni=100.0))
+    qf = factors.quarterly_factors(q, fin_tickers={"FIN2"}, shares={"FIN2": 50.0})
+    g = qf[(qf["ticker"] == "FIN2") & (qf["period_end"].dt.year >= 2026)]
+    assert (g["eps"] > 0).all()                     # 100/50 = 2.0
+    divf = factors.dividend_factors(pd.DataFrame([
+        dict(ticker="FIN2", year=y, cash_dividend=2.0, cash_earnings=2.0,
+             cash_surplus=0.0) for y in range(2020, 2026)]))
+    res = screen.screen_deposit(qf, divf, asof=pd.Timestamp("2026-09-30"))
+    assert res.set_index("ticker").loc["FIN2", "eps_4q_positive"]
+
+
+def test_負債比_金融業採產業相對門檻():
+    fin = _synth_fin_quarterly("FINBK", q_ni=100.0, eps_nan_from_2026=False)
+    steel = _synth_quarterly("STEEL", growing=True)
+    steel["total_liabilities"] = 4000.0        # debt_ratio = 0.8
+    qf = factors.quarterly_factors(_panel(fin, steel), fin_tickers={"FINBK"},
+                                   shares={"FINBK": 50.0})
+    divf = factors.dividend_factors(pd.DataFrame([
+        dict(ticker=t, year=y, cash_dividend=2.0, cash_earnings=2.0, cash_surplus=0.0)
+        for t in ("FINBK", "STEEL") for y in range(2018, 2026)]))
+    ind = pd.Series({"FINBK": "金融保險", "STEEL": "鋼鐵工業"})
+    res = screen.screen_deposit(qf, divf, asof=pd.Timestamp("2025-09-30"),
+                                industry=ind).set_index("ticker")
+    # 金融保險：debt_ratio 0.92，產業中位數 0.92 × 1.5 = 1.38 → 不剔除
+    assert res.loc["FINBK", "reject_reason"] != "負債比過高"
+    # 鋼鐵：0.8 > max(0.75, 0.8×1.5=1.2) → 0.8 > 0.75 → 剔除
+    assert res.loc["STEEL", "reject_reason"] == "負債比過高"
+
+
+def test_cut5y_減配後回復創高不算():
+    # 4 年前砍一刀、之後逐年回升並創高 → 不算減配
+    yrs = {2018: 3.0, 2019: 3.5, 2020: 1.5, 2021: 2.5, 2022: 3.6, 2023: 4.0}
+    div = pd.DataFrame([dict(ticker="REC", year=y, cash_dividend=v,
+                             cash_earnings=v, cash_surplus=0.0)
+                        for y, v in yrs.items()])
+    out = factors.dividend_factors(div).set_index("ticker")
+    assert out.loc["REC", "div_cut_5y"] == False
+
+
+def test_cut5y_近3年減配仍算():
+    yrs = {2018: 3.0, 2019: 3.2, 2020: 3.4, 2021: 3.5, 2022: 3.6, 2023: 2.0}
+    div = pd.DataFrame([dict(ticker="CUT", year=y, cash_dividend=v,
+                             cash_earnings=v, cash_surplus=0.0)
+                        for y, v in yrs.items()])
+    out = factors.dividend_factors(div).set_index("ticker")
+    assert out.loc["CUT", "div_cut_5y"] == True

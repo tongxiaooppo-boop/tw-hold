@@ -55,9 +55,11 @@ def load_quarterly() -> pd.DataFrame:
     #   損益表的 `EquityAttributableToOwnersOfParent` = 歸屬母公司**淨利**（≈ net_income）
     #   資產負債表的                                  = 歸屬母公司**業主權益**（ROE 的分母）
     # 舊版「以損益表為準」是反的——害 roe = 淨利 / 淨利 ≈ 3～4（2026-09-07 抓到）。
-    # 這裡以資產負債表的為準；`equity_parent` 沒有就退回總權益 `equity`。
+    # **只採資產負債表那份，永不退回損益表的**：非金融的 balance `equity_parent`
+    # 100% 有值（2330/1301/2412… 實測），損益表那份是多餘的；金融的 balance 沒有
+    # （金控用不同 XBRL），退回總權益 `equity` 才對——退回損益表的會把淨利當權益。
     if "equity_parent_b" in q.columns:
-        q["equity_parent"] = q["equity_parent_b"].fillna(q.get("equity_parent"))
+        q["equity_parent"] = q["equity_parent_b"]
     q["equity_parent"] = q["equity_parent"].fillna(q.get("equity"))
     q = q.drop(columns=[c for c in q.columns if c.endswith(("_b", "_c"))], errors="ignore")
     q["period_end"] = pd.to_datetime(q["period_end"])
