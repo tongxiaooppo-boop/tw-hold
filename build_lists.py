@@ -30,8 +30,11 @@ except Exception:
 TOP_N = 30
 
 #: 每個清單在 holdings 裡揭露的欄位（存在才帶）。
-VALUE_COLS = ["close", "value_score", "f_score", "roe", "norm_pe", "norm_ey",
-              "fcf_yield", "ev_ebit", "net_cash_to_mktcap", "gross_margin", "reject_reason"]
+VALUE_COLS = ["close", "verdict", "value_score", "f_score", "roe", "norm_pe", "norm_ey",
+              "fcf_yield", "ev_ebit", "net_cash_to_mktcap", "gross_margin",
+              "cheap_threshold", "valuation_ceiling", "upside_pct", "cyclical_peak_flag",
+              "eps_basis_suspect", "pe_p30", "pe_p70", "pe_market",
+              "buy_low", "buy_high", "buy_note", "reject_reason"]
 DEPOSIT_COLS = ["close", "safety_score", "div_years", "last_cash_dividend", "fcf_yield",
                 "ann_vol", "roe", "payout_ratio_ttm", "cyclical_penalty",
                 "debt_ratio", "reject_reason"]
@@ -82,6 +85,7 @@ def main() -> int:
         "universe_filtered": ctx["universe_filtered"],
         "note": ctx["universe_note"],
         "u1b_pending": not ctx["has_prices"],
+        "has_pe_bands": ctx.get("has_pe_bands", False),
     }
     DERIVED.mkdir(parents=True, exist_ok=True)
 

@@ -30,6 +30,7 @@ import pandas as pd
 
 from factors.factors import (annual_eps, dividend_factors, quarterly_factors)
 from reference.loader import BUNDLE_DIR, load_dividends, load_quarterly
+from screener.pricing import add_value_verdict
 from screener.screen import screen_deposit, screen_value
 
 try:
@@ -95,6 +96,16 @@ def _read_bundle_price_history(lookback_weeks: int = 160) -> pd.DataFrame | None
     return d[d["date"] >= cutoff].reset_index(drop=True)
 
 
+def _read_bundle_per_history() -> pd.DataFrame | None:
+    """bundle `fundamentals/per.parquet` → `[ticker, date, per]`（每日 PE，估值分位用）。"""
+    p = BUNDLE_DIR / "fundamentals" / "per.parquet"
+    if not p.exists():
+        return None
+    d = pd.read_parquet(p, columns=["ticker", "date", "per"])
+    d["date"] = pd.to_datetime(d["date"])
+    return d
+
+
 def _weekly_vol(prices_hist: pd.DataFrame | None) -> pd.DataFrame | None:
     """年化週報酬標準差——低波動是定存區的核心因子。缺日線歷史就回 None。"""
     if prices_hist is None or {"date", "ticker", "close"} - set(prices_hist.columns):
@@ -141,7 +152,9 @@ def screen_all() -> dict:
     divf = dividend_factors(div, annual_eps(qf))
 
     prices = _read_bundle_prices()
-    vol = _weekly_vol(_read_bundle_price_history())
+    price_hist = _read_bundle_price_history()
+    per_hist = _read_bundle_per_history()
+    vol = _weekly_vol(price_hist)
     top500, uni_note = _universe_top500()
     if top500 is None:
         est = _top500_by_mktcap(qf, prices)
@@ -153,6 +166,9 @@ def screen_all() -> dict:
     dep["in_top500"] = True if top500 is None else dep["ticker"].isin(top500)
     val["in_top500"] = True if top500 is None else val["ticker"].isin(top500)
 
+    # M2 §6.2/§6.3：買價 + verdict（定存 §7.3/§7.4 之後補）
+    val = add_value_verdict(val, per_hist, price_hist)
+
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
     return {
@@ -160,6 +176,7 @@ def screen_all() -> dict:
         "context": {
             "quarters": list(qf.shape), "tickers": int(qf.ticker.nunique()),
             "has_prices": prices is not None, "has_vol": vol is not None,
+            "has_pe_bands": per_hist is not None,
             "universe_filtered": top500 is not None, "universe_note": uni_note,
             "trading_date": bundle_meta.get("trading_date"),
             "bundle_schema": bundle_meta.get("schema_version"),
@@ -193,6 +210,8 @@ def _fmt(df: pd.DataFrame, score: str, cols: list[str]) -> str:
     show = ["ticker", score] + [c for c in cols if c in sub.columns]
     t = sub[show].copy()
     for c in show[1:]:
+        if t[c].dtype == object or t[c].dtype == bool:
+            continue                       # verdict 等文字欄不轉數字
         t[c] = pd.to_numeric(t[c], errors="coerce").round(3)
     return _md_table(t)
 
@@ -223,10 +242,14 @@ def _write_report(dep: pd.DataFrame, val: pd.DataFrame) -> None:
         "門檻：Piotroski F-Score ≥ 6 / 營收非連 3 季衰退 / 毛利率 5 年未下滑 / "
         "FCF 為正。排序 = rank(品質: F-Score, ROE) + rank(便宜: normalized 盈餘"
         "殖利率, FCF 殖利率, EV/EBIT, 淨現金/市值)。",
+        f"> verdict（§6.3，只由便宜門檻驅動）："
+        + "、".join(f"{k} {v}" for k, v in
+                   val[val["passes"] & val["in_top500"]]["verdict"]
+                   .value_counts().items()),
         "",
         _fmt(val, "value_score",
-             ["f_score", "roe", "norm_pe", "norm_ey", "fcf_yield", "ev_ebit",
-              "net_cash_to_mktcap", "gross_margin"]),
+             ["verdict", "close", "cheap_threshold", "buy_low", "buy_high",
+              "f_score", "roe", "norm_pe", "fcf_yield", "upside_pct"]),
         "",
         "## 被剔除的（前 15，看門檻有沒有卡錯）",
         "",
