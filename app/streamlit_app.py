@@ -118,7 +118,8 @@ _CSS = """
   --thc-flag:#d5894f;
   --thc-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
-.thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:start;margin-top:.3rem;}
+.thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:stretch;margin-top:.3rem;}
+.thc-grid > .thc-card{height:100%;}
 @media (min-width:900px){.thc-grid{grid-template-columns:1fr 1fr;}}
 .thc-card{display:flex;background:var(--thc-surface);border:1px solid var(--thc-line);
   border-radius:10px;overflow:hidden;}
@@ -414,7 +415,8 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
     cats = [c for c in ("推薦", "觀望", "資料不足", "不推薦")
             if any(_verdict_cat(h.get("verdict", "")) == c for h in holdings)]
     c1, c2 = st.columns([2, 1])
-    pick = c1.multiselect("篩選 verdict", cats, default=cats)
+    pick = c1.pills("篩選 verdict（點掉不想看的）", cats, selection_mode="multi",
+                    default=cats, key=f"_pick_{kind}") or cats
     sort_label = c2.selectbox("排序", list(SORT_KEYS[kind]))
     sk = SORT_KEYS[kind][sort_label]
     rows = [h for h in holdings if _verdict_cat(h.get("verdict", "")) in pick]

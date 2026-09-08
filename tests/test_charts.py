@@ -66,7 +66,7 @@ def test_pe_river_有河道():
 def test_fscore_table_9項_不加總():
     t = ch.fscore_table(_qf())
     assert len(t) == 9
-    assert set(t["狀態"]) <= {"✓", "✗"}
+    assert set(t["狀態"]) <= {"✅ 成立", "⬜ 未達"}
     assert "總分" not in t["項目"].values and "分數" not in "".join(t["項目"])
 
 
