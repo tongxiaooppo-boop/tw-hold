@@ -117,7 +117,7 @@ tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N
 | 項 | 說明 |
 | :-- | :-- |
 | 實驗 B 報告過時 | **金融軌這輪改了 `cut5y` 語意 + 定存硬門檻通過數 55 → ~92**，`docs/reports/expectations_20260907.md` 的定存數字已不準。用完整填息率重跑 `research/backtest_rebalance.py`（研究文件，非產品）。 |
-| `per.parquet` 不自動更新 | valuation 分位帶會慢慢舊。tw-swing 用 TWSE `BWIBBU_ALL` 每日整批刷 PER/PBR/殖利率、併進 U1b。 |
+| ✅ `per.parquet` 每日刷新 | tw-swing `fetch_valuation.py`（TWSE BWIBBU_ALL + TPEx）→ `data/valuation/` 快照 → `build_per_parquet.py --from-existing` 併進 per.parquet，`publish_bundle.yml` 每平日跑。2026-09-08（tw-swing `3bab9fa`）。tw-hold 端零改動（schema 同）。 |
 | ✅ 個股頁法人買賣超圖 | `bundle_data.chips()` + `stockcharts.institutional_net()`（外資/投信/自營柱＋20日累計線，張）。2026-09-08。 |
 | `price_adjuster.py` 移植 | 本地進階模式、500 大以外個股的還原股價（雲端唯讀不需要）。PRD §M4。 |
 | PRD §8/§9〈已定〉過時 | 寫於 opus 審核前，講舊的 `tw-data` 公開 repo。現以 §3.1.1 / §10.1 為準，README 已標。 |
