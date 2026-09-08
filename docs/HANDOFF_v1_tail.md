@@ -84,9 +84,10 @@ commit：tw-swing `32351a9`、tw-hold `9731273`。
 
 | 項 | 說明 |
 | :-- | :-- |
+| ✅ 代號可點跳個股查詢 | `st.tabs` → `st.radio` session_state 導覽；代號變 `?code=XXXX` 連結，`_route()` 讀 query param 預填+切分頁+清 param。commit `84cd0ad`。 |
+| ✅ 股利圖分次配息描邊 | 同年季配/半年配疊柱各段加淺色描邊、按 pay_date 排序。commit `a68b9e3`。 |
 | 卡片右側留白 | 使用者說「先不改」，兩欄 grid 已解決大半。之後若還要處理 → 卡片給 `max-width` 讀起來像文件。 |
 | 長波段卡「都是字」 | 已改成 B 語言（`_swing_b_html`），但使用者可能還想更緊湊 / 加視覺元素。等回饋。 |
-| （可能有更多）| 使用者評審沒結束就叫我寫交接——**下一輪先問使用者「UI 還有沒有要調的」**。 |
 
 ⚠️ 改 app 一定本地 `PYTHONIOENCODING=utf-8 python -m pytest -q` + AppTest 過再 push
 （`streamlit run` 本機無瀏覽器截不了圖，靠使用者看 Cloud）。
