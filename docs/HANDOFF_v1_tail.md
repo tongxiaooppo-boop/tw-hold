@@ -113,15 +113,15 @@ data_pack 已還原。`IGNORE_JUMPS`：2380 / 4950 / 7772（疑減資缺比例�
 見上方「續做」+ 記憶 `tw-hold-revenue-history`。**下一輪確認 `publish_bundle` 跑過、
 tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N 個月」）。
 
-### C. ⑥ 小尾巴 🟢 —— **下一個做**
+### C. ⑥ 小尾巴 🟢 —— **剩最後一項**
 
 | 項 | 說明 |
 | :-- | :-- |
-| 實驗 B 報告過時 | **金融軌這輪改了 `cut5y` 語意 + 定存硬門檻通過數 55 → ~92**，`docs/reports/expectations_20260907.md` 的定存數字已不準。用完整填息率重跑 `research/backtest_rebalance.py`（研究文件，非產品）。 |
+| 實驗 B 報告過時 🔴 剩這個 | **金融軌這輪改了 `cut5y` 語意 + 定存硬門檻通過數 55 → ~92**，`docs/reports/expectations_20260907.md` 的定存數字已不準。用完整填息率重跑 `research/backtest_rebalance.py`（研究文件，非產品）。做完 ⑥ 收工，進 ③。 |
 | ✅ `per.parquet` 每日刷新 | tw-swing `fetch_valuation.py`（TWSE BWIBBU_ALL + TPEx）→ `data/valuation/` 快照 → `build_per_parquet.py --from-existing` 併進 per.parquet，`publish_bundle.yml` 每平日跑。2026-09-08（tw-swing `3bab9fa`）。tw-hold 端零改動（schema 同）。 |
 | ✅ 個股頁法人買賣超圖 | `bundle_data.chips()` + `stockcharts.institutional_net()`（外資/投信/自營柱＋20日累計線，張）。2026-09-08。 |
-| `price_adjuster.py` 移植 | 本地進階模式、500 大以外個股的還原股價（雲端唯讀不需要）。PRD §M4。 |
-| PRD §8/§9〈已定〉過時 | 寫於 opus 審核前，講舊的 `tw-data` 公開 repo。現以 §3.1.1 / §10.1 為準，README 已標。 |
+| ~~`price_adjuster.py` 移植~~ | **不做（v1）**：整個「本地進階模式即時補抓」都還沒建，雲端唯讀不需要。列 §E 日後拓展。 |
+| ✅ PRD §8/§9 過時 | 2026-09-08：§8/§9 加更正框（`tw-data` 沒建、走 tw-swing 私有 Release + PAT）、§10.1 更新 per 抓取、§11 加變更記錄條目。README 本來就標了。 |
 | ~~`div_years` 全=12~~ | **不做**（使用者 2026-09-08 裁決）：股價只到 2015、配息 >10 年夠用。定存排序時該分項飽和 = 接受。 |
 
 ### D. ③ 產業逆風判定 🟢 —— **最後做**（PRD §6.5 / §7，PLAN 未打勾）
@@ -131,6 +131,8 @@ tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N
 放 `screener/pricing.py` 或新 `screener/industry.py`，價值 + 定存都掛。
 
 ### E. 未來項（使用者提過、還沒定案）
+- **`price_adjuster.py` 移植 / 本地進階模式即時補抓**：500 大以外個股的還原股價、
+  FinMind 即時補抓。整塊 v1 沒做（雲端唯讀不需要）。PRD §M4 / §3.3。
 - **個股頁「三軌門檻檢視」**：把定存/價值/長波段的硬門檻套在單一檔上、只顯示 ✓/✗
   （描述不是建議）。PRD §4.1 明寫個股頁「不打分、不給買賣建議」——做之前**先定調措辭**
   + 記 PRD backlog。**2026-09-08 使用者再確認：先不做、列日後拓展**（階段一純讀清單 JSON

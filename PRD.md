@@ -662,6 +662,14 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 
 ## 8. 技術棧 · repo · 佈署
 
+> 🔴 **本節 repo 架構已被實作取代（README §「現況」+ §10.1 + `docs/M0_HANDOFF.md` 為準）**：
+> **沒有建 `tw-data`**。抓取 + 打包 + 發佈 bundle 全在 **`tw-swing`（私有）** 的
+> `fundamentals.yml`（U1a 週）+ `publish_bundle.yml`（U1b 日），發到 tw-swing **私有** Release。
+> **`tw-hold` 是公開 repo**（Actions 不計帳號額度）。tw-hold `fetch_bundle.py` 用
+> **fine-grained PAT**（`TWSWING_BUNDLE_PAT`，contents:read）拉，dispatch 用 `TWHOLD_DISPATCH_PAT`
+> ——兩顆 PAT 都活著（守門員 G6 沒刪，到期日見 `reference/UPSTREAM.md`）。
+> 「零 token / 匿名下載 / tw-data 公開」那套沒發生。下面保留原文供對照。
+
 - Python 3.14、Streamlit、**plotly**、pandas、pyarrow、requests。
 - repo（**同一個 GitHub 帳號，不開新帳號**，§9 已定 10）：
 
@@ -691,6 +699,10 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 ---
 
 ## 9. 決定與待定（2026-09-07 二次修正）
+
+> 🔴 **已定 1 / 9 / 10 的「tw-data 公開、下游零 token」已被實作取代**——見 §8 頂的更正框
+> 與 §10.1。實際：bundle 在 tw-swing 私有 Release、tw-hold public、走 fine-grained PAT。
+> 其餘各條（分軌、因子門檻、F-Score、不開新帳號、tw-swing 不放生）仍有效。
 
 **已定**：
 1. 資料（**v2.2**）：獨立的 **`tw-data`（公開 repo）** 是唯一的抓取者，
@@ -762,9 +774,15 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 | tw-swing `daily.yml` 三槍（現況） | ~990 | ~990 |
 | tw-swing `fundamentals.yml`（現況） | ~100 | ~100 |
 | **新增** `publish_bundle.yml`（U1b，每日抓+打包） | ~330 | **~330** |
-| **新增** `per` 抓取進 CI（U2，每週 500 requests） | ~60 | **~60** |
+| ~~`per` 抓取進 CI（U2，每週 500 requests）~~ | ~~60~~ | **~0** |
 | **新增** tw-hold `rebuild.yml`（每日重算+commit） | ~100 | **0**（公開 repo 不計） |
-| **合計** | ~1580 | **~1480** |
+| **合計** | ~1580 | **~1420** |
+
+> **2026-09-08 更新**：`per` 不走 FinMind CI 抓取了——改用 **TWSE `BWIBBU_ALL` + TPEx
+> `tpex_mainboard_peratio_analysis`** 每日整批（各 1 request、免金鑰），塞進 `publish_bundle.yml`
+> 既有的 job（`scripts/fetch_valuation.py` → `data/valuation/` 版控快照 → `build_per_parquet.py
+> --from-existing`）。增量成本 ≈ 0 分。實測整份 `publish_bundle` 仍 ~2 分/次。
+> 月營收歷史（`revenue_history.parquet`）也是同模式：版控種子 + 每日快照，CI 零額外抓取。
 
 **✅ 使用者裁決 2026-09-07：tw-hold repo 設 public。**
 
@@ -835,6 +853,18 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 ---
 
 ## 11. 變更記錄
+
+- **2026-09-08 v1 收尾（實作校正，非設計變更）**——PRD 凍結下的現況同步：
+  1. §8 / §9 已定 1·9·10：`tw-data` 公開架構**沒實作**，bundle 在 tw-swing 私有 Release、
+     tw-hold public、走 fine-grained PAT（兩處加更正框，正文保留對照）。
+  2. §10.1：`per` 改 TWSE `BWIBBU_ALL` + TPEx 每日整批（免金鑰、增量 ≈ 0 分），
+     不走 FinMind CI 抓取；月營收歷史同模式（版控種子 + 每日快照）。
+  3. bundle `revenue.parquet` 改月營收長表（2015~）→ 個股頁月營收圖 + 候選池 `revenue_accel`。
+  4. bundle 加 `chips.parquet` reader → 個股頁法人買賣超圖。
+  5. 上游未還原的面額變更/股票分割：`reference/corporate_actions.py` 手動對照表
+     （`SPLITS` + `IGNORE_JUMPS`）+ `detect_unhandled_splits()` build 偵測 + webhook 告警。
+  6. `div_years` 連續配息年上限 ~12（股利資料從 2015）——使用者裁決**接受飽和、不補更早**。
+  7. 個股頁「三軌門檻檢視」：使用者再確認**先不做**，列日後拓展。
 
 - **2026-09-07 v3.1-draft 波段軌道復活（未定案）**——起因：pool3 的回測結果回來了，
   把 v3.0 砍掉這一軌的理由推翻了一半。
