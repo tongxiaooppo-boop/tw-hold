@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-07",
-    "rebuilt_at": "2026-09-08T04:35:34+00:00",
+    "rebuilt_at": "2026-09-08T04:57:00+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -448,15 +448,15 @@
     ],
     "likely_out": [
       {
-        "ticker": "2330",
-        "reason": "分數掉出前 15"
-      },
-      {
         "ticker": "9939",
         "reason": "分數掉出前 15"
       },
       {
         "ticker": "1513",
+        "reason": "分數掉出前 15"
+      },
+      {
+        "ticker": "2330",
         "reason": "分數掉出前 15"
       },
       {
