@@ -136,13 +136,32 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     return out
 
 
-def revenue_yoy(revenue: pd.DataFrame) -> pd.Series:
-    """月營收 YoY（bundle 是單月快照——`revenue_accel`「加速」判定要 revenue 歷史，
-    尚未進 bundle，v1 只用 YoY > 0）→ index=ticker。"""
+def revenue_yoy(revenue: pd.DataFrame) -> pd.DataFrame:
+    """每檔最新月的月營收 YoY + `revenue_accel`（本月 YoY > 上月 YoY）→ index=ticker，
+    欄 [revenue_yoy, revenue_accel]。
+
+    吃兩種 bundle schema：
+      - 新（長表）[ticker, month "YYYY-MM", revenue, ...]：YoY = 本月 / 去年同月 − 1，
+        accel = 本月 YoY > 上月 YoY。
+      - 舊（單月快照）[ticker, period, revenue, revenue_last_year]：YoY 直接算，accel = NaN。
+    """
     r = revenue.copy()
     r["ticker"] = _bare(r["ticker"])
-    r = r.set_index("ticker")
-    return (r["revenue"] / r["revenue_last_year"] - 1.0).rename("revenue_yoy")
+
+    if "month" in r.columns:                     # 新長表
+        r = r.dropna(subset=["revenue"]).sort_values(["ticker", "month"])
+        g = r.groupby("ticker", sort=False)["revenue"]
+        r["yoy"] = g.transform(lambda s: s / s.shift(12) - 1.0)
+        r["yoy_prev"] = r.groupby("ticker", sort=False)["yoy"].shift(1)
+        last = r.groupby("ticker", sort=False).tail(1).set_index("ticker")
+        return pd.DataFrame({
+            "revenue_yoy": last["yoy"],
+            "revenue_accel": last["yoy"] > last["yoy_prev"],
+        })
+
+    r = r.set_index("ticker")                    # 舊單月快照
+    yoy = r["revenue"] / r["revenue_last_year"] - 1.0
+    return pd.DataFrame({"revenue_yoy": yoy, "revenue_accel": pd.NA}, index=r.index)
 
 
 def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
@@ -161,6 +180,10 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
         support.append(f"月營收 YoY {rev:+.0%}（成長明確）")
     elif rev is not None and rev < 0.05:
         oppose.append(f"月營收 YoY 僅 {rev:+.0%}（勉強過門檻）")
+    if rec.get("revenue_accel") is True:
+        support.append("月營收 YoY 較上月加速")
+    elif rec.get("revenue_accel") is False:
+        oppose.append("月營收 YoY 較上月減速")
     if rec.get("inst_net20") and rec["inst_net20"] > 0:
         support.append(f"法人 20 日淨買超 {rec['inst_net20']/1e3:,.0f} 張")
     if d50 is not None and 0 <= d50 <= 0.08:
@@ -190,7 +213,9 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
     tt = trend_template(prices_adj, index_0050, asof)
     inst = institutional_net20(chips, asof)
     atr = atr14(prices_adj, asof)
-    ryoy = revenue_yoy(revenue)
+    rev_df = revenue_yoy(revenue)
+    ryoy = rev_df["revenue_yoy"].to_dict()
+    raccel = rev_df["revenue_accel"].to_dict()
 
     tickers = fund.index
     if universe is not None:
@@ -210,7 +235,9 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
             "roe": float(f["roe"]) if pd.notna(f["roe"]) else None,
             "f_score": float(f["f_score"]) if pd.notna(f["f_score"]) else None,
             "revenue_yoy": float(ryoy.get(tk)) if pd.notna(ryoy.get(tk, np.nan)) else None,
-            "c_rev_yoy": bool(ryoy.get(tk, -1) > 0),
+            "c_rev_yoy": bool(pd.notna(ryoy.get(tk, np.nan)) and ryoy.get(tk) > 0),
+            "revenue_accel": (bool(raccel.get(tk)) if pd.notna(raccel.get(tk, pd.NA))
+                              else None),
             "inst_net20": float(inst.get(tk)) if pd.notna(inst.get(tk, np.nan)) else None,
             "c_inst": bool(inst.get(tk, -1) > 0),
             "trend_cnt": int(row["trend_cnt"]),
@@ -261,7 +288,9 @@ def _invalidation(rec: dict) -> list[dict]:
          and rec["dist_50ma"] < 0 else "未觸發"},
         {"條件": "趨勢模板 < 5/8", "目前": "已觸發" if rec["trend_cnt"] < 5 else "未觸發"},
         {"條件": "月營收 YoY 轉負", "目前": "已轉負" if (rec["revenue_yoy"] or 0) < 0
-         else "未觸發（加速判定待 revenue 歷史進 bundle）"},
+         else ("未觸發（YoY 仍加速）" if rec.get("revenue_accel") is True
+               else "未觸發（但 YoY 已較上月減速）" if rec.get("revenue_accel") is False
+               else "未觸發")},
         {"條件": "季 EPS YoY 轉負", "目前": "已轉負" if (rec["eps_yoy_q"] or 0) < 0
          else "未觸發"},
     ]
