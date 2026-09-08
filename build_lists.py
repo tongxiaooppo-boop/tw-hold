@@ -35,7 +35,10 @@ VALUE_COLS = ["close", "verdict", "value_score", "f_score", "roe", "norm_pe", "n
               "cheap_threshold", "valuation_ceiling", "upside_pct", "cyclical_peak_flag",
               "eps_basis_suspect", "pe_p30", "pe_p70", "pe_market",
               "buy_low", "buy_high", "buy_note", "reject_reason"]
-DEPOSIT_COLS = ["close", "safety_score", "div_years", "last_cash_dividend", "fcf_yield",
+DEPOSIT_COLS = ["close", "verdict", "safety_score", "cur_yield", "yield_floor",
+                "est_buy_price", "buy_low", "buy_high", "buy_note",
+                "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
+                "yield_pctile_5y", "div_years", "last_cash_dividend", "fcf_yield",
                 "ann_vol", "roe", "payout_ratio_ttm", "cyclical_penalty",
                 "debt_ratio", "reject_reason"]
 
@@ -86,6 +89,8 @@ def main() -> int:
         "note": ctx["universe_note"],
         "u1b_pending": not ctx["has_prices"],
         "has_pe_bands": ctx.get("has_pe_bands", False),
+        "has_fill_rate": ctx.get("has_fill_rate", False),
+        "g2_note": ctx.get("g2_note"),
     }
     DERIVED.mkdir(parents=True, exist_ok=True)
 
@@ -94,7 +99,9 @@ def main() -> int:
 
     _write("value", {"_meta": meta, "holdings": val_rows, "changes": _diff("value", val_rows)})
     _write("deposit", {"_meta": {**meta, "warning":
-           "U3 universe 修正前定存線偏誤（PRD §7 / M0_HANDOFF §3）"},
+           "定存線已知偏誤：(1) 金控/金融股被『EPS 近4季非全正』刷掉——FinMind 對金融業"
+           "報不同 XBRL type、EPS/淨利是 NaN（PRD §7 / 實驗 B）；"
+           "(2) 填息率只涵蓋有未還原股價的 ~500 檔，其餘標記為未驗。"},
            "holdings": dep_rows, "changes": _diff("deposit", dep_rows)})
     _write("swing", {"_meta": meta, "holdings": [], "changes": {"added": [], "removed": []},
            "note": "M1 主動選股候選池未實作（PLAN §M1，前置 M0b）"})
