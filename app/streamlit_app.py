@@ -29,24 +29,57 @@ def _load(name: str) -> dict | None:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _fmt_removed(removed: list) -> list[str]:
+    """removed 可能是 [ticker] 或 [{ticker, reason}]。"""
+    out = []
+    for r in removed:
+        out.append(f"{r['ticker']}（{r.get('reason', '')}）" if isinstance(r, dict) else str(r))
+    return out
+
+
 def _list_page(title: str, payload: dict | None, note: str) -> None:
     st.header(title)
     st.caption(note)
     if payload is None:
-        st.info("清單尚未產出——`build_factors.py` / 每日 Action 跑過後這裡才有東西。")
+        st.info("清單尚未產出——`build_lists.py` / 每日 Action 跑過後這裡才有東西。")
         return
     meta = payload.get("_meta", {})
+    bits = []
     if meta.get("trading_date"):
-        st.caption(f"資料日期：{meta['trading_date']}　·　重算：{meta.get('rebuilt_at', '—')}")
+        bits.append(f"資料日期 {meta['trading_date']}")
+    if meta.get("period"):
+        bits.append(f"本期換股日 {meta['period']}"
+                    + ("（成分凍結，只刷新價格/verdict）" if meta.get("frozen")
+                       else "（本次重算成分）"))
+    bits.append(f"重算 {meta.get('rebuilt_at', '—')}")
+    st.caption("　·　".join(bits))
+    if meta.get("warning"):
+        st.warning(meta["warning"])
+    if meta.get("g2_note"):
+        st.caption("🔒 " + meta["g2_note"])
+
     holdings = payload.get("holdings", [])
     if holdings:
-        st.subheader("成分")
+        st.subheader(f"本季成分（{len(holdings)} 檔）")
         st.dataframe(pd.DataFrame(holdings), width="stretch")
+
     changes = payload.get("changes", {})
-    if changes:
+    if changes.get("added") or changes.get("removed"):
+        st.subheader("本季換股（正式變動）")
+        if changes.get("turnover_pct") is not None:
+            st.caption(f"換手率 {changes['turnover_pct']:.0%}")
         c1, c2 = st.columns(2)
-        c1.subheader("新進"); c1.write(changes.get("added", []) or "—")
-        c2.subheader("移除（= 出場訊號）"); c2.write(changes.get("removed", []) or "—")
+        c1.markdown("**新進**"); c1.write(changes.get("added", []) or "—")
+        c2.markdown("**移除（= 出場訊號）**")
+        c2.write(_fmt_removed(changes.get("removed", [])) or "—")
+
+    cand = payload.get("candidates", {})
+    if cand.get("likely_in") or cand.get("likely_out"):
+        st.subheader("候補變動（若今天重選；提示，非正式換股）")
+        c1, c2 = st.columns(2)
+        c1.markdown("**分數擠進前 15**"); c1.write(cand.get("likely_in", []) or "—")
+        c2.markdown("**本季成分掉出前 15**")
+        c2.write(_fmt_removed(cand.get("likely_out", [])) or "—")
 
 
 def main() -> None:
@@ -59,11 +92,12 @@ def main() -> None:
     tabs = st.tabs(["價值", "定存", "長波段", "個股查詢"])
     with tabs[0]:
         _list_page("價值清單", _load("value_list.json"),
-                   "F-Score ≥ 6 + Magic Formula 精神，季換股（3/6/9/12）。")
+                   "F-Score ≥ 6 + Magic Formula 精神。月看、季換（3/31、5/15、8/14、11/14），"
+                   "前 15、單一產業 ≤ 40%。verdict 只由便宜門檻驅動（§6.3）。")
     with tabs[1]:
         _list_page("定存清單", _load("deposit_list.json"),
-                   "殖利率 ≥ 5%（目標 5.5%）+ 七道硬門檻，季換股。"
-                   "⚠️ U3 universe 修正前定存線是壞的（PRD §7、M0_HANDOFF §3）。")
+                   "殖利率 ≥ 5%（目標 5.5%）+ 硬門檻（含填息率 ≥ 60%、近 3 年含息報酬 ≥ 0），"
+                   "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（§7.3）。")
     with tabs[2]:
         _list_page("長波段清單", _load("swing_list.json"),
                    "主動擇時、持有 2–12 週、每日重算、進場前寫死出場規則。")
