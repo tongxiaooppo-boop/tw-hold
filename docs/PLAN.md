@@ -365,22 +365,21 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
 
 ---
 
-## M4 · 個股查詢
+## M4 · 個股查詢 · **✅ 主體完成 2026-09-08**
 
-**目標**：個股頁能用。**timebox 3 session。** 真的來不及可溢出一個月（加分項）。
+`app/bundle_data.py` + `app/charts.py` + `streamlit_app.py` 個股分頁。AppTest 實測
+2330 / 6488(OTC) / 9999(不存在) 都不爆。全套 43 tests 綠。
 
-- [ ] 🔴 **app 端 bundle 載入器**（雲端個股頁的資料路徑，PRD §3.2）：
-      `data/upstream/` 是 gitignore 的、**不在佈署出去的 repo 裡** → app 要用
-      同一顆 PAT 執行期拉一次、`st.cache_resource` 快取。
-      ⚠️ **按需讀取**：`pyarrow` 的 `filters=[("ticker","==",x)]` + `columns=[...]`，
-      **不可以整張 `pd.read_parquet()`**——Streamlit Cloud 只有 1GB RAM
-- [ ] 代號 → 前 500 讀 bundle / 本地不在則即時補抓（`data/cache/`，TTL 見 PRD §3.3）
-- [ ] 數據表 + 核心圖：K 線、月營收、季 EPS、三率、股利、**本益比河流圖**、F-Score 9 分項
-- [ ] plotly 互動（hover / 縮放）
-- [ ] `price_adjuster.py` 移植（500 大以外還原股價）
-- [ ] ⚠️ F-Score 9 分項打勾、**不加總、不給 verdict**
+- [x] 🔴 app 端 bundle 載入器（`app/bundle_data.py`）：`ensure_assets()` 執行期從 Release
+      拉、`st.cache_resource` 一次；按需讀 `pyarrow filters=[("ticker","in",[...])]` + `columns=`
+- [x] 代號 → 讀 bundle；不在 bundle 內給明確提示
+- [x] 圖：還原日K+均線、季 EPS、三率、現金流、逐年股利、**本益比河流圖**、F-Score 9 分項表
+- [x] plotly 互動
+- [x] ⚠️ F-Score 9 分項打勾、不加總、不給 verdict
+- [ ] 月營收走勢圖——bundle 只有單月快照，待 revenue 歷史併入 bundle（degraded：顯示 info）
+- [ ] `price_adjuster.py` 移植（本地進階模式、500 大以外）——低優先
 
-**M4 驗收**：輸入代號看得到數據表 + 圖；不打分。
+**M4 驗收**：✅ 輸入代號看得到數據表 + 7 類圖；不打分。細節見記憶 `tw-hold-m4-progress`。
 
 ---
 
