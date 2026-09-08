@@ -1,5 +1,13 @@
 # M0b 交接 — 給下一棒
 
+> ✅ **M0b 已完成（2026-09-08）**。tw-swing `master` @ `1c0155c`、tw-hold `main` @ `95ee5c0`。
+> publish_bundle.yml 跑綠（12 資產 / _meta 11 檔）、修掉 `_meta.json` 兩管線互蓋 bug、
+> rebuild.yml 接線並實測、清單補齊現價 + 年化週波動（`universe_filtered=True`、`u1b_pending=False`）。
+> 未接：跨 repo `repository_dispatch` 自動觸發（需 `TWHOLD_DISPATCH_PAT`，先不接）。
+> 下一棒：M1 候選池 或 M2 估值/verdict。詳見記憶 `tw-hold-m0-progress`。
+> 以下為當初交接內容，留作脈絡。
+
+
 > **自足執行指令。你在全新對話、沒有上下文。** 讀完這份就能動工。
 > 環境：Windows，`d:\g\claude\` 底下有 `tw-swing\`、`tw-hold\`、`books\`。
 > ⚠️ **bash 工具的 cwd 是 `d:\g\claude`**，跑腳本要 `cd /d/g/claude/tw-hold` 或 `tw-swing`。
