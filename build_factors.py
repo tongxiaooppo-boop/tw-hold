@@ -144,6 +144,15 @@ def _universe_top500() -> tuple[set[str] | None, str]:
     return set(u.loc[u[col], "ticker"].astype(str)), f"universe.parquet：{int(u[col].sum())} 檔"
 
 
+def _industry_map() -> dict[str, str]:
+    """ticker → 產業別（bundle universe.parquet 的 `industry` 欄）。缺檔 → 空 dict。"""
+    p = BUNDLE_DIR / "fundamentals" / "universe.parquet"
+    if not p.exists() or "industry" not in pd.read_parquet(p, columns=None).columns:
+        return {}
+    u = pd.read_parquet(p, columns=["ticker", "industry"])
+    return dict(zip(u["ticker"].astype(str), u["industry"].fillna("未分類")))
+
+
 def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str] | None:
     """退化估法：universe.parquet 不在時，用「capital_stock × 最新收盤」估市值前 500；
     缺收盤就不篩（回 None）。"""
@@ -190,6 +199,10 @@ def screen_all() -> dict:
     # M2 §7.1/§7.3/§7.4：定存兩道新硬門檻 + 殖利率法買價 + verdict
     dep = add_deposit_verdict(dep, raw_close_hist, price_hist, per_hist, div)
 
+    ind = _industry_map()
+    for df in (val, dep):
+        df["industry"] = df["ticker"].astype(str).map(ind)
+
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
     return {
@@ -199,6 +212,7 @@ def screen_all() -> dict:
             "has_prices": prices is not None, "has_vol": vol is not None,
             "has_pe_bands": per_hist is not None,
             "has_fill_rate": raw_close_hist is not None,
+            "has_industry": bool(ind),
             "g2_note": g2_note,
             "universe_filtered": top500 is not None, "universe_note": uni_note,
             "trading_date": bundle_meta.get("trading_date"),

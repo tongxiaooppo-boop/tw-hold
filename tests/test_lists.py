@@ -86,24 +86,71 @@ def test_screen_all_無股價也能出兩清單(bundle):
     assert ok["value_score"].notna().any()
 
 
-def test_build_lists_寫出三個_json_帶_changes(bundle):
+def test_build_lists_寫出三個_json_帶季表結構(bundle):
     assert bundle.main() == 0
     d = bundle.DERIVED
     for name in ("value", "deposit", "swing"):
-        p = d / f"{name}_list.json"
-        assert p.exists()
-        payload = json.loads(p.read_text(encoding="utf-8"))
+        payload = json.loads((d / f"{name}_list.json").read_text(encoding="utf-8"))
         assert "_meta" in payload and "holdings" in payload and "changes" in payload
+    val = json.loads((d / "value_list.json").read_text(encoding="utf-8"))
+    assert "candidates" in val and val["_meta"]["period"] == "2026-08-14"
     meta = json.loads((d / "_meta.json").read_text(encoding="utf-8"))
-    assert meta["trading_date"] == "2026-09-02"
-    assert meta["u1b_pending"] is True
+    assert meta["trading_date"] == "2026-09-02" and meta["u1b_pending"] is True
 
 
-def test_changes_diff_對上一期(bundle):
+def test_首次換股全新進_之後同期凍結(bundle):
     bundle.main()
     val = json.loads((bundle.DERIVED / "value_list.json").read_text(encoding="utf-8"))
     first = {h["ticker"] for h in val["holdings"]}
-    assert val["changes"]["added"] == sorted(first)      # 第一次跑：全部都是新進
-    bundle.main()                                        # 再跑一次
+    assert val["changes"]["added"] == sorted(first)      # 第一次：全部新進
+    assert val["_meta"]["frozen"] is False
+
+    bundle.main()                                        # 同一期再跑
     val2 = json.loads((bundle.DERIVED / "value_list.json").read_text(encoding="utf-8"))
-    assert val2["changes"]["added"] == [] and val2["changes"]["removed"] == []
+    assert val2["_meta"]["frozen"] is True               # 成分凍結
+    assert {h["ticker"] for h in val2["holdings"]} == first
+    assert val2["changes"] == val["changes"]             # 變動表沿用上次換股
+
+
+def test_跨換股日才重算變動(bundle):
+    bundle.main()
+    p = bundle.DERIVED / "value_list.json"
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    # 把上一期日期改早 → 下次跑會視為跨了換股日
+    payload["_meta"]["period"] = "2026-05-15"
+    payload["holdings"].append({"ticker": "9999"})       # 假裝上期還持有 9999
+    p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    bundle.main()
+    val = json.loads(p.read_text(encoding="utf-8"))
+    assert val["_meta"]["period"] == "2026-08-14" and val["_meta"]["frozen"] is False
+    removed = {r["ticker"] for r in val["changes"]["removed"]}
+    assert "9999" in removed
+    assert val["changes"]["removed"][0]["reason"]        # 每檔有原因
+
+
+def test_current_rebalance_對齊季換股日():
+    from datetime import date
+    import build_lists as bl
+    assert bl.current_rebalance(date(2026, 9, 8)) == date(2026, 8, 14)
+    assert bl.current_rebalance(date(2026, 3, 30)) == date(2025, 11, 14)
+    assert bl.current_rebalance(date(2026, 5, 15)) == date(2026, 5, 15)
+
+
+def test_select_composition_產業上限():
+    import pandas as pd
+    import build_lists as bl
+    # 半導體 20 檔分數最高 + 另外 3 產業各 5 檔 → 半導體被卡在 6，其餘由別產業補滿 15
+    rows = [dict(ticker=f"A{i}", score=100 - i, passes=True, in_top500=True,
+                 industry="半導體業") for i in range(20)]
+    for j, ind in enumerate(("食品工業", "鋼鐵工業", "紡織纖維")):
+        rows += [dict(ticker=f"{ind[0]}{i}", score=5 - j - i * 0.01,
+                      passes=True, in_top500=True, industry=ind) for i in range(5)]
+    df = pd.DataFrame(rows)
+    pick = bl.select_composition(df, "score", has_industry=True)
+    assert len(pick) == 15
+    semi = sum(1 for t in pick if t.startswith("A"))
+    assert semi == int(bl.N * bl.INDUSTRY_CAP)          # 半導體剛好卡在 6
+    # 關掉產業資訊 → 純照分數，半導體佔滿前 15
+    assert sum(1 for t in bl.select_composition(df, "score", has_industry=False)
+               if t.startswith("A")) == 15
