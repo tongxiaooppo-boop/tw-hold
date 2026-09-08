@@ -46,6 +46,7 @@ LABELS = {
     "net_cash_to_mktcap": "淨現金/市值", "gross_margin": "毛利率",
     "cheap_threshold": "便宜門檻", "valuation_ceiling": "估值上緣", "upside_pct": "空間%",
     "cyclical_peak_flag": "循環高峰旗標", "eps_basis_suspect": "EPS 基準存疑",
+    "industry_headwind": "產業逆風", "industry_ret_6m": "產業近6月中位報酬",
     "pe_p30": "PE P30", "pe_p70": "PE P70", "pe_market": "市場 PE",
     "buy_low": "買區下界", "buy_high": "買區上界", "buy_note": "買區備註",
     "reject_reason": "剔除原因", "cur_yield": "現價殖利率", "yield_floor": "殖利率門檻",
@@ -57,16 +58,19 @@ LABELS = {
 }
 PCT_FIELDS = {"roe", "fcf_yield", "norm_ey", "gross_margin", "upside_pct", "cur_yield",
               "yield_floor", "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
-              "yield_pctile_5y", "net_cash_to_mktcap", "payout_ratio_ttm", "debt_ratio"}
+              "yield_pctile_5y", "net_cash_to_mktcap", "payout_ratio_ttm", "debt_ratio",
+              "industry_ret_6m"}
 
 # 卡片臉上（明細以外）不重複顯示的欄位——這些已在卡片臉上以其他形式出現。
 FACE_SKIP = {
     "value": {"ticker", "name", "verdict", "upside_pct", "value_score", "f_score",
               "roe", "close", "cheap_threshold", "industry", "reject_reason",
-              "buy_low", "buy_high", "buy_note", "cyclical_peak_flag", "eps_basis_suspect"},
+              "buy_low", "buy_high", "buy_note", "cyclical_peak_flag", "eps_basis_suspect",
+              "industry_headwind", "industry_ret_6m"},
     "deposit": {"ticker", "name", "verdict", "cur_yield", "yield_floor", "est_buy_price",
                 "close", "div_years", "ret3y_incl", "fill_rate", "safety_score",
-                "industry", "reject_reason", "buy_low", "buy_high", "buy_note"},
+                "industry", "reject_reason", "buy_low", "buy_high", "buy_note",
+                "industry_headwind", "industry_ret_6m"},
 }
 SORT_KEYS = {
     "value": {"價值分數": "value_score", "空間%": "upside_pct", "現價": "close"},
@@ -303,6 +307,10 @@ def _card_b_html(r: dict, kind: str) -> str:
         flags += '<span class="thc-flag">⚠ 循環高位</span>'
     if r.get("eps_basis_suspect"):
         flags += '<span class="thc-flag">⚠ EPS 存疑</span>'
+    if r.get("industry_headwind"):
+        rr = r.get("industry_ret_6m")
+        rt = f"（近6月中位 {rr*100:.0f}%）" if isinstance(rr, (int, float)) else ""
+        flags += f'<span class="thc-flag">⚠ 產業逆風{rt}</span>'
 
     if kind == "value":
         up = r.get("upside_pct")

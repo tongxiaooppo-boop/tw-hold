@@ -39,14 +39,15 @@ REBALANCE_MD = [(3, 31), (5, 15), (8, 14), (11, 14)]   # 換股日（PRD §6.1�
 VALUE_COLS = ["name", "close", "verdict", "value_score", "f_score", "roe", "norm_pe",
               "norm_ey", "fcf_yield", "ev_ebit", "net_cash_to_mktcap", "gross_margin",
               "industry", "cheap_threshold", "valuation_ceiling", "upside_pct",
-              "cyclical_peak_flag", "eps_basis_suspect", "pe_p30", "pe_p70", "pe_market",
+              "cyclical_peak_flag", "eps_basis_suspect", "industry_headwind",
+              "industry_ret_6m", "pe_p30", "pe_p70", "pe_market",
               "buy_low", "buy_high", "buy_note", "reject_reason"]
 DEPOSIT_COLS = ["name", "close", "verdict", "safety_score", "cur_yield", "yield_floor",
                 "est_buy_price", "buy_low", "buy_high", "buy_note", "industry",
                 "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
                 "yield_pctile_5y", "div_years", "last_cash_dividend", "fcf_yield",
                 "ann_vol", "roe", "payout_ratio_ttm", "cyclical_penalty",
-                "debt_ratio", "reject_reason"]
+                "debt_ratio", "industry_headwind", "industry_ret_6m", "reject_reason"]
 
 
 def current_rebalance(asof: date) -> date:
