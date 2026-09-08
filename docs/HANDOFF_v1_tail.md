@@ -24,17 +24,25 @@
 - **個股查詢**：輸入代號 → 7 類 plotly 圖（K線 / 季EPS / 三率 / 現金流 / 股利 / 本益比河流圖 / F-Score 9 分項）。
 - **警語**：每個分頁頂部 + 底部都有；長波段另加「無回測支撐」。
 
-**commit 位置**：tw-hold `main` @ `b0b35aa`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
-tests：tw-hold 全套 **43 passed**。個股查詢分頁 Cloud crash 已修（見 §5b，真因是 `import charts` 撞到 repo 根的空套件）。
+**commit 位置**：tw-hold `main` @ `7479a72`、tw-swing `master` @ `0f3ec55`（§1 金融軌已完成）。**兩 repo clean + push。**
+tests：tw-hold **48 passed**、tw-swing 782。個股查詢分頁 Cloud crash 已修（見 §5b，真因是 `import charts` 撞到 repo 根的空套件）。
 
 **進度細節**（權威）：記憶 `tw-hold-m1-progress` / `tw-hold-m2-progress` / `tw-hold-m3-progress` / `tw-hold-m4-progress`。
 PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 
 ---
 
-## 1. 🔴 金控股全被踢出定存清單（這一輪第一件事）
+## 1. ✅ 金控股金融軌（2026-09-08 完成）
 
-**現況**：華南金 2880、富邦金 2881、國泰金 2882、玉山金 2884、兆豐金 2886、
+tw-swing `master` @ `0f3ec55`、tw-hold `main` @ `7479a72`。完整經過見記憶
+`tw-hold-financial-track-design`。**實際卡四道門檻不是一個**：缺 EPS type（改 XBRL
+對映）、負債比 0.75 結構性擋銀行（改產業中位數）、2022 全業性減配（cut5y 語意
+全域放寬）、缺股本（市值/股數改用 universe）。結果富邦/國泰/永豐/元大等 12 檔金融
+過硬門檻；官股行庫多因 §7.1 填息率 < 60% 正確排除。以下為原始交接內容，留存。
+
+---
+
+**原現況**：華南金 2880、富邦金 2881、國泰金 2882、玉山金 2884、兆豐金 2886、
 中信金 2891、第一金 2892、合庫金 5880——**8 家全部**被 `reject_reason = "eps 近4季非全正"` 刷掉。
 （`cd /d/g/claude/tw-hold && PYTHONIOENCODING=utf-8 python -c "import build_factors as bf; d=bf.screen_all()['deposit']; print(d[d.ticker.isin(['2881','2882','2891','2886'])][['ticker','name','passes','reject_reason']])"` 可複現。）
 
