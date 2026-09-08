@@ -62,6 +62,13 @@ def _md_table(df: pd.DataFrame) -> str:
     return "\n".join([head, sep, *body])
 
 
+def _split_adjust(d: pd.DataFrame, price_cols: list[str]) -> pd.DataFrame:
+    """面額變更 / 股票分割：上游 `prices_adj` 沒還原 → 分割日前的價格 ÷ factor
+    （見 reference.corporate_actions）。無已知分割的 ticker 原樣返回。"""
+    from reference.corporate_actions import adjust_per_share
+    return adjust_per_share(d, price_cols)
+
+
 def _read_bundle_prices() -> pd.DataFrame | None:
     """從 bundle 日線檔取最新收盤 `[ticker, close]`。
 
@@ -81,6 +88,7 @@ def _read_bundle_prices() -> pd.DataFrame | None:
             continue
         d = d[[dcol, tcol, ccol]].rename(columns={dcol: "date", tcol: "ticker", ccol: "close"})
         d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
+        d = _split_adjust(d, ["close"])
         return (d.sort_values("date").groupby("ticker", as_index=False).last()
                   [["ticker", "close"]])
     return None
@@ -95,6 +103,7 @@ def _read_bundle_price_history(lookback_weeks: int = 160) -> pd.DataFrame | None
     d = pd.read_parquet(p, columns=["date", "ticker", "close"])
     d["date"] = pd.to_datetime(d["date"])
     d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
+    d = _split_adjust(d, ["close"])
     cutoff = d["date"].max() - pd.Timedelta(weeks=lookback_weeks)
     return d[d["date"] >= cutoff].reset_index(drop=True)
 
@@ -117,7 +126,7 @@ def _read_bundle_ohlc() -> pd.DataFrame | None:
         return None
     d = pd.read_parquet(p)
     d["date"] = pd.to_datetime(d["date"])
-    return d
+    return _split_adjust(d, [c for c in ("open", "high", "low", "close") if c in d.columns])
 
 
 def _read_bundle_simple(name: str) -> pd.DataFrame | None:

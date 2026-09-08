@@ -82,6 +82,9 @@ def prices(code: str, lookback_days: int = 900) -> pd.DataFrame:
     if d.empty:
         return d
     d["date"] = pd.to_datetime(d["date"])
+    # 面額變更 / 股票分割：上游沒還原 → 分割日前 OHLC ÷ factor（見 reference.corporate_actions）
+    from reference.corporate_actions import adjust_per_share
+    d = adjust_per_share(d, ["open", "high", "low", "close"])
     cut = d["date"].max() - pd.Timedelta(days=lookback_days)
     return d[d["date"] >= cut].sort_values("date").reset_index(drop=True)
 
@@ -113,4 +116,6 @@ def dividends(code: str) -> pd.DataFrame:
     for c in ("pay_date", "CashExDividendTradingDate"):
         if c in d.columns:
             d[c] = pd.to_datetime(d[c], errors="coerce")
+    # 註：分割前的每股股利理應 ÷ factor，但上游這張股利表對 5904 本身就前後不一致
+    # （2021–2024 看起來已被 ÷10、2025 又是舊基準）——不在這裡硬還原，避免越弄越糟。
     return d.sort_values("year").reset_index(drop=True)
