@@ -174,10 +174,10 @@ def _load_prev(name: str) -> dict:
 def _write(name: str, payload: dict) -> None:
     (DERIVED / f"{name}_list.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    hold = len(payload.get("holdings", []))
-    froze = payload.get("_meta", {}).get("frozen")
-    print(f"  → data/derived/{name}_list.json　({hold} 檔"
-          + ("，本期凍結" if froze else "，換股日重算") + ")")
+    n = len(payload.get("holdings") or payload.get("candidates_pool") or [])
+    tag = ("，本期凍結" if payload.get("_meta", {}).get("frozen")
+           else "，候補池" if "candidates_pool" in payload else "，換股日重算")
+    print(f"  → data/derived/{name}_list.json　({n} 檔{tag})")
 
 
 def _build(name: str, df: pd.DataFrame, score: str, cols: list[str],
@@ -238,9 +238,20 @@ def main() -> int:
                               "——FinMind 對金融業報不同 XBRL type、EPS/淨利是 NaN"
                               "（PRD §7 / 實驗 B）；(2) 填息率只涵蓋有未還原股價的 ~500 檔。"},
                              has_ind, asof))
-    _write("swing", {"_meta": meta, "holdings": [],
-                     "changes": {"added": [], "removed": []},
-                     "note": "M1 主動選股候選池未實作（PLAN §M1）"})
+    pool = r.get("pool", [])
+    pool_prev = {c["ticker"] for c in _load_prev("swing").get("candidates_pool", [])}
+    pool_cur = {c["ticker"] for c in pool}
+    _write("swing", {
+        "_meta": {**meta, "pool_note": ctx.get("pool_note"),
+                  "disclaimer": "🔴 這個區間沒有回測支撐——這是風控算術不是驗證過的買點。"
+                                "只回答「這個進場點承擔多少風險」，不回答「會不會賺」。"
+                                "候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，"
+                                "不給 verdict、不給買價、不排名次，買賣由你決定。每週重算。"},
+        "holdings": [],
+        "candidates_pool": pool,
+        "changes": {"added": sorted(pool_cur - pool_prev),
+                    "removed": sorted(pool_prev - pool_cur)},
+    })
 
     (DERIVED / "_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
