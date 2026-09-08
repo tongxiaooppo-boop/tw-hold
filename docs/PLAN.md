@@ -4,11 +4,12 @@
 > 讓任何一次新對話都能從「還沒打勾的第一項」直接接手。
 > 規格與理由在 [`../PRD.md`](../PRD.md)（凍結）。介面長相在 `scratchpad/tw-hold-mock.html`。
 
-**建立**：2026-09-07 ｜ **修訂**：2026-09-07（**M0 執行中**）
-｜ **狀態**：🔄 **M0 執行中**——M0.3 遷移 ✅ / M0.4 參考碼 ✅ / M0.2 骨架 + GitHub push ✅ /
-U2 per.parquet ✅ / U3 `build_universe.py` ✅（等背景補抓）。
-待：M0.1a（已寫未 commit）/ M0.1b `publish_bundle.yml` / M0.5（fetch_bundle 接線 + build_lists）。
-進度細節見記憶 `tw-hold-m0-progress`。
+**建立**：2026-09-07 ｜ **修訂**：2026-09-08（**M0a 部分上線達成**）
+｜ **狀態**：✅ **M0a 部分上線**——https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/
+（Streamlit Community Cloud）。M0.3/M0.4/M0.2/M0.5 + U2/U3/U1a 全綠、Release `data-latest`
+已發（U1a 資產）、fetch_bundle→build_lists→app 全鏈通。順帶修好 tw-swing G-5 斷線。
+**下一棒讀 [`M0b_HANDOFF.md`](M0b_HANDOFF.md)**（自足）：M0.1b `publish_bundle.yml`（U1b 日線）
+→ 接 `rebuild.yml` → M0b 驗收。進度細節見記憶 `tw-hold-m0-progress`。
 **M1 候選池**（PRD §5，v3.1）已補進本檔——前置 M0b，可與 M2 並行。
 
 > 🔴 **下一棒讀 [`M0_HANDOFF.md`](M0_HANDOFF.md)**（自足）。M-1 已完成——四個回測實驗
