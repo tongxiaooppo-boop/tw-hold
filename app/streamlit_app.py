@@ -133,17 +133,19 @@ _CSS = """
 .thc-pill.thc-good{color:var(--thc-good);background:var(--thc-good-bg);}
 .thc-pill.thc-warn{color:var(--thc-warn);background:var(--thc-warn-bg);}
 .thc-pill.thc-neutral{color:var(--thc-neutral);background:var(--thc-neutral-bg);}
-.thc-flag{font-size:.74rem;color:var(--thc-flag);font-weight:600;white-space:nowrap;}
+.thc-flag{font-size:.72rem;color:var(--thc-faint);font-weight:500;white-space:nowrap;}
 .thc-ctx{font-size:.85rem;color:var(--thc-soft);margin-top:.2rem;}
 .thc-hero{display:flex;align-items:flex-end;gap:.5rem;margin:.55rem 0 .1rem;}
 .thc-big{font-family:var(--thc-mono);font-weight:600;font-size:1.9rem;line-height:1;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 .thc-big.up{color:var(--thc-good);}
 .thc-cap{font-size:.78rem;color:var(--thc-faint);padding-bottom:.18rem;}
-.thc-bar{margin:.6rem 0 .2rem;height:6px;border-radius:99px;background:var(--thc-surface2);position:relative;}
-.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:var(--thc-good-bg);border-radius:99px;}
-.thc-bar .n{position:absolute;top:-3px;width:2px;height:12px;background:var(--thc-accent);border-radius:2px;}
-.thc-barcap{font-size:.72rem;color:var(--thc-faint);font-family:var(--thc-mono);
+.thc-bar{margin:.6rem 0 .25rem;height:7px;border-radius:99px;background:#2c332a;position:relative;}
+.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:rgba(104,183,132,.30);
+  border:1px solid rgba(104,183,132,.5);border-radius:99px;}
+.thc-bar .n{position:absolute;top:-4px;width:3px;height:15px;background:#e9ece6;
+  border-radius:2px;box-shadow:0 0 0 1.5px #131511;}
+.thc-barcap{font-size:.72rem;color:var(--thc-soft);font-family:var(--thc-mono);
   display:flex;justify-content:space-between;gap:.5rem;}
 .thc-note{font-size:.8rem;color:var(--thc-soft);margin:.5rem 0 .1rem;}
 .thc-chips{display:flex;flex-wrap:wrap;gap:.38rem;margin:.7rem 0 .1rem;}
@@ -151,10 +153,19 @@ _CSS = """
   border-radius:6px;padding:.2rem .5rem;white-space:nowrap;color:var(--thc-soft);}
 .thc-chip b{font-family:var(--thc-mono);font-weight:600;font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 .thc-details{margin-top:.55rem;font-size:.85rem;}
-.thc-details summary{cursor:pointer;color:var(--thc-faint);font-size:.82rem;list-style:none;}
+.thc-details summary{cursor:pointer;color:var(--thc-soft);font-size:.83rem;list-style:none;font-weight:500;}
 .thc-details summary::-webkit-details-marker{display:none;}
 .thc-details summary::before{content:"▸ ";color:var(--thc-accent);}
 .thc-details[open] summary::before{content:"▾ ";}
+/* 長波段：支持/反對兩欄 */
+.sw-risk{margin-left:auto;font-family:var(--thc-mono);font-size:.8rem;color:var(--thc-warn);white-space:nowrap;}
+.sw-cols{display:grid;gap:.6rem 1.4rem;margin-top:.6rem;}
+.sw-h{font-family:var(--thc-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--thc-faint);font-weight:600;margin-bottom:.15rem;}
+.sw-h.sup{color:var(--thc-good);}
+.sw-cols ul{margin:0;padding-left:1.05rem;font-size:.84rem;color:var(--thc-soft);}
+.sw-cols li{margin:.16rem 0;}
+@media (min-width:560px){.sw-cols{grid-template-columns:1fr 1fr;}}
 .thc-details table{width:100%;border-collapse:collapse;margin-top:.45rem;}
 .thc-details td{padding:.22rem .1rem;border-bottom:1px solid var(--thc-line);}
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
@@ -186,6 +197,14 @@ def _sev(verdict: str) -> str:
     if verdict.startswith("觀望"):
         return "warn"
     return "neutral"          # 資料不足 / 不推薦 / 其他
+
+
+def _verdict_cat(verdict: str) -> str:
+    """完整 verdict → 類別（篩選用）。"""
+    for c in ("推薦", "觀望", "資料不足", "不推薦"):
+        if verdict.startswith(c):
+            return c
+    return verdict.split("（")[0] or "其他"
 
 
 def _paren(verdict: str) -> str:
@@ -305,6 +324,34 @@ def _render_card_b(r: dict, kind: str) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def _render_swing_b(c: dict) -> None:
+    """長波段候選卡——同 B 視覺語言，但沒有 verdict / 買價（狀態型）。
+    支持 / 反對並列進卡片本體；條件表 + 複製給 AI 仍是外面的 st.expander。"""
+    def _ul(items, empty):
+        items = [x for x in (items or []) if x not in (None, "")]
+        lis = "".join(f"<li>{_esc(x)}</li>" for x in items) or f"<li>{_esc(empty)}</li>"
+        return f"<ul>{lis}</ul>"
+
+    risk = c.get("risk_pct_at_close")
+    ctx = "　·　".join(x for x in [
+        _esc(c.get("industry") or ""),
+        f"現價 {c['close']:,.2f}" if c.get("close") is not None else "",
+        f"可買上限 {c['max_buy']:,.2f}" if c.get("max_buy") is not None else "",
+        f"停損 {c['risk_stop']:,.2f}" if c.get("risk_stop") is not None else "",
+    ] if x)
+    html = (
+        f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
+        f'<div class="thc-head"><span class="thc-tk">{_esc(c.get("ticker"))}</span>'
+        f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
+        + (f'<span class="sw-risk">{risk:+.0%} 風險</span>' if risk is not None else "")
+        + f'</div><div class="thc-ctx">{ctx}</div>'
+        f'<div class="sw-cols">'
+        f'<div><div class="sw-h sup">支持</div>{_ul(c.get("support"), "（未發現額外支持證據）")}</div>'
+        f'<div><div class="sw-h">反對</div>{_ul(c.get("oppose"), "（未發現反對證據——代表檢查不足）")}</div>'
+        f'</div></div></div>')
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
     lines = [f"# {title}（tw-hold，資料日期 {meta.get('trading_date', '—')}）",
              "※ 候選 + 判斷依據，非投資建議。", ""]
@@ -340,12 +387,15 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
         st.caption("🔒 " + meta["g2_note"])
 
     holdings = payload.get("holdings", [])
-    verdicts = sorted({h.get("verdict", "") for h in holdings})
+    # 定存的 verdict 內嵌數字（「觀望（殖利率 4.4% < 門檻 5.0%）」）→ 每檔自成一組。
+    # 篩選按**類別**（推薦 / 觀望 / 資料不足 / 不推薦），不按完整字串。
+    cats = [c for c in ("推薦", "觀望", "資料不足", "不推薦")
+            if any(_verdict_cat(h.get("verdict", "")) == c for h in holdings)]
     c1, c2 = st.columns([2, 1])
-    pick = c1.multiselect("篩選 verdict", verdicts, default=verdicts)
+    pick = c1.multiselect("篩選 verdict", cats, default=cats)
     sort_label = c2.selectbox("排序", list(SORT_KEYS[kind]))
     sk = SORT_KEYS[kind][sort_label]
-    rows = [h for h in holdings if h.get("verdict", "") in pick]
+    rows = [h for h in holdings if _verdict_cat(h.get("verdict", "")) in pick]
     rows.sort(key=lambda h: (h.get(sk) is None, -(h.get(sk) or 0)))
 
     st.subheader(f"本季成分（{len(rows)}/{len(holdings)} 檔）")
@@ -395,24 +445,15 @@ def _swing_page(payload: dict | None) -> None:
         cc[1].markdown("**本週退出候選（條件不再成立）**\n\n" + _bullets(chg.get("removed")))
 
     for c in payload["candidates_pool"]:
-        with st.container(border=True):
-            top = st.columns([3, 2, 2, 2])
-            top[0].markdown(f"### {c['ticker']}　{c.get('name', '')}\n{c.get('industry', '')}")
-            top[1].metric("現價", _fmt("close", c.get("close")))
-            top[2].metric("停損參考位", _fmt("close", c.get("risk_stop")),
-                          f"{(c.get('risk_pct_at_close') or 0):+.0%} 風險")
-            top[3].metric("可買上限", _fmt("close", c.get("max_buy")))
-            s1, s2 = st.columns(2)
-            s1.markdown("**支持**\n\n" + _bullets(c.get("support"), "（未發現額外支持證據）"))
-            s2.markdown("**反對**\n\n" + _bullets(c.get("oppose")))
-            with st.expander("條件成立狀態 + 失效條件檢查表"):
-                st.markdown("**進場條件（全部成立才進候選池）**")
-                st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, use_container_width=True)
-                st.markdown("**失效條件（目前狀態；v3.1 不追蹤持倉）**")
-                st.dataframe(pd.DataFrame(c.get("invalidation", [])), hide_index=True, use_container_width=True)
-                st.caption(f"距 50MA {(c.get('dist_50ma') or 0):+.0%}　·　"
-                           f"距 52 週高 {(c.get('dist_52w_high') or 0):+.0%}　·　"
-                           f"距 200MA {(c.get('dist_200ma') or 0):+.0%}")
+        _render_swing_b(c)
+        with st.expander("條件成立狀態 + 失效條件檢查表"):
+            st.markdown("**進場條件（全部成立才進候選池）**")
+            st.dataframe(pd.DataFrame(c.get("conditions", [])), hide_index=True, use_container_width=True)
+            st.markdown("**失效條件（目前狀態；v3.1 不追蹤持倉）**")
+            st.dataframe(pd.DataFrame(c.get("invalidation", [])), hide_index=True, use_container_width=True)
+            st.caption(f"距 50MA {(c.get('dist_50ma') or 0):+.0%}　·　"
+                       f"距 52 週高 {(c.get('dist_52w_high') or 0):+.0%}　·　"
+                       f"距 200MA {(c.get('dist_200ma') or 0):+.0%}")
 
     with st.expander("複製給 AI"):
         st.code(_copy_for_ai("長波段候選池", meta, payload["candidates_pool"]),
@@ -442,7 +483,14 @@ def _stock_page() -> None:
     st.header("個股查詢")
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
                "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
-    code = st.text_input("股票代號", placeholder="2330").strip()
+    st.markdown("**股票代號**")
+    with st.form("stock_query", border=False):
+        fc1, fc2 = st.columns([5, 1])
+        _in = fc1.text_input("代號", placeholder="2330", label_visibility="collapsed")
+        _go = fc2.form_submit_button("查詢", use_container_width=True)
+    if _go and _in.strip():
+        st.session_state["_stock_code"] = _in.strip()
+    code = st.session_state.get("_stock_code", "")
     if not code:
         _disclaimer()
         return

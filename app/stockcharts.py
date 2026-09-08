@@ -12,18 +12,21 @@ import plotly.graph_objects as go
 
 _MA = {"季線": 60, "年線": 240}
 
-#: 固定深色（app 主題也是深色）——圖例橫排在上方，手機時不吃掉右半繪圖區。
+#: 固定深色（app 主題也是深色）。圖例橫排放在**圖下方**——放上方會跟標題重疊、
+#: 手機放右邊會吃掉半個繪圖區。
 _LAYOUT = dict(
     template="plotly_dark",
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     font=dict(color="#d7dbd4"),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-    margin=dict(t=52, b=24, l=8, r=8),
+    legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0),
+    margin=dict(t=48, b=76, l=10, r=10),
 )
 
 
 def _style(fig: go.Figure, title: str, height: int) -> go.Figure:
-    fig.update_layout(title=title, height=height, **_LAYOUT)
+    fig.update_layout(
+        title=dict(text=title, x=0.01, xanchor="left", font=dict(size=14)),
+        height=height, **_LAYOUT)
     return fig
 
 
