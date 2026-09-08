@@ -1,5 +1,12 @@
 # tw-hold 期望值報告（實驗 B + D）
 
+> 🔴 **2026-09-08：這份的定存線數字已過時、且 `research/backtest_rebalance.py` 目前跑不起來。**
+> 原因：(1) 金融軌把 `cut5y` 語意放寬 → 定存硬門檻通過數 55 → ~92；(2) 研究腳本 import
+> `twswing.value.{factors,loader,screen}`，那個 package 已從 tw-swing 搬進 tw-hold（`factors/`、
+> `reference/loader.py`、`screener/`）→ 腳本要先 port 才能重跑。研究文件、不進產品，
+> 重跑排在「重新檢視定存回測 + 模擬單進場口徑」時一起做（見 `docs/BACKTEST_HANDOFF.md`、
+> 記憶 `tw-hold-backtest-experiments-outcome`）。價值線數字仍大致可參考。
+
 > 2026-09-07。使用者裁決：**tw-hold 照做，這份只告訴你「做了大概長怎樣」，不是要不要做的關卡。**
 > 🔴 **所有報酬數字是「上界」**——universe 用今天的前 500 大回溯，等於已知誰活到今天。
 > 真實會更差（當年會下市／重大衰退的公司這裡看不到）。

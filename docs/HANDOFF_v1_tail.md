@@ -113,11 +113,11 @@ data_pack 已還原。`IGNORE_JUMPS`：2380 / 4950 / 7772（疑減資缺比例�
 見上方「續做」+ 記憶 `tw-hold-revenue-history`。**下一輪確認 `publish_bundle` 跑過、
 tw-hold 個股頁月營收圖有出來**（舊 bundle 期間會顯示「只有 N 個月」）。
 
-### C. ⑥ 小尾巴 🟢 —— **剩最後一項**
+### ✅ C. ⑥ 小尾巴 —— 2026-09-08 清完（實驗 B 標過時、其餘做完或裁決不做）
 
 | 項 | 說明 |
 | :-- | :-- |
-| 實驗 B 報告過時 🔴 剩這個 | **金融軌這輪改了 `cut5y` 語意 + 定存硬門檻通過數 55 → ~92**，`docs/reports/expectations_20260907.md` 的定存數字已不準。用完整填息率重跑 `research/backtest_rebalance.py`（研究文件，非產品）。做完 ⑥ 收工，進 ③。 |
+| ✅ 實驗 B 報告過時 | 2026-09-08：兩份 report 加過時框。**沒重跑**——`research/backtest_rebalance.py` import `twswing.value.*`（已搬進 tw-hold），要先 port 才能跑；且定存回測本身待重新檢視（記憶 `tw-hold-backtest-experiments-outcome`）。研究文件、不進產品，排在重審定存回測時一起做。 |
 | ✅ `per.parquet` 每日刷新 | tw-swing `fetch_valuation.py`（TWSE BWIBBU_ALL + TPEx）→ `data/valuation/` 快照 → `build_per_parquet.py --from-existing` 併進 per.parquet，`publish_bundle.yml` 每平日跑。2026-09-08（tw-swing `3bab9fa`）。tw-hold 端零改動（schema 同）。 |
 | ✅ 個股頁法人買賣超圖 | `bundle_data.chips()` + `stockcharts.institutional_net()`（外資/投信/自營柱＋20日累計線，張）。2026-09-08。 |
 | ~~`price_adjuster.py` 移植~~ | **不做（v1）**：整個「本地進階模式即時補抓」都還沒建，雲端唯讀不需要。列 §E 日後拓展。 |
