@@ -24,7 +24,7 @@
 - **個股查詢**：輸入代號 → 7 類 plotly 圖（K線 / 季EPS / 三率 / 現金流 / 股利 / 本益比河流圖 / F-Score 9 分項）。
 - **警語**：每個分頁頂部 + 底部都有；長波段另加「無回測支撐」。
 
-**commit 位置**：tw-hold `main` @ `b8b0712`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
+**commit 位置**：tw-hold `main` @ `ba1aa6d`、tw-swing `master` @ `1c0155c`。**兩 repo clean + push。**
 tests：tw-hold 全套 **43 passed**。
 
 **進度細節**（權威）：記憶 `tw-hold-m1-progress` / `tw-hold-m2-progress` / `tw-hold-m3-progress` / `tw-hold-m4-progress`。
@@ -118,6 +118,20 @@ PLAN §M1–§M4 已打勾。**PRD 凍結，不 re-litigate。**
 這個已經做了骨架（`_card_list` / `_swing_page` in `app/streamlit_app.py`），
 剩「正式設計」：間距、風險 badge 上色、支持/反對排版、可能把明細表移出 expander。
 **動手前先問使用者要不要一起連個股頁的排版做。**
+
+---
+
+## 5b. ⚠️ 個股查詢分頁在 Cloud 曾兩次炸（已修，但要盯）
+
+- `ModuleNotFoundError`（`from app import charts`）→ 已修：`streamlit_app.py` 頂端把
+  repo 根 + `app/` 塞進 `sys.path`、內部 import 改 bare（`import charts` / `import bundle_data`）。
+- `AttributeError` in `go.Candlestick`（Cloud 抓到跟本地不同的 plotly）→ 已修：
+  **`requirements.txt` 釘死版本**（`pandas==3.0.3 / pyarrow==24.0.0 / streamlit==1.60.0 / plotly==6.9.0`，
+  本地測過的），`charts.kline` 改用純 list 餵 plotly，`_stock_page` 每張圖包 try/except
+  （`_chart` helper——單張爆掉顯示 `type(e).__name__: e`、不整頁掛）。
+- **下一輪盯**：Cloud 重建環境後（改 requirements 會觸發）再開個股頁確認。若某張圖還是
+  `_chart` 印出錯誤，那串 `AttributeError: ...` 就是要 debug 的線索。改版本前一定本地
+  `python -m pytest -q` + `streamlit run` + AppTest 過。
 
 ---
 
