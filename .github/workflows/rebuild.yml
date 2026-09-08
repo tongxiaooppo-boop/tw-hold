@@ -50,6 +50,24 @@ jobs:
       - name: 算因子 + 三清單
         run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
+      - name: 偵測到未還原分割就告警
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          W=$(python -c "import json,sys; print(json.load(open('data/derived/_meta.json')).get('split_warning',''))" 2>/dev/null || true)
+          [ -z "$W" ] && { echo "無未還原分割"; exit 0; }
+          echo "::warning::偵測到疑似未還原分割：$W"
+          MSG="🟠 tw-hold 偵測到疑似未還原的股票分割/面額變更
+          $W
+          → 查 TWSE 基準日+比例，加進 reference/corporate_actions.py 的 SPLITS 或 IGNORE_JUMPS
+          ${RUN_URL}"
+          [ -z "$WEBHOOK" ] && exit 0
+          curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
+          exit 0
+
       - name: commit data/derived/
         run: |
           git config user.name  "tw-hold-bot"
