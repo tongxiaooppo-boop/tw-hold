@@ -504,6 +504,20 @@ def _stock_data(code: str) -> dict:
     return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf}
 
 
+def _qf_display(df: pd.DataFrame):
+    """原始季度表：金額欄改「千元 + 千分號」，其餘欄不動。回傳 Styler。"""
+    if df is None or df.empty:
+        return df
+    d = df.copy()
+    money = [c for c in d.columns
+             if pd.api.types.is_numeric_dtype(d[c]) and d[c].abs().max() >= 1e5]
+    for c in money:
+        d[c] = d[c] / 1000
+    d = d.rename(columns={c: f"{c}(千元)" for c in money})
+    money_k = [f"{c}(千元)" for c in money]
+    return d.style.format(subset=money_k, formatter="{:,.0f}", na_rep="—")
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     _disclaimer()
@@ -579,7 +593,9 @@ def _stock_page() -> None:
         st.dataframe(ch.fscore_table(d["qf"]), hide_index=True, use_container_width=True)
 
     with st.expander("原始季度數據"):
-        st.dataframe(d["qf"] if not d["qf"].empty else d["fin"], use_container_width=True)
+        st.caption("金額欄位以**千元**顯示、加千分號；eps／比率／年季欄維持原值。")
+        _raw = d["qf"] if not d["qf"].empty else d["fin"]
+        st.dataframe(_qf_display(_raw), use_container_width=True)
 
     _disclaimer()
 
