@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from app import charts as ch
+import app.stockcharts as ch
 
 
 def _px(n: int = 300):
