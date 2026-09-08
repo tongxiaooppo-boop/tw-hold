@@ -30,6 +30,8 @@ import pandas as pd
 
 from factors.factors import (annual_eps, dividend_factors, quarterly_factors)
 from reference.loader import BUNDLE_DIR, load_dividends, load_quarterly
+from screener.deposit_pricing import add_deposit_verdict
+from screener.gates import GateError, assert_raw_not_adjusted
 from screener.pricing import add_value_verdict
 from screener.screen import screen_deposit, screen_value
 
@@ -97,11 +99,22 @@ def _read_bundle_price_history(lookback_weeks: int = 160) -> pd.DataFrame | None
 
 
 def _read_bundle_per_history() -> pd.DataFrame | None:
-    """bundle `fundamentals/per.parquet` → `[ticker, date, per]`（每日 PE，估值分位用）。"""
+    """bundle `fundamentals/per.parquet` → `[ticker, date, per, dividend_yield]`
+    （每日 PE / 殖利率，估值分位 + §7.3 殖利率門檻用）。"""
     p = BUNDLE_DIR / "fundamentals" / "per.parquet"
     if not p.exists():
         return None
-    d = pd.read_parquet(p, columns=["ticker", "date", "per"])
+    d = pd.read_parquet(p, columns=["ticker", "date", "per", "dividend_yield"])
+    d["date"] = pd.to_datetime(d["date"])
+    return d
+
+
+def _read_bundle_raw_close_history() -> pd.DataFrame | None:
+    """bundle `prices_raw_close.parquet` → `[date, ticker, close]`（未還原收盤，填息率用）。"""
+    p = BUNDLE_DIR / "prices_raw_close.parquet"
+    if not p.exists():
+        return None
+    d = pd.read_parquet(p, columns=["date", "ticker", "close"])
     d["date"] = pd.to_datetime(d["date"])
     return d
 
@@ -153,8 +166,14 @@ def screen_all() -> dict:
 
     prices = _read_bundle_prices()
     price_hist = _read_bundle_price_history()
+    raw_close_hist = _read_bundle_raw_close_history()
     per_hist = _read_bundle_per_history()
     vol = _weekly_vol(price_hist)
+
+    # G2：未還原 / 還原搞混會讓填息率恆等 100% 且不報錯（PRD §10.2）
+    g2_note = None
+    if raw_close_hist is not None:
+        g2_note = assert_raw_not_adjusted(raw_close_hist, price_hist, div)
     top500, uni_note = _universe_top500()
     if top500 is None:
         est = _top500_by_mktcap(qf, prices)
@@ -166,8 +185,10 @@ def screen_all() -> dict:
     dep["in_top500"] = True if top500 is None else dep["ticker"].isin(top500)
     val["in_top500"] = True if top500 is None else val["ticker"].isin(top500)
 
-    # M2 §6.2/§6.3：買價 + verdict（定存 §7.3/§7.4 之後補）
+    # M2 §6.2/§6.3：價值買價 + verdict
     val = add_value_verdict(val, per_hist, price_hist)
+    # M2 §7.1/§7.3/§7.4：定存兩道新硬門檻 + 殖利率法買價 + verdict
+    dep = add_deposit_verdict(dep, raw_close_hist, price_hist, per_hist, div)
 
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
@@ -177,6 +198,8 @@ def screen_all() -> dict:
             "quarters": list(qf.shape), "tickers": int(qf.ticker.nunique()),
             "has_prices": prices is not None, "has_vol": vol is not None,
             "has_pe_bands": per_hist is not None,
+            "has_fill_rate": raw_close_hist is not None,
+            "g2_note": g2_note,
             "universe_filtered": top500 is not None, "universe_note": uni_note,
             "trading_date": bundle_meta.get("trading_date"),
             "bundle_schema": bundle_meta.get("schema_version"),
@@ -210,7 +233,7 @@ def _fmt(df: pd.DataFrame, score: str, cols: list[str]) -> str:
     show = ["ticker", score] + [c for c in cols if c in sub.columns]
     t = sub[show].copy()
     for c in show[1:]:
-        if t[c].dtype == object or t[c].dtype == bool:
+        if not pd.api.types.is_numeric_dtype(t[c]) or pd.api.types.is_bool_dtype(t[c]):
             continue                       # verdict 等文字欄不轉數字
         t[c] = pd.to_numeric(t[c], errors="coerce").round(3)
     return _md_table(t)
@@ -230,12 +253,18 @@ def _write_report(dep: pd.DataFrame, val: pd.DataFrame) -> None:
         "## 定存區（存股安全分）",
         "",
         "門檻：近 4 季 EPS 全正 / 連續配息 ≥ 5 年無減配 / FCF 覆蓋股利 / "
-        "配息來自盈餘 / 負債比 ≤ 0.75。排序 = FCF 殖利率 × 低波動 × ROE × "
-        "連續年數 × (−payout) × 景氣循環懲罰。",
+        "配息來自盈餘 / 負債比 ≤ 0.75 / 近 5 年填息率 ≥ 60% / 近 3 年含息報酬 ≥ 0。"
+        "排序 = FCF 殖利率 × 低波動 × ROE × 連續年數 × (−payout) × 景氣循環懲罰。"
+        "買價（§7.3）= 近 3 年均現金股利 ÷ max(近 5 年均殖利率, 5%)。",
+        f"> verdict（§7.4）："
+        + "、".join(f"{k} {v}" for k, v in
+                   dep[dep["passes"] & dep["in_top500"]]["verdict"]
+                   .str.replace(r"（.*", "", regex=True).value_counts().items()),
         "",
         _fmt(dep, "safety_score",
-             ["div_years", "last_cash_dividend", "fcf_yield", "ann_vol", "roe",
-              "payout_ratio_ttm", "cyclical_penalty", "debt_ratio"]),
+             ["verdict", "close", "cur_yield", "yield_floor", "est_buy_price",
+              "buy_low", "buy_high", "fill_rate", "ret3y_incl", "ann_vol",
+              "div_years"]),
         "",
         "## 價值區（F-Score ≥ 6 + Magic Formula 精神）",
         "",
