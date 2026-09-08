@@ -77,7 +77,16 @@ tw-swing `master` @ `0f3ec55`、tw-hold `main` @ `7479a72`。完整經過見記�
 
 ---
 
-## 2. 自動排程開關（使用者要決定，但你把選項備好）
+## 2. ✅ 自動排程（2026-09-08 完成，採 (a)）
+
+`publish_bundle.yml` 發佈後 POST `repository_dispatch` `bundle-published` → `rebuild.yml`。
+PAT `TWHOLD_DISPATCH_PAT`（tw-swing secret，Contents:write，~2027-09-08 到期）。
+`rebuild.yml` 加「三清單無實質變動就不 commit」。端到端驗過。之後平日 06:00 UTC 自動。
+tw-swing `32351a9`、tw-hold `9731273`。以下為原始內容，留存。
+
+---
+
+## 2-舊. 自動排程開關（使用者要決定，但你把選項備好）
 
 **現況**：`rebuild.yml`（tw-hold）已接線可跑，但**排程刻意沒開**（PLAN 原則「先手動跑幾天」）。
 `heartbeat.yml` 每週一 UTC 01:00 醒來檢查 `data/derived/_meta.json.rebuilt_at` 新鮮度——
