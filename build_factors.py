@@ -30,6 +30,7 @@ import pandas as pd
 
 from factors.factors import (annual_eps, dividend_factors, quarterly_factors)
 from reference.loader import BUNDLE_DIR, load_dividends, load_quarterly
+from screener.candidate_pool import build_candidate_pool
 from screener.deposit_pricing import add_deposit_verdict
 from screener.gates import GateError, assert_raw_not_adjusted
 from screener.pricing import add_value_verdict
@@ -107,6 +108,21 @@ def _read_bundle_per_history() -> pd.DataFrame | None:
     d = pd.read_parquet(p, columns=["ticker", "date", "per", "dividend_yield"])
     d["date"] = pd.to_datetime(d["date"])
     return d
+
+
+def _read_bundle_ohlc() -> pd.DataFrame | None:
+    """bundle `prices_adj.parquet` 全欄（date/ticker/OHLC/volume）——候選池趨勢模板 + ATR 用。"""
+    p = BUNDLE_DIR / "prices_adj.parquet"
+    if not p.exists():
+        return None
+    d = pd.read_parquet(p)
+    d["date"] = pd.to_datetime(d["date"])
+    return d
+
+
+def _read_bundle_simple(name: str) -> pd.DataFrame | None:
+    p = BUNDLE_DIR / f"{name}.parquet"
+    return pd.read_parquet(p) if p.exists() else None
 
 
 def _read_bundle_raw_close_history() -> pd.DataFrame | None:
@@ -203,11 +219,25 @@ def screen_all() -> dict:
     for df in (val, dep):
         df["industry"] = df["ticker"].astype(str).map(ind)
 
+    # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
+    pool, pool_note = [], "候選池未算"
+    ohlc = _read_bundle_ohlc()
+    idx0050 = _read_bundle_simple("index_0050")
+    chips = _read_bundle_simple("chips")
+    rev = _read_bundle_simple("revenue")
+    if all(x is not None for x in (ohlc, idx0050, chips, rev)):
+        uni = top500 if isinstance(top500, set) else None
+        pool = build_candidate_pool(qf, ohlc, idx0050, chips, rev, uni)
+        pool_note = f"候選池 {len(pool)} 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）"
+    else:
+        pool_note = "候選池缺料（需 prices_adj / index_0050 / chips / revenue）"
+
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
     return {
-        "deposit": dep, "value": val,
+        "deposit": dep, "value": val, "pool": pool,
         "context": {
+            "pool_note": pool_note,
             "quarters": list(qf.shape), "tickers": int(qf.ticker.nunique()),
             "has_prices": prices is not None, "has_vol": vol is not None,
             "has_pe_bands": per_hist is not None,

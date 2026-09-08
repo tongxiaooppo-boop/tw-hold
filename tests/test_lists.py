@@ -78,7 +78,7 @@ def bundle(tmp_path, monkeypatch):
 
 def test_screen_all_無股價也能出兩清單(bundle):
     r = bundle.screen_all()
-    assert set(r) == {"deposit", "value", "context"}
+    assert {"deposit", "value", "context"} <= set(r)
     assert not r["value"].empty and not r["deposit"].empty
     assert r["context"]["has_prices"] is False
     # 沒股價時 value_score 用品質排序、不是全 NaN
