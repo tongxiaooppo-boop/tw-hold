@@ -92,6 +92,11 @@ commit：tw-swing `32351a9`、tw-hold `9731273`。
 ⚠️ 改 app 一定本地 `PYTHONIOENCODING=utf-8 python -m pytest -q` + AppTest 過再 push
 （`streamlit run` 本機無瀏覽器截不了圖，靠使用者看 Cloud）。
 
+### A2. 已知分割待人工核 🟡
+`detect_unhandled_splits()` 2026-09-08 偵測到 6 個未還原跳空候選：0052 / 2380 / 4747 /
+4950（疑減資）/ 5314 / 7772。查 TWSE 基準日+比例，真的是分割/減資就加進
+`reference/corporate_actions.py` 的 `SPLITS`。5904 寶雅已處理。見記憶 `tw-hold-split-adjustment-gap`。
+
 ### B. ④ 月營收歷史 🟡 —— **要動 bundle**
 `app/stockcharts.py` 的月營收圖是 `st.info` placeholder；M1 候選池 `revenue_accel`
 「加速」判定也略過（只用 `revenue_yoy > 0`）。根因：bundle `revenue.parquet` 只有
