@@ -126,7 +126,7 @@ def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
     回傳警示字串（每檔一條）。build_lists 會印出來（rebuild.yml log 看得到）
     + 塞進清單 warning。這是「提醒去 TWSE 查基準日+比例、加進 SPLITS」的觸發器，
     不自動還原（啟發式會誤傷）。"""
-    from reference.corporate_actions import SPLITS
+    from reference.corporate_actions import SPLITS, IGNORE_JUMPS
     p = BUNDLE_DIR / "prices_adj.parquet"
     if not p.exists():
         return []
@@ -135,7 +135,7 @@ def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
     d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
     d = d[(d["date"] >= d["date"].max() - pd.Timedelta(days=lookback_days))
           & (d["close"] > 0)].sort_values(["ticker", "date"])
-    known = set(SPLITS)
+    known = set(SPLITS) | set(IGNORE_JUMPS)
     out = []
     for tk, g in d.groupby("ticker", sort=False):
         if tk in known or len(g) < 12:

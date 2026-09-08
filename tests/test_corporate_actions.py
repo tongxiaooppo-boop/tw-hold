@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from reference.corporate_actions import SPLITS, adjust_per_share
+from reference.corporate_actions import IGNORE_JUMPS, SPLITS, adjust_per_share
 
 
 def test_分割日前除以factor_日後不動():
@@ -49,3 +49,11 @@ def test_對照表格式():
         assert tk.isdigit()
         for e in events:
             assert pd.Timestamp(e["date"]) and e["factor"] > 0 and e["factor"] != 1
+    assert not (set(SPLITS) & set(IGNORE_JUMPS))     # 同一檔不能又修又忽略
+
+
+def test_偵測器對已登記或已忽略的跳空不再報():
+    from build_factors import detect_unhandled_splits
+    for line in detect_unhandled_splits():
+        tk = line.split()[0]
+        assert tk not in SPLITS and tk not in IGNORE_JUMPS
