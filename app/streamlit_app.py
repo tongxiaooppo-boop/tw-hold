@@ -237,6 +237,76 @@ def _swing_page(payload: dict | None) -> None:
     _disclaimer(SWING_DISCLAIMER)
 
 
+@st.cache_resource(show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
+def _ensure_bundle():
+    from app.bundle_data import ensure_assets
+    return ensure_assets()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _stock_data(code: str) -> dict:
+    from app import bundle_data as bd
+    from factors.factors import quarterly_factors
+    px, per, fin, div = (bd.prices(code), bd.per_history(code),
+                         bd.financials(code), bd.dividends(code))
+    qf = quarterly_factors(fin) if not fin.empty else fin
+    return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf}
+
+
+def _stock_page() -> None:
+    from app import charts as ch
+    _disclaimer()
+    st.header("個股查詢")
+    st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
+               "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
+    code = st.text_input("股票代號", placeholder="2330").strip()
+    if not code:
+        _disclaimer()
+        return
+
+    got = _ensure_bundle()
+    if not any(got.values()):
+        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。")
+        _disclaimer()
+        return
+
+    d = _stock_data(code)
+    if d["px"].empty and d["fin"].empty:
+        st.warning(f"{code} 不在 bundle 內。"
+                   + ("本地進階模式可即時補抓（尚未實作）。" if LOCAL_ADVANCED
+                      else "雲端唯讀模式只服務 bundle 內的股票。"))
+        _disclaimer()
+        return
+
+    name = code
+    if not d["px"].empty:
+        st.plotly_chart(ch.kline(d["px"], name), width='stretch')
+        if not d["per"].empty:
+            st.plotly_chart(ch.pe_river(d["px"], d["per"], name), width='stretch')
+
+    if not d["qf"].empty:
+        c1, c2 = st.columns(2)
+        c1.plotly_chart(ch.quarterly_eps(d["qf"], name), width='stretch')
+        c2.plotly_chart(ch.margins(d["qf"], name), width='stretch')
+        st.plotly_chart(ch.cashflow(d["qf"], name), width='stretch')
+
+    if not d["div"].empty:
+        st.plotly_chart(ch.dividends_chart(d["div"], name), width='stretch')
+
+    st.info("📊 月營收走勢圖：bundle 目前只有單月快照，歷史圖待 revenue 歷史併入 bundle。")
+
+    if not d["qf"].empty:
+        st.subheader("Piotroski F-Score 9 分項")
+        st.caption("**只打勾、不加總、不當買賣依據。** 加總分數在價值清單裡當品質門檻，"
+                   "這裡是診斷用。")
+        st.dataframe(ch.fscore_table(d["qf"]), hide_index=True, width="stretch")
+
+    with st.expander("原始季度數據"):
+        st.dataframe(d["qf"] if not d["qf"].empty else d["fin"], width="stretch")
+
+    _disclaimer()
+
+
 def main() -> None:
     st.set_page_config(page_title="tw-hold", layout="wide")
     st.title("tw-hold")
@@ -255,14 +325,7 @@ def main() -> None:
     with tabs[2]:
         _swing_page(_load("swing_list.json"))
     with tabs[3]:
-        _disclaimer()
-        st.header("個股查詢")
-        st.text_input("股票代號", placeholder="2330")
-        if not LOCAL_ADVANCED:
-            st.info("雲端唯讀模式：只服務前 500 大（bundle 內）。"
-                    "即時補抓不在池內的個股是本地進階模式功能。")
-        st.info("M4 實作。")
-        _disclaimer()
+        _stock_page()
 
 
 if __name__ == "__main__":
