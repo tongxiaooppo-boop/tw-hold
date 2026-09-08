@@ -58,7 +58,8 @@ cd /d/g/claude/tw-swing && PYTHONIOENCODING=utf-8 python scripts/check_daily.py 
 真出問題查 FinMind 原始 `origin_name`。
 
 ### ② 自動排程 ✅（採 (a) repository_dispatch）
-tw-swing `publish_bundle.yml`（平日 06:00 UTC）發佈成功 → POST `repository_dispatch`
+tw-swing `publish_bundle.yml`（平日 **UTC 22:00 = 台灣隔日早上 06:00**，2026-09-08 從 UTC 06:00
+改早——排在 daily.yml 第三槍後）發佈成功 → POST `repository_dispatch`
 `bundle-published` → tw-hold `rebuild.yml` 重算三清單。端到端驗過。
 PAT：tw-swing secret **`TWHOLD_DISPATCH_PAT`**（fine-grained / tw-hold / Contents:write，
 **~2027-09-08 到期**）。`rebuild.yml` 加「三張 `*_list.json` 沒實質變動就不 commit」。
