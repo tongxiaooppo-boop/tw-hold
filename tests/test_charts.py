@@ -73,3 +73,14 @@ def test_fscore_table_9項_不加總():
 def test_margins_三率():
     fig = ch.margins(_qf(), "測試")
     assert {t.name for t in fig.data} == {"毛利率", "營益率", "稅後淨利率"}
+
+
+def test_monthly_revenue_柱加YoY線():
+    m = pd.period_range("2022-01", periods=30, freq="M").astype(str)
+    rev = pd.DataFrame({"month": pd.to_datetime(m),
+                        "revenue": np.linspace(1e8, 3e8, 30)})
+    fig = ch.monthly_revenue(rev, "測試")
+    names = {t.name for t in fig.data}
+    assert "月營收（億）" in names and "YoY %" in names
+    fig2 = ch.monthly_revenue(rev, "測試", pd.Timestamp("2023-06-01"))
+    assert list(fig2.layout.xaxis.range)[0] == pd.Timestamp("2023-06-01")

@@ -24,7 +24,7 @@ import fetch_bundle as fb   # noqa: E402  reuse _read_pat / _api / _release_asse
 UPSTREAM = _REPO / "data" / "upstream"
 
 #: 個股頁要的檔（不含 chips——法人買賣超個股頁 v1 先不畫）
-_ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet",
+_ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet", "revenue.parquet",
            "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"]
 _FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"}
 
@@ -87,6 +87,26 @@ def prices(code: str, lookback_days: int = 900) -> pd.DataFrame:
     d = adjust_per_share(d, ["open", "high", "low", "close"])
     cut = d["date"].max() - pd.Timedelta(days=lookback_days)
     return d[d["date"] >= cut].sort_values("date").reset_index(drop=True)
+
+
+def revenue(code: str) -> pd.DataFrame:
+    """月營收長表 → `[month(Timestamp，當月月初), revenue]`，依月排序。
+
+    新 bundle：`[ticker, month "YYYY-MM", revenue, announced]`。
+    舊 bundle（單月快照）：`[ticker, period, revenue, ...]` → 只有一列。
+    """
+    d = _read("revenue.parquet", code, False)
+    if d.empty:
+        return pd.DataFrame(columns=["month", "revenue"])
+    mcol = "month" if "month" in d.columns else ("period" if "period" in d.columns else None)
+    if mcol is None or "revenue" not in d.columns:
+        return pd.DataFrame(columns=["month", "revenue"])
+    d = d[[mcol, "revenue"]].rename(columns={mcol: "month"})
+    d["month"] = pd.to_datetime(d["month"].astype(str), errors="coerce")
+    d["revenue"] = pd.to_numeric(d["revenue"], errors="coerce")
+    return (d.dropna(subset=["month", "revenue"])
+             .drop_duplicates("month", keep="last")
+             .sort_values("month").reset_index(drop=True))
 
 
 def per_history(code: str) -> pd.DataFrame:

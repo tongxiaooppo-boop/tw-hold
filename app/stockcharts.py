@@ -1,7 +1,8 @@
 """個股查詢的 plotly 圖（M4，PRD §4.2）。
 
 八類：K 線 / 月營收 / 季 EPS / 三率 / 現金流 / 股利 / 本益比河流圖 / F-Score 9 分項。
-⚠️ 月營收：bundle `revenue.parquet` 只有單月快照，歷史圖待 revenue 歷史進 bundle。
+月營收：bundle `revenue.parquet` 是長表（2015~），柱＝月營收、線＝YoY%。舊單月快照
+schema 也吃（只有一列 → 不畫）。
 ⚠️ F-Score 9 分項：**打勾表，不加總、不給 verdict**（PRD §4.1）。
 """
 from __future__ import annotations
@@ -60,6 +61,25 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
             pad = (vis.max() - vis.min()) * 0.06 or 1
             fig.update_yaxes(range=[vis.min() - pad, vis.max() + pad])
     return _style(fig, f"{name} 還原日K + 均線", 440)
+
+
+def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
+    """月營收：柱＝月營收（億元），線＝YoY%（右軸）。`start` 只裁 x 軸，YoY 用完整歷史算。"""
+    d = rev.copy().sort_values("month")
+    d["month"] = pd.to_datetime(d["month"])
+    d["yoy"] = d["revenue"] / d["revenue"].shift(12) - 1.0
+    fig = go.Figure([
+        go.Bar(x=d["month"], y=d["revenue"] / 1e8, name="月營收（億）",
+               marker_line_width=0),
+        go.Scatter(x=d["month"], y=d["yoy"] * 100, name="YoY %", yaxis="y2",
+                   line=dict(width=2, color="#d69f57")),
+    ])
+    fig.update_layout(
+        yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
+                    zeroline=True, zerolinecolor="rgba(214,159,87,.35)"))
+    if start is not None:
+        fig.update_xaxes(range=[pd.Timestamp(start), d["month"].max()])
+    return _style(fig, f"{name} 月營收 + YoY", 360)
 
 
 def quarterly_eps(qf: pd.DataFrame, name: str) -> go.Figure:

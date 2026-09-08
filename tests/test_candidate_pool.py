@@ -46,6 +46,18 @@ def _revenue(ticker: str, yoy: float = 0.3):
                               revenue_prev_month=125.0)])
 
 
+def _revenue_hist(ticker: str, yoy: float = 0.3, accel: bool = True):
+    """新長表 schema：25 個月，最後一個月 YoY = `yoy`、上月 YoY 視 `accel` 高或低。"""
+    months = pd.period_range("2024-08", periods=25, freq="M").astype(str)
+    base = 100.0
+    rev = [base] * 13
+    prev_yoy = yoy - 0.1 if accel else yoy + 0.1
+    for m in range(13, 25):
+        y = yoy if m == 24 else prev_yoy
+        rev.append(rev[m - 12] * (1 + y))
+    return pd.DataFrame({"ticker": ticker, "month": months, "revenue": rev})
+
+
 def test_trend_template_上升趨勢過8條():
     tt = trend_template(_uptrend_prices("1001"), _flat_index(), ASOF)
     assert tt.loc["1001", "trend_cnt"] >= 7
@@ -89,3 +101,21 @@ def test_build_pool_營收衰退就不進():
         _qf("1001"), _uptrend_prices("1001"), _flat_index(),
         _chips("1001"), _revenue("1001", yoy=-0.1), universe={"1001"}, asof=ASOF)
     assert pool == []
+
+
+def test_revenue_yoy_新長表_算加速():
+    from screener.candidate_pool import revenue_yoy
+    up = revenue_yoy(_revenue_hist("1001", yoy=0.3, accel=True))
+    assert up.loc["1001", "revenue_accel"] == True          # noqa: E712
+    assert abs(up.loc["1001", "revenue_yoy"] - 0.3) < 1e-6
+    down = revenue_yoy(_revenue_hist("1001", yoy=0.3, accel=False))
+    assert down.loc["1001", "revenue_accel"] == False       # noqa: E712
+
+
+def test_build_pool_新長表營收_進池且帶accel():
+    pool = build_candidate_pool(
+        _qf("1001"), _uptrend_prices("1001"), _flat_index(),
+        _chips("1001"), _revenue_hist("1001", yoy=0.3, accel=True),
+        universe={"1001"}, asof=ASOF)
+    assert len(pool) == 1 and pool[0]["revenue_accel"] is True
+    assert "月營收 YoY 較上月加速" in pool[0]["support"]

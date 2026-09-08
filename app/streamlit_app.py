@@ -498,10 +498,10 @@ def _ensure_bundle():
 def _stock_data(code: str) -> dict:
     import bundle_data as bd
     from factors.factors import quarterly_factors
-    px, per, fin, div = (bd.prices(code), bd.per_history(code),
-                         bd.financials(code), bd.dividends(code))
+    px, per, fin, div, rev = (bd.prices(code), bd.per_history(code),
+                              bd.financials(code), bd.dividends(code), bd.revenue(code))
     qf = quarterly_factors(fin) if not fin.empty else fin
-    return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf}
+    return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf, "rev": rev}
 
 
 def _qf_display(df: pd.DataFrame):
@@ -584,7 +584,15 @@ def _stock_page() -> None:
     if not d["div"].empty:
         _chart(ch.dividends_chart, d["div"], name)
 
-    st.info("📊 月營收走勢圖：bundle 目前只有單月快照，歷史圖待 revenue 歷史併入 bundle。")
+    rev = d.get("rev")
+    if rev is not None and len(rev) >= 13:
+        rstart = start if (not d["px"].empty and start is not None) else None
+        _chart(ch.monthly_revenue, rev, name, rstart)
+    elif rev is not None and not rev.empty:
+        st.info(f"📊 月營收：目前只有 {len(rev)} 個月，滿 13 個月才畫 YoY 圖"
+                "（等 revenue 歷史隨下次 bundle 發佈進來）。")
+    else:
+        st.info("📊 月營收走勢圖：這檔在 bundle 沒有月營收資料。")
 
     if not d["qf"].empty:
         st.subheader("Piotroski F-Score 9 分項")
