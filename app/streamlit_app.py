@@ -669,13 +669,18 @@ def _checklist_page() -> None:
         _disclaimer()
         return
 
-    _ensure_bundle()
+    got = _ensure_bundle()
+    if not any(got.values()):
+        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。")
+        _disclaimer()
+        return
+
     fv, fd = _factor_row("value", code), _factor_row("deposit", code)
     d = _stock_data(code)
-    swing = cl.swing_checks(d)
-    if not swing and fv is None and fd is None:
-        st.warning(f"{code} 不在資料範圍（bundle 與 500 大因子表都查無）。"
-                   "超出範圍的股票不另外抓單股資料。")
+    px_fin_empty = d["px"].empty and d["fin"].empty
+    if px_fin_empty and fv is None and fd is None:
+        st.warning(f"{code} 不在資料範圍——bundle（前 ~500 大 + 定存宇宙）與 500 大因子表都查無。"
+                   "超出範圍的股票**不另外抓單股資料**（PRD §M4 雲端唯讀）。")
         _disclaimer()
         return
 
@@ -683,9 +688,11 @@ def _checklist_page() -> None:
     st.markdown(f"### {code} {name}")
     t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
     with t1:
-        _render_checks(swing,
+        _render_checks(cl.swing_checks(d),
                        "長波段候選池判準（CANSLIM + Minervini）。趨勢模板只做 7 條，"
-                       "不含相對強弱 RS（需全市場橫斷面）。", SWING_DISCLAIMER)
+                       "不含相對強弱 RS（需全市場橫斷面）。", SWING_DISCLAIMER,
+                       missing=("這檔在 bundle 沒有價量／財報資料，無法體檢長波段軌。"
+                                if px_fin_empty else None))
     with t2:
         _render_checks(cl.value_checks(fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
