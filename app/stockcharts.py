@@ -23,6 +23,9 @@ _LAYOUT = dict(
     font=dict(color="#d7dbd4"),
     legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0),
     margin=dict(t=48, b=76, l=10, r=10),
+    # 手機上單指拖曳會被 plotly 吃掉當平移／縮放，害頁面滑不動——關掉拖曳，
+    # 保留 hover 點值；雙指縮放要兩指、不會誤觸。
+    dragmode=False,
 )
 
 

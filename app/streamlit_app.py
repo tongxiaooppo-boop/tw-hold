@@ -563,7 +563,10 @@ def _stock_page() -> None:
     def _chart(fn, *args, target=st):
         """單張圖爆掉不要整頁掛——就地顯示錯誤、繼續下一張。"""
         try:
-            target.plotly_chart(fn(*args), use_container_width=True)
+            target.plotly_chart(fn(*args), use_container_width=True, config={
+                # 手機捲動時別誤觸縮放；工具列在小螢幕也只會擋圖。
+                "scrollZoom": False, "displayModeBar": False, "doubleClick": False,
+            })
         except Exception as e:  # noqa: BLE001
             target.warning(f"「{getattr(fn, '__name__', '圖')}」畫不出來：{type(e).__name__}: {e}")
 
