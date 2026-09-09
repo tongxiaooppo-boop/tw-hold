@@ -36,6 +36,11 @@ SWING_DISCLAIMER = (
     "「這個進場點承擔多少風險」，**不回答「會不會賺」**。不給 verdict、不給買價、"
     "不排名次。"
 )
+SHORT_DISCLAIMER = (
+    "🔴🔴 **短線不是 tw-hold 的守備範圍**——這裡只把日線技術面條件逐條攤開，"
+    "**零回測、零驗證**，雜訊極高。tw-hold 是長期持有工具；短線交易請用 tw-swing。"
+    "融資融券變化 bundle 沒有 → 相關條件不出現。**不給訊號、不給買賣點。**"
+)
 
 #: 英文欄名 → 中文（明細表 / 複製給 AI 用）
 LABELS = {
@@ -538,7 +543,7 @@ def _chart(fn, *args, target=None) -> None:
 
 
 def _stock_input(form_key: str, submit_label: str) -> str:
-    """個股查詢 / 三軌體檢共用同一個 session key `_stock_code`——切頁查的是同一支。"""
+    """個股查詢 / 多軌體檢共用同一個 session key `_stock_code`——切頁查的是同一支。"""
     with st.form(form_key, border=False):
         c1, c2 = st.columns([5, 1])
         c1.text_input("代號", key="_stock_code", placeholder="2330",
@@ -556,7 +561,7 @@ def _peer_link(target_nav: str, label: str) -> None:
 
 
 def _page_footer(other_nav: str, other_label: str) -> None:
-    """個股查詢 / 三軌體檢 共用的頁尾：回到頂部 + 切到另一頁（同一支）。
+    """個股查詢 / 多軌體檢 共用的頁尾：回到頂部 + 切到另一頁（同一支）。
     「回到頂部」連到頁首 `anchor='top'` 的標題。"""
     st.divider()
     c1, c2 = st.columns(2)
@@ -651,7 +656,7 @@ def _stock_page() -> None:
         st.dataframe(_qf_display(_raw), use_container_width=True)
 
     _disclaimer()
-    _page_footer("三軌體檢", f"🔬 用三軌判準體檢 {code} →")
+    _page_footer("多軌體檢", f"🔬 多軌體檢 {code} →")
 
 
 _DERIVED_RELEASE = ("https://github.com/tongxiaooppo-boop/tw-hold"
@@ -737,12 +742,13 @@ def _render_checks(rows: list[dict], note: str, missing: str | None = None,
 
 
 def _checklist_page() -> None:
-    """三軌體檢：同一檔、三套判準逐條攤開。不加總、不給 verdict／買價／排名。"""
+    """多軌體檢：同一檔、四套判準逐條攤開。不加總、不給 verdict／買價／排名。"""
     import checklist as cl
 
-    st.subheader("三軌體檢", anchor="top")
-    st.caption("同一檔股票，分別用「長波段 / 價值 / 定存」三套判準逐條攤開。"
-               "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。")
+    st.subheader("多軌體檢", anchor="top")
+    st.caption("同一檔股票，分別用「短線 / 長波段 / 價值 / 定存」四套判準逐條攤開。"
+               "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。"
+               "短線軌零回測、只是把技術面條件列出來（tw-hold 是長期工具，短線用 tw-swing）。")
     code = _stock_input("cl_query", "體檢")
     if not code:
         _disclaimer()
@@ -774,7 +780,19 @@ def _checklist_page() -> None:
     def _ago(days):
         return end - pd.Timedelta(days=days) if end is not None else None
 
-    t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
+    t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 長波段", "🔵 價值", "🟢 定存"])
+    with t0:
+        # 短線是日尺度 → 圖只看近 3 個月
+        _render_checks(cl.short_checks(d),
+                       "純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。",
+                       missing=("這檔在 bundle 沒有價量資料，無法體檢短線軌。"
+                                if px.empty else None),
+                       disclaimer=SHORT_DISCLAIMER)
+        st.caption("——對應圖表（短線尺度：近 3 個月）——")
+        if not px.empty:
+            _chart(ch.kline, px, nm, _ago(95), ch._MA_SHORT)
+        if chp is not None and not chp.empty:
+            _chart(ch.institutional_net, chp, nm, _ago(95))
     with t1:
         # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
         _render_checks(cl.swing_checks(d),
@@ -820,7 +838,7 @@ def _checklist_page() -> None:
 
 
 APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
-NAV = ["價值", "定存", "長波段", "個股查詢", "三軌體檢"]
+NAV = ["價值", "定存", "長波段", "個股查詢", "多軌體檢"]
 
 
 def _route() -> None:
