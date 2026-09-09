@@ -685,28 +685,42 @@ def _render_checks(rows: list[dict], note: str, missing: str | None = None,
     if not rows:
         st.info("這檔缺足夠資料算這一軌。")
         return
-    df = pd.DataFrame(rows)
+
+    import checklist as cl
+
+    s = cl.summarize(rows)
+    if s["缺口"]:
+        st.markdown("🔴 **未達的門檻**：" + " · ".join(s["缺口"]))
+    else:
+        st.markdown("🟢 **沒有門檻被擋下**（不代表完美，只代表這些條件都成立）")
+    if s["待確認"]:
+        st.caption("⚪ 資料不足、未判定：" + " · ".join(s["待確認"]))
+    if s["風險命中"]:
+        st.markdown("⚠️ **風險命中**：" + " · ".join(s["風險命中"]))
 
     def _colour(col):
         out = []
-        for v in col:
-            v = str(v)
+        for v in map(str, col):
             out.append("color:#68b784;font-weight:600" if v.startswith("✅")
                        else "color:#e57373;font-weight:600" if v.startswith("❌")
                        else "color:#d69f57" if v.startswith("⚠️")
                        else "color:#8a8f88")
         return out
 
-    st.dataframe(
-        df.style.apply(_colour, subset=["狀態"]),
-        hide_index=True, use_container_width=True,
-        height=(len(df) + 1) * 35 + 3,          # 全部攤開，不要內捲捲軸
-        column_config={
-            "項目": st.column_config.TextColumn(width="medium"),
-            "門檻": st.column_config.TextColumn(width="large"),
-            "現值": st.column_config.TextColumn(width="small"),
-            "狀態": st.column_config.TextColumn(width="small"),
-        })
+    df = pd.DataFrame(rows)
+    for grp in df["組"].drop_duplicates():
+        sub = df[df["組"] == grp].drop(columns="組").reset_index(drop=True)
+        st.markdown(f"**{grp}**")
+        st.dataframe(
+            sub.style.apply(_colour, subset=["狀態"]),
+            hide_index=True, use_container_width=True,
+            height=(len(sub) + 1) * 35 + 3,      # 全部攤開，不要內捲捲軸
+            column_config={
+                "項目": st.column_config.TextColumn(width="medium"),
+                "門檻": st.column_config.TextColumn(width="large"),
+                "現值": st.column_config.TextColumn(width="small"),
+                "狀態": st.column_config.TextColumn(width="small"),
+            })
     if disclaimer:
         st.caption(disclaimer)
 
