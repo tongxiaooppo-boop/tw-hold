@@ -685,7 +685,28 @@ def _render_checks(rows: list[dict], note: str, missing: str | None = None,
     if not rows:
         st.info("這檔缺足夠資料算這一軌。")
         return
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    df = pd.DataFrame(rows)
+
+    def _colour(col):
+        out = []
+        for v in col:
+            v = str(v)
+            out.append("color:#68b784;font-weight:600" if v.startswith("✅")
+                       else "color:#e57373;font-weight:600" if v.startswith("❌")
+                       else "color:#d69f57" if v.startswith("⚠️")
+                       else "color:#8a8f88")
+        return out
+
+    st.dataframe(
+        df.style.apply(_colour, subset=["狀態"]),
+        hide_index=True, use_container_width=True,
+        height=(len(df) + 1) * 35 + 3,          # 全部攤開，不要內捲捲軸
+        column_config={
+            "項目": st.column_config.TextColumn(width="medium"),
+            "門檻": st.column_config.TextColumn(width="large"),
+            "現值": st.column_config.TextColumn(width="small"),
+            "狀態": st.column_config.TextColumn(width="small"),
+        })
     if disclaimer:
         st.caption(disclaimer)
 
@@ -718,8 +739,8 @@ def _checklist_page() -> None:
         _disclaimer()
         return
 
-    name = (fv or fd or {}).get("name") or code
-    st.markdown(f"### {code} {name}")
+    name = (fv or fd or {}).get("name") or ""
+    st.markdown(f"### {code}{' ' + name if name and name != code else ''}")
     t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
     with t1:
         _render_checks(cl.swing_checks(d),

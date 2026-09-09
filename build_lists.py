@@ -231,6 +231,10 @@ def main() -> int:
     }
     DERIVED.mkdir(parents=True, exist_ok=True)
 
+    # 逐檔因子表——三軌體檢頁要用（gitignore、由 rebuild.yml 推 derived-latest release）。
+    r["value"].to_parquet(DERIVED / "factors_value.parquet", index=False)
+    r["deposit"].to_parquet(DERIVED / "factors_deposit.parquet", index=False)
+
     from build_factors import detect_unhandled_splits
     split_warn = detect_unhandled_splits()
     for w in split_warn:
