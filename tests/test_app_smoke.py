@@ -40,6 +40,16 @@ def test_三軌體檢分頁_不輸入代號不炸():
     assert "三軌體檢" in " ".join(h.value for h in at.subheader)
 
 
+def test_三軌體檢_帶代號_三個分頁都渲染不炸():
+    at = AppTest.from_file(REPO_APP, default_timeout=60)
+    at.session_state["_nav"] = "三軌體檢"
+    at.session_state["_stock_code"] = "2330"
+    at.run()
+    assert not at.exception
+    # 三軌至少要有一張檢核表（dataframe）或明確的 info，不能整頁掛
+    assert at.dataframe or any("因子表" in i.value or "資料" in i.value for i in at.info)
+
+
 def test_兩頁共用代號且可頁內切換():
     at = AppTest.from_file(REPO_APP, default_timeout=30)
     at.session_state["_stock_code"] = "2330"
