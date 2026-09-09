@@ -33,6 +33,13 @@ def test_三清單分頁都有標題():
         assert want in " ".join(h.value for h in at.header)
 
 
+def test_三軌體檢分頁_不輸入代號不炸():
+    at = _run()
+    at.radio(key="_nav").set_value("三軌體檢").run()
+    assert not at.exception
+    assert "三軌體檢" in " ".join(h.value for h in at.subheader)
+
+
 def test_代號連結指向個股查詢():
     at = _run()
     md = " ".join(m.value for m in at.markdown)

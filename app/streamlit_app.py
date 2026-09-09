@@ -590,12 +590,18 @@ def _stock_page() -> None:
         c1, c2 = st.columns(2)
         _chart(ch.quarterly_eps, d["qf"], name, target=c1)
         _chart(ch.margins, d["qf"], name, target=c2)
+        c3, c4 = st.columns(2)
+        _chart(ch.roe_trend, d["qf"], name, target=c3)
+        _chart(ch.balance_health, d["qf"], name, target=c4)
         _chart(ch.cashflow, d["qf"], name)
 
     if not d["div"].empty:
         _chart(ch.dividends_chart, d["div"], name)
 
     xstart = start if (not d["px"].empty and start is not None) else None
+
+    if not d["per"].empty:
+        _chart(ch.yield_trend, d["per"], name, xstart)
 
     rev = d.get("rev")
     if rev is not None and len(rev) >= 13:
@@ -624,7 +630,75 @@ def _stock_page() -> None:
     _disclaimer()
 
 
-NAV = ["價值", "定存", "長波段", "個股查詢"]
+@st.cache_data(ttl=3600, show_spinner=False)
+def _factor_row(track: str, code: str) -> dict | None:
+    """`data/derived/factors_{value,deposit}.parquet` 裡該檔那一列（清單頁同一份因子）。"""
+    p = DERIVED / f"factors_{track}.parquet"
+    if not p.exists():
+        return None
+    df = pd.read_parquet(p)
+    c = str(code).strip().split(".")[0]
+    hit = df[df["ticker"].astype(str).str.split(".").str[0] == c]
+    return hit.iloc[0].to_dict() if not hit.empty else None
+
+
+def _render_checks(rows: list[dict], note: str, missing: str | None) -> None:
+    st.caption(note)
+    if missing:
+        st.info(missing)
+        return
+    if not rows:
+        st.info("這檔缺足夠資料算這一軌。")
+        return
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+
+def _checklist_page() -> None:
+    """三軌體檢：同一檔、三套判準逐條攤開。不加總、不給 verdict／買價／排名。"""
+    import checklist as cl
+
+    st.subheader("三軌體檢")
+    st.caption("同一檔股票，分別用「長波段 / 價值 / 定存」三套判準逐條攤開。"
+               "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。")
+    _in = st.text_input("股票代號", key="_cl_in",
+                        value=st.session_state.get("_stock_code", ""))
+    if st.button("體檢", key="_cl_go") and _in.strip():
+        st.session_state["_stock_code"] = _in.strip()
+    code = st.session_state.get("_stock_code", "")
+    if not code:
+        _disclaimer()
+        return
+
+    _ensure_bundle()
+    fv, fd = _factor_row("value", code), _factor_row("deposit", code)
+    d = _stock_data(code)
+    swing = cl.swing_checks(d)
+    if not swing and fv is None and fd is None:
+        st.warning(f"{code} 不在資料範圍（bundle 與 500 大因子表都查無）。"
+                   "超出範圍的股票不另外抓單股資料。")
+        _disclaimer()
+        return
+
+    name = (fv or fd or {}).get("name") or code
+    st.markdown(f"### {code} {name}")
+    t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
+    with t1:
+        _render_checks(swing,
+                       "長波段候選池判準（CANSLIM + Minervini）。趨勢模板只做 7 條，"
+                       "不含相對強弱 RS（需全市場橫斷面）。", SWING_DISCLAIMER)
+    with t2:
+        _render_checks(cl.value_checks(fv),
+                       "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
+                       None if fv is not None else "這檔不在 500 大價值因子表，無法體檢價值軌。")
+    with t3:
+        _render_checks(cl.deposit_checks(fd),
+                       "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
+                       None if fd is not None else "這檔不在 500 大定存因子表，無法體檢定存軌。")
+    _disclaimer()
+
+
+APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
+NAV = ["價值", "定存", "長波段", "個股查詢", "三軌體檢"]
 
 
 def _route() -> None:
@@ -638,10 +712,10 @@ def _route() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="tw-hold", layout="wide")
+    st.set_page_config(page_title=APP_NAME, layout="wide")
     _inject_css()
     _route()
-    st.title("tw-hold")
+    st.title(APP_NAME)
     st.caption("長波段 / 價值 / 定存三清單 + 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
@@ -657,8 +731,10 @@ def main() -> None:
                    "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（§7.3）。")
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
-    else:
+    elif nav == "個股查詢":
         _stock_page()
+    else:
+        _checklist_page()
 
 
 if __name__ == "__main__":
