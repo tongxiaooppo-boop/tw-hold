@@ -549,13 +549,23 @@ def _chart(fn, *args, target=None) -> None:
 
 
 def _stock_input(form_key: str, submit_label: str) -> str:
-    """個股查詢 / 多軌體檢共用同一個 session key `_stock_code`——切頁查的是同一支。"""
+    """個股查詢 / 多軌體檢共用同一支代號。
+
+    ⚠️ 兩頁的輸入框都用 widget key `_stock_code`。Streamlit 在「切頁 → 原本那個
+    widget 沒再 render」時會把它的 key 從 session_state 清掉 → 切過去就變空白。
+    對策：另存一個**非 widget** 的鏡像 key `_code_mirror`（永不被清），widget 建立前
+    先拿它把 `_stock_code` 補回來。"""
+    if not st.session_state.get("_stock_code") and st.session_state.get("_code_mirror"):
+        st.session_state["_stock_code"] = st.session_state["_code_mirror"]
     with st.form(form_key, border=False):
         c1, c2 = st.columns([5, 1])
         c1.text_input("代號", key="_stock_code", placeholder="2330",
                       label_visibility="collapsed")
         c2.form_submit_button(submit_label, use_container_width=True)
-    return st.session_state.get("_stock_code", "").strip()
+    code = st.session_state.get("_stock_code", "").strip()
+    if code:
+        st.session_state["_code_mirror"] = code
+    return code
 
 
 def _page_footer(other_nav: str, other_label: str) -> None:
