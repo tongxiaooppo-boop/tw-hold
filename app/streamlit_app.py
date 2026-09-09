@@ -526,6 +526,17 @@ def _qf_display(df: pd.DataFrame):
     return d.style.format(subset=money_k, formatter="{:,.0f}", na_rep="—")
 
 
+def _chart(fn, *args, target=None) -> None:
+    """單張圖爆掉不要整頁掛——就地顯示錯誤、繼續下一張。手機關掉拖曳縮放。"""
+    tgt = target if target is not None else st
+    try:
+        tgt.plotly_chart(fn(*args), use_container_width=True, config={
+            "scrollZoom": False, "displayModeBar": False, "doubleClick": False,
+        })
+    except Exception as e:  # noqa: BLE001
+        tgt.warning(f"「{getattr(fn, '__name__', '圖')}」畫不出來：{type(e).__name__}: {e}")
+
+
 def _stock_input(form_key: str, submit_label: str) -> str:
     """個股查詢 / 三軌體檢共用同一個 session key `_stock_code`——切頁查的是同一支。"""
     with st.form(form_key, border=False):
@@ -572,16 +583,6 @@ def _stock_page() -> None:
         return
 
     name = code
-
-    def _chart(fn, *args, target=st):
-        """單張圖爆掉不要整頁掛——就地顯示錯誤、繼續下一張。"""
-        try:
-            target.plotly_chart(fn(*args), use_container_width=True, config={
-                # 手機捲動時別誤觸縮放；工具列在小螢幕也只會擋圖。
-                "scrollZoom": False, "displayModeBar": False, "doubleClick": False,
-            })
-        except Exception as e:  # noqa: BLE001
-            target.warning(f"「{getattr(fn, '__name__', '圖')}」畫不出來：{type(e).__name__}: {e}")
 
     if not d["px"].empty:
         end = pd.Timestamp(pd.to_datetime(d["px"]["date"]).max())
@@ -753,8 +754,12 @@ def _checklist_page() -> None:
         _disclaimer()
         return
 
+    import stockcharts as ch
+
     name = (fv or fd or {}).get("name") or ""
+    nm = name or code
     st.markdown(f"### {code}{' ' + name if name and name != code else ''}")
+    qf, px, per, div, rev, chp = (d["qf"], d["px"], d["per"], d["div"], d["rev"], d["chips"])
     t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
     with t1:
         _render_checks(cl.swing_checks(d),
@@ -763,14 +768,36 @@ def _checklist_page() -> None:
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢長波段軌。"
                                 if px_fin_empty else None),
                        disclaimer=SWING_DISCLAIMER)
+        st.caption("——對應圖表——")
+        if not px.empty:
+            _chart(ch.kline, px, nm, None, ch._MA_SHORT)
+        if rev is not None and len(rev) >= 13:
+            _chart(ch.monthly_revenue, rev, nm)
+        if chp is not None and not chp.empty:
+            _chart(ch.institutional_net, chp, nm)
     with t2:
         _render_checks(cl.value_checks(fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
                        None if fv is not None else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。")
+        st.caption("——對應圖表——")
+        if not qf.empty:
+            c1, c2 = st.columns(2)
+            _chart(ch.roe_trend, qf, nm, target=c1)
+            _chart(ch.margins, qf, nm, target=c2)
+        if not px.empty and not per.empty:
+            _chart(ch.pe_river, px, per, nm)
     with t3:
         _render_checks(cl.deposit_checks(fd),
                        "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
                        None if fd is not None else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。")
+        st.caption("——對應圖表——")
+        if not div.empty:
+            _chart(ch.dividends_chart, div, nm)
+        if not per.empty:
+            _chart(ch.yield_trend, per, nm)
+        if not qf.empty:
+            _chart(ch.balance_health, qf, nm)
+    st.caption("完整圖表（K 線區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     _disclaimer()
 
 
