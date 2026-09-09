@@ -643,9 +643,30 @@ def _stock_page() -> None:
     _disclaimer()
 
 
+_DERIVED_RELEASE = ("https://github.com/tongxiaooppo-boop/tw-hold"
+                    "/releases/download/derived-latest")
+
+
+@st.cache_resource(show_spinner="載入因子表…")
+def _ensure_derived_factors() -> None:
+    """factors_{value,deposit}.parquet 不進版控（每天一顆 blob）→ 執行期從 tw-hold
+    的 derived-latest release 拉（公開 repo，免 PAT）。本地已有 build 產物就沿用。"""
+    import urllib.request
+    DERIVED.mkdir(parents=True, exist_ok=True)
+    for n in ("factors_value.parquet", "factors_deposit.parquet"):
+        p = DERIVED / n
+        if p.exists() and p.stat().st_size > 0:
+            continue
+        try:
+            urllib.request.urlretrieve(f"{_DERIVED_RELEASE}/{n}", p)
+        except Exception:  # noqa: BLE001  拉不到就退化成「不在因子表」，不炸
+            pass
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _factor_row(track: str, code: str) -> dict | None:
-    """`data/derived/factors_{value,deposit}.parquet` 裡該檔那一列（清單頁同一份因子）。"""
+    """`factors_{value,deposit}.parquet` 裡該檔那一列（清單頁同一份因子）。"""
+    _ensure_derived_factors()
     p = DERIVED / f"factors_{track}.parquet"
     if not p.exists():
         return None
@@ -692,7 +713,7 @@ def _checklist_page() -> None:
     d = _stock_data(code)
     px_fin_empty = d["px"].empty and d["fin"].empty
     if px_fin_empty and fv is None and fd is None:
-        st.warning(f"{code} 不在資料範圍——bundle（前 ~500 大 + 定存宇宙）與 500 大因子表都查無。"
+        st.warning(f"{code} 不在資料範圍——bundle 與因子表（約 1000 檔上市普通股）都查無。"
                    "超出範圍的股票**不另外抓單股資料**（PRD §M4 雲端唯讀）。")
         _disclaimer()
         return
@@ -710,11 +731,11 @@ def _checklist_page() -> None:
     with t2:
         _render_checks(cl.value_checks(fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
-                       None if fv is not None else "這檔不在 500 大價值因子表，無法體檢價值軌。")
+                       None if fv is not None else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。")
     with t3:
         _render_checks(cl.deposit_checks(fd),
                        "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
-                       None if fd is not None else "這檔不在 500 大定存因子表，無法體檢定存軌。")
+                       None if fd is not None else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。")
     _disclaimer()
 
 
