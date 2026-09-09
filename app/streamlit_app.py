@@ -655,7 +655,8 @@ def _factor_row(track: str, code: str) -> dict | None:
     return hit.iloc[0].to_dict() if not hit.empty else None
 
 
-def _render_checks(rows: list[dict], note: str, missing: str | None) -> None:
+def _render_checks(rows: list[dict], note: str, missing: str | None = None,
+                   disclaimer: str | None = None) -> None:
     st.caption(note)
     if missing:
         st.info(missing)
@@ -664,6 +665,8 @@ def _render_checks(rows: list[dict], note: str, missing: str | None) -> None:
         st.info("這檔缺足夠資料算這一軌。")
         return
     st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    if disclaimer:
+        st.caption(disclaimer)
 
 
 def _checklist_page() -> None:
@@ -700,9 +703,10 @@ def _checklist_page() -> None:
     with t1:
         _render_checks(cl.swing_checks(d),
                        "長波段候選池判準（CANSLIM + Minervini）。趨勢模板只做 7 條，"
-                       "不含相對強弱 RS（需全市場橫斷面）。", SWING_DISCLAIMER,
+                       "不含相對強弱 RS（需全市場橫斷面）。",
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢長波段軌。"
-                                if px_fin_empty else None))
+                                if px_fin_empty else None),
+                       disclaimer=SWING_DISCLAIMER)
     with t2:
         _render_checks(cl.value_checks(fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
