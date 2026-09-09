@@ -189,9 +189,9 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     return _style(fig, f"{name} 本益比河流圖", 440)
 
 
-def roe_trend(qf: pd.DataFrame, name: str) -> go.Figure:
+def roe_trend(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure:
     """ROE / ROA（TTM，%）逐季——價值軌「獲利品質」的走勢版（三率圖沒有 ROE）。"""
-    d = qf.tail(24)
+    d = qf.tail(quarters)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=d["period_end"], y=d["roe"] * 100, name="ROE(TTM)",
                              line=dict(width=2)))
@@ -201,9 +201,9 @@ def roe_trend(qf: pd.DataFrame, name: str) -> go.Figure:
     return _style(fig, f"{name} ROE / ROA（%，TTM）", 340)
 
 
-def balance_health(qf: pd.DataFrame, name: str) -> go.Figure:
+def balance_health(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure:
     """負債比（左軸 %）+ 流動比（右軸，倍）逐季——價值/定存軌「財務安全」的走勢版。"""
-    d = qf.tail(24)
+    d = qf.tail(quarters)
     fig = go.Figure([
         go.Scatter(x=d["period_end"], y=d["debt_ratio"] * 100, name="負債比 %",
                    line=dict(width=2, color="#d69f57")),
