@@ -189,6 +189,46 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     return _style(fig, f"{name} 本益比河流圖", 440)
 
 
+def roe_trend(qf: pd.DataFrame, name: str) -> go.Figure:
+    """ROE / ROA（TTM，%）逐季——價值軌「獲利品質」的走勢版（三率圖沒有 ROE）。"""
+    d = qf.tail(24)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=d["period_end"], y=d["roe"] * 100, name="ROE(TTM)",
+                             line=dict(width=2)))
+    if "roa" in d.columns:
+        fig.add_trace(go.Scatter(x=d["period_end"], y=d["roa"] * 100, name="ROA(TTM)",
+                                 line=dict(width=1.4)))
+    return _style(fig, f"{name} ROE / ROA（%，TTM）", 340)
+
+
+def balance_health(qf: pd.DataFrame, name: str) -> go.Figure:
+    """負債比（左軸 %）+ 流動比（右軸，倍）逐季——價值/定存軌「財務安全」的走勢版。"""
+    d = qf.tail(24)
+    fig = go.Figure([
+        go.Scatter(x=d["period_end"], y=d["debt_ratio"] * 100, name="負債比 %",
+                   line=dict(width=2, color="#d69f57")),
+        go.Scatter(x=d["period_end"], y=d["current_ratio"], name="流動比（倍）", yaxis="y2",
+                   line=dict(width=1.6, color="#68b784")),
+    ])
+    fig.update_layout(yaxis=dict(ticksuffix="%"),
+                      yaxis2=dict(overlaying="y", side="right", showgrid=False))
+    return _style(fig, f"{name} 負債比 / 流動比", 340)
+
+
+def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
+    """現金殖利率走勢（%）——定存軌用；per.parquet 的 dividend_yield 已是百分比單位。"""
+    d = per.copy().sort_values("date")
+    d = d[pd.to_numeric(d["dividend_yield"], errors="coerce") > 0]
+    if d.empty:
+        return _style(go.Figure(), f"{name} 現金殖利率走勢（無資料）", 320)
+    fig = go.Figure([go.Scatter(x=d["date"], y=d["dividend_yield"], name="現金殖利率",
+                                line=dict(width=2, color="#68b784"))])
+    fig.update_layout(yaxis=dict(ticksuffix="%"))
+    if start is not None:
+        fig.update_xaxes(range=[pd.Timestamp(start), pd.to_datetime(d["date"]).max()])
+    return _style(fig, f"{name} 現金殖利率走勢（%）", 320)
+
+
 F_LABELS = {
     "f_roa": "ROA 為正", "f_ocf": "營運現金流為正", "f_droa": "ROA 較去年提升",
     "f_accrual": "營運現金流 > 淨利", "f_leverage": "長期負債比未升高",
