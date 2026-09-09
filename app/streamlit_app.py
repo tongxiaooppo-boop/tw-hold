@@ -526,6 +526,24 @@ def _qf_display(df: pd.DataFrame):
     return d.style.format(subset=money_k, formatter="{:,.0f}", na_rep="—")
 
 
+def _stock_input(form_key: str, submit_label: str) -> str:
+    """個股查詢 / 三軌體檢共用同一個 session key `_stock_code`——切頁查的是同一支。"""
+    with st.form(form_key, border=False):
+        c1, c2 = st.columns([5, 1])
+        c1.text_input("代號", key="_stock_code", placeholder="2330",
+                      label_visibility="collapsed")
+        c2.form_submit_button(submit_label, use_container_width=True)
+    return st.session_state.get("_stock_code", "").strip()
+
+
+def _peer_link(target_nav: str, label: str) -> None:
+    """跳到另一頁看同一支（不必回表頭切分頁）。用非 widget 的 `_nav_goto`
+    暫存，`main()` 在建 radio 前才寫入 `_nav`——避免「widget 建立後才改 key」。"""
+    if st.button(label, key=f"_peer_{target_nav}", use_container_width=True):
+        st.session_state["_nav_goto"] = target_nav
+        st.rerun()
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     _disclaimer()
@@ -533,16 +551,11 @@ def _stock_page() -> None:
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
                "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
     st.markdown("**股票代號**")
-    with st.form("stock_query", border=False):
-        fc1, fc2 = st.columns([5, 1])
-        _in = fc1.text_input("代號", placeholder="2330", label_visibility="collapsed")
-        _go = fc2.form_submit_button("查詢", use_container_width=True)
-    if _go and _in.strip():
-        st.session_state["_stock_code"] = _in.strip()
-    code = st.session_state.get("_stock_code", "")
+    code = _stock_input("stock_query", "查詢")
     if not code:
         _disclaimer()
         return
+    _peer_link("三軌體檢", f"🔬 用三軌判準體檢 {code} →")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -660,14 +673,11 @@ def _checklist_page() -> None:
     st.subheader("三軌體檢")
     st.caption("同一檔股票，分別用「長波段 / 價值 / 定存」三套判準逐條攤開。"
                "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。")
-    _in = st.text_input("股票代號", key="_cl_in",
-                        value=st.session_state.get("_stock_code", ""))
-    if st.button("體檢", key="_cl_go") and _in.strip():
-        st.session_state["_stock_code"] = _in.strip()
-    code = st.session_state.get("_stock_code", "")
+    code = _stock_input("cl_query", "體檢")
     if not code:
         _disclaimer()
         return
+    _peer_link("個股查詢", f"📈 看 {code} 的圖表 →")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -722,6 +732,9 @@ def main() -> None:
     st.set_page_config(page_title=APP_NAME, layout="wide")
     _inject_css()
     _route()
+    goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
+    if goto in NAV:
+        st.session_state["_nav"] = goto
     st.title(APP_NAME)
     st.caption("長波段 / 價值 / 定存三清單 + 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))

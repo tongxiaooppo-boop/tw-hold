@@ -40,6 +40,19 @@ def test_三軌體檢分頁_不輸入代號不炸():
     assert "三軌體檢" in " ".join(h.value for h in at.subheader)
 
 
+def test_兩頁共用代號且可頁內切換():
+    at = AppTest.from_file(REPO_APP, default_timeout=30)
+    at.session_state["_stock_code"] = "2330"
+    at.session_state["_nav"] = "個股查詢"
+    at.run()
+    assert not at.exception
+    # 個股查詢頁應有「→ 三軌體檢」的跳轉鈕；按下去切到三軌體檢，代號不變
+    at.button(key="_peer_三軌體檢").click().run()
+    assert at.session_state["_nav"] == "三軌體檢"
+    assert at.session_state["_stock_code"] == "2330"
+    assert "三軌體檢" in " ".join(h.value for h in at.subheader)
+
+
 def test_代號連結指向個股查詢():
     at = _run()
     md = " ".join(m.value for m in at.markdown)
