@@ -46,8 +46,9 @@ def test_多軌體檢_帶代號_四個分頁都渲染不炸():
     at.session_state["_stock_code"] = "2330"
     at.run()
     assert not at.exception
-    # 三軌至少要有一張檢核表（dataframe）或明確的 info，不能整頁掛
-    assert at.dataframe or any("因子表" in i.value or "資料" in i.value for i in at.info)
+    # 至少要渲染出一張檢核清單（thc-cl HTML）或明確的 info，不能整頁掛
+    assert any("thc-cl-row" in m.value for m in at.markdown) or \
+        any("因子表" in i.value or "資料" in i.value for i in at.info)
 
 
 def test_兩頁共用代號且可頁內切換():

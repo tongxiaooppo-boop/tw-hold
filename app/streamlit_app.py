@@ -185,6 +185,32 @@ _CSS = """
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+/* 多軌體檢：檢核清單。桌面＝四欄類表格（不動）；手機＝堆疊，狀態永遠靠右可見 */
+.thc-cl{border:1px solid var(--thc-line);border-radius:8px;overflow:hidden;margin:.15rem 0 .1rem;}
+.thc-cl-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,2fr) minmax(0,.9fr) minmax(0,.85fr);
+  gap:.2rem .7rem;padding:.5rem .85rem;border-top:1px solid var(--thc-line);
+  font-size:.88rem;align-items:baseline;}
+.thc-cl-row:first-child{border-top:none;}
+.thc-cl-hd{font-family:var(--thc-mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--thc-faint);font-weight:600;background:var(--thc-surface2);}
+.thc-cl-item{color:var(--thc-ink);}
+.thc-cl-gate{color:var(--thc-soft);}
+.thc-cl-cur{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+.thc-cl-st{font-weight:600;white-space:nowrap;}
+.thc-cl-st.good{color:var(--thc-good);}
+.thc-cl-st.bad{color:#e57373;}
+.thc-cl-st.warn{color:var(--thc-warn);}
+.thc-cl-st.na{color:var(--thc-faint);}
+@media (max-width:640px){
+  .thc-cl-hd{display:none;}
+  .thc-cl-row{grid-template-columns:1fr auto;column-gap:.6rem;row-gap:.15rem;padding:.6rem .8rem;}
+  .thc-cl-item{grid-column:1;grid-row:1;font-weight:600;}
+  .thc-cl-st{grid-column:2;grid-row:1;text-align:right;}
+  .thc-cl-cur{grid-column:1/-1;font-size:.82rem;color:var(--thc-soft);}
+  .thc-cl-gate{grid-column:1/-1;font-size:.78rem;color:var(--thc-faint);}
+  .thc-cl-cur::before{content:"現值　";color:var(--thc-faint);}
+  .thc-cl-gate::before{content:"門檻　";color:var(--thc-faint);}
+}
 /* 頁尾「回到頂部」——樣式對齊隔壁的 st.button（切換分頁那顆） */
 a.thc-toplink{display:block;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
   border:1px solid var(--thc-line);color:var(--thc-soft)!important;
@@ -724,29 +750,28 @@ def _render_checks(rows: list[dict], note: str, missing: str | None = None,
     if s["風險命中"]:
         st.markdown("⚠️ **風險命中**：" + " · ".join(s["風險命中"]))
 
-    def _colour(col):
-        out = []
-        for v in map(str, col):
-            out.append("color:#68b784;font-weight:600" if v.startswith("✅")
-                       else "color:#e57373;font-weight:600" if v.startswith("❌")
-                       else "color:#d69f57" if v.startswith("⚠️")
-                       else "color:#8a8f88")
-        return out
+    def _st_cls(v: str) -> str:
+        v = str(v)
+        return ("good" if v.startswith("✅") else "bad" if v.startswith("❌")
+                else "warn" if v.startswith("⚠️") else "na")
 
     df = pd.DataFrame(rows)
     for grp in df["組"].drop_duplicates():
-        sub = df[df["組"] == grp].drop(columns="組").reset_index(drop=True)
+        sub = df[df["組"] == grp]
         st.markdown(f"**{grp}**")
-        st.dataframe(
-            sub.style.apply(_colour, subset=["狀態"]),
-            hide_index=True, use_container_width=True,
-            height=(len(sub) + 1) * 35 + 3,      # 全部攤開，不要內捲捲軸
-            column_config={
-                "項目": st.column_config.TextColumn(width="medium"),
-                "門檻": st.column_config.TextColumn(width="large"),
-                "現值": st.column_config.TextColumn(width="small"),
-                "狀態": st.column_config.TextColumn(width="small"),
-            })
+        html = ['<div class="thc-cl">',
+                '<div class="thc-cl-row thc-cl-hd"><span>項目</span><span>門檻</span>'
+                '<span>現值</span><span>狀態</span></div>']
+        for _, r in sub.iterrows():
+            html.append(
+                '<div class="thc-cl-row">'
+                f'<span class="thc-cl-item">{_esc(r["項目"])}</span>'
+                f'<span class="thc-cl-gate">{_esc(r["門檻"])}</span>'
+                f'<span class="thc-cl-cur">{_esc(r["現值"])}</span>'
+                f'<span class="thc-cl-st {_st_cls(r["狀態"])}">{_esc(r["狀態"])}</span>'
+                '</div>')
+        html.append('</div>')
+        st.markdown("".join(html), unsafe_allow_html=True)
     if disclaimer:
         st.caption(disclaimer)
 
