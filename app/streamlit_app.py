@@ -185,12 +185,11 @@ _CSS = """
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
-/* 頁尾導覽：回到頂部 + 切到另一頁，兩顆同一款鈕 */
-.thc-footer{display:flex;gap:.6rem;margin:.4rem 0 1rem;}
-.thc-footer a{flex:1;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
+/* 頁尾「回到頂部」——樣式對齊隔壁的 st.button（切換分頁那顆） */
+a.thc-toplink{display:block;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
   border:1px solid var(--thc-line);color:var(--thc-soft)!important;
-  text-decoration:none!important;font-size:.92rem;background:var(--thc-card,transparent);}
-.thc-footer a:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;}
+  text-decoration:none!important;font-size:.9rem;line-height:1.6;}
+a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;}
 /* Streamlit 元件微調——深底下的線 / 字提亮 */
 [data-testid="stExpander"] details{border-color:var(--thc-line)!important;}
 .stCaption,[data-testid="stCaptionContainer"]{color:var(--thc-soft)!important;}
@@ -569,15 +568,16 @@ def _stock_input(form_key: str, submit_label: str) -> str:
 
 
 def _page_footer(other_nav: str, other_label: str) -> None:
-    """個股查詢 / 多軌體檢 共用的頁尾：回到頂部 + 切到另一頁（同一支）。
-    兩顆都是 `<a target="_self">`（同一款鈕）——`#top` 捲回頁首標題（`anchor='top'`）、
-    `?goto=` 由 `_route()` 接手切分頁。"""
+    """個股查詢 / 多軌體檢 共用的頁尾。
+    - 回到頂部：`<a href="#top">`（唯一在 Streamlit 可靠的捲動方式，連頁首 anchor='top'）。
+    - 切到另一頁：真的 `st.button` —— 功能就等於表頭那顆 radio（`_nav_goto` 由 main()
+      在建 radio *前* 寫入 `_nav`，避開「widget 建立後不能改 key」）。"""
     st.divider()
-    st.markdown(
-        '<div class="thc-footer">'
-        '<a href="#top" target="_self">⬆ 回到頂部</a>'
-        f'<a href="?goto={_esc(other_nav)}" target="_self">{_esc(other_label)}</a>'
-        '</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    c1.markdown('<a href="#top" class="thc-toplink">⬆ 回到頂部</a>', unsafe_allow_html=True)
+    if c2.button(other_label, key="_ft_goto", use_container_width=True):
+        st.session_state["_nav_goto"] = other_nav
+        st.rerun()
 
 
 def _stock_page() -> None:
@@ -852,17 +852,13 @@ NAV = ["價值", "定存", "長波段", "個股查詢", "多軌體檢"]
 
 
 def _route() -> None:
-    """`?code=XXXX` → 預填個股查詢 + 切分頁；`?goto=分頁` → 頁尾「切到另一頁」。
-    處理完就把 query param 清掉，否則每次 rerun 都被鎖住。"""
+    """卡片上的代號連結 `?code=XXXX` → 預填個股查詢 + 切分頁。
+    處理完就把 query param 清掉，否則每次 rerun 都被鎖在個股查詢分頁。"""
     code = (st.query_params.get("code") or "").strip()
     if code:
         st.session_state["_stock_code"] = code
         st.session_state["_nav"] = "個股查詢"
         del st.query_params["code"]
-    goto = (st.query_params.get("goto") or "").strip()
-    if goto:
-        st.session_state["_nav_goto"] = goto     # main() 在建 radio 前寫入 _nav
-        del st.query_params["goto"]
 
 
 def main() -> None:
