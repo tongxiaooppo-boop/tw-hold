@@ -443,6 +443,11 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
 - 個股出場推播（Discord/Slack webhook）
 - 估值：產業相對 PE（現在是自身歷史）
 - 季換股改月換股 / 事件觸發換股
-- 個股頁 AI 敘事層整合
+- 個股頁 AI 敘事層整合（→ `docs/AI_LAYER.md`）
+- **個股查詢 / 多軌體檢：可設定 500 外的擴充清單（~10 檔）** —— 避免被
+  「因子表 ~1000 檔」鎖死。作法：一份使用者維護的 `extra_tickers`（config / repo
+  檔），rebuild.yml 把這幾檔一起算進 `factors_*.parquet` + bundle 需要的切片。
+  🔴 **仍不做即時查詢**——不在「因子表 + 擴充 10 檔」名單內的股票一律不抓單股資料
+  （守 PRD §M4 雲端唯讀 + FinMind 額度）。
 - ~~`tw-hold-data` 若嫌公開不妥 → 改私有 + PAT~~ → **v2.1 已定案走私有 Release + PAT**
 - U1b 併回 `daily.yml`（G-5 過關、真錢上線之後，省掉一次重複抓取）

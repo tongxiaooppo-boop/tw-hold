@@ -190,3 +190,80 @@
 | **v2-b** | 盤前 briefing（§5.3）：美國收盤 + 法人/產業流向 + 對清單影響。AI 檢索、重度免責。 |
 | **v2-c** | MCP server（§7），或個股頁敘事段落（§5.2，看 v2-a 的克制程度）。 |
 | **不做** | AI 選股、AI 分數、外部訊息進規則、盤中推播。 |
+
+---
+
+## 11. 2026-09-09 討論定調（多軌體檢上線後）
+
+> **優先序：主架構先做穩、讓朋友測；AI 層不急。** 下面是想清楚了、日後照做的方向。
+
+### 11.1 證據包 = 多軌體檢的輸出（不用另建）
+
+`app/checklist.py` 的 `{short,swing,value,deposit}_checks(d)` + `summarize()` 產出的
+「項目／門檻／現值／狀態」＋「未達門檻／待確認／風險命中」，**就是要餵給 AI 的東西**
+——剛好命中 §3.1「只看規則結果、不看原始財報」。
+
+- 抽 `checklist.evidence_packet(d, fv, fd) -> dict | markdown`：把四軌 rows + summaries
+  + `factors_*` 的 verdict / cheap_threshold / flags 組成一包。
+- **一次寫、三處用**：①「複製給 AI」的內容 ② app 內 AI 呼叫的 payload ③ 未來 MCP tool。
+
+### 11.2 AI 的最佳任務 = 失效條件匹配（不是情緒分數）
+
+情緒分數雜訊高、又會變成 de-facto 因子。真正有價值的問法：
+**「這幾則新聞，有沒有具體踩到某條判準的失效條件？逐條對應，沒有就說沒有。」**
+（多軌體檢的 `未達的門檻` / `風險命中` 摘要正好當對照清單。）
+
+固定三段 prompt：① 四軌結論講人話 ② 新聞逐條對失效條件 ③ 收在「什麼會翻盤」。
+
+### 11.3 AI 的存在理由 = 補「規則的時間差」
+
+規則是公告日遞延（PIT），可能還看著 Q2 財報。新聞 + 月營收快報是即時的。
+AI 的獨門價值＝橋接這個 lag（「規則建立在 Q2，但 9 月營收 + 這則新聞顯示 Q3 轉弱」）。
+
+### 11.4 引擎：三種形態，手動選（不靜默降級）
+
+一個 radio：`複製 / 用我的 API key / 本機 CLI`，用不到的灰掉 + 寫原因。哪個 AI 分析的要看得到。
+
+| 形態 | 說明 | 環境 |
+| :-- | :-- | :-- |
+| 複製給 AI | 顯示 `evidence_packet` + 新聞 + 三段問題，零依賴 | 都可 |
+| BYOK API key | 使用者貼 key，`st.session_state` only（§2 密鑰處理） | 雲端 + 本地 |
+| 本機 CLI headless | `claude -p` / `gemini` / `codex`，騎訂閱免費 | **僅 `LOCAL_ADVANCED`** |
+
+**BYOK 函式庫只要兩個**：
+- `openai` SDK（改 `base_url`）一次吃 **GPT + DeepSeek + Gemini**（Gemini 有 OpenAI 相容端點）
+- `anthropic` SDK 吃 Claude
+- DeepSeek 最便宜（`deepseek-chat`），設預設。
+
+**選模型 = 混合式**：貼 key 當下呼叫一次 list-models（同時當金鑰驗證）→ 過濾
+chat 能力 + 合理家族白名單 → **便宜的排最前標「推薦」**（haiku / flash / mini /
+deepseek-chat）→ list 失敗退回寫死 shortlist → 結果存 `session_state` 不重抓。
+四家都有 list models 端點（OpenAI 那份最吵、要用名稱前綴過濾）。
+
+**MCP server 另列**（§7）——不是「第 3 層」，是「乾脆不把 AI 放進 app」的替代路線。
+
+### 11.5 新聞：on-demand RSS，標題為主
+
+- **個股查詢頁（任意檔）**：點進去才即時抓 RSS（Google News 關鍵字 + 鉅亨 + MOPS 重大訊息），
+  **只顯示標題 + 連結**，`st.cache_data(ttl≈30min)` keyed by code，沒 AI 也能看。
+- **清單股（holdings + candidates ≈ 50–80 檔）**：CI 每日批次抓 + 情緒 → `data/derived/news.json`。
+- **盤前 briefing**：port `books` 的 `tw-stock-scanner-main/morning_brief.py`（隔夜美股 yfinance
+  + 隔夜新聞 RSS + Claude 逐則評論 + 行事曆，無引擎退化成純數據）。CI 批次、repo secret。
+- 參考框架：`tw-stock-scanner-main` 的 `fetch_news.py` / `analyze_news.py`（Haiku 批次
+  15 則/請求 + prompt caching）/ `llm.py` / `apikey.py`。**不要用 `me/news` 的 SnowNLP**（財經很不準）。
+
+### 11.6 落點：全放「個股查詢」（使用者要一站式）
+
+個股查詢：圖 → 最近新聞（標題列）→「AI 解說」按鈕（帶 `evidence_packet` + 新聞）。
+多軌體檢維持純判準深看，底部放同一顆 AI 按鈕（共用 `evidence_packet`）。兩頁已有互跳鍵。
+
+### 11.7 紅線（不變，再強調）
+
+- 傳給 AI 只有 `evidence_packet`（規則結果），**永不傳原始財報 df** → 不然它自己重算跟規則吵 = `me` 復活
+- 新聞情緒**不給數字、不上頁面欄位、不上卡片** → 只在 AI 散文和標題列
+- AI 輸出 display-only：不寫 `data/derived`、不回饋任何 checklist 狀態
+- prompt 是 explanation 格式；三段固定；換引擎不換口氣
+
+### 11.8 待確認
+
+- 使用者提到「之前幫忙做的 Gemini 選 key 模式」參考專案——**路徑未定，等使用者給**，再對齊 UI / 存 key 寫法。
