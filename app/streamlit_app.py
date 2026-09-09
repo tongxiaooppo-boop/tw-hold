@@ -760,44 +760,52 @@ def _checklist_page() -> None:
     nm = name or code
     st.markdown(f"### {code}{' ' + name if name and name != code else ''}")
     qf, px, per, div, rev, chp = (d["qf"], d["px"], d["per"], d["div"], d["rev"], d["chips"])
+    end = pd.to_datetime(px["date"]).max() if not px.empty else None
+
+    def _ago(days):
+        return end - pd.Timedelta(days=days) if end is not None else None
+
     t1, t2, t3 = st.tabs(["🟠 長波段", "🔵 價值", "🟢 定存"])
     with t1:
+        # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
         _render_checks(cl.swing_checks(d),
                        "長波段候選池判準（CANSLIM + Minervini）。趨勢模板只做 7 條，"
                        "不含相對強弱 RS（需全市場橫斷面）。",
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢長波段軌。"
                                 if px_fin_empty else None),
                        disclaimer=SWING_DISCLAIMER)
-        st.caption("——對應圖表——")
+        st.caption("——對應圖表（波段尺度：近 1 年）——")
         if not px.empty:
-            _chart(ch.kline, px, nm, None, ch._MA_SHORT)
+            _chart(ch.kline, px, nm, _ago(365), ch._MA_SHORT)
         if rev is not None and len(rev) >= 13:
-            _chart(ch.monthly_revenue, rev, nm)
+            _chart(ch.monthly_revenue, rev, nm, _ago(730))
         if chp is not None and not chp.empty:
-            _chart(ch.institutional_net, chp, nm)
+            _chart(ch.institutional_net, chp, nm, _ago(120))
     with t2:
+        # 價值是年度尺度 → 逐季圖看近 6 年、PE 河流看近 5 年
         _render_checks(cl.value_checks(fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
                        None if fv is not None else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。")
-        st.caption("——對應圖表——")
+        st.caption("——對應圖表（價值尺度：近 5～6 年）——")
         if not qf.empty:
             c1, c2 = st.columns(2)
-            _chart(ch.roe_trend, qf, nm, target=c1)
+            _chart(ch.roe_trend, qf, nm, 24, target=c1)
             _chart(ch.margins, qf, nm, target=c2)
         if not px.empty and not per.empty:
-            _chart(ch.pe_river, px, per, nm)
+            _chart(ch.pe_river, px, per, nm, _ago(1825))
     with t3:
+        # 定存看長期：股利連續性 10+ 年、殖利率 5 年分位、負債結構近 6 年
         _render_checks(cl.deposit_checks(fd),
                        "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
                        None if fd is not None else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。")
-        st.caption("——對應圖表——")
+        st.caption("——對應圖表（定存尺度：股利近 12 年、殖利率近 5 年）——")
         if not div.empty:
             _chart(ch.dividends_chart, div, nm)
         if not per.empty:
-            _chart(ch.yield_trend, per, nm)
+            _chart(ch.yield_trend, per, nm, _ago(1825))
         if not qf.empty:
-            _chart(ch.balance_health, qf, nm)
-    st.caption("完整圖表（K 線區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
+            _chart(ch.balance_health, qf, nm, 24)
+    st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     _disclaimer()
 
 
