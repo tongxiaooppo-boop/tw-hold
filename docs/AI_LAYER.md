@@ -230,17 +230,52 @@ AI 的獨門價值＝橋接這個 lag（「規則建立在 Q2，但 9 月營收 
 | BYOK API key | 使用者貼 key，`st.session_state` only（§2 密鑰處理） | 雲端 + 本地 |
 | 本機 CLI headless | `claude -p` / `gemini` / `codex`，騎訂閱免費 | **僅 `LOCAL_ADVANCED`** |
 
-**BYOK 函式庫只要兩個**：
-- `openai` SDK（改 `base_url`）一次吃 **GPT + DeepSeek + Gemini**（Gemini 有 OpenAI 相容端點）
-- `anthropic` SDK 吃 Claude
-- DeepSeek 最便宜（`deepseek-chat`），設預設。
+**🔴 不裝任何 SDK** —— `where` 專案（`d:\g\claude\where\where-ai.html`）證明純 HTTP
+就能打 GPT / Gemini / DeepSeek。`reference/llm.py` 用 `requests`（streamlit 已間接帶）
+或 `urllib`，**requirements.txt 維持乾淨**（pandas / pyarrow / streamlit / plotly，不加）。
 
-**選模型 = 混合式**：貼 key 當下呼叫一次 list-models（同時當金鑰驗證）→ 過濾
-chat 能力 + 合理家族白名單 → **便宜的排最前標「推薦」**（haiku / flash / mini /
-deepseek-chat）→ list 失敗退回寫死 shortlist → 結果存 `session_state` 不重抓。
-四家都有 list models 端點（OpenAI 那份最吵、要用名稱前綴過濾）。
+**三條 call path**（不是三個 lib）：
+| path | 端點 | 認證 header | 吃哪家 |
+| :-- | :-- | :-- | :-- |
+| gemini native | `POST {ep}/v1beta/models/{model}:generateContent` | `x-goog-api-key` | Gemini |
+| openai-compat | `POST {ep}/chat/completions` | `Authorization: Bearer` | GPT + DeepSeek |
+| anthropic | `POST {ep}/v1/messages` | `x-api-key` + `anthropic-version` | Claude（`where` 沒有，tw-hold 要加——自家產品） |
+
+**設定結構**（抄 `where`，key 存 `st.session_state` 取代 localStorage）：
+```
+{ vendor: 'gemini'|'openai'|'deepseek'|'anthropic'|'none',
+  providers: { <每家各自>: {key, model, endpoint} } }        # 換家不用重貼
+```
+`vendor` = 現在用哪家；其餘有 key 的 → `aiChain()` 自動備援，`callAIChain()` 回傳
+`{text, vendor, switched}`（**知道是誰答的**，§11.4 要「不靜默降級」）。
+
+**選模型 = `where` 的 lazy 混合式**：
+- **白名單家（GPT / DeepSeek / Claude）**：寫死 2–3 個選項、便宜的當預設、下拉；
+  `allowedModel()` 強制只能選名單內（自由輸入藏「進階設定」）。
+- **Gemini（無白名單）**：`model:''` → 第一次用才 `GET /v1beta/models?pageSize=200`
+  → 過濾 `supportedGenerationMethods` 含 `generateContent` → `pickGeminiModel()` 打分挑：
+  版本號 ×4、`flash` +100、`pro` +40、`preview/exp` −40、`vision/thinking` −20，
+  skip `embedding|imagen|veo|tts|gemma|aqa|live|learnlm` → 記起來（`rememberModel`）。
+- **打分挑便宜的邏輯套用到所有家**（flash / mini / haiku / deepseek-chat 浮最前）。
+- 手動「🔎 查我的金鑰有哪些模型」按鈕（顯示清單 + 自動挑）。
+
+**自我修復 + 韌性**（都抄 `where`）：
+- 模型 404 / deprecated → 重列清單、採用 API 建議型號（**要真的在清單上才信**）、
+  否則重挑、`rememberModel`、重試一次。
+- `dropUnsupportedParam`：400 提到 `temperature` / `max_tokens` / `response_format`
+  → 拿掉那參數重試（新模型常拒收舊參數）。`max_tokens` → `max_completion_tokens`。
+- `aiFetch` = fetch + 45s timeout；`extractJson` 剝 ```` ``` ```` 圍欄。
+- `httpErrorMessage`：400/401/403/404/429/500 → 白話中文 + API 原訊息片段
+  （`where` 有現成對照表，直接 port）。
+- gemini 2.5-flash 加 `generationConfig.thinkingConfig.thinkingBudget: 0`（關思考 token，省）。
+- 清除鈕：「🗑️ 清除全部金鑰」+ 誠實提醒「key 在平台上還是有效，真要停用去後台刪」。
 
 **MCP server 另列**（§7）——不是「第 3 層」，是「乾脆不把 AI 放進 app」的替代路線。
+
+**參考實作**：`d:\g\claude\where\where-ai.html`（L1996–2560）——
+`AI_DEFAULTS` / `loadCfg` / `providerCfg` / `listGeminiModels` / `pickGeminiModel` /
+`callGemini` / `callOpenAICompatible` / `callAIChain` / `httpErrorMessage` / `renderSetup`。
+整套多供應商 BYOK + lazy 選模型 + 自我修復，**零 SDK**。
 
 ### 11.5 新聞：on-demand RSS，標題為主
 
@@ -264,6 +299,9 @@ deepseek-chat）→ list 失敗退回寫死 shortlist → 結果存 `session_sta
 - AI 輸出 display-only：不寫 `data/derived`、不回饋任何 checklist 狀態
 - prompt 是 explanation 格式；三段固定；換引擎不換口氣
 
-### 11.8 待確認
+### 11.8 待確認 → **已解**
+
+~~使用者提到「之前幫忙做的 Gemini 選 key 模式」參考專案~~ → 是 `d:\g\claude\where\`
+（`where-ai.html`，長輩用的物品定位 app，跟股票無關）。做法已吸收進 §11.4。
 
 - 使用者提到「之前幫忙做的 Gemini 選 key 模式」參考專案——**路徑未定，等使用者給**，再對齊 UI / 存 key 寫法。
