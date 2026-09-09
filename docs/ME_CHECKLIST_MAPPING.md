@@ -11,6 +11,11 @@
 > - 測試：`tests/test_checklist.py`（5）+ `test_app_smoke` 加 1，共 79 passed。
 > - 利息保障倍數：如定案，整條未出現。
 > - **不加總、不顯示 N/M 通過**（跟 F-Score 頁一致）——只有表格。
+> - ⚠️ **因子表靠 Release**：`factors_{value,deposit}.parquet` 不進版控 →
+>   `rebuild.yml` 推到 `derived-latest` release，app `_ensure_derived_factors()` 執行期拉。
+>   **首次要手動跑一次 `rebuild.yml`（workflow_dispatch）建出 release**，否則 Cloud 上
+>   價值/定存軌一律「不在因子表」。因子表 ~1019 檔 ≈ bundle 財報涵蓋數，長波段（吃 bundle）
+>   與價值/定存（吃因子表）宇宙其實一致。
 
 > 目的：把 HANDOFF_2026-09-08 §4 那條「個股頁三軌門檻檢視」改用舊專案
 > `books/claude/me/taiwan-stock-analyzer-v3` 的子項設計去做，但**不評分**——

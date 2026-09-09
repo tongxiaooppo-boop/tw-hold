@@ -58,6 +58,19 @@ jobs:
       - name: 算因子 + 三清單
         run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
+      # factors_*.parquet 刻意不進版控（每天一顆 blob）→ 推到 derived-latest release，
+      # 讓 Streamlit Cloud 的「三軌體檢」頁執行期拉得到（tw-hold 是公開 repo，免 PAT）。
+      - name: 因子表 → derived-latest release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view derived-latest >/dev/null 2>&1 \
+            || gh release create derived-latest --title "derived factors (latest)" \
+                 --notes "build_lists.py 產出的逐檔因子表；rebuild.yml 每次覆蓋。app 三軌體檢頁執行期讀。"
+          gh release upload derived-latest --clobber \
+            data/derived/factors_value.parquet data/derived/factors_deposit.parquet
+
       - name: 自動解不了的分割才告警
         if: always()
         env:
