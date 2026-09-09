@@ -781,7 +781,7 @@ def _checklist_page() -> None:
     import checklist as cl
 
     st.subheader("多軌體檢", anchor="top")
-    st.caption("同一檔股票，分別用「短線 / 長波段 / 價值 / 定存」四套判準逐條攤開。"
+    st.caption("同一檔股票，分別用「短線 / 波段 / 價值 / 定存」四套判準逐條攤開。"
                "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。"
                "短線軌零回測、只是把技術面條件列出來（tw-hold 是長期工具，短線用 tw-swing）。")
     code = _stock_input("cl_query", "體檢")
@@ -815,7 +815,7 @@ def _checklist_page() -> None:
     def _ago(days):
         return end - pd.Timedelta(days=days) if end is not None else None
 
-    t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 長波段", "🔵 價值", "🟢 定存"])
+    t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 波段", "🔵 價值", "🟢 定存"])
     with t0:
         # 短線是日尺度 → 圖只看近 3 個月
         _render_checks(cl.short_checks(d),
@@ -831,9 +831,9 @@ def _checklist_page() -> None:
     with t1:
         # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
         _render_checks(cl.swing_checks(d),
-                       "長波段候選池判準（CANSLIM + Minervini）。趨勢模板只做 7 條，"
+                       "門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。趨勢模板只做 7 條，"
                        "不含相對強弱 RS（需全市場橫斷面）。",
-                       missing=("這檔在 bundle 沒有價量／財報資料，無法體檢長波段軌。"
+                       missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
                                 if px_fin_empty else None),
                        disclaimer=SWING_DISCLAIMER)
         st.caption("——對應圖表（波段尺度：近 1 年）——")
