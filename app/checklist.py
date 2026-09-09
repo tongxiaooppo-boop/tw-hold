@@ -65,7 +65,8 @@ def summarize(rows: list[dict]) -> dict:
     """檢核列 → 白話「亮點 / 缺口 / 待確認」。**不加總分、不給 verdict**——
     只是把成立/未達/無資料的項目名挑出來，讓人一眼看到卡在哪。"""
     good = [r["項目"] for r in rows if r["狀態"].startswith("✅")]
-    bad = [r["項目"] for r in rows if r["狀態"].startswith("❌")]
+    bad = [r["項目"] for r in rows
+           if r["狀態"].startswith("❌") and not r["項目"].endswith("（參考）")]
     na = [r["項目"] for r in rows if r["狀態"] == _NA]        # 「— 無資料」；風險列的裸「—」不算
     hit = [r["項目"] for r in rows if r["狀態"].startswith("⚠️")]
     return {"亮點": good, "缺口": bad, "待確認": na, "風險命中": hit}
@@ -79,6 +80,8 @@ def value_checks(r) -> list[dict]:
         return []
     fin = is_finance(_get(r, "industry"))
     close, cheap = _get(r, "close"), _get(r, "cheap_threshold")
+    ceiling, upside = _get(r, "valuation_ceiling"), _get(r, "upside_pct")
+    peak, eps_susp = _get(r, "cyclical_peak_flag"), _get(r, "eps_basis_suspect")
     roe, gm, fs = _get(r, "roe"), _get(r, "gross_margin"), _get(r, "f_score")
     ttm_eps, ryoy = _get(r, "ttm_eps"), _get(r, "rev_yoy")
     debt, cr = _get(r, "debt_ratio"), _get(r, "current_ratio")
@@ -86,9 +89,20 @@ def value_checks(r) -> list[dict]:
     rows: list[dict] = []
 
     g = _G(rows, "估值")
-    g("現價有安全邊際", "現價 ≤ 便宜門檻（normalized EPS × PE P30）",
-      f"現價 {_f(close)} / 門檻 {_f(cheap)}",
+    # 主門檻用「估值上緣」——這才是價值清單判 verdict「無安全邊際」的實際觸發線（§6.3）。
+    g("現價未過估值上緣", "現價 ≤ 估值上緣（normalized EPS × PE 均值/P70）",
+      f"現價 {_f(close)} / 上緣 {_f(ceiling)}（空間 {_pct(upside)}）",
+      None if close is None or ceiling is None else close <= ceiling)
+    # 便宜門檻是「深度價值進場價」（5 年均 EPS × PE 三成分位）——結構性成長股常年摸不到，
+    # ❌ 是常態、不是警訊；放這裡當參考，不當主判準。
+    g("現價落在便宜區（參考）", "現價 ≤ 便宜門檻（= 5 年均 EPS × PE P30；成長股通常摸不到）",
+      f"門檻 {_f(cheap)}",
       None if close is None or cheap is None else close <= cheap)
+    if peak:
+        g("景氣循環高峰旗標", "命中 → 現價 EPS 可能在循環高點，便宜門檻改用均值 EPS 才保守",
+          "命中", None, raw="⚠️ 命中")
+    if eps_susp:
+        g("EPS 基準存疑", "命中 → 近期 EPS 口徑異常，估值數字打折看", "命中", None, raw="⚠️ 命中")
 
     g = _G(rows, "獲利品質")
     g("ROE（TTM）≥ 10%", "≥ 10%", _pct(roe), None if roe is None else roe >= 0.10)
