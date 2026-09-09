@@ -1,4 +1,4 @@
-"""三軌體檢——把「長波段 / 價值 / 定存」三套判準逐條攤開成檢核表。
+"""多軌體檢——把「短線 / 長波段 / 價值 / 定存」四套判準逐條攤開成檢核表。
 
 **只打勾、不加總、不加權、不給 verdict / 買價 / 排名**（PRD §4.1、§5.1）。
 骨架回收自舊專案 `books/claude/me/taiwan-stock-analyzer-v3` 的六子項設計，
@@ -315,4 +315,116 @@ def swing_checks(d: dict) -> list[dict]:
         if pd.notna(rsi6):
             g("短線超賣（可能是機會或下跌中）", "RSI(6) < 30", _f(rsi6, 0),
               None, raw="⚠️ 命中" if rsi6 < 30 else "—")
+    return rows
+
+
+# ─────────────────────────────  短線軌  ─────────────────────────────
+# tw-hold 是長期持有工具，短線是 tw-swing 的守備範圍。這一軌只把「日線技術面
+# 條件」逐條攤開讓人自己看，**零回測支撐**，措辭要最保守（見 SHORT_DISCLAIMER）。
+# 融資融券變化：bundle 沒這份資料 → 相關條件直接不出現（同利息保障倍數處理）。
+
+def _macd(close: pd.Series):
+    ema12 = close.ewm(span=12, adjust=False).mean()
+    ema26 = close.ewm(span=26, adjust=False).mean()
+    dif = ema12 - ema26
+    dea = dif.ewm(span=9, adjust=False).mean()
+    return dif, dea
+
+
+def _ccp(close: pd.Series, vol: pd.Series, lookback: int = 60, bins: int = 30):
+    """近 `lookback` 日成交量密集區價（Chip Concentration Price）——多日收盤 × 量的
+    直方圖峰值，取代單日盤中 POC。"""
+    c, v = close.tail(lookback), vol.tail(lookback)
+    if len(c) < 10 or c.max() == c.min():
+        return None
+    edges = np.linspace(c.min(), c.max(), bins + 1)
+    idx = np.clip(np.digitize(c, edges) - 1, 0, bins - 1)
+    w = np.zeros(bins)
+    for i, vv in zip(idx, v):
+        w[i] += vv if pd.notna(vv) else 0
+    peak = int(np.argmax(w))
+    return float((edges[peak] + edges[peak + 1]) / 2)
+
+
+def short_checks(d: dict) -> list[dict]:
+    """`d`：`_stock_data()` 的輸出。純日線技術面，**不評分、不給買賣點**。"""
+    px, chp = d.get("px"), d.get("chips")
+    rows: list[dict] = []
+    if px is None or px.empty:
+        _G(rows, "趨勢結構")("日線技術面", "需 bundle 有價量資料", "資料不足", None)
+        return rows
+
+    p = px.sort_values("date").reset_index(drop=True)
+    c = p["close"].astype(float)
+    vol = p["volume"].astype(float) if "volume" in p.columns else pd.Series(np.nan, index=p.index)
+    last = c.iloc[-1]
+    ma5, ma10, ma20 = (c.rolling(w).mean().iloc[-1] for w in (5, 10, 20))
+    up = c.diff().gt(0)
+    dn = c.diff().lt(0)
+    consec_up = int(up.tail(10).iloc[::-1].cumprod().sum())   # 從最後一天往回數連漲
+    consec_dn = int(dn.tail(10).iloc[::-1].cumprod().sum())
+    hi10 = c.iloc[-11:-1].max() if len(c) >= 11 else np.nan
+    lo10 = c.iloc[-11:-1].min() if len(c) >= 11 else np.nan
+
+    g = _G(rows, "趨勢結構")
+    g("收盤站上 5 日均線", "收盤 > MA5", f"{_f(last)} / MA5 {_f(ma5)}",
+      None if pd.isna(ma5) else last > ma5)
+    g("收盤站上 20 日均線", "收盤 > MA20", f"{_f(last)} / MA20 {_f(ma20)}",
+      None if pd.isna(ma20) else last > ma20)
+    g("均線多頭排列", "MA5 > MA10 > MA20", f"{_f(ma5)} / {_f(ma10)} / {_f(ma20)}",
+      None if any(pd.isna(x) for x in (ma5, ma10, ma20)) else ma5 > ma10 > ma20)
+
+    g = _G(rows, "動能")
+    rsi6, rsi14 = _rsi(c, 6), _rsi(c, 14)
+    g("RSI(14) 偏多未過熱", "50 ≤ RSI(14) ≤ 80", _f(rsi14, 0),
+      None if pd.isna(rsi14) else 50 <= rsi14 <= 80)
+    dif, dea = _macd(c)
+    g("MACD 動能翻正", "DIF > DEA（快線在慢線之上）",
+      f"DIF {_f(dif.iloc[-1])} / DEA {_f(dea.iloc[-1])}",
+      None if pd.isna(dif.iloc[-1]) else dif.iloc[-1] > dea.iloc[-1])
+    bias20 = (last - ma20) / ma20 if pd.notna(ma20) and ma20 else None
+    g("月線乖離未過大", "|收盤 − MA20| / MA20 ≤ 15%", _pct(bias20),
+      None if bias20 is None else abs(bias20) <= 0.15)
+
+    g = _G(rows, "量能")
+    v_now = vol.iloc[-1]
+    v_ma5, v_ma20 = vol.rolling(5).mean().iloc[-1], vol.rolling(20).mean().iloc[-1]
+    g("今日放量", "今日量 > 20 日均量",
+      f"{_f(v_now / 1000, 0)} / 均 {_f(v_ma20 / 1000, 0)} 張"
+      if pd.notna(v_now) and pd.notna(v_ma20) else "—",
+      None if pd.isna(v_now) or pd.isna(v_ma20) else v_now > v_ma20)
+    g("量能轉強", "5 日均量 > 20 日均量", "—" if pd.isna(v_ma5) else f"{_f(v_ma5 / 1000, 0)} 張",
+      None if pd.isna(v_ma5) or pd.isna(v_ma20) else v_ma5 > v_ma20)
+
+    g = _G(rows, "慣性")
+    g("突破近 10 日高 或 連漲 ≥ 3 日", "任一成立",
+      f"距 10 日高 {_pct((last / hi10 - 1) if pd.notna(hi10) else None)} · 連漲 {consec_up} 日",
+      None if pd.isna(hi10) else (last > hi10 or consec_up >= 3))
+    g("未破近 10 日低、未連跌 ≥ 3 日", "兩者皆須成立",
+      f"距 10 日低 {_pct((last / lo10 - 1) if pd.notna(lo10) else None)} · 連跌 {consec_dn} 日",
+      None if pd.isna(lo10) else (last >= lo10 and consec_dn < 3))
+
+    g = _G(rows, "籌碼")
+    if chp is not None and not chp.empty:
+        cc = chp.sort_values("date")
+        net5 = (cc["foreign"] + cc["trust"] + cc["dealer"]).tail(5).sum()
+        g("法人 5 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）", f"{_f(net5, 0)} 張",
+          None if pd.isna(net5) else net5 > 0)
+
+    g = _G(rows, "籌碼密集區")
+    ccp = _ccp(c, vol)
+    if ccp is not None:
+        dist = last / ccp - 1
+        g("站在 60 日成交量密集區之上", "距密集區價 ≥ +1%",
+          f"密集區 {_f(ccp)} · 距 {_pct(dist)}", dist >= 0.01)
+
+    g = _G(rows, "風險揭露")
+    if pd.notna(rsi6):
+        g("短線過熱", "RSI(6) > 85", _f(rsi6, 0), None,
+          raw="⚠️ 命中" if rsi6 > 85 else "—")
+    atr = (p["high"].astype(float) - p["low"].astype(float)).rolling(20).mean().iloc[-1]
+    atr_pct = atr / last if pd.notna(atr) and last else None
+    if atr_pct is not None:
+        g("日內波動偏大", "ATR20 / 收盤 > 4%", _pct(atr_pct), None,
+          raw="⚠️ 命中" if atr_pct > 0.04 else "—")
     return rows

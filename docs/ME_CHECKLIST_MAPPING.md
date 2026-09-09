@@ -2,6 +2,16 @@
 
 > 建立 2026-09-09。**§7 已定案、已實作**（commit 見下）。
 >
+> ## 更新（2026-09-09 傍晚）
+> - 分頁改名 **「多軌體檢」**，加第 4 軌 **短線**（`checklist.short_checks`）——使用者決定
+>   「不評分不推薦、加進來 OK」。純日線技術面（趨勢/動能/量能/慣性/籌碼/密集區/風險），
+>   MACD·CCP·ATR 現算。融資融券變化 bundle 沒有 → 不出現。帶最強警語 `SHORT_DISCLAIMER`
+>   （零回測、tw-hold 是長期工具、短線用 tw-swing）。圖：K線+法人近 3 個月。
+> - 估值軌主判準改「現價未過估值上緣」（`valuation_ceiling`），便宜門檻降為參考列
+>   （5 年均 EPS × PE P30，成長股常年摸不到，❌ 不進摘要）。
+> - 圖表時間跨度跟各軌尺度（短線近 3 月 / 波段近 1 年 / 價值近 5–6 年 / 定存股利近 12 年）。
+> - 頁尾導覽：回到頂部 + 切到另一頁。
+>
 > ## 實作狀態（2026-09-09）
 > - `app/checklist.py`：`swing_checks` / `value_checks` / `deposit_checks` → `[{項目,門檻,現值,狀態}]`。
 >   價值/定存讀 `data/derived/factors_{value,deposit}.parquet`；波段現算（qf/rev/chips/per）。

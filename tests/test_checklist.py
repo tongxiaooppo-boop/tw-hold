@@ -1,4 +1,4 @@
-"""三軌體檢——檢核列產生器。門檻對得上、金融業跳過對得上、缺資料不炸。"""
+"""多軌體檢——檢核列產生器。門檻對得上、金融業跳過對得上、缺資料不炸。"""
 from __future__ import annotations
 
 import sys
@@ -58,6 +58,19 @@ def test_checks_傳None_不炸():
     assert cl.value_checks(None) == []
     assert cl.deposit_checks(None) == []
     assert cl.swing_checks({}) != []          # 會回「資料不足」列，不丟例外
+    assert cl.short_checks({}) != []
+
+
+def test_short_checks_基本流程():
+    dates = pd.date_range("2024-01-01", periods=120, freq="B")
+    px = pd.DataFrame({"date": dates, "open": 100.0, "high": 103.0, "low": 98.0,
+                       "close": np.linspace(80, 130, 120), "volume": np.linspace(1e3, 3e3, 120)})
+    chips = pd.DataFrame({"date": dates[-10:], "foreign": 50.0, "trust": 20.0, "dealer": 5.0})
+    rows = cl.short_checks({"px": px, "chips": chips})
+    s = _states(rows)
+    assert s["收盤站上 5 日均線"] == cl._OK       # 單調上漲
+    assert s["法人 5 日淨買超 > 0"] == cl._OK
+    assert {r["組"] for r in rows} >= {"趨勢結構", "動能", "量能", "慣性"}
 
 
 def test_swing_checks_基本流程():

@@ -33,16 +33,16 @@ def test_三清單分頁都有標題():
         assert want in " ".join(h.value for h in at.header)
 
 
-def test_三軌體檢分頁_不輸入代號不炸():
+def test_多軌體檢分頁_不輸入代號不炸():
     at = _run()
-    at.radio(key="_nav").set_value("三軌體檢").run()
+    at.radio(key="_nav").set_value("多軌體檢").run()
     assert not at.exception
-    assert "三軌體檢" in " ".join(h.value for h in at.subheader)
+    assert "多軌體檢" in " ".join(h.value for h in at.subheader)
 
 
-def test_三軌體檢_帶代號_三個分頁都渲染不炸():
+def test_多軌體檢_帶代號_四個分頁都渲染不炸():
     at = AppTest.from_file(REPO_APP, default_timeout=60)
-    at.session_state["_nav"] = "三軌體檢"
+    at.session_state["_nav"] = "多軌體檢"
     at.session_state["_stock_code"] = "2330"
     at.run()
     assert not at.exception
@@ -56,11 +56,11 @@ def test_兩頁共用代號且可頁內切換():
     at.session_state["_nav"] = "個股查詢"
     at.run()
     assert not at.exception
-    # 個股查詢頁應有「→ 三軌體檢」的跳轉鈕；按下去切到三軌體檢，代號不變
-    at.button(key="_peer_三軌體檢").click().run()
-    assert at.session_state["_nav"] == "三軌體檢"
+    # 個股查詢頁應有「→ 多軌體檢」的跳轉鈕；按下去切到多軌體檢，代號不變
+    at.button(key="_peer_多軌體檢").click().run()
+    assert at.session_state["_nav"] == "多軌體檢"
     assert at.session_state["_stock_code"] == "2330"
-    assert "三軌體檢" in " ".join(h.value for h in at.subheader)
+    assert "多軌體檢" in " ".join(h.value for h in at.subheader)
 
 
 def test_代號連結指向個股查詢():
