@@ -185,6 +185,12 @@ _CSS = """
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+/* 頁尾導覽：回到頂部 + 切到另一頁，兩顆同一款鈕 */
+.thc-footer{display:flex;gap:.6rem;margin:.4rem 0 1rem;}
+.thc-footer a{flex:1;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
+  border:1px solid var(--thc-line);color:var(--thc-soft)!important;
+  text-decoration:none!important;font-size:.92rem;background:var(--thc-card,transparent);}
+.thc-footer a:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;}
 /* Streamlit 元件微調——深底下的線 / 字提亮 */
 [data-testid="stExpander"] details{border-color:var(--thc-line)!important;}
 .stCaption,[data-testid="stCaptionContainer"]{color:var(--thc-soft)!important;}
@@ -552,22 +558,16 @@ def _stock_input(form_key: str, submit_label: str) -> str:
     return st.session_state.get("_stock_code", "").strip()
 
 
-def _peer_link(target_nav: str, label: str) -> None:
-    """跳到另一頁看同一支（不必回表頭切分頁）。用非 widget 的 `_nav_goto`
-    暫存，`main()` 在建 radio 前才寫入 `_nav`——避免「widget 建立後才改 key」。"""
-    if st.button(label, key=f"_peer_{target_nav}", use_container_width=True):
-        st.session_state["_nav_goto"] = target_nav
-        st.rerun()
-
-
 def _page_footer(other_nav: str, other_label: str) -> None:
     """個股查詢 / 多軌體檢 共用的頁尾：回到頂部 + 切到另一頁（同一支）。
-    「回到頂部」連到頁首 `anchor='top'` 的標題。"""
+    兩顆都是 `<a target="_self">`（同一款鈕）——`#top` 捲回頁首標題（`anchor='top'`）、
+    `?goto=` 由 `_route()` 接手切分頁。"""
     st.divider()
-    c1, c2 = st.columns(2)
-    c1.markdown("[⬆ 回到頂部](#top)")
-    with c2:
-        _peer_link(other_nav, other_label)
+    st.markdown(
+        '<div class="thc-footer">'
+        '<a href="#top" target="_self">⬆ 回到頂部</a>'
+        f'<a href="?goto={_esc(other_nav)}" target="_self">{_esc(other_label)}</a>'
+        '</div>', unsafe_allow_html=True)
 
 
 def _stock_page() -> None:
@@ -842,13 +842,17 @@ NAV = ["價值", "定存", "長波段", "個股查詢", "多軌體檢"]
 
 
 def _route() -> None:
-    """卡片上的代號連結 `?code=XXXX` → 預填個股查詢 + 切分頁。
-    處理完就把 query param 清掉，否則每次 rerun 都被鎖在個股查詢分頁。"""
+    """`?code=XXXX` → 預填個股查詢 + 切分頁；`?goto=分頁` → 頁尾「切到另一頁」。
+    處理完就把 query param 清掉，否則每次 rerun 都被鎖住。"""
     code = (st.query_params.get("code") or "").strip()
     if code:
         st.session_state["_stock_code"] = code
         st.session_state["_nav"] = "個股查詢"
         del st.query_params["code"]
+    goto = (st.query_params.get("goto") or "").strip()
+    if goto:
+        st.session_state["_nav_goto"] = goto     # main() 在建 radio 前寫入 _nav
+        del st.query_params["goto"]
 
 
 def main() -> None:

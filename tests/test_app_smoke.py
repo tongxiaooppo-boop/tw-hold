@@ -56,11 +56,18 @@ def test_兩頁共用代號且可頁內切換():
     at.session_state["_nav"] = "個股查詢"
     at.run()
     assert not at.exception
-    # 個股查詢頁應有「→ 多軌體檢」的跳轉鈕；按下去切到多軌體檢，代號不變
-    at.button(key="_peer_多軌體檢").click().run()
-    assert at.session_state["_nav"] == "多軌體檢"
-    assert at.session_state["_stock_code"] == "2330"
-    assert "多軌體檢" in " ".join(h.value for h in at.subheader)
+    # 頁尾「切到另一頁」是 <a href="?goto=多軌體檢">——連結有進到頁面
+    assert "?goto=多軌體檢" in " ".join(m.value for m in at.markdown)
+    # 模擬點下去：帶 ?goto= 進來 → 切到多軌體檢、代號不變
+    at2 = AppTest.from_file(REPO_APP, default_timeout=30)
+    at2.session_state["_stock_code"] = "2330"
+    at2.session_state["_nav"] = "個股查詢"
+    at2.query_params["goto"] = "多軌體檢"
+    at2.run()
+    assert at2.session_state["_nav"] == "多軌體檢"
+    assert at2.session_state["_stock_code"] == "2330"
+    assert "goto" not in at2.query_params
+    assert "多軌體檢" in " ".join(h.value for h in at2.subheader)
 
 
 def test_代號連結指向個股查詢():
