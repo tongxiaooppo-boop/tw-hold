@@ -555,10 +555,20 @@ def _peer_link(target_nav: str, label: str) -> None:
         st.rerun()
 
 
+def _page_footer(other_nav: str, other_label: str) -> None:
+    """個股查詢 / 三軌體檢 共用的頁尾：回到頂部 + 切到另一頁（同一支）。
+    「回到頂部」連到頁首 `anchor='top'` 的標題。"""
+    st.divider()
+    c1, c2 = st.columns(2)
+    c1.markdown("[⬆ 回到頂部](#top)")
+    with c2:
+        _peer_link(other_nav, other_label)
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     _disclaimer()
-    st.header("個股查詢")
+    st.header("個股查詢", anchor="top")
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
                "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
     st.markdown("**股票代號**")
@@ -566,7 +576,6 @@ def _stock_page() -> None:
     if not code:
         _disclaimer()
         return
-    _peer_link("三軌體檢", f"🔬 用三軌判準體檢 {code} →")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -642,6 +651,7 @@ def _stock_page() -> None:
         st.dataframe(_qf_display(_raw), use_container_width=True)
 
     _disclaimer()
+    _page_footer("三軌體檢", f"🔬 用三軌判準體檢 {code} →")
 
 
 _DERIVED_RELEASE = ("https://github.com/tongxiaooppo-boop/tw-hold"
@@ -730,14 +740,13 @@ def _checklist_page() -> None:
     """三軌體檢：同一檔、三套判準逐條攤開。不加總、不給 verdict／買價／排名。"""
     import checklist as cl
 
-    st.subheader("三軌體檢")
+    st.subheader("三軌體檢", anchor="top")
     st.caption("同一檔股票，分別用「長波段 / 價值 / 定存」三套判準逐條攤開。"
                "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。")
     code = _stock_input("cl_query", "體檢")
     if not code:
         _disclaimer()
         return
-    _peer_link("個股查詢", f"📈 看 {code} 的圖表 →")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -807,6 +816,7 @@ def _checklist_page() -> None:
             _chart(ch.balance_health, qf, nm, 24)
     st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     _disclaimer()
+    _page_footer("個股查詢", f"📈 看 {code} 的完整圖表 →")
 
 
 APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
