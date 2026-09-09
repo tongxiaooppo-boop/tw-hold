@@ -70,6 +70,19 @@ def test_兩頁共用代號且可頁內切換():
     assert "多軌體檢" in " ".join(h.value for h in at2.subheader)
 
 
+def test_切頁保留代號():
+    at = AppTest.from_file(REPO_APP, default_timeout=30)
+    at.session_state["_nav"] = "個股查詢"
+    at.session_state["_stock_code"] = "2454"
+    at.run()
+    assert at.session_state["_code_mirror"] == "2454"         # 非 widget 鏡像有寫入
+    # 模擬 Streamlit 切頁把 widget key 清掉，只剩鏡像
+    at.session_state["_stock_code"] = ""
+    at.query_params["goto"] = "多軌體檢"
+    at.run()
+    assert at.session_state["_stock_code"] == "2454"          # 從鏡像補回
+
+
 def test_代號連結指向個股查詢():
     at = _run()
     md = " ".join(m.value for m in at.markdown)
