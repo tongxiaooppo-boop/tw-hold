@@ -1,10 +1,9 @@
 {
  "_meta": {
-  "source": "etfinfo.tw",
-  "endpoint": "/api/active/summary",
+  "source": "third-party-active-etf",
   "anchor_date": "2026-09-09",
   "market_date": "2026-09-09",
-  "fetched_at": "2026-09-10T03:01:59+00:00",
+  "fetched_at": "2026-09-10T03:18:27+00:00",
   "total_etfs": 40,
   "synced_etfs": 26,
   "stale_etfs": 14,
@@ -117,10 +116,10 @@
    "consensus_strong": true,
    "buyers": [],
    "sellers": [
-    "00991A",
     "00408A",
-    "00982A",
-    "00994A"
+    "00991A",
+    "00994A",
+    "00982A"
    ],
    "kind": "consensus_sell"
   },
@@ -397,8 +396,8 @@
    "buyers": [],
    "sellers": [
     "00991A",
-    "00996A",
-    "00985A"
+    "00985A",
+    "00996A"
    ],
    "kind": "consensus_sell"
   },
@@ -490,8 +489,8 @@
    "consensus": 1,
    "consensus_strong": false,
    "buyers": [
-    "00404A",
-    "00991A"
+    "00991A",
+    "00404A"
    ],
    "sellers": [
     "00996A"
@@ -552,21 +551,6 @@
    "sellers": [],
    "kind": "sell"
   },
-  "6223": {
-   "name": "旺矽",
-   "industry": "半導體業",
-   "net_shares": 71000,
-   "net_amount": 398665000,
-   "issuer_count": 2,
-   "consensus": 2,
-   "consensus_strong": false,
-   "buyers": [
-    "00404A",
-    "00991A"
-   ],
-   "sellers": [],
-   "kind": "consensus_buy"
-  },
   "2303": {
    "name": "聯電",
    "industry": "半導體業",
@@ -584,6 +568,21 @@
     "00985A"
    ],
    "kind": "sell"
+  },
+  "6223": {
+   "name": "旺矽",
+   "industry": "半導體業",
+   "net_shares": 71000,
+   "net_amount": 398665000,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": false,
+   "buyers": [
+    "00991A",
+    "00404A"
+   ],
+   "sellers": [],
+   "kind": "consensus_buy"
   },
   "5274": {
    "name": "信驊",
@@ -623,8 +622,8 @@
    "consensus_strong": true,
    "buyers": [
     "00992A",
-    "00404A",
     "00408A",
+    "00404A",
     "00994A"
    ],
    "sellers": [],
@@ -693,18 +692,6 @@
    "sellers": [],
    "kind": "buy"
   },
-  "6683": {
-   "name": "雍智科技",
-   "industry": "半導體業",
-   "net_shares": 26000,
-   "net_amount": 35620000,
-   "issuer_count": 1,
-   "consensus": 0,
-   "consensus_strong": false,
-   "buyers": [],
-   "sellers": [],
-   "kind": "buy"
-  },
   "2408": {
    "name": "南亞科",
    "industry": "半導體業",
@@ -716,6 +703,18 @@
    "buyers": [],
    "sellers": [],
    "kind": "sell"
+  },
+  "6683": {
+   "name": "雍智科技",
+   "industry": "半導體業",
+   "net_shares": 26000,
+   "net_amount": 35620000,
+   "issuer_count": 1,
+   "consensus": 0,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [],
+   "kind": "buy"
   },
   "2357": {
    "name": "華碩",
@@ -928,8 +927,8 @@
    "consensus_strong": true,
    "buyers": [],
    "sellers": [
-    "00404A",
     "00408A",
+    "00404A",
     "00994A"
    ],
    "kind": "consensus_sell"
