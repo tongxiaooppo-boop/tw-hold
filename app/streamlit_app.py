@@ -183,6 +183,39 @@ def _active_legend(flags: dict) -> str:
             f"**非官方三大法人／投信買賣超，不是機構認養背書。**")
 
 
+_PCF_INDEX = REPO / "data" / "pcf" / "_index.json"
+_REBUILD_RUNS_URL = ("https://github.com/tongxiaooppo-boop/tw-hold"
+                     "/actions/workflows/rebuild.yml")
+
+
+def _load_pcf_index() -> dict | None:
+    try:
+        return json.loads(_PCF_INDEX.read_text(encoding="utf-8")) if _PCF_INDEX.exists() else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _ago_human(iso: str | None) -> str:
+    """ISO 時戳 → 「3 小時前」；壞掉就原樣回。"""
+    if not iso:
+        return "—"
+    from datetime import datetime, timezone
+    try:
+        t = datetime.fromisoformat(str(iso))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        sec = (datetime.now(timezone.utc) - t).total_seconds()
+    except Exception:  # noqa: BLE001
+        return str(iso)
+    if sec < 90:
+        return "剛剛"
+    if sec < 3600:
+        return f"{int(sec // 60)} 分鐘前"
+    if sec < 86400:
+        return f"{int(sec // 3600)} 小時前"
+    return f"{int(sec // 86400)} 天前"
+
+
 # ── 版型 B：判斷卡（使用者裁決 2026-09-08）──────────────────────────────
 _CSS = """
 <style>
@@ -1084,8 +1117,96 @@ def _checklist_page() -> None:
     _page_footer("個股查詢", f"📈 看 {code} 的完整圖表 →")
 
 
+def _active_etf_page() -> None:
+    """主動式 ETF 每日動向——那五檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
+    純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
+    兼作「爬五家投信官網有沒有正常」的體檢面板。"""
+    st.header("主動式 ETF 每日動向", anchor="top")
+    st.caption(
+        "規模前五大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
+        "持股差分＝這五檔當日「主動選股」的加碼／調節（已用受益權單位數還原申贖，純申贖不算）。"
+        f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
+
+    idx = _load_pcf_index()
+    flags = _load("active_etf_flags.json") or {}
+    meta = flags.get("_meta") or {}
+    fm_all = meta.get("funds") or {}
+    idx_funds = (idx or {}).get("funds") or {}
+
+    if not fm_all and not idx_funds:
+        st.error("還沒有 PCF 快照／旗標產出——CI 第一次 rebuild 應該還沒跑完。")
+        st.markdown(f"[看 rebuild 執行紀錄 →]({_REBUILD_RUNS_URL})")
+        _disclaimer()
+        return
+
+    anchor = meta.get("anchor_date") or "—"
+    synced, total = meta.get("synced_etfs"), meta.get("total_etfs") or 5
+    idx_upd = (idx or {}).get("updated_at")
+    st.markdown(
+        f"**資料日 {anchor}**　·　{synced if synced is not None else '—'} / {total} 檔算得出差分"
+        f"　·　快照最後更新 {_ago_human(idx_upd)}")
+    if meta.get("schema_ok") is False:
+        st.error("`schema_ok = False`——旗標已在各分頁 / 卡片整組隱藏，直到管線恢復。")
+    _idx_date = (idx_upd or "")[:10]
+    try:
+        if _idx_date and (pd.Timestamp(_taipei_today()) - pd.Timestamp(_idx_date)).days > 3:
+            st.warning(f"⚠️ 快照最後更新 {_idx_date}，距今超過 3 天。中間若有交易日，代表 CI 沒跑、"
+                       f"或五家投信官網把 CI 的 IP 擋掉了——看 [rebuild 執行紀錄]({_REBUILD_RUNS_URL}) "
+                       "的「PCF 快照」步驟有沒有 `::warning::`。")
+    except Exception:  # noqa: BLE001
+        pass
+
+    fl = flags.get("flags") or {}
+
+    def _moved_by(code: str):
+        buys = sorted(tk for tk, f in fl.items() if code in (f.get("buyers") or []))
+        sells = sorted(tk for tk, f in fl.items() if code in (f.get("sellers") or []))
+        nm = {tk: (fl[tk].get("name") or "") for tk in (*buys, *sells)}
+        return buys, sells, nm
+
+    order = ([r["code"] for r in (idx or {}).get("nav_rank") or []]
+             or list(idx_funds) or list(fm_all))
+    missing = set((idx or {}).get("missing") or [])
+
+    for code in order:
+        fi = idx_funds.get(code) or {}
+        fmd = fm_all.get(code) or {}
+        issuer = fi.get("issuer") or fmd.get("issuer") or ""
+        title = f"{code}　{issuer}" + (f"・{fi['name']}" if fi.get("name") else "")
+        snaps_n = len(list((REPO / "data" / "pcf" / code).glob("*.parquet")))
+        st.markdown(f"#### {title}")
+
+        if code in missing or (not fi and not fmd):
+            st.markdown("🔴 這次 CI 完全沒抓到這一檔——通常是被反爬擋或投信官網改版。")
+            continue
+        if not fmd.get("synced"):
+            tail = ("（群益 buyback API 沒有日期參數，只能等隔天累積第二份）"
+                    if issuer == "群益" else "")
+            st.markdown(f"🟡 只有 {snaps_n} 份 PCF 快照——要連續兩個交易日才算得出差分{tail}。")
+            st.caption(f"最新 PCF 日 {fi.get('latest_date') or fmd.get('date') or '—'}"
+                       f"　·　抓取 {_ago_human(fi.get('fetched_at'))}")
+            continue
+
+        date = fmd.get("date") or fi.get("latest_date") or "—"
+        buys, sells, nm = _moved_by(code)
+        st.markdown(f"🟢 **{fmd.get('prev_date', '?')} → {date}**"
+                    f"　·　濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔")
+        c1, c2 = st.columns(2)
+        c1.markdown("**加碼 / 新進**\n\n"
+                    + (_bullets([f"{t}　{nm.get(t, '')}" for t in buys]) if buys else "—"))
+        c2.markdown("**調節 / 出清**\n\n"
+                    + (_bullets([f"{t}　{nm.get(t, '')}" for t in sells]) if sells else "—"))
+        st.caption(f"抓取 {_ago_human(fi.get('fetched_at'))}　·　持股 {fi.get('holdings_n', '—')} 檔"
+                   f"　·　磁碟留存 {snaps_n} 份快照")
+
+    st.divider()
+    st.caption("代號可到「個股查詢」看該股日線；旗標同時掛在「多軌體檢／長波段／短線」分頁上。"
+               f"　·　🔧 爬取失敗會在 CI 顯示 `::warning::`：[rebuild 執行紀錄 →]({_REBUILD_RUNS_URL})")
+    _disclaimer()
+
+
 APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
-NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢"]
+NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢", "主動式 ETF"]
 
 
 def _route() -> None:
@@ -1125,8 +1246,10 @@ def main() -> None:
         _shortterm_page()
     elif nav == "個股查詢":
         _stock_page()
-    else:
+    elif nav == "多軌體檢":
         _checklist_page()
+    else:
+        _active_etf_page()
 
 
 if __name__ == "__main__":

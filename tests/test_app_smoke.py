@@ -40,6 +40,17 @@ def test_多軌體檢分頁_不輸入代號不炸():
     assert "多軌體檢" in " ".join(h.value for h in at.subheader)
 
 
+def test_主動式ETF分頁_渲染不炸():
+    at = _run()
+    at.radio(key="_nav").set_value("主動式 ETF").run()
+    assert not at.exception
+    assert "主動式 ETF 每日動向" in " ".join(h.value for h in at.header)
+    # 五檔基金代號都要出現（有訊號或「等隔天」都算）
+    blob = " ".join(m.value for m in at.markdown)
+    for code in ("00981A", "00403A", "00991A", "00982A", "00992A"):
+        assert code in blob
+
+
 def test_多軌體檢_帶代號_四個分頁都渲染不炸():
     at = AppTest.from_file(REPO_APP, default_timeout=60)
     at.session_state["_nav"] = "多軌體檢"
