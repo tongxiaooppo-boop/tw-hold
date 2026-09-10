@@ -58,6 +58,12 @@ jobs:
       - name: 算因子 + 三清單
         run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
+      # 主動式 ETF 認養旗標（context flag，非 gate）。第三方來源 etfinfo.tw，
+      # 抓不到 → 沿用上次成功值、留 warning、**不擋三清單**。見 build_active_etf_flags.py。
+      - name: 主動式 ETF 認養旗標
+        continue-on-error: true
+        run: python build_active_etf_flags.py   # → data/derived/active_etf_flags.json
+
       # factors_*.parquet 刻意不進版控（每天一顆 blob）→ 推到 derived-latest release，
       # 讓 Streamlit Cloud 的「三軌體檢」頁執行期拉得到（tw-hold 是公開 repo，免 PAT）。
       - name: 因子表 → derived-latest release
