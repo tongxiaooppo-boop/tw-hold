@@ -5,30 +5,36 @@
 近一日「主動式 ETF」對個股的加碼／調節，攤成一個 per-ticker 旗標，給長波段候選池、
 短線頁、個股查詢、多軌體檢的卡片／檢核表當 **context flag**——**不 gate 任何進出場**。
 
-## 資料源：`etfinfo.tw`（第三方彙總，非官方）
+## 資料源：第三方「主動式 ETF 持股彙整」JSON（非官方，有付費牆層）
 
-`GET https://www.etfinfo.tw/api/active/summary`（~220KB JSON、免登入、帶 Referer/UA）。
-用其中兩塊：
+端點 URL **由環境變數 `ACTIVE_ETF_SUMMARY_URL` 提供，不寫進版控**——這是刻意的，
+不想在公開 repo 裡替第三方站掛看板（見交接討論 2026-09-10）。實際來源記在
+本機記憶 `tw-hold-active-etf-flag` 與 `docs/PLAN.md`（後者用泛稱）。
+沒設環境變數 → 當成抓取失敗處理（保留上次成功值）。
+
+回傳的 JSON 用其中兩塊：
   - `flowRankings[]`：個股當日淨變動（netShares / netAmount / issuerCount / etfDetails）
   - `consensusSignals[]`：多檔主動 ETF 同向（buyers / sellers / netSignal / isStrong）
 
 ⚠️ **這不是官方三大法人／投信買賣超**，是「主動式 ETF 發行商」的 PCF 減法彙總，
-且 etfinfo 有付費牆層、每次約 1/3 主動 ETF 尚未更新（`syncStatus.staleEtfs`）。
-所以：抓不到 → 保留上次成功值、`::warning::`、**不讓 rebuild 變紅**；
+且來源每次約 1/3 主動 ETF 尚未更新（`syncStatus.staleEtfs`）。
+所以：抓不到／未設 URL → 保留上次成功值、`::warning::`、**不讓 rebuild 變紅**；
 過期（anchor 落後 > STALE_DAYS 交易日）或 schema 壞 → app 端整個隱藏旗標。
 
 未來計畫：自建 PCF 上游（`docs/PLAN.md` Backlog）。
 
 用法：
-    python build_active_etf_flags.py
+    ACTIVE_ETF_SUMMARY_URL=... python build_active_etf_flags.py
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -40,7 +46,7 @@ except Exception:
 DERIVED = Path(__file__).resolve().parent / "data" / "derived"
 OUT = DERIVED / "active_etf_flags.json"
 
-SUMMARY_URL = "https://www.etfinfo.tw/api/active/summary"
+SUMMARY_URL = os.environ.get("ACTIVE_ETF_SUMMARY_URL", "")   # 不進版控（GitHub secret）
 STALE_DAYS = 4                    # anchor 落後今天超過這麼多「天」→ app 端視為過期
 CONSENSUS_MIN = 2                 # |netSignal| ≥ 此值 → 標為 consensus_buy / consensus_sell
 
@@ -50,9 +56,12 @@ def _taipei_now() -> datetime:
 
 
 def _fetch() -> dict:
+    if not SUMMARY_URL:
+        raise RuntimeError("未設定 ACTIVE_ETF_SUMMARY_URL")
+    u = urlparse(SUMMARY_URL)
     req = urllib.request.Request(SUMMARY_URL, headers={
         "User-Agent": "tw-hold-rebuild (+https://github.com/tongxiaooppo-boop/tw-hold)",
-        "Referer": "https://www.etfinfo.tw/active",
+        "Referer": f"{u.scheme}://{u.netloc}/",     # 從 URL 推，repo 裡不留網域字面
         "Accept": "application/json",
     })
     with urllib.request.urlopen(req, timeout=25) as r:
@@ -131,8 +140,7 @@ def build(summary: dict) -> dict:
 
     return {
         "_meta": {
-            "source": "etfinfo.tw",
-            "endpoint": "/api/active/summary",
+            "source": "third-party-active-etf",     # 不點名（見 build 檔頭）
             "anchor_date": anchor,
             "market_date": market,
             "fetched_at": _taipei_now().isoformat(timespec="seconds"),
@@ -154,7 +162,7 @@ def main() -> int:
             print(f"::warning::主動式 ETF 旗標抓取失敗（{type(e).__name__}: {e}）——沿用上次成功的 {OUT.name}")
             return 0
         OUT.write_text(json.dumps(
-            {"_meta": {"source": "etfinfo.tw", "schema_ok": False,
+            {"_meta": {"source": "third-party-active-etf", "schema_ok": False,
                        "fetched_at": _taipei_now().isoformat(timespec="seconds"),
                        "error": f"{type(e).__name__}: {e}"},
              "flags": {}}, ensure_ascii=False, indent=1), encoding="utf-8")

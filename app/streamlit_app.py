@@ -117,9 +117,9 @@ def _bullets(items: list, empty: str = "—") -> str:
     return "\n".join(f"- {x}" for x in items) if items else empty
 
 
-# ── 主動式 ETF 認養旗標（context flag，資料源 etfinfo.tw；見 build_active_etf_flags.py）──
+# ── 主動式 ETF 認養旗標（context flag；見 build_active_etf_flags.py）──
 # 只是把「近一日主動式 ETF 對這檔加碼／調節」攤在卡片上，**不 gate 任何進出場**。
-# 非官方三大法人／投信買賣超。來源過期或抓不到 → 整組隱藏（helper 回空字串）。
+# 第三方彙整、非官方三大法人／投信買賣超。來源過期或抓不到 → 整組隱藏（helper 回空字串）。
 _ACTIVE_LABEL = {
     "consensus_buy": "🏦 主動ETF 認養", "buy": "🏦 主動ETF 加碼",
     "consensus_sell": "🏦 主動ETF 調節", "sell": "🏦 主動ETF 調節",
@@ -175,7 +175,7 @@ def _active_legend(flags: dict) -> str:
     if not m:
         return ""
     return (f"🏦 主動式 ETF 認養＝近一日「主動式 ETF」對該股的加碼／調節"
-            f"（來源 etfinfo.tw，資料日 {m.get('anchor_date', '—')}，"
+            f"（第三方持股彙整，資料日 {m.get('anchor_date', '—')}，"
             f"{m.get('stale_etfs', '?')}/{m.get('total_etfs', '?')} 檔 ETF 尚未更新）。"
             f"**非官方三大法人／投信買賣超，不是機構認養背書。**")
 

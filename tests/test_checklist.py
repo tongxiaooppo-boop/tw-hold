@@ -61,7 +61,7 @@ def test_checks_傳None_不炸():
     assert cl.short_checks({}) != []
 
 
-_ITEM = "主動式 ETF 認養（etfinfo，非官方三大法人）"
+_ITEM = "主動式 ETF 認養（第三方彙整，非官方三大法人）"
 
 
 def test_active_etf_row_None_不出現():

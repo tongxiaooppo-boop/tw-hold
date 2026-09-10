@@ -1,4 +1,4 @@
-"""build_active_etf_flags.build()——把 etfinfo summary 瘦成 per-ticker 旗標。
+"""build_active_etf_flags.build()——把第三方 active-ETF summary 瘦成 per-ticker 旗標。
 
 守：只留該留的欄位、kind 判定對、NaN/缺欄不炸、schema 壞會被擋。
 """
