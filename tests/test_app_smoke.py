@@ -140,6 +140,32 @@ def test_short_b_html_單張():
     assert "thc-card" in out
 
 
+def test_active_chip_與_evidence():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    buy = {"kind": "consensus_buy", "net_shares": 1803000, "issuer_count": 2,
+           "consensus": 3, "consensus_strong": True}
+    assert "認養" in app._active_chip(buy) and "×3" in app._active_chip(buy)
+    sup, opp = app._active_evidence(buy)
+    assert "淨買超" in sup and "+1,803 張" in sup and opp == ""
+    sell = {"kind": "sell", "net_shares": -500000, "issuer_count": 1, "consensus": 0}
+    s2, o2 = app._active_evidence(sell)
+    assert s2 == "" and "淨賣超" in o2 and "500 張" in o2
+    assert app._active_chip(None) == "" and app._active_chip({"kind": "neutral"}) == ""
+
+
+def test_active_flags_過期回空():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    # _active_flags 讀 data/derived/active_etf_flags.json；schema 壞 → {}
+    d = app._load("active_etf_flags.json")
+    assert d is not None                       # rebuild 產物在 repo 裡
+    # 不論其新舊，函式不能炸、回傳 dict
+    assert isinstance(app._active_flags(), dict)
+
+
 def test_verdict_cat_定存內嵌數字歸類():
     import sys
     sys.path.insert(0, "app")

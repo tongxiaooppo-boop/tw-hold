@@ -451,25 +451,31 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
   （守 PRD §M4 雲端唯讀 + FinMind 額度）。
 - ~~`tw-hold-data` 若嫌公開不妥 → 改私有 + PAT~~ → **v2.1 已定案走私有 Release + PAT**
 - U1b 併回 `daily.yml`（G-5 過關、真錢上線之後，省掉一次重複抓取）
-- **「主動式 ETF 認養旗標」（2026-09-10 撤回，改天再做）** —— 長波段/短線/個股/多軌加一個
-  「近一日主動式 ETF 加碼／調節」的 context flag（不 gate）。曾實作、已 `git revert`。
-  · **撤回原因**：唯一有「每日個股層級」資料的第三方站（ETF 彙整站）`robots.txt` 明寫
-    `Disallow: /api/`，使用條款也限制「改作後發布於其他平台」。不繞。
-  · **查證留痕，別再重查（2026-09-10）**：
-    - TWSE OpenAPI：無 consolidated PCF holdings feed（`fund/T86`＝三大法人、`ETFReport/ETFRank`＝排行）。
-    - FundClear（集保）：官方 JSON API 但只到基金/類別層級、無每日個股 PCF、落後數週。
-    - **TWSE MIS（`mis.twse.com.tw`）：只有即時報價 + iNAV（`all_etf.txt`、`getStockInfo.jsp`）。
-      沒有 PCF 持股端點——資料裡的 `nu` 欄是把你導去各投信自己的 PCF 頁。**
-    - MOPS：月/季完整持股，非每日。
-    - **沒有統一的官方 PCF feed，得逐投信抓；且各家難度天差地遠：**
-      · 富邦 `websys.fsit.com.tw/FubonETF/Trade/Pcf.aspx?stkId=XXXX&lan=TW` ＝一個 GET、server 渲染表格、**極簡單**。
-      · 國泰 `cathaysite.com.tw`、兆豐 `megafunds.com.tw/.../trade_pcf.aspx` ＝ `.aspx`＋JS handler、中等。
-      · **統一（`ezmoney.com.tw`，持 00981A/00403A ＝規模第 1、2）：對非瀏覽器 client 無限轉址（反爬）→ 需 headless 或找內部 XHR、難。**
-      · 復華（`fhtrust.com.tw`）：JS 站，PCF 連結不在主頁、要挖。群益：未定位。
-    - PCF 各家只給「當天」、無歷史 → 要自己每日存快照（同處置股套路），第一個 diff 訊號在快照 job 上線後第 2 個交易日。
-    - **FinMind 有現成 dataset**（`TaiwanStockActiveETFHolding` / `TaiwanStockActiveETFHoldingChange`，
-      2026-09-10 實測確認存在、但是 **Sponsor 付費層**）→ **使用者決定不付**（tw-hold 不賺錢，付月費失去意義）。
-  · **重做的正路**：抓 ETF 發行投信每日 PCF（法定公開揭露、不需同意）。準則＝**規模前 5**（不指定投信、不寫死代號，
-    每次動態抓當下排行；~2026-07 為 00981A/00403A/00991A/00982A/00992A ＝統一×2、復華、群益×2）。
-    **使用者 2026-09-10 定案：自己啃前五大（統一/復華/群益），含統一反爬；不付 FinMind Sponsor。**
-    動工順序見 `docs/HANDOFF_2026-09-10.md` §2。
+- ✅ **「主動式 ETF 認養旗標」（2026-09-10 自建 PCF 版上線）** —— 長波段/短線/個股/多軌
+  各加一個「近一日規模前五大主動式 ETF 加碼／調節」的 context flag（**不 gate**）。
+  · **資料**：直接抓三家發行投信官網每日揭露 PCF（法定公開，不需同意）：
+    - 統一 `ezmoney.com.tw`（00981A=49YTW、00403A=63YTW）：cookie 暖身 GET 解掉反爬 302 loop
+      → `POST /ETF/Transaction/GetPCF`（date 要民國年）。**headless 不需要。**
+    - 群益 `capitalfund.com.tw`（00982A=399、00992A=500）：`POST /CFWeb/api/etf/buyback`。
+      id 對照 `GET /CFWeb/api/etf/items`。
+    - 復華 `fhtrust.com.tw`（00991A=ETF23）：`GET /api/assets?fundID=&qDate=YYYYMMDD` 的
+      `result[0].detail[]`（**不是** `/api/ETFPcf`＝空籃子、也不是 `/api/stockhold`＝月頻）。
+      id 對照 `GET /api/fundList?ec001=3` 的 `etf002` 欄。
+  · **實作**：`scripts/pcf_fetchers.py`（三家 fetcher + FUNDS 設定）→ `scripts/snapshot_pcf.py`
+    （rebuild.yml 每天跑，落 `data/pcf/<code>/<date>.parquet` 進版控，比照處置股，每檔留 15 份）
+    → `build_active_etf_flags.py`（每檔最近兩份快照差分 → `data/derived/active_etf_flags.json`）。
+    方向看**權重當量的主動股數差**（`|Δshares_active|×price/nav`），已用受益權單位數
+    `flow = units_T/units_prev` 還原申贖等比縮放 → 申贖與市值漂移都不會誤判成加碼/調節。
+    第一個 diff 訊號在快照 job 上線後**第 2 個交易日**。
+  · **規模前 5（wantgoo 2026-09-10 實查）**：00981A(2840億)/00403A(1581億)/00991A(795億)/
+    00982A(509億)/00992A(415億)＝統一×2、復華×1、群益×2。清單穩定，每月對一次 wantgoo；
+    `snapshot_pcf.py` 每次用各家自報 nav 重排寫進 `_index.json[nav_rank]` 當 sanity check。
+  · **降級**：單一投信抓失敗 → 該檔標 stale、`::warning::`、不擋三清單；全部只有 1 份快照 /
+    `anchor_date` 落後 > 4 天 / `schema_ok` false → app 端整組隱藏旗標。
+  · **界線（頁面永遠標）**：非官方三大法人／投信買賣超，非機構認養背書；永不 gate。
+  · **查證留痕（2026-09-10，別再重查）**：TWSE OpenAPI / TWSE MIS / TWSE ETFortune web /
+    FundClear（集保）/ MOPS 都**沒有** consolidated 每日個股 PCF feed。FinMind
+    `TaiwanStockActiveETFHolding(Change)` 存在但 **Sponsor 付費層**，使用者決定不付。
+  · **CI 風險**：三家站的反爬（統一 nxq cookie、群益 Imperva）從 GitHub Actions 的
+    Azure IP 可能被擋——若擋，走降級路徑（feature 靜默隱藏），觀察幾天再決定要不要搬到
+    self-hosted / 反向代理。
