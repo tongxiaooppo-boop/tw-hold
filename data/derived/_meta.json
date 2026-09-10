@@ -1,6 +1,6 @@
 {
-  "trading_date": "2026-09-09",
-  "rebuilt_at": "2026-09-09T23:52:18+00:00",
+  "trading_date": "2026-09-10",
+  "rebuilt_at": "2026-09-10T23:45:24+00:00",
   "bundle_schema": 1,
   "universe_filtered": true,
   "note": "universe.parquet：611 檔",
@@ -8,5 +8,6 @@
   "has_pe_bands": true,
   "has_fill_rate": true,
   "has_industry": true,
-  "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2015-07-16：raw -3.4%；1216 2015-08-06：raw -6.8%；2884 2015-07-30：raw -7.1%；2892 2015-07-31：raw -10.3%"
+  "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2015-07-16：raw -3.4%；1216 2015-08-06：raw -6.8%；2884 2015-07-30：raw -7.1%；2892 2015-07-31：raw -10.3%",
+  "split_warning": "2321 2026-09-02 還原收盤 ×1.94——疑似未還原的面額變更/分割/減資，`scripts/resolve_splits.py` 會試著自動解析；8277 2026-09-02 還原收盤 ×2.31——疑似未還原的面額變更/分割/減資，`scripts/resolve_splits.py` 會試著自動解析"
 }
