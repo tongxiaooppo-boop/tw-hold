@@ -258,7 +258,7 @@ def main() -> int:
                   "disclaimer": "🔴 這個區間沒有回測支撐——這是風控算術不是驗證過的買點。"
                                 "只回答「這個進場點承擔多少風險」，不回答「會不會賺」。"
                                 "候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，"
-                                "不給 verdict、不給買價、不排名次，買賣由你決定。每週重算。"},
+                                "不給 verdict、不給買價、不排名次，買賣由你決定。每日重算。"},
         "holdings": [],
         "candidates_pool": pool,
         "changes": {"added": sorted(pool_cur - pool_prev),

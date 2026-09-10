@@ -451,3 +451,12 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
   （守 PRD §M4 雲端唯讀 + FinMind 額度）。
 - ~~`tw-hold-data` 若嫌公開不妥 → 改私有 + PAT~~ → **v2.1 已定案走私有 Release + PAT**
 - U1b 併回 `daily.yml`（G-5 過關、真錢上線之後，省掉一次重複抓取）
+- **自建「主動式 ETF PCF」上游** —— 「主動式ETF認領旗標」v1 的資料源是 `etfinfo.tw/api/active/summary`
+  （第三方彙總、有付費牆層、每次約 1/3 主動 ETF stale）。當旗標變 load-bearing 或該 API 被關進牆
+  → 自己抓 PCF：各家主動 ETF 的 PCF 頁 + 證交所/櫃買彙整 + 集保，逐日 diff。
+  ⚠️ 查證結果，別再重查：
+  · TWSE OpenAPI **沒有** consolidated PCF holdings feed（`fund/T86` 是三大法人、`ETFReport/ETFRank` 只有排行）。
+  · FundClear（集保 `www.fundclear.com.tw/api/etf/*`）有官方 JSON API 但**只到基金/類別層級**
+    （受益權單位數變動、規模、折溢價、配息），**無每日個股 PCF**，且統計落後數週。
+    → 拿來當「官方 ETF 主檔清單 / 每檔規模・折溢價・配息」來源可以，認領旗標用不上。
+  單一來源脆弱見記憶 `upstream-datapack-single-point`。

@@ -61,6 +61,33 @@ class _G:
                           "狀態": raw or _state(ok)})
 
 
+def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
+    """主動式 ETF 認養——context 列，狀態型（不影響成立與否的判斷，只是攤開）。
+
+    `active_etf`：`build_active_etf_flags.py` 產的 per-ticker 旗標。
+      - `None`  → 來源未提供／已過期 → **整列不出現**（同利息保障倍數、融資融券處理）
+      - `{}`    → 來源正常但這檔近一日沒有主動式 ETF 動作 → 顯示「無」
+    """
+    if active_etf is None:
+        return
+    kind = active_etf.get("kind")
+    ns = active_etf.get("net_shares")
+    lots = f"{ns / 1000:+,.0f} 張" if isinstance(ns, (int, float)) else "—"
+    ic = active_etf.get("issuer_count")
+    who = f"{ic} 檔 ETF" if isinstance(ic, int) else "主動 ETF"
+    cons = active_etf.get("consensus") or 0
+    tag = f"、{abs(cons)} 檔共識" if abs(cons) >= 2 else ""
+    if kind in ("consensus_buy", "buy"):
+        g("主動式 ETF 認養（etfinfo，非官方三大法人）", "狀態型：近一日主動式 ETF 淨買超",
+          f"{who}淨買超 {lots}{tag}", True)
+    elif kind in ("consensus_sell", "sell"):
+        g("主動式 ETF 認養（etfinfo，非官方三大法人）", "狀態型：近一日主動式 ETF 淨賣超",
+          f"{who}淨賣超 {lots.lstrip('+')}{tag}", None, raw="⚠️ 命中")
+    else:
+        g("主動式 ETF 認養（etfinfo，非官方三大法人）", "狀態型：近一日主動式 ETF 買賣",
+          "近一日無主動式 ETF 買賣", None)
+
+
 def summarize(rows: list[dict]) -> dict:
     """檢核列 → 白話「亮點 / 缺口 / 待確認」。**不加總分、不給 verdict**——
     只是把成立/未達/無資料的項目名挑出來，讓人一眼看到卡在哪。"""
@@ -210,8 +237,9 @@ def _pctile(hist: pd.Series, val) -> float | None:
     return float((h <= val).mean())
 
 
-def swing_checks(d: dict) -> list[dict]:
-    """`d`：`_stock_data()` 的輸出（px / per / qf / rev / chips …）。"""
+def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
+    """`d`：`_stock_data()` 的輸出（px / per / qf / rev / chips …）。
+    `active_etf`：主動式 ETF 認養旗標（見 `_active_etf_row`），None → 該列不出現。"""
     q, rev, px = d.get("qf"), d.get("rev"), d.get("px")
     per, chp = d.get("per"), d.get("chips")
     rows: list[dict] = []
@@ -289,6 +317,7 @@ def swing_checks(d: dict) -> list[dict]:
         net20 = (c["foreign"] + c["trust"] + c["dealer"]).tail(20).sum()
         g("法人 20 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）",
           f"{_f(net20, 0)} 張", None if pd.isna(net20) else net20 > 0)
+    _active_etf_row(g, active_etf)
 
     g = _G(rows, "估值位置")
     if per is not None and not per.empty:
@@ -346,8 +375,9 @@ def _ccp(close: pd.Series, vol: pd.Series, lookback: int = 60, bins: int = 30):
     return float((edges[peak] + edges[peak + 1]) / 2)
 
 
-def short_checks(d: dict) -> list[dict]:
-    """`d`：`_stock_data()` 的輸出。純日線技術面，**不評分、不給買賣點**。"""
+def short_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
+    """`d`：`_stock_data()` 的輸出。純日線技術面，**不評分、不給買賣點**。
+    `active_etf`：主動式 ETF 認養旗標（見 `_active_etf_row`），None → 該列不出現。"""
     px, chp = d.get("px"), d.get("chips")
     rows: list[dict] = []
     if px is None or px.empty:
@@ -410,6 +440,7 @@ def short_checks(d: dict) -> list[dict]:
         net5 = (cc["foreign"] + cc["trust"] + cc["dealer"]).tail(5).sum()
         g("法人 5 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）", f"{_f(net5, 0)} 張",
           None if pd.isna(net5) else net5 > 0)
+    _active_etf_row(g, active_etf)
 
     g = _G(rows, "籌碼密集區")
     ccp = _ccp(c, vol)
