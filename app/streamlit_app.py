@@ -314,6 +314,12 @@ _CSS = """
   .thc-cl-cur::before{content:"現值　";color:var(--thc-faint);}
   .thc-cl-gate::before{content:"門檻　";color:var(--thc-faint);}
 }
+/* 主動式 ETF 每日動向——沿用卡片語言，一檔一框 */
+.ae-stack{display:flex;flex-direction:column;gap:.7rem;margin:.4rem 0 .2rem;}
+.ae-stack .thc-card{height:auto;}
+.ae-stack .sw-cols a{color:var(--thc-accent);text-decoration:none;}
+.ae-stack .sw-cols a:hover{text-decoration:underline;}
+.ae-stack .sw-cols li.flat{list-style:none;margin-left:-1.05rem;color:var(--thc-faint);}
 /* 頁尾「回到頂部」——樣式對齊隔壁的 st.button（切換分頁那顆） */
 a.thc-toplink{display:block;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
   border:1px solid var(--thc-line);color:var(--thc-soft)!important;
@@ -1117,6 +1123,42 @@ def _checklist_page() -> None:
     _page_footer("個股查詢", f"📈 看 {code} 的完整圖表 →")
 
 
+def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *,
+             buys: list | None = None, sells: list | None = None,
+             names: dict | None = None, note: str | None = None,
+             meta_line: str = "") -> str:
+    """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。"""
+    names = names or {}
+
+    def _li(tks: list | None) -> str:
+        if not tks:
+            return '<li class="flat">—</li>'
+        return "".join(
+            f'<li><a href="?code={_esc(t)}" target="_self">{_esc(t)}</a>'
+            f'　{_esc(names.get(t, ""))}</li>' for t in tks)
+
+    parts = [
+        '<div class="thc-head">',
+        f'<span class="thc-tk">{_esc(code)}</span>',
+        f'<span class="thc-cn">{_esc(issuer)}{("・" + _esc(name)) if name else ""}</span>',
+        f'<span class="thc-pill thc-{sev}">{_esc(pill)}</span>',
+        '</div>',
+        f'<div class="thc-ctx">{_esc(ctx)}</div>',
+    ]
+    if note:
+        parts.append(f'<div class="thc-note">{_esc(note)}</div>')
+    if buys is not None or sells is not None:
+        parts.append(
+            '<div class="sw-cols">'
+            f'<div><div class="sw-h sup">加碼 / 新進</div><ul>{_li(buys)}</ul></div>'
+            f'<div><div class="sw-h">調節 / 出清</div><ul>{_li(sells)}</ul></div>'
+            '</div>')
+    if meta_line:
+        parts.append(f'<div class="thc-barcap" style="margin-top:.5rem">{_esc(meta_line)}</div>')
+    return (f'<div class="thc-card thc-{sev}"><div class="thc-stripe"></div>'
+            f'<div class="thc-body">{"".join(parts)}</div></div>')
+
+
 def _active_etf_page() -> None:
     """主動式 ETF 每日動向——那五檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
@@ -1145,6 +1187,8 @@ def _active_etf_page() -> None:
     st.markdown(
         f"**資料日 {anchor}**　·　{synced if synced is not None else '—'} / {total} 檔算得出差分"
         f"　·　快照最後更新 {_ago_human(idx_upd)}")
+    st.caption("目前顯示**近 1 交易日**的變化（資料日 vs 前一交易日）。"
+               "近 5 日變化要等每檔基金的快照歷史累積足夠再開。")
     if meta.get("schema_ok") is False:
         st.error("`schema_ok = False`——旗標已在各分頁 / 卡片整組隱藏，直到管線恢復。")
     _idx_date = (idx_upd or "")[:10]
@@ -1168,39 +1212,47 @@ def _active_etf_page() -> None:
              or list(idx_funds) or list(fm_all))
     missing = set((idx or {}).get("missing") or [])
 
+    cards: list[str] = []
     for code in order:
         fi = idx_funds.get(code) or {}
         fmd = fm_all.get(code) or {}
         issuer = fi.get("issuer") or fmd.get("issuer") or ""
-        title = f"{code}　{issuer}" + (f"・{fi['name']}" if fi.get("name") else "")
+        name = fi.get("name") or ""
         snaps_n = len(list((REPO / "data" / "pcf" / code).glob("*.parquet")))
-        st.markdown(f"#### {title}")
+        fetched = _ago_human(fi.get("fetched_at"))
 
         if code in missing or (not fi and not fmd):
-            st.markdown("🔴 這次 CI 完全沒抓到這一檔——通常是被反爬擋或投信官網改版。")
+            cards.append(_ae_card(
+                code, issuer, name, "neutral", "🔴 沒抓到",
+                "這次 CI 完全沒抓到這一檔。",
+                note="通常是被反爬擋、或投信官網改版——看 CI log 的 `::warning::`。",
+                meta_line=f"最後抓取 {fetched}"))
             continue
+
         if not fmd.get("synced"):
             tail = ("（群益 buyback API 沒有日期參數，只能等隔天累積第二份）"
                     if issuer == "群益" else "")
-            st.markdown(f"🟡 只有 {snaps_n} 份 PCF 快照——要連續兩個交易日才算得出差分{tail}。")
-            st.caption(f"最新 PCF 日 {fi.get('latest_date') or fmd.get('date') or '—'}"
-                       f"　·　抓取 {_ago_human(fi.get('fetched_at'))}")
+            cards.append(_ae_card(
+                code, issuer, name, "warn", "🟡 等隔天",
+                f"最新 PCF 日 {fi.get('latest_date') or fmd.get('date') or '—'}",
+                note=f"目前只有 {snaps_n} 份 PCF 快照——要連續兩個交易日才算得出差分{tail}。",
+                meta_line=f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"))
             continue
 
         date = fmd.get("date") or fi.get("latest_date") or "—"
         buys, sells, nm = _moved_by(code)
-        st.markdown(f"🟢 **{fmd.get('prev_date', '?')} → {date}**"
-                    f"　·　濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔")
-        c1, c2 = st.columns(2)
-        c1.markdown("**加碼 / 新進**\n\n"
-                    + (_bullets([f"{t}　{nm.get(t, '')}" for t in buys]) if buys else "—"))
-        c2.markdown("**調節 / 出清**\n\n"
-                    + (_bullets([f"{t}　{nm.get(t, '')}" for t in sells]) if sells else "—"))
-        st.caption(f"抓取 {_ago_human(fi.get('fetched_at'))}　·　持股 {fi.get('holdings_n', '—')} 檔"
-                   f"　·　磁碟留存 {snaps_n} 份快照")
+        cards.append(_ae_card(
+            code, issuer, name, "good", "🟢 差分已算",
+            f"{fmd.get('prev_date', '?')} → {date}　·　濾掉零星微調後共動 "
+            f"{fmd.get('moved_n', 0)} 檔",
+            buys=buys, sells=sells, names=nm,
+            meta_line=f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
+                      f"　·　磁碟留存 {snaps_n} 份快照"))
+
+    st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
-    st.caption("代號可到「個股查詢」看該股日線；旗標同時掛在「多軌體檢／長波段／短線」分頁上。"
+    st.caption("代號可點進「個股查詢」看該股日線；旗標同時掛在「多軌體檢／長波段／短線」分頁上。"
                f"　·　🔧 爬取失敗會在 CI 顯示 `::warning::`：[rebuild 執行紀錄 →]({_REBUILD_RUNS_URL})")
     _disclaimer()
 
