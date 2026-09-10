@@ -922,6 +922,16 @@ def _factor_row(track: str, code: str) -> dict | None:
     return hit.iloc[0].to_dict() if not hit.empty else None
 
 
+def _safe_checks(fn, *args, **kwargs) -> list[dict]:
+    """跑某一軌的檢核；任何例外 → 就地紅字、回空列，不讓整個「多軌體檢」頁掛掉
+    （這頁只是把判準攤開，單軌算不出來不該連累其他三軌）。"""
+    try:
+        return fn(*args, **kwargs)
+    except Exception as e:  # noqa: BLE001
+        st.error(f"這一軌算不出來：{type(e).__name__}: {e}")
+        return []
+
+
 def _render_checks(rows: list[dict], note: str, missing: str | None = None,
                    disclaimer: str | None = None) -> None:
     st.caption(note)
@@ -1020,7 +1030,7 @@ def _checklist_page() -> None:
     t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 波段", "🔵 價值", "🟢 定存"])
     with t0:
         # 短線是日尺度 → 圖只看近 3 個月
-        _render_checks(cl.short_checks(d, active_etf=_aef),
+        _render_checks(_safe_checks(cl.short_checks, d, active_etf=_aef),
                        "純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。",
                        missing=("這檔在 bundle 沒有價量資料，無法體檢短線軌。"
                                 if px.empty else None),
@@ -1032,7 +1042,7 @@ def _checklist_page() -> None:
             _chart(ch.institutional_net, chp, nm, _ago(95))
     with t1:
         # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
-        _render_checks(cl.swing_checks(d, active_etf=_aef),
+        _render_checks(_safe_checks(cl.swing_checks, d, active_etf=_aef),
                        "門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。趨勢模板只做 7 條，"
                        "不含相對強弱 RS（需全市場橫斷面）。",
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
@@ -1047,7 +1057,7 @@ def _checklist_page() -> None:
             _chart(ch.institutional_net, chp, nm, _ago(120))
     with t2:
         # 價值是年度尺度 → 逐季圖看近 6 年、PE 河流看近 5 年
-        _render_checks(cl.value_checks(fv),
+        _render_checks(_safe_checks(cl.value_checks, fv),
                        "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
                        None if fv is not None else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。")
         st.caption("——對應圖表（價值尺度：近 5～6 年）——")
@@ -1059,7 +1069,7 @@ def _checklist_page() -> None:
             _chart(ch.pe_river, px, per, nm, _ago(1825))
     with t3:
         # 定存看長期：股利連續性 10+ 年、殖利率 5 年分位、負債結構近 6 年
-        _render_checks(cl.deposit_checks(fd),
+        _render_checks(_safe_checks(cl.deposit_checks, fd),
                        "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
                        None if fd is not None else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。")
         st.caption("——對應圖表（定存尺度：股利近 12 年、殖利率近 5 年）——")
