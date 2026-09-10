@@ -455,9 +455,18 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
   「近一日主動式 ETF 加碼／調節」的 context flag（不 gate）。曾實作、已 `git revert`。
   · **撤回原因**：唯一有「每日個股層級」資料的第三方站（ETF 彙整站）`robots.txt` 明寫
     `Disallow: /api/`，使用條款也限制「改作後發布於其他平台」。不繞。
-  · **查證留痕，別再重查**：TWSE OpenAPI 無 consolidated PCF holdings feed（`fund/T86`＝
-    三大法人、`ETFReport/ETFRank`＝排行不含持股）；FundClear（集保，`www.fundclear.com.tw/api/etf/*`）
-    有官方 JSON API 但只到基金/類別層級、無每日個股 PCF、落後數週。
-  · **重做的正路**：直接抓 ETF 發行投信的**每日 PCF／申購買回清單**（法定公開揭露、
-    不需任何人同意）。使用者指定先只做**統一（UPAMC）／野村（Nomura）／復華（Fuh Hwa）**
-    三家的主動式 ETF 當來源——先確認這三家 PCF 頁的格式與可抓性，逐日 diff 出加減碼。
+  · **查證留痕，別再重查（2026-09-10）**：
+    - TWSE OpenAPI：無 consolidated PCF holdings feed（`fund/T86`＝三大法人、`ETFReport/ETFRank`＝排行）。
+    - FundClear（集保）：官方 JSON API 但只到基金/類別層級、無每日個股 PCF、落後數週。
+    - **TWSE MIS（`mis.twse.com.tw`）：只有即時報價 + iNAV（`all_etf.txt`、`getStockInfo.jsp`）。
+      沒有 PCF 持股端點——資料裡的 `nu` 欄是把你導去各投信自己的 PCF 頁。**
+    - MOPS：月/季完整持股，非每日。
+    - **沒有統一的官方 PCF feed，得逐投信抓；且各家難度天差地遠：**
+      · 富邦 `websys.fsit.com.tw/FubonETF/Trade/Pcf.aspx?stkId=XXXX&lan=TW` ＝一個 GET、server 渲染表格、**極簡單**。
+      · 國泰 `cathaysite.com.tw`、兆豐 `megafunds.com.tw/.../trade_pcf.aspx` ＝ `.aspx`＋JS handler、中等。
+      · **統一（`ezmoney.com.tw`，持 00981A/00403A ＝規模第 1、2）：對非瀏覽器 client 無限轉址（反爬）→ 需 headless 或找內部 XHR、難。**
+      · 復華（`fhtrust.com.tw`）：JS 站，PCF 連結不在主頁、要挖。群益：未定位。
+    - PCF 各家只給「當天」、無歷史 → 要自己每日存快照（同處置股套路），第一個 diff 訊號在快照 job 上線後第 2 個交易日。
+  · **重做的正路**：抓 ETF 發行投信每日 PCF（法定公開揭露、不需同意）。準則＝**規模前 5**（不指定投信、不寫死代號，
+    每次動態抓當下排行；~2026-07 為 00981A/00403A/00991A/00982A/00992A ＝統一×2、復華、群益×2）。
+    務實選項：要嘛啃統一的反爬（涵蓋最大兩檔），要嘛退而求其次先做富邦/國泰/兆豐這種好抓的、接受不是規模前段。
