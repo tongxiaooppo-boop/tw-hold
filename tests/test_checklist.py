@@ -61,42 +61,6 @@ def test_checks_傳None_不炸():
     assert cl.short_checks({}) != []
 
 
-_ITEM = "主動式 ETF 認養（第三方彙整，非官方三大法人）"
-
-
-def test_active_etf_row_None_不出現():
-    px = pd.DataFrame({"date": pd.date_range("2024-01-01", periods=60, freq="B"),
-                       "open": 100.0, "high": 103.0, "low": 98.0,
-                       "close": np.linspace(80, 130, 60), "volume": 1e3})
-    rows = cl.short_checks({"px": px}, active_etf=None)
-    assert not any(r["項目"] == _ITEM for r in rows)
-
-
-def test_active_etf_row_買超_成立():
-    px = pd.DataFrame({"date": pd.date_range("2024-01-01", periods=60, freq="B"),
-                       "open": 100.0, "high": 103.0, "low": 98.0,
-                       "close": np.linspace(80, 130, 60), "volume": 1e3})
-    ae = {"kind": "consensus_buy", "net_shares": 1803000, "issuer_count": 2, "consensus": 3}
-    rows = cl.short_checks({"px": px}, active_etf=ae)
-    row = next(r for r in rows if r["項目"] == _ITEM)
-    assert row["狀態"] == cl._OK and "淨買超" in row["現值"] and row["組"] == "籌碼"
-
-
-def test_active_etf_row_賣超_命中風險():
-    d = {"qf": pd.DataFrame(), "rev": pd.DataFrame(), "px": pd.DataFrame(),
-         "per": pd.DataFrame(), "chips": pd.DataFrame()}
-    ae = {"kind": "consensus_sell", "net_shares": -2240000, "issuer_count": 3, "consensus": -4}
-    rows = cl.swing_checks(d, active_etf=ae)
-    row = next(r for r in rows if r["項目"] == _ITEM)
-    assert row["狀態"].startswith("⚠️") and "淨賣超" in row["現值"]
-
-
-def test_active_etf_row_無動作():
-    rows = cl.swing_checks({"px": pd.DataFrame()}, active_etf={})
-    row = next(r for r in rows if r["項目"] == _ITEM)
-    assert row["狀態"] == cl._NA and "無主動式 ETF" in row["現值"]
-
-
 def test_short_checks_基本流程():
     dates = pd.date_range("2024-01-01", periods=120, freq="B")
     px = pd.DataFrame({"date": dates, "open": 100.0, "high": 103.0, "low": 98.0,

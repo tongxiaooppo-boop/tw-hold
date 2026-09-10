@@ -117,69 +117,6 @@ def _bullets(items: list, empty: str = "—") -> str:
     return "\n".join(f"- {x}" for x in items) if items else empty
 
 
-# ── 主動式 ETF 認養旗標（context flag；見 build_active_etf_flags.py）──
-# 只是把「近一日主動式 ETF 對這檔加碼／調節」攤在卡片上，**不 gate 任何進出場**。
-# 第三方彙整、非官方三大法人／投信買賣超。來源過期或抓不到 → 整組隱藏（helper 回空字串）。
-_ACTIVE_LABEL = {
-    "consensus_buy": "🏦 主動ETF 認養", "buy": "🏦 主動ETF 加碼",
-    "consensus_sell": "🏦 主動ETF 調節", "sell": "🏦 主動ETF 調節",
-}
-
-
-def _active_flags() -> dict:
-    """回整份 flags dict；schema 壞或 anchor 落後 > 4 天 → 回 {}（呼叫端一律當「沒有」）。"""
-    d = _load("active_etf_flags.json") or {}
-    m = d.get("_meta") or {}
-    if not m.get("schema_ok"):
-        return {}
-    ad = m.get("anchor_date")
-    try:
-        if ad and (pd.Timestamp(_taipei_today()) - pd.Timestamp(ad)).days > 4:
-            return {}
-    except Exception:
-        pass
-    return d
-
-
-def _active_of(ticker, flags: dict) -> dict | None:
-    return (flags.get("flags") or {}).get(str(ticker or "").split(".")[0]) if flags else None
-
-
-def _active_chip(f: dict | None) -> str:
-    if not f or f.get("kind") in (None, "neutral"):
-        return ""
-    label = _ACTIVE_LABEL.get(f["kind"], "🏦 主動ETF")
-    cons = f.get("consensus")
-    tail = f" ×{abs(cons)}" if isinstance(cons, int) and abs(cons) >= 2 else ""
-    return f'<span class="thc-flag">{_esc(label + tail)}</span>'
-
-
-def _active_evidence(f: dict | None) -> tuple[str, str]:
-    """回 (支持句, 反對句)——只會有一個非空；都空＝這檔沒被主動式 ETF 動。"""
-    if not f or f.get("kind") in (None, "neutral"):
-        return "", ""
-    ns = f.get("net_shares")
-    lots = f"{ns / 1000:+,.0f} 張" if isinstance(ns, (int, float)) else "—"
-    ic = f.get("issuer_count")
-    who = f"{ic} 檔主動 ETF" if isinstance(ic, int) else "主動 ETF"
-    cons = f.get("consensus") or 0
-    strong = "、共識強" if f.get("consensus_strong") and abs(cons) >= 2 else ""
-    same = f"（{abs(cons)} 檔同向{strong}）" if abs(cons) >= 2 else ""
-    if f["kind"] in ("consensus_buy", "buy"):
-        return f"主動式 ETF：{who}近一日淨買超 {lots}{same}", ""
-    return "", f"主動式 ETF 調節：{who}近一日淨賣超 {lots.lstrip('+')}{same}"
-
-
-def _active_legend(flags: dict) -> str:
-    m = flags.get("_meta") or {}
-    if not m:
-        return ""
-    return (f"🏦 主動式 ETF 認養＝近一日「主動式 ETF」對該股的加碼／調節"
-            f"（第三方持股彙整，資料日 {m.get('anchor_date', '—')}，"
-            f"{m.get('stale_etfs', '?')}/{m.get('total_etfs', '?')} 檔 ETF 尚未更新）。"
-            f"**非官方三大法人／投信買賣超，不是機構認養背書。**")
-
-
 # ── 版型 B：判斷卡（使用者裁決 2026-09-08）──────────────────────────────
 _CSS = """
 <style>
@@ -455,18 +392,14 @@ def _cond_table_html(rows: list[dict]) -> str:
     return f"<table>{body}</table>"
 
 
-def _swing_b_html(c: dict, flag: dict | None = None) -> str:
+def _swing_b_html(c: dict) -> str:
     """長波段候選卡——同 B 視覺語言，但沒有 verdict / 買價（狀態型）。
-    支持/反對 + 條件表 + 失效條件全進卡片；只有「複製給 AI」在外面。
-    `flag`：主動式 ETF 認養旗標（context，非 gate）。"""
+    支持/反對 + 條件表 + 失效條件全進卡片；只有「複製給 AI」在外面。"""
     def _ul(items, empty):
         items = [x for x in (items or []) if x not in (None, "")]
         lis = "".join(f"<li>{_esc(x)}</li>" for x in items) or f"<li>{_esc(empty)}</li>"
         return f"<ul>{lis}</ul>"
 
-    sup_x, opp_x = _active_evidence(flag)
-    support = list(c.get("support") or []) + ([sup_x] if sup_x else [])
-    oppose = list(c.get("oppose") or []) + ([opp_x] if opp_x else [])
     risk = c.get("risk_pct_at_close")
     ctx = "　·　".join(x for x in [
         _esc(c.get("industry") or ""),
@@ -481,12 +414,12 @@ def _swing_b_html(c: dict, flag: dict | None = None) -> str:
     return (
         f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
         f'<div class="thc-head">{_tk_link(c.get("ticker"))}'
-        f'<span class="thc-cn">{_esc(c.get("name",""))}</span>{_active_chip(flag)}'
+        f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
         + (f'<span class="sw-risk">{risk:+.0%} 風險</span>' if risk is not None else "")
         + f'</div><div class="thc-ctx">{ctx}</div>'
         f'<div class="sw-cols">'
-        f'<div><div class="sw-h sup">支持</div>{_ul(support, "（未發現額外支持證據）")}</div>'
-        f'<div><div class="sw-h">反對</div>{_ul(oppose, "（未發現反對證據——代表檢查不足）")}</div>'
+        f'<div><div class="sw-h sup">支持</div>{_ul(c.get("support"), "（未發現額外支持證據）")}</div>'
+        f'<div><div class="sw-h">反對</div>{_ul(c.get("oppose"), "（未發現反對證據——代表檢查不足）")}</div>'
         f'</div>'
         f'<details class="thc-details"><summary>條件成立狀態 + 失效條件</summary>'
         f'<div class="sw-h" style="margin-top:.5rem">進場條件（全部成立才進候選池）</div>'
@@ -586,10 +519,6 @@ def _swing_page(payload: dict | None) -> None:
     st.caption(f"資料日期 {meta.get('trading_date', '—')}　·　{meta.get('pool_note', '')}"
                f"　·　重算 {meta.get('rebuilt_at', '—')}")
 
-    flags = _active_flags()
-    if flags:
-        st.caption(_active_legend(flags))
-
     chg = payload.get("changes", {})
     if chg.get("added") or chg.get("removed"):
         cc = st.columns(2)
@@ -598,8 +527,7 @@ def _swing_page(payload: dict | None) -> None:
 
     st.markdown(
         '<div class="thc-grid">'
-        + "".join(_swing_b_html(c, _active_of(c.get("ticker"), flags))
-                  for c in payload["candidates_pool"]) + "</div>",
+        + "".join(_swing_b_html(c) for c in payload["candidates_pool"]) + "</div>",
         unsafe_allow_html=True)
 
     with st.expander("複製給 AI"):
@@ -627,9 +555,9 @@ def _taipei_today() -> str:
     return f"{datetime.now(timezone.utc) + timedelta(hours=8):%Y-%m-%d}"
 
 
-def _short_b_html(c: dict, flag: dict | None = None) -> str:
+def _short_b_html(c: dict) -> str:
     """單檔短線候選卡——沿用 B 視覺語言，狀態型：沒有 verdict / 買價 / 排名。
-    每一格都是 tw-swing `share-*.html` 上看得到的資料；`flag` 是主動式 ETF 認養旗標。"""
+    每一格都是 tw-swing `share-*.html` 上看得到的資料。"""
     def _n(v, fmt):
         return fmt.format(v) if isinstance(v, (int, float)) else "—"
 
@@ -651,7 +579,7 @@ def _short_b_html(c: dict, flag: dict | None = None) -> str:
         f'<div class="thc-head">'
         f'<span class="thc-tk"><a href="?code={_esc(code)}" target="_self">{_esc(c.get("ticker"))}</a></span>'
         f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
-        f'<span class="thc-flag">{_esc(c.get("signal") or "")}</span>{_active_chip(flag)}</div>'
+        f'<span class="thc-flag">{_esc(c.get("signal") or "")}</span></div>'
         f'<div class="thc-ctx">{ctxbits}</div>'
         f'<div class="thc-note">{_esc(c.get("note") or "")}</div>'
         f'<div class="thc-barcap" style="margin-top:.45rem">{_esc(meta2)}</div>'
@@ -696,13 +624,9 @@ def _shortterm_page() -> None:
         _disclaimer(SHORT_DISCLAIMER)
         return
 
-    flags = _active_flags()
-    if flags:
-        st.caption(_active_legend(flags))
     st.subheader(f"當日候選（{len(cands)} 檔）")
-    st.markdown('<div class="thc-grid">'
-                + "".join(_short_b_html(c, _active_of(c.get("ticker"), flags)) for c in cands)
-                + "</div>", unsafe_allow_html=True)
+    st.markdown('<div class="thc-grid">' + "".join(_short_b_html(c) for c in cands) + "</div>",
+                unsafe_allow_html=True)
 
     with st.expander("複製給 AI"):
         lines = [f"# 短線清單 tw-swing（產生日 {asof}，非投資建議、隔日開盤前有效）", ""]
@@ -817,13 +741,6 @@ def _stock_page() -> None:
         return
 
     name = code
-
-    _aflags = _active_flags()
-    _aef = _active_of(code, _aflags)
-    if _aef and _aef.get("kind") not in (None, "neutral"):
-        _sx, _ox = _active_evidence(_aef)
-        st.markdown(f'<div class="thc-chips">{_active_chip(_aef)}</div>', unsafe_allow_html=True)
-        st.caption((_sx or _ox) + "　—　" + _active_legend(_aflags))
 
     if not d["px"].empty:
         end = pd.Timestamp(pd.to_datetime(d["px"]["date"]).max())
@@ -1000,14 +917,6 @@ def _checklist_page() -> None:
     name = (fv or fd or {}).get("name") or ""
     nm = name or code
     st.markdown(f"### {code}{' ' + name if name and name != code else ''}")
-
-    # 主動式 ETF 認養：來源正常 → 傳 flag dict（沒動作就傳 {}，檢核表顯示「無」）；
-    # 來源過期／抓不到 → 傳 None，檢核表整列不出現。
-    _aflags = _active_flags()
-    _aef = (_active_of(code, _aflags) or {}) if _aflags else None
-    if _aflags:
-        st.caption(_active_legend(_aflags))
-
     qf, px, per, div, rev, chp = (d["qf"], d["px"], d["per"], d["div"], d["rev"], d["chips"])
     end = pd.to_datetime(px["date"]).max() if not px.empty else None
 
@@ -1017,7 +926,7 @@ def _checklist_page() -> None:
     t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 波段", "🔵 價值", "🟢 定存"])
     with t0:
         # 短線是日尺度 → 圖只看近 3 個月
-        _render_checks(cl.short_checks(d, active_etf=_aef),
+        _render_checks(cl.short_checks(d),
                        "純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。",
                        missing=("這檔在 bundle 沒有價量資料，無法體檢短線軌。"
                                 if px.empty else None),
@@ -1029,7 +938,7 @@ def _checklist_page() -> None:
             _chart(ch.institutional_net, chp, nm, _ago(95))
     with t1:
         # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
-        _render_checks(cl.swing_checks(d, active_etf=_aef),
+        _render_checks(cl.swing_checks(d),
                        "門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。趨勢模板只做 7 條，"
                        "不含相對強弱 RS（需全市場橫斷面）。",
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
