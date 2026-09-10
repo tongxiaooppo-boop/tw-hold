@@ -114,6 +114,32 @@ def test_card_b_html_單張():
     assert "thc-good" in out and "估值買價" in out
 
 
+def test_短線分頁_切過去不炸():
+    # 來源網路可達與否都要「不丟例外」：拉不到 → st.error，拉得到 → 卡片。
+    at = AppTest.from_file(REPO_APP, default_timeout=40)
+    at.session_state["_nav"] = "短線"
+    at.run()
+    assert not at.exception
+    assert "短線清單（tw-swing）" in " ".join(h.value for h in at.header)
+    txt = " ".join([m.value for m in at.markdown]
+                   + [e.value for e in at.error] + [i.value for i in at.info])
+    assert ("thc-card" in txt) or ("拉不到" in txt) or ("無訊號" in txt)
+
+
+def test_short_b_html_單張():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    c = {"ticker": "6672.TW", "name": "騰輝電子-KY", "pool_label": "一號池 · 核心",
+         "signal": "領先股回檔進場", "signal_date": "2026-09-07", "entry": 299.5,
+         "stop": 250.29, "risk_pct": 0.164, "position_pct": 0.03, "rs_rank": 0.966,
+         "vol_ratio": 3.07, "note": "回測 MA50 帶量彈"}
+    out = app._short_b_html(c)
+    assert "6672.TW" in out and "?code=6672" in out       # 連結去掉 .TW 後綴
+    assert "騰輝電子-KY" in out and "領先股回檔進場" in out
+    assert "thc-card" in out
+
+
 def test_verdict_cat_定存內嵌數字歸類():
     import sys
     sys.path.insert(0, "app")

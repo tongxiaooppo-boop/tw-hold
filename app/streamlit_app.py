@@ -41,6 +41,10 @@ SHORT_DISCLAIMER = (
     "**零回測、零驗證**，雜訊極高。tw-hold 是長期持有工具；短線交易請用 tw-swing。"
     "融資融券變化 bundle 沒有 → 相關條件不出現。**不給訊號、不給買賣點。**"
 )
+# 「短線」分頁的清單來自 tw-swing 的分享級每日產出（結構化版）。這支 JSON 在
+# Cloudflare Pages 上是公開路徑（`functions/_middleware.js` 白名單），免 PAT。
+# 內容 = tw-swing `share-*.html` 的資料版，含它自己的分享級免責（`disclaimer`）。
+_SWING_SHARE_URL = "https://tw-swing.pages.dev/share-latest.json"
 
 #: 英文欄名 → 中文（明細表 / 複製給 AI 用）
 LABELS = {
@@ -532,6 +536,110 @@ def _swing_page(payload: dict | None) -> None:
     _disclaimer(SWING_DISCLAIMER)
 
 
+@st.cache_data(ttl=1800, show_spinner="拉 tw-swing 每日清單…")
+def _fetch_swing_share() -> dict | None:
+    """抓 tw-swing 分享級每日清單（結構化版）。拉不到就回 None——這一頁沒有
+    這份資料就是空的，不該讓整個 app 掛掉，也不該無聲顯示舊的。"""
+    import json as _json
+    import urllib.request
+    try:
+        req = urllib.request.Request(_SWING_SHARE_URL, headers={"User-Agent": "tw-hold"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return _json.loads(r.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001  網路 / JSON / 逾時都退化成「沒有清單」
+        return None
+
+
+def _taipei_today() -> str:
+    from datetime import datetime, timedelta, timezone
+    return f"{datetime.now(timezone.utc) + timedelta(hours=8):%Y-%m-%d}"
+
+
+def _short_b_html(c: dict) -> str:
+    """單檔短線候選卡——沿用 B 視覺語言，狀態型：沒有 verdict / 買價 / 排名。
+    每一格都是 tw-swing `share-*.html` 上看得到的資料。"""
+    def _n(v, fmt):
+        return fmt.format(v) if isinstance(v, (int, float)) else "—"
+
+    code = str(c.get("ticker") or "").split(".")[0]      # 6538.TWO → 6538（個股查詢用）
+    ctxbits = "　·　".join(x for x in [
+        _esc(c.get("pool_label") or ""),
+        f"進場 {_n(c.get('entry'), '{:,.2f}')}",
+        f"停損 {_n(c.get('stop'), '{:,.2f}')}",
+        f"風險 {_n(c.get('risk_pct'), '{:.1%}')}",
+        f"部位 {_n(c.get('position_pct'), '{:.1%}')}",
+    ] if x and not x.endswith("—"))
+    meta2 = "　·　".join([
+        f"RS {_n(c.get('rs_rank'), '{:.0%}')}",
+        f"量比 {_n(c.get('vol_ratio'), '{:.1f}')}",
+        f"觸發日 {_esc(c.get('signal_date') or '—')}",
+    ])
+    return (
+        f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
+        f'<div class="thc-head">'
+        f'<span class="thc-tk"><a href="?code={_esc(code)}" target="_self">{_esc(c.get("ticker"))}</a></span>'
+        f'<span class="thc-cn">{_esc(c.get("name",""))}</span>'
+        f'<span class="thc-flag">{_esc(c.get("signal") or "")}</span></div>'
+        f'<div class="thc-ctx">{ctxbits}</div>'
+        f'<div class="thc-note">{_esc(c.get("note") or "")}</div>'
+        f'<div class="thc-barcap" style="margin-top:.45rem">{_esc(meta2)}</div>'
+        f'</div></div>')
+
+
+def _shortterm_page() -> None:
+    _disclaimer(SHORT_DISCLAIMER)
+    st.header("短線清單（tw-swing）")
+    st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
+               "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
+
+    data = _fetch_swing_share()
+    if data is None:
+        st.error("拉不到 tw-swing 每日清單（網路或來源暫時無法存取）。"
+                 "可直接看 https://tw-swing.pages.dev/share-latest")
+        _disclaimer(SHORT_DISCLAIMER)
+        return
+
+    asof = data.get("asof", "—")
+    gen = data.get("generated_at", "—")
+    wd = data.get("weekday", "")
+    # 「整群計算時間」放在最顯眼的地方；當天沒產出時明講，不靜默拿舊的當新的。
+    st.caption(f"**清單產生日 {asof}（{wd}）**　·　產生時刻 {gen}（台北）　·　來源 tw-swing")
+    today = _taipei_today()
+    if asof != "—" and asof < today:
+        lag = (pd.Timestamp(today) - pd.Timestamp(asof)).days
+        msg = (f"⚠️ 這份是 **{asof}** 產生的清單，距今 {lag} 天。"
+               "若今天是交易日、盤後仍停在這個日期，代表 tw-swing 今日尚無新產出——"
+               "**別把這份當今天的清單看**。")
+        (st.warning if lag >= 4 else st.info)(msg)
+
+    for d in data.get("disclaimer", []):
+        st.caption("· " + d)
+    for p in data.get("pools", []):
+        if p.get("warn_html"):
+            st.warning(p["warn_html"])
+
+    cands = data.get("candidates", [])
+    if data.get("empty") or not cands:
+        st.info(f"tw-swing 在 {asof} 收盤後跑完，**當日無訊號**。")
+        _disclaimer(SHORT_DISCLAIMER)
+        return
+
+    st.subheader(f"當日候選（{len(cands)} 檔）")
+    st.markdown('<div class="thc-grid">' + "".join(_short_b_html(c) for c in cands) + "</div>",
+                unsafe_allow_html=True)
+
+    with st.expander("複製給 AI"):
+        lines = [f"# 短線清單 tw-swing（產生日 {asof}，非投資建議、隔日開盤前有效）", ""]
+        for c in cands:
+            lines.append(
+                f"- {c.get('ticker')} {c.get('name','')}｜{c.get('signal','')}"
+                f"｜進場 {c.get('entry')}｜停損 {c.get('stop')}｜觸發日 {c.get('signal_date')}"
+                f"｜{c.get('note','')}")
+        st.code("\n".join(lines), language="markdown")
+
+    _disclaimer(SHORT_DISCLAIMER)
+
+
 @st.cache_resource(show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
 def _ensure_bundle():
     from bundle_data import ensure_assets
@@ -873,7 +981,7 @@ def _checklist_page() -> None:
 
 
 APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
-NAV = ["價值", "定存", "長波段", "個股查詢", "多軌體檢"]
+NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢"]
 
 
 def _route() -> None:
@@ -894,7 +1002,7 @@ def main() -> None:
     if goto in NAV:
         st.session_state["_nav"] = goto
     st.title(APP_NAME)
-    st.caption("長波段 / 價值 / 定存三清單 + 個股查詢。**候選 + 為什麼，不是建議。**"
+    st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
     nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
@@ -909,6 +1017,8 @@ def main() -> None:
                    "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（§7.3）。")
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
+    elif nav == "短線":
+        _shortterm_page()
     elif nav == "個股查詢":
         _stock_page()
     else:
