@@ -1,0 +1,330 @@
+{
+ "_meta": {
+  "source": "自建 PCF（統一／復華／群益官網每日揭露）",
+  "anchor_date": "2026-09-09",
+  "market_date": "2026-09-09",
+  "fetched_at": "2026-09-10T04:38:54+00:00",
+  "total_etfs": 5,
+  "synced_etfs": 3,
+  "stale_etfs": 2,
+  "funds": {
+   "00981A": {
+    "synced": true,
+    "date": "2026-09-08",
+    "prev_date": "2026-09-06",
+    "moved_n": 5
+   },
+   "00403A": {
+    "synced": true,
+    "date": "2026-09-09",
+    "prev_date": "2026-09-06",
+    "moved_n": 15
+   },
+   "00991A": {
+    "synced": true,
+    "date": "2026-09-09",
+    "prev_date": "2026-09-08",
+    "moved_n": 5
+   },
+   "00982A": {
+    "synced": false,
+    "date": "2026-09-09",
+    "moved_n": 0
+   },
+   "00992A": {
+    "synced": false,
+    "date": "2026-09-09",
+    "moved_n": 0
+   }
+  },
+  "schema_ok": true
+ },
+ "flags": {
+  "2303": {
+   "name": "聯電",
+   "industry": null,
+   "net_shares": 728393,
+   "net_amount": 103067660,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "2308": {
+   "name": "台達電",
+   "industry": null,
+   "net_shares": 40227,
+   "net_amount": 72206650,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "2327": {
+   "name": "國巨*",
+   "industry": null,
+   "net_shares": 140743,
+   "net_amount": 79519823,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "2330": {
+   "name": "台積電",
+   "industry": null,
+   "net_shares": 885744,
+   "net_amount": 2183359953,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00981A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "2345": {
+   "name": "智邦",
+   "industry": null,
+   "net_shares": -62172,
+   "net_amount": -125276812,
+   "issuer_count": 2,
+   "consensus": 0,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [
+    "00991A"
+   ],
+   "kind": "sell"
+  },
+  "2383": {
+   "name": "台光電",
+   "industry": null,
+   "net_shares": 27517,
+   "net_amount": 147901982,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "2454": {
+   "name": "聯發科",
+   "industry": null,
+   "net_shares": 133665,
+   "net_amount": 618199240,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
+   "buyers": [
+    "00403A",
+    "00991A"
+   ],
+   "sellers": [],
+   "kind": "consensus_buy"
+  },
+  "3008": {
+   "name": "大立光",
+   "industry": null,
+   "net_shares": -78431,
+   "net_amount": -538819295,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "3017": {
+   "name": "奇鋐",
+   "industry": null,
+   "net_shares": -254069,
+   "net_amount": -858752689,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "3037": {
+   "name": "欣興",
+   "industry": null,
+   "net_shares": 133289,
+   "net_amount": 132355742,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "3653": {
+   "name": "健策",
+   "industry": null,
+   "net_shares": 16474,
+   "net_amount": 94888835,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "3665": {
+   "name": "貿聯-KY",
+   "industry": null,
+   "net_shares": -102718,
+   "net_amount": -202868838,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell"
+  },
+  "5274": {
+   "name": "信驊",
+   "industry": null,
+   "net_shares": -67050,
+   "net_amount": -1247472281,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "6223": {
+   "name": "旺矽",
+   "industry": null,
+   "net_shares": 156446,
+   "net_amount": 878443744,
+   "issuer_count": 3,
+   "consensus": 3,
+   "consensus_strong": true,
+   "buyers": [
+    "00403A",
+    "00981A",
+    "00991A"
+   ],
+   "sellers": [],
+   "kind": "consensus_buy"
+  },
+  "6274": {
+   "name": "台燿",
+   "industry": null,
+   "net_shares": -267261,
+   "net_amount": -359465819,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00991A"
+   ],
+   "kind": "sell"
+  },
+  "6669": {
+   "name": "緯穎",
+   "industry": null,
+   "net_shares": -293866,
+   "net_amount": -683238275,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
+   "buyers": [],
+   "sellers": [
+    "00403A",
+    "00991A"
+   ],
+   "kind": "consensus_sell"
+  },
+  "6805": {
+   "name": "富世達",
+   "industry": null,
+   "net_shares": 119534,
+   "net_amount": 274331629,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "8210": {
+   "name": "勤誠",
+   "industry": null,
+   "net_shares": -279015,
+   "net_amount": -255577496,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell"
+  },
+  "8358": {
+   "name": "金居",
+   "industry": null,
+   "net_shares": -195587,
+   "net_amount": -102878922,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "8996": {
+   "name": "高力",
+   "industry": null,
+   "net_shares": -276154,
+   "net_amount": -371426721,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell"
+  }
+ }
+}
