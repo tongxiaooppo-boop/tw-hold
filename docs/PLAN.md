@@ -464,9 +464,12 @@ v3.0 曾把長波段移到 tw-swing pool3（Y4/Y1 + 長出場 + 週批次，走�
   · **實作**：`scripts/pcf_fetchers.py`（三家 fetcher + FUNDS 設定）→ `scripts/snapshot_pcf.py`
     （rebuild.yml 每天跑，落 `data/pcf/<code>/<date>.parquet` 進版控，比照處置股，每檔留 15 份）
     → `build_active_etf_flags.py`（每檔最近兩份快照差分 → `data/derived/active_etf_flags.json`）。
-    方向看**權重當量的主動股數差**（`|Δshares_active|×price/nav`），已用受益權單位數
-    `flow = units_T/units_prev` 還原申贖等比縮放 → 申贖與市值漂移都不會誤判成加碼/調節。
+    方向看**權重當量的主動股數差**（`|Δshares_active|×price/nav`）。
     第一個 diff 訊號在快照 job 上線後**第 2 個交易日**。
+    ~~已用受益權單位數 `flow = units_T/units_prev` 還原申贖等比縮放~~ ——
+    **2026-09-11 拿掉**：拿真實 PCF（00403A 09-09→09-10）比對第三方站截圖，
+    證明申贖不是均分整個籃子交割，流量修正反而把股數沒動的持股誤判成加碼。
+    現在直接用真實股數差，賣出也可能是基金應付贖回被迫調節，頁面上有標。
   · **規模前 5（wantgoo 2026-09-10 實查）**：00981A(2840億)/00403A(1581億)/00991A(795億)/
     00982A(509億)/00992A(415億)＝統一×2、復華×1、群益×2。清單穩定，每月對一次 wantgoo；
     `snapshot_pcf.py` 每次用各家自報 nav 重排寫進 `_index.json[nav_rank]` 當 sanity check。

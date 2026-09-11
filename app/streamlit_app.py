@@ -179,8 +179,9 @@ def _active_legend(flags: dict) -> str:
     stale = m.get("stale_etfs")
     stale_txt = f"，{stale}/{m.get('total_etfs', '?')} 檔尚未更新" if stale else ""
     return (f"🏦 主動式 ETF 認養＝近一日「規模前五大主動式 ETF」對該股的加碼／調節"
-            f"（{_ACTIVE_SRC}，已還原申贖流量，資料日 {m.get('anchor_date', '—')}{stale_txt}）。"
-            f"**非官方三大法人／投信買賣超，不是機構認養背書。**")
+            f"（{_ACTIVE_SRC}，真實股數差，資料日 {m.get('anchor_date', '—')}{stale_txt}）。"
+            f"**非官方三大法人／投信買賣超，不是機構認養背書**；賣出也可能是基金"
+            f"應付大額贖回而被迫調節，不一定代表看壞後市。")
 
 
 _PCF_INDEX = REPO / "data" / "pcf" / "_index.json"
@@ -1214,7 +1215,8 @@ def _active_etf_page() -> None:
     st.header("主動式 ETF 每日動向", anchor="top")
     st.caption(
         "規模前五大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
-        "持股差分＝這五檔當日「主動選股」的加碼／調節（已用受益權單位數還原申贖，純申贖不算）。"
+        "真實股數差＝這五檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
+        "賣出也可能是基金應付大額贖回被迫調節，不一定是看壞這檔股票。"
         f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
 
     idx = _load_pcf_index()
