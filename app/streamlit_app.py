@@ -216,20 +216,31 @@ def _ago_human(iso: str | None) -> str:
     return f"{int(sec // 86400)} 天前"
 
 
-# ── 版型 B：判斷卡（使用者裁決 2026-09-08）──────────────────────────────
+# ── 版型 B：判斷卡（使用者裁決 2026-09-08；配色「北歐靜謐」方案 C，2026-09-11）──
+# 卡片依「判斷類別」暈染色（好／警示／中性），不是漲跌色；漲跌色只留給真的漲跌
+# （目前只有個股 K 線，見 stockcharts.py 的 --thc-up/--thc-down 對應色）。
+# 這裡的變數是唯一色源——要微調配色只改這個 :root 區塊，其餘規則一律吃 var()。
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Serif+TC:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&family=Noto+Serif+TC:wght@600&display=swap');
 :root{
-  --thc-surface:#1e211a; --thc-surface2:#262a20; --thc-line:#333a2d;
-  --thc-ink:#e9ece6; --thc-soft:#a3ada2; --thc-faint:#7c8677;
-  --thc-accent:#5fb89e;
-  --thc-good:#68b784; --thc-good-bg:#1e2c22;
-  --thc-warn:#d69f57; --thc-warn-bg:#2e2717;
-  --thc-neutral:#9aa39a; --thc-neutral-bg:#262b24;
-  --thc-flag:#d5894f;
-  --thc-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --thc-bg:#EEF1F4;
+  --thc-surface:#FFFFFF; --thc-surface2:#F5F7F9; --thc-line:#E4E8EC;
+  --thc-ink:#2B333B; --thc-soft:#5E6B76; --thc-faint:#8A97A3;
+  --thc-accent:#5C7A72;
+  /* 判斷類卡片暈染——good=通過/推薦、warn=存疑/風險、neutral=一般 */
+  --thc-good:#5C7A72; --thc-good-bg:#DEE9E6;
+  --thc-warn:#8A6A5F; --thc-warn-bg:#F1E3DF;
+  --thc-neutral:#5E7686; --thc-neutral-bg:#DEE7EC;
+  --thc-flag:#8A6A5F;
+  --thc-bad:#B5453B;
+  /* 漲跌色（台股慣例，紅漲綠跌）——只給真正的價格漲跌用，不要拿來標判斷結果 */
+  --thc-up:#C4574A; --thc-down:#4A7D74;
+  --thc-sans:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --thc-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
+.stApp{background:var(--thc-bg);}
+.stApp, .stApp p, .stApp li, .stApp label, .stApp span{font-family:var(--thc-sans);}
 .thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:stretch;margin-top:.3rem;}
 .thc-grid > .thc-card{height:100%;}
 @media (min-width:900px){.thc-grid{grid-template-columns:1fr 1fr;}}
@@ -257,11 +268,11 @@ _CSS = """
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 .thc-big.up{color:var(--thc-good);}
 .thc-cap{font-size:.78rem;color:var(--thc-faint);padding-bottom:.18rem;}
-.thc-bar{margin:.6rem 0 .25rem;height:7px;border-radius:99px;background:#2c332a;position:relative;}
-.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:rgba(104,183,132,.30);
-  border:1px solid rgba(104,183,132,.5);border-radius:99px;}
-.thc-bar .n{position:absolute;top:-4px;width:3px;height:15px;background:#e9ece6;
-  border-radius:2px;box-shadow:0 0 0 1.5px #131511;}
+.thc-bar{margin:.6rem 0 .25rem;height:7px;border-radius:99px;background:var(--thc-line);position:relative;}
+.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:rgba(92,122,114,.28);
+  border:1px solid rgba(92,122,114,.5);border-radius:99px;}
+.thc-bar .n{position:absolute;top:-4px;width:3px;height:15px;background:var(--thc-ink);
+  border-radius:2px;box-shadow:0 0 0 1.5px var(--thc-bg);}
 .thc-barcap{font-size:.72rem;color:var(--thc-soft);font-family:var(--thc-mono);
   display:flex;justify-content:space-between;gap:.5rem;}
 .thc-note{font-size:.8rem;color:var(--thc-soft);margin:.5rem 0 .1rem;}
@@ -284,7 +295,7 @@ _CSS = """
 .sw-cols li{margin:.16rem 0;}
 @media (min-width:560px){.sw-cols{grid-template-columns:1fr 1fr;}}
 .thc-details table{width:100%;border-collapse:collapse;margin-top:.45rem;}
-.thc-details td{padding:.22rem .1rem;border-bottom:1px solid var(--thc-line);}
+.thc-details td{padding:.22rem .1rem;border-bottom:.5px solid var(--thc-line);}
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
@@ -301,7 +312,7 @@ _CSS = """
 .thc-cl-cur{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 .thc-cl-st{font-weight:600;white-space:nowrap;}
 .thc-cl-st.good{color:var(--thc-good);}
-.thc-cl-st.bad{color:#e57373;}
+.thc-cl-st.bad{color:var(--thc-bad);}
 .thc-cl-st.warn{color:var(--thc-warn);}
 .thc-cl-st.na{color:var(--thc-faint);}
 @media (max-width:640px){
