@@ -64,11 +64,21 @@ LABELS = {
     "yield_pctile_5y": "殖利率5年分位", "div_years": "連續配息年", "last_cash_dividend": "近一次現金股利",
     "ann_vol": "年化週波動", "payout_ratio_ttm": "配息率TTM", "cyclical_penalty": "景氣循環懲罰",
     "debt_ratio": "負債比",
+    # 長波段候選池（狀態型，沒有 verdict）——沒登記的話「複製給 AI」會吐英文欄名，
+    # 而且比率欄不會換算成 %（0.92 其實是 +92%，AI 讀不出來，2026-09-11 修）。
+    "eps_yoy_q": "季 EPS YoY", "revenue_yoy": "月營收 YoY", "revenue_accel": "月營收 YoY 加速",
+    "inst_net20": "法人 20 日淨買超（股）", "trend_cnt": "Minervini 趨勢模板（滿分 8）",
+    "dist_50ma": "距 50MA", "dist_52w_high": "距 52 週高", "dist_200ma": "距 200MA",
+    "risk_stop": "停損參考位", "risk_pct_at_close": "現價到停損位的風險",
+    "max_buy": "可買上限", "conditions": "進場條件狀態", "invalidation": "失效條件現況",
+    "support": "支持", "oppose": "反對",
 }
 PCT_FIELDS = {"roe", "fcf_yield", "norm_ey", "gross_margin", "upside_pct", "cur_yield",
               "yield_floor", "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
               "yield_pctile_5y", "net_cash_to_mktcap", "payout_ratio_ttm", "debt_ratio",
-              "industry_ret_6m"}
+              "industry_ret_6m",
+              "eps_yoy_q", "revenue_yoy", "dist_50ma", "dist_52w_high", "dist_200ma",
+              "risk_pct_at_close"}
 
 # 卡片臉上（明細以外）不重複顯示的欄位——這些已在卡片臉上以其他形式出現。
 FACE_SKIP = {
@@ -102,7 +112,9 @@ def _fmt(field: str, v) -> str:
     if isinstance(v, bool):
         return "是" if v else "否"
     if isinstance(v, (int, float)):
-        return f"{v * 100:.1f}%" if field in PCT_FIELDS else f"{v:,.2f}"
+        if field in PCT_FIELDS:
+            return f"{v * 100:.1f}%"
+        return f"{v:,}" if isinstance(v, int) else f"{v:,.2f}"
     return str(v)
 
 
@@ -143,6 +155,12 @@ def _active_flags() -> dict:
     return d
 
 
+def _span_label(n) -> str:
+    """旗標實際涵蓋幾個交易日。某檔基金漏抓一天時它的差分就是跨日的——文案照實講，
+    不要一律寫「近一日」（2026-09-11 修；判定見 build_active_etf_flags._span_days）。"""
+    return f"近 {int(n)} 個交易日" if isinstance(n, int) and n > 1 else "近一日"
+
+
 def _active_of(ticker, flags: dict) -> dict | None:
     return (flags.get("flags") or {}).get(str(ticker or "").split(".")[0]) if flags else None
 
@@ -167,9 +185,10 @@ def _active_evidence(f: dict | None) -> tuple[str, str]:
     cons = f.get("consensus") or 0
     strong = "、共識強" if f.get("consensus_strong") and abs(cons) >= 2 else ""
     same = f"（{abs(cons)} 檔同向{strong}）" if abs(cons) >= 2 else ""
+    win = _span_label(f.get("span_days"))
     if f["kind"] in ("consensus_buy", "buy"):
-        return f"主動式 ETF：{who}近一日淨買超 {lots}{same}", ""
-    return "", f"主動式 ETF 調節：{who}近一日淨賣超 {lots.lstrip('+')}{same}"
+        return f"主動式 ETF：{who}{win}淨買超 {lots}{same}", ""
+    return "", f"主動式 ETF 調節：{who}{win}淨賣超 {lots.lstrip('+')}{same}"
 
 
 def _active_legend(flags: dict) -> str:
@@ -178,8 +197,14 @@ def _active_legend(flags: dict) -> str:
         return ""
     stale = m.get("stale_etfs")
     stale_txt = f"，{stale}/{m.get('total_etfs', '?')} 檔尚未更新" if stale else ""
-    return (f"🏦 主動式 ETF 認養＝近一日「規模前五大主動式 ETF」對該股的加碼／調節"
-            f"（{_ACTIVE_SRC}，真實股數差，資料日 {m.get('anchor_date', '—')}{stale_txt}）。"
+    # 有基金漏抓一天 → 它的差分跨 > 1 個交易日，這裡要講清楚是哪幾檔（stale_etfs
+    # 抓不到這種：它有兩份快照、只是不相鄰）。
+    multi = m.get("multi_day_etfs") or []
+    multi_txt = (f"，其中 {'／'.join(multi)} 因為中間漏抓，差分跨 "
+                 f"{m.get('max_span_days', 2)} 個交易日" if multi else "")
+    return (f"🏦 主動式 ETF 認養＝近一次揭露變化中「規模前五大主動式 ETF」對該股的加碼／調節"
+            f"（{_ACTIVE_SRC}，真實股數差，資料日 {m.get('anchor_date', '—')}"
+            f"{stale_txt}{multi_txt}）。"
             f"**非官方三大法人／投信買賣超，不是機構認養背書**；賣出也可能是基金"
             f"應付大額贖回而被迫調節，不一定代表看壞後市。")
 
@@ -237,12 +262,19 @@ _CSS = """
   --thc-bad:#B5453B;
   /* 漲跌色（台股慣例，紅漲綠跌）——只給真正的價格漲跌用，不要拿來標判斷結果 */
   --thc-up:#C4574A; --thc-down:#4A7D74;
+  /* 同一個紅、給需要半透明的地方（雷達徽章）——別再寫死 rgba(196,87,74,…) */
+  --thc-up-rgb:196,87,74;
   --thc-sans:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --thc-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
 .stApp{background:var(--thc-bg);}
+/* Streamlit 的 Material 圖示是「靠 ligature 把文字變成圖」的 <span>，字體被蓋掉就會
+   顯示成 keyboard_arrow_right 這種原始文字。預設 testid 是 stIconMaterial，但
+   DynamicIcon 允許呼叫端覆寫（stAlertDynamicIcon / stToastDynamicIcon /
+   stFileChipIcon*）——都含 "Icon"，用包含式比對一次蓋掉（2026-09-11）。
+   app 自己的 <span> 沒有 data-testid，不受影響。 */
 .stApp, .stApp p, .stApp li, .stApp label,
-.stApp span:not([data-testid="stIconMaterial"]){font-family:var(--thc-sans);}
+.stApp span:not([data-testid*="Icon"]){font-family:var(--thc-sans);}
 /* 分頁選單（st.radio）前面原生的圓圈勾選標——藏掉，只留文字，雷達徽章疊在文字後面就好。
    結構是 <label data-testid="stRadioOption"><input type=radio hidden><div><div>[圓圈][文字]</div></div></label>；
    圓圈那個 div 沒有 testid，用「跟 stMarkdownContainer 同一排的第一個 div」抓它，不用猜 class 名稱。 */
@@ -360,8 +392,48 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 """
 
 
-def _inject_css() -> None:
-    st.markdown(_CSS, unsafe_allow_html=True)
+def _nav_badge_css(nav: str) -> str:
+    """目前分頁文字後面疊一個小雷達徽章（同心圈＋掃描扇形＋中心點）。
+
+    - 用 `nth-of-type` 對到選中的那個 `stRadioOption`（react-aria 把 7 個選項渲染成
+      radiogroup 底下 7 個相鄰 `<label>`，順序由 `NAV` 保證），不用去猜 BaseWeb 內部
+      的 checked 狀態怎麼反映在 DOM 上。
+    - 掃描扇形照 NAV 在「8 方位環」（含未來第 8 個美股焦點）上的順位轉：
+      價值=正上方(0°)，之後每項順時針 +45°。
+    - 🔴 圓圈的半徑一定要寫死 `circle 23px`：不寫的話 radial-gradient 預設是
+      farthest-corner（23√2 = 32.5px），百分比停點會算到盒子外——外圈整圈被
+      `border-radius:50%` 裁掉、內圈只剩 0.5px（2026-09-11 修）。
+    - 紅色沿用漲跌色 `--thc-up`（使用者要「紅漲」直覺），半透明吃 `--thc-up-rgb`，
+      不另外寫死色碼。
+    """
+    i = NAV.index(nav) if nav in NAV else 0
+    sel = (f'div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]'
+           f':nth-of-type({i + 1})')
+    ring = "rgba(var(--thc-up-rgb),.38)"
+    return f"""<style>
+{sel} {{ position: relative; z-index: 0; overflow: visible; }}
+{sel}::before {{
+  content: ""; position: absolute; left: 50%; top: 50%; z-index: -1; pointer-events: none;
+  width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%;
+  background:
+    radial-gradient(circle 23px at center, var(--thc-up) 0 2px, transparent 2px),
+    conic-gradient(from {i * 45 - 22.5}deg,
+      rgba(var(--thc-up-rgb),.30) 0deg 45deg, transparent 45deg 360deg),
+    radial-gradient(circle 23px at center,
+      transparent 0 11.5px, {ring} 11.5px 12.5px,
+      transparent 12.5px 19px, {ring} 19px 20px, transparent 20px);
+}}
+</style>"""
+
+
+def _inject_css(nav: str = "") -> None:
+    """一次注入：主題 CSS + 目前分頁的雷達徽章。
+
+    徽章的規則依「選中哪一頁」而變，但**併在同一次 `st.markdown`**——分開注入會多出
+    一個 `stMarkdown` 元素，`stVerticalBlock` 的 flex gap 照算，分頁列下面就多一格
+    空白（2026-09-11 修）。`nav` 在建 radio *之前* 從 session_state 取得。
+    """
+    st.markdown(_CSS + (_nav_badge_css(nav) if nav else ""), unsafe_allow_html=True)
 
 
 def _sev(verdict: str) -> str:
@@ -559,14 +631,42 @@ def _swing_b_html(c: dict, flag: dict | None = None) -> str:
         f'</div></div>')
 
 
+def _copy_item(x) -> str:
+    """條件表那種 `{"項": ..., "狀態": ...}` → 一行人話。"""
+    if isinstance(x, dict):
+        return "　".join(f"{kk} {vv}" for kk, vv in x.items() if vv not in (None, ""))
+    return str(x)
+
+
 def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
+    """清單 → 貼給 AI 的純文字。
+
+    ⚠️ 這份是餵給別的 AI 讀的，兩件事不能省（2026-09-11 修）：
+      - 比率欄一律照 `PCT_FIELDS` 換算成 %——長波段的 `0.27` 其實是 +27%，
+        原樣吐出去 AI 分不出是 27% 還是 0.27%。
+      - list / dict（條件表、支持/反對）要展開成條列，不能吐 Python repr。
+    候選池的 `c_*` 布林跟「進場條件狀態」完全重複（全過才進池）→ 不重覆印。
+    """
     lines = [f"# {title}（tw-hold，資料日期 {meta.get('trading_date', '—')}）",
              "※ 候選 + 判斷依據，非投資建議。", ""]
     for r in rows:
-        head = f"- {r.get('ticker')} {r.get('name', '')}｜{r.get('verdict', '')}"
+        head = f"- {r.get('ticker')} {r.get('name', '')}".rstrip()
+        if r.get("verdict"):
+            head += f"｜{r['verdict']}"
         lines.append(head)
         for k, v in r.items():
-            if k in ("ticker", "name", "verdict") or v in (None, ""):
+            if k in ("ticker", "name", "verdict") or k.startswith("c_"):
+                continue
+            if isinstance(v, (list, tuple)):
+                items = [_copy_item(x) for x in v if x not in (None, "")]
+                if items:
+                    lines.append(f"    {LABELS.get(k, k)}:")
+                    lines.extend(f"      - {it}" for it in items)
+                continue
+            if isinstance(v, dict):
+                lines.append(f"    {LABELS.get(k, k)}: {_copy_item(v)}")
+                continue
+            if v in (None, ""):
                 continue
             lines.append(f"    {LABELS.get(k, k)}: {_fmt(k, v)}")
     return "\n".join(lines)
@@ -789,18 +889,40 @@ def _shortterm_page() -> None:
 
 @st.cache_resource(show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
 def _ensure_bundle():
+    """回 `{檔名: 有沒有}`。下載中途斷線 / GitHub API 抽風 → 不要讓整頁吐 traceback，
+    退化成「一個都沒有」，呼叫端已經有寫好的提示（2026-09-11 修）。"""
     from bundle_data import ensure_assets
-    return ensure_assets()
+    try:
+        return ensure_assets()
+    except Exception as e:  # noqa: BLE001
+        st.session_state["_bundle_err"] = f"{type(e).__name__}: {e}"
+        return {}
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _stock_data(code: str) -> dict:
+    """個股頁 / 多軌體檢共用的資料包。
+
+    每一張表各自接住例外（某個 parquet 壞了 / schema 變了 → 那張表退化成空的），
+    不要讓整頁吐 traceback——這支在多軌體檢是在 `_safe_checks` 之外呼叫的，
+    一張表炸掉會連累四軌全滅（2026-09-11 修）。
+    """
     import bundle_data as bd
     from factors.factors import quarterly_factors
-    px, per, fin, div, rev, chp = (bd.prices(code), bd.per_history(code), bd.financials(code),
-                                   bd.dividends(code), bd.revenue(code), bd.chips(code))
-    qf = quarterly_factors(fin) if not fin.empty else fin
-    return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf, "rev": rev, "chips": chp}
+    errs: list[str] = []
+
+    def _g(fn, *a):
+        try:
+            return fn(*a)
+        except Exception as e:  # noqa: BLE001
+            errs.append(f"{getattr(fn, '__name__', fn)}: {type(e).__name__}: {e}")
+            return pd.DataFrame()
+
+    px, per, fin = _g(bd.prices, code), _g(bd.per_history, code), _g(bd.financials, code)
+    div, rev, chp = _g(bd.dividends, code), _g(bd.revenue, code), _g(bd.chips, code)
+    qf = _g(quarterly_factors, fin) if not fin.empty else fin
+    return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf, "rev": rev,
+            "chips": chp, "_errs": errs}
 
 
 def _qf_display(df: pd.DataFrame):
@@ -873,11 +995,15 @@ def _stock_page() -> None:
 
     got = _ensure_bundle()
     if not any(got.values()):
-        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。")
+        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。"
+                 + (f"（{st.session_state['_bundle_err']}）"
+                    if st.session_state.get("_bundle_err") else ""))
         _disclaimer()
         return
 
     d = _stock_data(code)
+    for _e in d.get("_errs") or []:      # 某張表讀壞了 → 就地講清楚，不靜默當成「沒這檔」
+        st.warning(f"這一份資料讀不出來，相關圖表／檢核會缺：{_e}")
     if d["px"].empty and d["fin"].empty:
         st.warning(f"{code} 不在 bundle 內。"
                    + ("本地進階模式可即時補抓（尚未實作）。" if LOCAL_ADVANCED
@@ -965,27 +1091,42 @@ _DERIVED_RELEASE = ("https://github.com/tongxiaooppo-boop/tw-hold"
 @st.cache_resource(show_spinner="載入因子表…")
 def _ensure_derived_factors() -> None:
     """factors_{value,deposit}.parquet 不進版控（每天一顆 blob）→ 執行期從 tw-hold
-    的 derived-latest release 拉（公開 repo，免 PAT）。本地已有 build 產物就沿用。"""
+    的 derived-latest release 拉（公開 repo，免 PAT）。本地已有 build 產物就沿用。
+
+    ⚠️ 先下載到 `.part` 再 `replace()`——直接寫目的檔的話，連線中途斷掉會留下半截
+    parquet，而「存在且非空」就被當成有了、永遠不重抓，`@st.cache_resource` 又讓它
+    整個 session 卡死（2026-09-11 修）。
+    """
     import urllib.request
     DERIVED.mkdir(parents=True, exist_ok=True)
     for n in ("factors_value.parquet", "factors_deposit.parquet"):
         p = DERIVED / n
         if p.exists() and p.stat().st_size > 0:
             continue
+        tmp = p.with_suffix(p.suffix + ".part")
         try:
-            urllib.request.urlretrieve(f"{_DERIVED_RELEASE}/{n}", p)
+            urllib.request.urlretrieve(f"{_DERIVED_RELEASE}/{n}", tmp)
+            tmp.replace(p)
         except Exception:  # noqa: BLE001  拉不到就退化成「不在因子表」，不炸
-            pass
+            tmp.unlink(missing_ok=True)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _factor_row(track: str, code: str) -> dict | None:
-    """`factors_{value,deposit}.parquet` 裡該檔那一列（清單頁同一份因子）。"""
+    """`factors_{value,deposit}.parquet` 裡該檔那一列（清單頁同一份因子）。
+
+    讀壞了（檔案毀損 / schema 變了）→ 回 None（＝「不在因子表」），不要讓多軌體檢
+    整頁掛掉——這支是在 `_safe_checks` 之外呼叫的。壞檔直接刪掉讓下次重抓。
+    """
     _ensure_derived_factors()
     p = DERIVED / f"factors_{track}.parquet"
     if not p.exists():
         return None
-    df = pd.read_parquet(p)
+    try:
+        df = pd.read_parquet(p)
+    except Exception:  # noqa: BLE001
+        p.unlink(missing_ok=True)
+        return None
     c = str(code).strip().split(".")[0]
     hit = df[df["ticker"].astype(str).str.split(".").str[0] == c]
     return hit.iloc[0].to_dict() if not hit.empty else None
@@ -1061,12 +1202,16 @@ def _checklist_page() -> None:
 
     got = _ensure_bundle()
     if not any(got.values()):
-        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。")
+        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。"
+                 + (f"（{st.session_state['_bundle_err']}）"
+                    if st.session_state.get("_bundle_err") else ""))
         _disclaimer()
         return
 
     fv, fd = _factor_row("value", code), _factor_row("deposit", code)
     d = _stock_data(code)
+    for _e in d.get("_errs") or []:      # 某張表讀壞了 → 就地講清楚，不靜默當成「沒這檔」
+        st.warning(f"這一份資料讀不出來，相關圖表／檢核會缺：{_e}")
     px_fin_empty = d["px"].empty and d["fin"].empty
     if px_fin_empty and fv is None and fd is None:
         st.warning(f"{code} 不在資料範圍——bundle 與因子表（約 1000 檔上市普通股）都查無。"
@@ -1170,6 +1315,12 @@ def _fmt_aum_navps(fmd: dict) -> str:
     prem = fmd.get("premium_pct")
     if isinstance(prem, (int, float)):
         parts.append(f"折溢價 {prem:+.2f}%")
+    elif fmd.get("premium_skipped"):
+        # 市價與淨值不同一天 → 不給跨日的折溢價（2026-09-11 修，見 fetch_twse_closes）
+        cd = fmd.get("close_date")
+        why = (f"收盤價是 {cd} 的，跟 PCF 基準日 {fmd.get('date') or '—'} 不同天"
+               if cd else "這份快照沒記收盤價是哪天的，下次重抓才有")
+        parts.append(f"折溢價 —（{why}）")
     return "　·　".join(parts)
 
 
@@ -1229,6 +1380,9 @@ def _active_summary(fl: dict) -> str:
         lots = f"{ns / 1000:+,.0f} 張" if isinstance(ns, (int, float)) else "—"
         mix = (f'　<span class="thc-flag">（{len(b)}買{len(s)}賣，淨額計）</span>'
                if b and s else "")
+        sp = f.get("span_days")
+        if isinstance(sp, int) and sp > 1:      # 漏抓一天 → 這一列不是「近一日」
+            mix += f'　<span class="thc-flag">（跨 {sp} 個交易日）</span>'
         return (f'<li><a href="?code={_esc(tk)}" target="_self">{_esc(tk)}</a>'
                 f'　{_esc(f.get("name") or "")}　<b>{_esc(lots)}</b>{mix}</li>')
 
@@ -1342,8 +1496,14 @@ def _active_etf_page() -> None:
         "真實股數差＝這五檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
         "賣出也可能是基金應付大額贖回被迫調節，不一定是看壞這檔股票。"
         f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
-    st.caption("目前顯示**近 1 交易日**的變化（資料日 vs 前一交易日）。"
-               "近 5 日變化要等每檔基金的快照歷史累積足夠再開。")
+    _msp = meta.get("max_span_days") or 1
+    _multi = meta.get("multi_day_etfs") or []
+    st.caption(
+        ("目前顯示**近 1 交易日**的變化（資料日 vs 前一交易日）。"
+         if _msp <= 1 else
+         f"多數基金顯示**近 1 交易日**的變化；**{'／'.join(_multi)} 中間漏抓，"
+         f"它的差分跨 {_msp} 個交易日**（每張卡片標了自己的 `前一份 → 資料日`）。")
+        + "近 5 日變化要等每檔基金的快照歷史累積足夠再開。")
     st.caption("代號可點進「個股查詢」看該股日線；旗標同時掛在「多軌體檢／長波段／短線」分頁上。"
                f"　·　🔧 爬取失敗會在 CI 顯示 `::warning::`：[rebuild 執行紀錄 →]({_REBUILD_RUNS_URL})")
     _disclaimer()
@@ -1365,40 +1525,19 @@ def _route() -> None:
 
 def main() -> None:
     st.set_page_config(page_title=APP_NAME, page_icon="📡", layout="wide")
-    _inject_css()
     _route()
     goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
     if goto in NAV:
         st.session_state["_nav"] = goto
+    # radio 還沒建，但 key 綁 session_state——使用者點過的那一頁在 rerun 一開始就已經
+    # 寫回去了，所以這裡就能知道等一下會選中哪一頁，徽章 CSS 才併得進同一次注入。
+    _inject_css(st.session_state.get("_nav") or NAV[0])
     st.title(f"📡 {APP_NAME}")
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
     nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
                    label_visibility="collapsed")
-
-    # 目前分頁後面疊一個小雷達徽章（同心圈＋掃描扇形＋中心點，紅色＝台股「紅漲」直覺，
-    # 沿用 --thc-up 同一色號）。用 nth-of-type 對到目前選中的那個 stRadioOption，
-    # 不用去猜 BaseWeb 內部的 checked 狀態怎麼反映在 DOM 上——順序由 NAV 這個 list 保證。
-    # 掃描扇形指向哪個方位，照 NAV 在「8 方位環」（含未來第 8 個美股焦點）上的順位算，
-    # 不是每個分頁都指同一個方向：價值=正上方(0°)，之後每項順時針 +45°。
-    _nav_i = NAV.index(nav)
-    _nav_n = _nav_i + 1
-    _wedge_from = _nav_i * 45 - 22.5
-    st.markdown(f"""<style>
-    div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]:nth-of-type({_nav_n}) {{
-      position: relative; z-index: 0; overflow: visible;
-    }}
-    div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]:nth-of-type({_nav_n})::before {{
-      content: ""; position: absolute; left: 50%; top: 50%; z-index: -1; pointer-events: none;
-      width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%;
-      background:
-        radial-gradient(circle 2px at center, var(--thc-up) 100%, transparent 100%),
-        conic-gradient(from {_wedge_from}deg, rgba(196,87,74,.30) 0deg 45deg, transparent 45deg 360deg),
-        radial-gradient(circle, transparent 0 55%, rgba(196,87,74,.35) 55% 56.5%,
-          transparent 56.5% 85%, rgba(196,87,74,.35) 85% 86.5%, transparent 86.5% 100%);
-    }}
-    </style>""", unsafe_allow_html=True)
 
     if nav == "價值":
         _card_list("value", "價值清單", _load("value_list.json"),

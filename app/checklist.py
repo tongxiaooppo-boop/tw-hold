@@ -71,6 +71,9 @@ def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
     if active_etf is None:
         return
     kind = active_etf.get("kind")
+    # 某檔基金漏抓一天時，它的差分跨 > 1 個交易日——門檻欄照實講，不要寫死「近一日」
+    sp = active_etf.get("span_days")
+    win = f"近 {int(sp)} 個交易日" if isinstance(sp, int) and sp > 1 else "近一日"
     ns = active_etf.get("net_shares")
     lots = f"{ns / 1000:+,.0f} 張" if isinstance(ns, (int, float)) else "—"
     ic = active_etf.get("issuer_count")
@@ -78,14 +81,15 @@ def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
     cons = active_etf.get("consensus") or 0
     tag = f"、{abs(cons)} 檔共識" if abs(cons) >= 2 else ""
     if kind in ("consensus_buy", "buy"):
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）", "狀態型：近一日主動式 ETF 淨買超",
-          f"{who}淨買超 {lots}{tag}", True)
+        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+          f"狀態型：{win}主動式 ETF 淨買超", f"{who}淨買超 {lots}{tag}", True)
     elif kind in ("consensus_sell", "sell"):
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）", "狀態型：近一日主動式 ETF 淨賣超",
-          f"{who}淨賣超 {lots.lstrip('+')}{tag}", None, raw="⚠️ 命中")
+        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+          f"狀態型：{win}主動式 ETF 淨賣超", f"{who}淨賣超 {lots.lstrip('+')}{tag}",
+          None, raw="⚠️ 命中")
     else:
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）", "狀態型：近一日主動式 ETF 買賣",
-          "近一日無主動式 ETF 買賣", None)
+        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+          f"狀態型：{win}主動式 ETF 買賣", f"{win}無主動式 ETF 買賣", None)
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -246,10 +250,23 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
 
     g = _G(rows, "營收動能")
     if rev is not None and len(rev) >= 13:
-        r = rev.sort_values("month").reset_index(drop=True)
-        r["yoy"] = r["revenue"] / r["revenue"].shift(12) - 1.0
-        r["mom"] = r["revenue"] / r["revenue"].shift(1) - 1.0
-        yoy, yoy_p, mom = r["yoy"].iloc[-1], r["yoy"].iloc[-2], r["mom"].iloc[-1]
+        r = rev.dropna(subset=["revenue"]).sort_values("month").reset_index(drop=True)
+        # YoY / MoM 對齊曆月，不是位移 N 列——有缺月的公司用 shift() 會拿錯月份比，
+        # 而且完全不報錯（canonical 版見 screener.candidate_pool.monthly_yoy）。
+        _rv = dict(zip(pd.to_datetime(r["month"]), r["revenue"]))
+
+        def _rev_at(ts):
+            return _rv.get(pd.Timestamp(ts))
+
+        def _rev_yoy(ts):
+            cur, ly = _rev_at(ts), _rev_at(pd.Timestamp(ts) - pd.DateOffset(years=1))
+            return cur / ly - 1.0 if (cur is not None and ly) else np.nan
+
+        m_now = pd.Timestamp(r["month"].iloc[-1])
+        m_pre = m_now - pd.DateOffset(months=1)
+        yoy, yoy_p = _rev_yoy(m_now), _rev_yoy(m_pre)
+        _pre_rev = _rev_at(m_pre)
+        mom = (r["revenue"].iloc[-1] / _pre_rev - 1.0) if _pre_rev else np.nan
         high12 = r["revenue"].iloc[-1] >= r["revenue"].tail(12).max()
         high6 = r["revenue"].iloc[-1] >= r["revenue"].tail(6).max()
         cagr = None

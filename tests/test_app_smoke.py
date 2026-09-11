@@ -184,3 +184,47 @@ def test_verdict_cat_定存內嵌數字歸類():
     assert app._verdict_cat("觀望（現價殖利率 4.4% < 門檻 5.0%）") == "觀望"
     assert app._verdict_cat("推薦") == "推薦"
     assert app._verdict_cat("資料不足（EPS 基準存疑）") == "資料不足"
+
+
+def test_旗標文案跟著實際跨幾個交易日走():
+    """2026-09-11 迴歸：某檔基金漏抓一天時它的差分跨 2 個交易日，文案不能寫死
+    「近一日」（旗標的 span_days 由 build_active_etf_flags 算）。"""
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    one = {"kind": "buy", "net_shares": 30000, "issuer_count": 1, "consensus": 0,
+           "span_days": 1}
+    two = {**one, "span_days": 2}
+    assert "近一日淨買超" in app._active_evidence(one)[0]
+    assert "近 2 個交易日淨買超" in app._active_evidence(two)[0]
+    # 舊格式（沒有 span_days）→ 退回「近一日」，不炸
+    assert "近一日" in app._active_evidence({k: v for k, v in one.items()
+                                            if k != "span_days"})[0]
+
+
+def test_複製給AI_比率換算成百分比且不吐python_repr():
+    """這份是要貼給別的 AI 讀的：0.27 必須寫成 +27%（不然 AI 分不出 27% / 0.27%），
+    條件表 / 支持反對要展開成條列，不能是 Python repr（2026-09-11 修）。"""
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    rows = [{"ticker": "1560", "name": "中砂", "c_eps_yoy": True,
+             "revenue_yoy": 0.2656, "dist_50ma": 0.0575, "close": 733.0,
+             "conditions": [{"項": "ROE > 15%", "狀態": "成立"}],
+             "support": ["季 EPS YoY +92%"], "oppose": []}]
+    out = app._copy_for_ai("長波段候選池", {"trading_date": "2026-09-10"}, rows)
+    assert "月營收 YoY: 26.6%" in out and "距 50MA: 5.8%" in out
+    assert "{'" not in out and "[{" not in out        # 沒有 Python repr
+    assert "      - 項 ROE > 15%　狀態 成立" in out
+    assert "c_eps_yoy" not in out                     # 跟條件表重複 → 不印
+    assert out.splitlines()[3] == "- 1560 中砂"        # 沒 verdict 就不留空的「｜」
+
+
+def test_複製給AI_有verdict時保留():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    out = app._copy_for_ai("價值清單", {"trading_date": "2026-09-10"},
+                           [{"ticker": "2330", "name": "台積電", "verdict": "觀望（無安全邊際）",
+                             "roe": 0.3}])
+    assert "- 2330 台積電｜觀望（無安全邊際）" in out and "ROE: 30.0%" in out

@@ -104,6 +104,15 @@ def main() -> int:
         added.append((tk, jdate, factor, hit["date"]))
         print(f"  + {tk} {jdate}　factor {factor}（FinMind 事件日 {hit['date']}，比例吻合）")
 
+    # 自動解掉的也要出聲。這支改的是「事件日之前的每股數字全部 ÷ factor」——K 線、
+    # normalized_EPS、每股股利的基準都會跟著變，而且會自動 commit 進版控。以前只有
+    # 「解不掉」會告警，「自動解掉了」反而無聲無息（2026-09-11 補）。
+    for tk, jdate, factor, fm_date in added:
+        print(f"::warning::自動還原分割/減資：{tk} {jdate} 之前的每股數字 ÷ {factor}"
+              f"（FinMind 事件日 {fm_date}，比例吻合）。"
+              f"寫進 reference/corporate_actions_resolved.json、會自動 commit——"
+              f"覺得解錯就到 corporate_actions.py 的 _MANUAL / IGNORE_JUMPS 蓋掉。")
+
     if added and args.write:
         for tk in resolved:
             resolved[tk] = sorted(resolved[tk], key=lambda e: e["date"])

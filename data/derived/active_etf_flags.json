@@ -3,70 +3,89 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-09-10",
   "market_date": "2026-09-10",
-  "fetched_at": "2026-09-11T05:14:14+00:00",
+  "fetched_at": "2026-09-11T14:08:40+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
+  "max_span_days": 2,
+  "multi_day_etfs": [
+   "00981A"
+  ],
   "funds": {
    "00981A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-08",
+    "span_days": 2,
     "moved_n": 3,
     "aum": 283976224291.0,
     "aum_prev": 285310474996.0,
     "navps": 30.019551794986505,
     "navps_prev": 30.03992594382498,
     "close": 29.89,
-    "premium_pct": -0.4315580587986677
+    "close_date": null,
+    "premium_pct": null,
+    "premium_skipped": true
    },
    "00403A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
+    "span_days": 1,
     "moved_n": 6,
     "aum": 156196406210.0,
     "aum_prev": 158102592651.0,
     "navps": 10.391258941295288,
     "navps_prev": 10.401473356776725,
     "close": 10.34,
-    "premium_pct": -0.49328903826640885
+    "close_date": null,
+    "premium_pct": null,
+    "premium_skipped": true
    },
    "00991A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
+    "span_days": 1,
     "moved_n": 1,
     "aum": 79666111582.0,
     "aum_prev": 79656376810.0,
     "navps": 17.816752362562553,
     "navps_prev": 17.77284018932974,
     "close": 17.74,
-    "premium_pct": -0.43078761494059326
+    "close_date": null,
+    "premium_pct": null,
+    "premium_skipped": true
    },
    "00982A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
+    "span_days": 1,
     "moved_n": 3,
     "aum": 50757735506.0,
     "aum_prev": 51292829030.0,
     "navps": 22.885121800629054,
     "navps_prev": 22.986466575783485,
     "close": 22.78,
-    "premium_pct": -0.4593456025484809
+    "close_date": null,
+    "premium_pct": null,
+    "premium_skipped": true
    },
    "00992A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
+    "span_days": 1,
     "moved_n": 0,
     "aum": 41382975225.0,
     "aum_prev": 41636483457.0,
     "navps": 18.25084741483293,
     "navps_prev": 18.306136396191615,
     "close": 18.16,
-    "premium_pct": -0.4977709405377802
+    "close_date": null,
+    "premium_pct": null,
+    "premium_skipped": true
    }
   },
   "schema_ok": true
@@ -80,6 +99,7 @@
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
+   "span_days": 2,
    "buyers": [
     "00981A"
    ],
@@ -94,6 +114,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 2,
    "buyers": [],
    "sellers": [
     "00981A"
@@ -108,6 +129,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 2,
    "buyers": [],
    "sellers": [
     "00981A"
@@ -122,6 +144,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -136,6 +159,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -150,6 +174,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -164,6 +189,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -178,6 +204,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -192,6 +219,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00403A"
@@ -206,6 +234,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00991A"
@@ -220,6 +249,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00982A"
@@ -234,6 +264,7 @@
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [],
    "sellers": [
     "00982A"
@@ -248,6 +279,7 @@
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
+   "span_days": 1,
    "buyers": [
     "00982A"
    ],

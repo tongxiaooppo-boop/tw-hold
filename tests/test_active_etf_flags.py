@@ -142,3 +142,64 @@ def test_輸出可_json_序列化():
     import json
     snaps = {"00981A": _snap([("2330", "x", 1, 5.0)], [("2330", "x", 9, 9.0)])}
     json.dumps(b.build_flags(snaps))          # 不拋＝沒有 set / DataFrame 殘留
+
+
+def test_漏抓一天_差分跨兩個交易日要標出來():
+    """2026-09-11 迴歸：00981A 真實案例——09-09 那天沒抓到，最近兩份快照是
+    09-08 與 09-10，差分其實跨 2 個交易日。舊版 `stale_etfs` 抓不到這種（它有
+    兩份快照、只是不相鄰），四個分頁一律寫「近一日」＝說謊。"""
+    snaps = {
+        "00981A": _snap([("2330", "台積電", 1000_000, 10.0)],
+                        [("2330", "台積電", 1200_000, 11.0)],
+                        d_prev="2026-09-08", d_today="2026-09-10"),      # 中間漏一天
+        "00403A": _snap([("2454", "聯發科", 500_000, 8.0)],
+                        [("2454", "聯發科", 600_000, 9.0)],
+                        d_prev="2026-09-09", d_today="2026-09-10"),      # 正常相鄰
+    }
+    out = b.build_flags(snaps)
+    m, f = out["_meta"], out["flags"]
+    assert m["funds"]["00981A"]["span_days"] == 2
+    assert m["funds"]["00403A"]["span_days"] == 1
+    assert m["max_span_days"] == 2 and m["multi_day_etfs"] == ["00981A"]
+    assert f["2330"]["span_days"] == 2          # 只被跨日那檔動到 → 旗標也是跨日
+    assert f["2454"]["span_days"] == 1
+
+
+def test_週末不算跨日():
+    """2026-09-11 是週五、09-14 是週一——中間只隔週末，不是漏抓。"""
+    snaps = {"00981A": _snap([("2330", "x", 1000_000, 10.0)],
+                             [("2330", "x", 1200_000, 11.0)],
+                             d_prev="2026-09-11", d_today="2026-09-14")}
+    m = b.build_flags(snaps)["_meta"]
+    assert m["funds"]["00981A"]["span_days"] == 1 and m["multi_day_etfs"] == []
+
+
+def test_折溢價_市價與淨值不同天就不算():
+    """折溢價 =（市價 − 淨值）÷ 淨值，兩個數字必須同一天。TWSE STOCK_DAY_ALL 給的是
+    「最近一個已收盤交易日」，盤後才跑就會跟 PCF 基準日差一天（2026-09-11 修）。"""
+    def _with_close(rows, date, close, close_date):
+        d = _df(rows, date=date)
+        d["fund_close"] = close
+        d["fund_close_date"] = close_date
+        return d
+
+    rows_p = [("2330", "x", 1000_000, 10.0)]
+    rows_t = [("2330", "x", 1200_000, 11.0)]
+    same = {"00981A": [("2026-09-09", _with_close(rows_p, "2026-09-09", 9.9, "2026-09-09")),
+                       ("2026-09-10", _with_close(rows_t, "2026-09-10", 10.1, "2026-09-10"))]}
+    fd = b.build_flags(same)["_meta"]["funds"]["00981A"]
+    assert fd["premium_pct"] is not None and fd["premium_skipped"] is False
+
+    cross = {"00981A": [("2026-09-09", _with_close(rows_p, "2026-09-09", 9.9, "2026-09-09")),
+                        ("2026-09-10", _with_close(rows_t, "2026-09-10", 10.1, "2026-09-11"))]}
+    fd2 = b.build_flags(cross)["_meta"]["funds"]["00981A"]
+    assert fd2["premium_pct"] is None and fd2["premium_skipped"] is True
+
+
+def test_舊快照沒有收盤日欄位_不給折溢價():
+    """schema 升級前存的快照沒有 `fund_close_date` → 不知道市價是哪天的 → 不算。"""
+    d_p, d_t = _df([("2330", "x", 1, 5.0)]), _df([("2330", "x", 9, 9.0)])
+    d_t["fund_close"] = 10.1
+    snaps = {"00981A": [("2026-09-08", d_p), ("2026-09-09", d_t)]}
+    fd = b.build_flags(snaps)["_meta"]["funds"]["00981A"]
+    assert fd["premium_pct"] is None and fd["premium_skipped"] is True
