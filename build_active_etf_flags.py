@@ -11,10 +11,17 @@
 `scripts/snapshot_pcf.py`（rebuild.yml 每天跑）抓各投信官網每日揭露 PCF →
 落 `data/pcf/<code>/<date>.parquet`。這支讀每檔最近兩份快照做差分。
 
-- **方向看權重變化**（`d_weight`），不看原始股數差——這樣申購/贖回造成的整體等比縮放
-  不會被誤判成加碼/調節（申贖時各檔權重大致不動）。`net_shares`（原始股數差）仍照舊
-  輸出給卡片顯示。門檻 `EPS_W`＝0.03pp。
+- **方向看真實股數差**（`sh_t - sh_p`），門檻用權重當量（`EPS_W`＝0.03pp）濾雜訊。
 - 新進成分股 → 視為加碼；完全出清 → 視為調節（權重差夠大，自然被 EPS 抓到）。
+
+  ⚠️ **2026-09-11 修正**：原本這裡用受益權單位數比例（flow）把前一日股數等比縮放
+  成「無主動交易時的預期值」，理論上是想濾掉申贖造成的整體等比縮放。**實測拿
+  00403A 真實 PCF（09-09→09-10）比對第三方站（xiaoyu-etf）證明這個假設不成立**：
+  那天申贖 -1.11%，但聯發科/聯電等持股股數完全沒動，只有少數幾檔被基金經理真的
+  動用——代表這些主動 ETF 的申贖不是均分整個 PCF 籃子交割，用 flow 修正反而把
+  「股數根本沒變」的持股誤判成「加碼」（因為修正後的「預期值」被錯誤縮小，讓沒動
+  的真實股數看起來像是「超出預期」的加碼）。改回直接看真實股數差，不再用 fund_units
+  做任何調整。
 
 ## ⚠️ 界線（一定要標在頁面上）
 
@@ -92,24 +99,24 @@ def _scalar(df: pd.DataFrame, col: str):
 
 
 def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
-    """回 per-stock：d_shares（已還原申贖流量的主動股數差）/ direction / price。
+    """回 per-stock：d_shares（真實股數差，不做流量調整）/ direction / price。
 
-    申贖（受益權單位數變動）會等比縮放所有持股 → 用 flow = units_T / units_prev
-    把前一日股數放大到「若無主動交易時的預期值」，再跟今日相減。方向用主動股數差
-    的權重當量（|active_d| × price / nav），對申贖與市值漂移都免疫。
+    2026-09-11 前這裡會用 fund_units（受益權單位數）比例把前一日股數等比縮放成
+    「無主動交易時的預期值」，理論上想濾掉申贖造成的整體等比縮放。**實測證明這個
+    假設不成立**（見模組 docstring）——這些主動 ETF 的申贖不是均分整個 PCF 籃子
+    交割，用流量修正反而會把「股數根本沒變」的持股誤判成加碼。現在直接用真實股數
+    差，門檻用權重當量（|d_shares| × price / nav）濾雜訊，對真的沒動的股票天然
+    免疫（d_shares=0）。
     """
     t = today.set_index("stock_code")
     p = prev.set_index("stock_code")
     codes = t.index.union(p.index)
 
-    u_t, u_p = _scalar(today, "fund_units"), _scalar(prev, "fund_units")
     nav_t = _scalar(today, "fund_nav")
-    flow = (u_t / u_p) if (u_t and u_p and u_p > 0) else 1.0
 
     sh_t = t["shares"].reindex(codes).fillna(0.0)
     sh_p = p["shares"].reindex(codes).fillna(0.0)
-    base = sh_p * flow                                   # 無主動交易時的預期今日股數
-    active_d = sh_t - base
+    active_d = sh_t - sh_p
 
     price = t["price"].reindex(codes)
     price = price.fillna((t["market_value"] / t["shares"]).reindex(codes))
@@ -125,10 +132,10 @@ def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
         out.loc[(active_d > 0) & (wt_eq >= EPS_W), "direction"] = 1
         out.loc[(active_d < 0) & (wt_eq >= EPS_W), "direction"] = -1
     else:                                                # 沒 nav → 用相對部位比例
-        rel = active_d / base.where(base > 0)
+        rel = active_d / sh_p.where(sh_p > 0)
         out["direction"] = 0
-        out.loc[(base <= 0) & (sh_t > 0), "direction"] = 1          # 新進
-        out.loc[(sh_t <= 0) & (base > 0), "direction"] = -1         # 出清
+        out.loc[(sh_p <= 0) & (sh_t > 0), "direction"] = 1          # 新進
+        out.loc[(sh_t <= 0) & (sh_p > 0), "direction"] = -1         # 出清
         out.loc[rel >= REL_EPS, "direction"] = 1
         out.loc[rel <= -REL_EPS, "direction"] = -1
     return out.reset_index(names="stock_code")

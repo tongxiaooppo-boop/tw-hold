@@ -1,6 +1,6 @@
 """build_active_etf_flags.build_flags()——前後兩日 PCF 快照 → per-ticker 旗標。
 
-守：方向看權重（濾申贖等比縮放）、consensus 疊加、新進/出清、降級、schema。
+守：方向看真實股數差、consensus 疊加、新進/出清、降級、schema。
 """
 from __future__ import annotations
 
@@ -47,13 +47,16 @@ def test_加碼_淨賣_不動():
     assert "3017" not in f                            # 沒動 → 不出現
 
 
-def test_申贖等比縮放_不誤判():
-    # 受益權單位數 +10% → 每檔股數 ×1.1 但無主動交易 → 全部 neutral、flags 空
+def test_股數不動_即使申贖發生也不誤判():
+    # 2026-09-11 迴歸測試：真實 00403A 案例——申贖造成受益權單位數 -1.1%，但
+    # 股數完全沒動的持股（用 flow 修正會把它誤判成加碼，見 build_active_etf_flags
+    # 模組 docstring）。修法＝不再用 fund_units 做流量調整，直接看真實股數差，
+    # 股數沒動 → d_shares=0 → 天然不算動作，不因為申贖發生就被牽連。
     prev = [("2330", "台積電", 1000_000, 40.0), ("2454", "聯發科", 500_000, 30.0),
             ("2317", "鴻海", 300_000, 30.0)]
-    today = [(c, n, round(s * 1.1), w) for c, n, s, w in prev]
+    today = prev                                          # 股數原封不動
     out = b.build_flags({"00981A": _snap(prev, today,
-                                         units_prev=100_000, units_today=110_000)})
+                                         units_prev=100_000, units_today=98_900)})
     assert out["flags"] == {}
     assert out["_meta"]["funds"]["00981A"]["moved_n"] == 0
 
