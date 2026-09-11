@@ -3,7 +3,7 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-09-10",
   "market_date": "2026-09-10",
-  "fetched_at": "2026-09-10T23:45:46+00:00",
+  "fetched_at": "2026-09-11T05:01:43+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -12,13 +12,13 @@
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-08",
-    "moved_n": 6
+    "moved_n": 3
    },
    "00403A": {
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
-    "moved_n": 17
+    "moved_n": 6
    },
    "00991A": {
     "synced": true,
@@ -30,7 +30,7 @@
     "synced": true,
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
-    "moved_n": 6
+    "moved_n": 3
    },
    "00992A": {
     "synced": true,
@@ -42,172 +42,25 @@
   "schema_ok": true
  },
  "flags": {
-  "2303": {
-   "name": "聯電",
-   "industry": null,
-   "net_shares": 968585,
-   "net_amount": 138023286,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "2308": {
-   "name": "台達電",
-   "industry": null,
-   "net_shares": 59454,
-   "net_amount": 99586267,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "2327": {
-   "name": "國巨*",
-   "industry": null,
-   "net_shares": 206227,
-   "net_amount": 117961741,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "2330": {
-   "name": "台積電",
-   "industry": null,
-   "net_shares": -18487,
-   "net_amount": -45292878,
-   "issuer_count": 3,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00981A",
-    "00982A"
-   ],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell"
-  },
-  "2345": {
-   "name": "智邦",
-   "industry": null,
-   "net_shares": 61662,
-   "net_amount": 121164797,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "2383": {
-   "name": "台光電",
-   "industry": null,
-   "net_shares": 41299,
-   "net_amount": 221982809,
-   "issuer_count": 2,
-   "consensus": 2,
-   "consensus_strong": true,
-   "buyers": [
-    "00403A",
-    "00981A"
-   ],
-   "sellers": [],
-   "kind": "consensus_buy"
-  },
-  "2454": {
-   "name": "聯發科",
-   "industry": null,
-   "net_shares": 52490,
-   "net_amount": 247751455,
-   "issuer_count": 3,
-   "consensus": 3,
-   "consensus_strong": true,
-   "buyers": [
-    "00403A",
-    "00981A",
-    "00982A"
-   ],
-   "sellers": [],
-   "kind": "consensus_buy"
-  },
-  "3017": {
-   "name": "奇鋐",
-   "industry": null,
-   "net_shares": 63655,
-   "net_amount": 220246822,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "3037": {
-   "name": "欣興",
-   "industry": null,
-   "net_shares": 194356,
-   "net_amount": 193189319,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
   "3653": {
    "name": "健策",
    "industry": null,
-   "net_shares": 53049,
-   "net_amount": 307152564,
-   "issuer_count": 2,
-   "consensus": 2,
-   "consensus_strong": true,
+   "net_shares": 30000,
+   "net_amount": 173700000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
    "buyers": [
-    "00403A",
     "00981A"
    ],
    "sellers": [],
-   "kind": "consensus_buy"
-  },
-  "3711": {
-   "name": "日月光投控",
-   "industry": null,
-   "net_shares": 88055,
-   "net_amount": 57236211,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "buyers": [],
-   "sellers": [
-    "00982A"
-   ],
    "kind": "buy"
   },
   "4979": {
    "name": "華星光",
    "industry": null,
-   "net_shares": -919303,
-   "net_amount": -524922075,
+   "net_shares": -923000,
+   "net_amount": -527033000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -216,55 +69,12 @@
     "00981A"
    ],
    "kind": "sell"
-  },
-  "5274": {
-   "name": "信驊",
-   "industry": null,
-   "net_shares": -17030,
-   "net_amount": -318470155,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "buyers": [],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell"
-  },
-  "6223": {
-   "name": "旺矽",
-   "industry": null,
-   "net_shares": 26117,
-   "net_amount": 146776658,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "buyers": [
-    "00403A"
-   ],
-   "sellers": [],
-   "kind": "buy"
-  },
-  "6669": {
-   "name": "緯穎",
-   "industry": null,
-   "net_shares": 59928,
-   "net_amount": 140531838,
-   "issuer_count": 2,
-   "consensus": 2,
-   "consensus_strong": true,
-   "buyers": [
-    "00403A",
-    "00982A"
-   ],
-   "sellers": [],
-   "kind": "consensus_buy"
   },
   "8210": {
    "name": "勤誠",
    "industry": null,
-   "net_shares": -378390,
-   "net_amount": -344335050,
+   "net_shares": -386000,
+   "net_amount": -351260000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -274,11 +84,11 @@
    ],
    "kind": "sell"
   },
-  "8358": {
-   "name": "金居",
+  "2330": {
+   "name": "台積電",
    "industry": null,
-   "net_shares": -97773,
-   "net_amount": -50939734,
+   "net_shares": -200000,
+   "net_amount": -490000000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -291,8 +101,8 @@
   "2337": {
    "name": "旺宏",
    "industry": null,
-   "net_shares": -987914,
-   "net_amount": -121019525,
+   "net_shares": -999000,
+   "net_amount": -122377500,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -305,8 +115,8 @@
   "2344": {
    "name": "華邦電",
    "industry": null,
-   "net_shares": -483372,
-   "net_amount": -86765226,
+   "net_shares": -500000,
+   "net_amount": -89750000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -319,8 +129,36 @@
   "3533": {
    "name": "嘉澤",
    "industry": null,
-   "net_shares": -47229,
-   "net_amount": -74385079,
+   "net_shares": -50000,
+   "net_amount": -78750000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "5274": {
+   "name": "信驊",
+   "industry": null,
+   "net_shares": -20000,
+   "net_amount": -374000000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell"
+  },
+  "8358": {
+   "name": "金居",
+   "industry": null,
+   "net_shares": -100000,
+   "net_amount": -52100000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -331,10 +169,10 @@
    "kind": "sell"
   },
   "7769": {
-   "name": "鴻勁",
+   "name": "鴻勁精密",
    "industry": null,
-   "net_shares": -27903,
-   "net_amount": -180671368,
+   "net_shares": -30000,
+   "net_amount": -194250000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -344,25 +182,39 @@
    ],
    "kind": "sell"
   },
-  "3105": {
-   "name": "穩懋",
+  "3711": {
+   "name": "日月光投控",
    "industry": null,
-   "net_shares": 34539,
-   "net_amount": 15939603,
+   "net_shares": -30000,
+   "net_amount": -19499710,
    "issuer_count": 1,
-   "consensus": 1,
+   "consensus": -1,
    "consensus_strong": false,
-   "buyers": [
+   "buyers": [],
+   "sellers": [
     "00982A"
    ],
-   "sellers": [],
-   "kind": "buy"
+   "kind": "sell"
+  },
+  "6139": {
+   "name": "亞翔",
+   "industry": null,
+   "net_shares": -24000,
+   "net_amount": -18071773,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "buyers": [],
+   "sellers": [
+    "00982A"
+   ],
+   "kind": "sell"
   },
   "6531": {
    "name": "愛普*",
    "industry": null,
-   "net_shares": 390043,
-   "net_amount": 401737878,
+   "net_shares": 380000,
+   "net_amount": 391393894,
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
