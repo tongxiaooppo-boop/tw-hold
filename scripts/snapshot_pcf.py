@@ -36,8 +36,8 @@ PCF_DIR = REPO / "data" / "pcf"
 INDEX = PCF_DIR / "_index.json"
 KEEP = 15
 _COLS = ["stock_code", "stock_name", "shares", "weight", "market_value", "price"]
-# 基金層純量（申贖流量還原用）——每份快照常數，複製進每一列
-_FUND_COLS = ["fund_nav", "fund_units", "data_date"]
+# 基金層純量——每份快照常數，複製進每一列
+_FUND_COLS = ["fund_nav", "fund_units", "fund_close", "data_date"]
 
 
 def _frame(o: dict) -> pd.DataFrame:
@@ -48,6 +48,7 @@ def _frame(o: dict) -> pd.DataFrame:
             .reset_index(drop=True))
     df["fund_nav"] = o.get("nav")
     df["fund_units"] = o.get("units")
+    df["fund_close"] = o.get("close")         # ETF 市價收盤（TWSE），算折溢價用
     df["data_date"] = o["data_date"]
     return df
 

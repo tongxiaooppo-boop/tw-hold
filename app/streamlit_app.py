@@ -1136,6 +1136,25 @@ def _checklist_page() -> None:
     _page_footer("個股查詢", f"📈 看 {code} 的完整圖表 →")
 
 
+def _fmt_aum_navps(fmd: dict) -> str:
+    """基金規模（總 AUM）+ 淨值（每受益權單位）前後對照 + 當日折溢價——PCF 快照
+    本來就有 fund_nav/fund_units，折溢價額外抓 TWSE 收盤價（fund_close，見
+    pcf_fetchers.fetch_twse_closes）算出來；跟三方站官網數字對過是準的。"""
+    aum_t, aum_p = fmd.get("aum"), fmd.get("aum_prev")
+    nps_t, nps_p = fmd.get("navps"), fmd.get("navps_prev")
+    parts = []
+    if isinstance(aum_t, (int, float)) and isinstance(aum_p, (int, float)) and aum_p:
+        pct = (aum_t - aum_p) / aum_p * 100
+        parts.append(f"規模 {aum_t / 1e8:,.0f}億（{pct:+.2f}%）")
+    if isinstance(nps_t, (int, float)) and isinstance(nps_p, (int, float)) and nps_p:
+        pct = (nps_t - nps_p) / nps_p * 100
+        parts.append(f"淨值 {nps_t:,.2f}（{pct:+.2f}%）")
+    prem = fmd.get("premium_pct")
+    if isinstance(prem, (int, float)):
+        parts.append(f"折溢價 {prem:+.2f}%")
+    return "　·　".join(parts)
+
+
 def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *,
              buys: list | None = None, sells: list | None = None,
              names: dict | None = None, note: str | None = None,
@@ -1294,13 +1313,14 @@ def _active_etf_page() -> None:
 
         date = fmd.get("date") or fi.get("latest_date") or "—"
         buys, sells, nm = _moved_by(code)
+        aum_line = _fmt_aum_navps(fmd)
+        meta_line = (f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
+                     f"　·　磁碟留存 {snaps_n} 份快照")
         cards.append(_ae_card(
             code, issuer, name, "good", "🟢 差分已算",
             f"{fmd.get('prev_date', '?')} → {date}　·　濾掉零星微調後共動 "
-            f"{fmd.get('moved_n', 0)} 檔",
-            buys=buys, sells=sells, names=nm,
-            meta_line=f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
-                      f"　·　磁碟留存 {snaps_n} 份快照"))
+            f"{fmd.get('moved_n', 0)} 檔" + (f"　·　{aum_line}" if aum_line else ""),
+            buys=buys, sells=sells, names=nm, meta_line=meta_line))
 
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
 

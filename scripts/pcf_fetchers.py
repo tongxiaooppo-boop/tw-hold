@@ -28,6 +28,7 @@
       "data_date": "2026-09-09",        # PCF 基準日（ISO）
       "post_date": "2026-09-10",        # 生效日，抓不到就同 data_date
       "nav": 285310474996.0,            # 基金淨資產（給規模重排當 sanity check）
+      "close": 29.89,                   # ETF 市價收盤（TWSE STOCK_DAY_ALL，抓不到 None）
       "holdings": [
         {"stock_code": "2330", "stock_name": "台積電",
          "shares": 11864000.0,          # 股（1 張 = 1000 股）
@@ -43,6 +44,8 @@
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import ssl
 import time
@@ -326,6 +329,30 @@ def fetch_fuhwa(fund_id: str) -> dict[str, Any]:
 _FETCHERS = {"tongyi": fetch_tongyi, "capital": fetch_capital, "fuhwa": fetch_fuhwa}
 
 
+# ── TWSE 收盤價（算折溢價用；PCF 只給淨值，沒有市價）───────────────────────
+# `STOCK_DAY_ALL` 是官方每日全市場收盤行情、免驗證，一次回全部證券（含 ETF）
+# 一天份，不用逐檔查。這 5 檔全是上市（無上櫃），只打 TWSE 這支就夠。
+_TWSE_DAY_ALL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL"
+
+
+def fetch_twse_closes(codes: list[str]) -> dict[str, float]:
+    """回 {code: 收盤價}——抓不到的（含整支失敗）就不出現在回傳的 dict 裡，
+    呼叫端用 `.get(code)` 容忍缺值，不當作致命錯誤（折溢價本來就是錦上添花，
+    不该拖累 PCF 快照本身）。"""
+    req = urllib.request.Request(_TWSE_DAY_ALL, headers={"User-Agent": _UA})
+    text = urllib.request.urlopen(req, timeout=_TIMEOUT, context=_CTX).read().decode("utf-8-sig")
+    want = set(codes)
+    out: dict[str, float] = {}
+    for cells in csv.reader(io.StringIO(text)):
+        # 表頭：日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,...
+        if len(cells) < 9 or cells[1] not in want:
+            continue
+        close = _num(cells[8])
+        if close is not None:
+            out[cells[1]] = close
+    return out
+
+
 def fetch_one(fund: dict[str, str]) -> dict[str, Any]:
     out = _FETCHERS[fund["fetch"]](fund["fund_id"])
     out["code"] = fund["code"]
@@ -350,6 +377,16 @@ def fetch_all(sleep: float = 1.0) -> tuple[list[dict], list[dict]]:
             bad.append({"code": f["code"], "issuer": f["issuer"],
                         "error": f"{type(e).__name__}: {e}"})
         time.sleep(sleep)
+
+    # 收盤價（折溢價用）——TWSE 這支獨立於 PCF 抓取，失敗也不該讓已經抓到的
+    # PCF 資料報廢：接住例外，缺值時 out["close"] 就是 None。
+    try:
+        closes = fetch_twse_closes([o["code"] for o in ok])
+    except Exception:                                             # noqa: BLE001
+        closes = {}
+    for o in ok:
+        o["close"] = closes.get(o["code"])
+
     return ok, bad
 
 

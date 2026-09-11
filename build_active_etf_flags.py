@@ -165,8 +165,23 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
         anchor = max(anchor, td_date)
         mv = _fund_moves(today, prev)
         moved = int((mv["direction"] != 0).sum())
+
+        # 基金規模（總 AUM）+ 淨值（每受益權單位）——PCF 快照本來就有 fund_nav/
+        # fund_units 兩欄，不用另外抓。2026-09-11 拿三方站截圖對過：fund_nav 精確
+        # 等於官網「資產規模」；fund_nav/fund_units 等於「淨值」。
+        # 折溢價要market價——PCF 沒有，改抓 TWSE STOCK_DAY_ALL 收盤價（見
+        # pcf_fetchers.fetch_twse_closes），存進快照的 fund_close 欄；抓不到就 None。
+        aum_t, aum_p = _scalar(today, "fund_nav"), _scalar(prev, "fund_nav")
+        u_t, u_p = _scalar(today, "fund_units"), _scalar(prev, "fund_units")
+        navps_t = (aum_t / u_t) if (aum_t and u_t) else None
+        navps_p = (aum_p / u_p) if (aum_p and u_p) else None
+        close_t = _scalar(today, "fund_close")
+        premium_t = ((close_t - navps_t) / navps_t * 100) if (close_t and navps_t) else None
         fund_detail[code] = {"synced": True, "date": td_date, "prev_date": pd_date,
-                             "moved_n": moved}
+                             "moved_n": moved,
+                             "aum": aum_t, "aum_prev": aum_p,
+                             "navps": navps_t, "navps_prev": navps_p,
+                             "close": close_t, "premium_pct": premium_t}
 
         for r in mv.itertuples(index=False):
             if r.direction == 0 and not r.d_shares:
