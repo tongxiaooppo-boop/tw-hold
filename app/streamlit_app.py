@@ -243,6 +243,11 @@ _CSS = """
 .stApp{background:var(--thc-bg);}
 .stApp, .stApp p, .stApp li, .stApp label,
 .stApp span:not([data-testid="stIconMaterial"]){font-family:var(--thc-sans);}
+/* 分頁選單（st.radio）前面原生的圓圈勾選標——藏掉，只留文字，雷達徽章疊在文字後面就好。
+   結構是 <label data-testid="stRadioOption"><input type=radio hidden><div><div>[圓圈][文字]</div></div></label>；
+   圓圈那個 div 沒有 testid，用「跟 stMarkdownContainer 同一排的第一個 div」抓它，不用猜 class 名稱。 */
+div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]
+  div:has(> [data-testid="stMarkdownContainer"]) > div:first-child{display:none;}
 .thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:stretch;margin-top:.3rem;}
 .thc-grid > .thc-card{height:100%;}
 @media (min-width:900px){.thc-grid{grid-template-columns:1fr 1fr;}}
@@ -1375,7 +1380,11 @@ def main() -> None:
     # 目前分頁後面疊一個小雷達徽章（同心圈＋掃描扇形＋中心點，紅色＝台股「紅漲」直覺，
     # 沿用 --thc-up 同一色號）。用 nth-of-type 對到目前選中的那個 stRadioOption，
     # 不用去猜 BaseWeb 內部的 checked 狀態怎麼反映在 DOM 上——順序由 NAV 這個 list 保證。
-    _nav_n = NAV.index(nav) + 1
+    # 掃描扇形指向哪個方位，照 NAV 在「8 方位環」（含未來第 8 個美股焦點）上的順位算，
+    # 不是每個分頁都指同一個方向：價值=正上方(0°)，之後每項順時針 +45°。
+    _nav_i = NAV.index(nav)
+    _nav_n = _nav_i + 1
+    _wedge_from = _nav_i * 45 - 22.5
     st.markdown(f"""<style>
     div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]:nth-of-type({_nav_n}) {{
       position: relative; z-index: 0; overflow: visible;
@@ -1385,7 +1394,7 @@ def main() -> None:
       width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%;
       background:
         radial-gradient(circle 2px at center, var(--thc-up) 100%, transparent 100%),
-        conic-gradient(from -90deg, rgba(196,87,74,.30) 0deg 45deg, transparent 45deg 360deg),
+        conic-gradient(from {_wedge_from}deg, rgba(196,87,74,.30) 0deg 45deg, transparent 45deg 360deg),
         radial-gradient(circle, transparent 0 55%, rgba(196,87,74,.35) 55% 56.5%,
           transparent 56.5% 85%, rgba(196,87,74,.35) 85% 86.5%, transparent 86.5% 100%);
     }}
