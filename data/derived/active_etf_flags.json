@@ -1,9 +1,9 @@
 {
  "_meta": {
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
-  "anchor_date": "2026-09-10",
-  "market_date": "2026-09-10",
-  "fetched_at": "2026-09-11T14:08:40+00:00",
+  "anchor_date": "2026-09-11",
+  "market_date": "2026-09-11",
+  "fetched_at": "2026-09-11T23:56:21+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -18,12 +18,12 @@
     "prev_date": "2026-09-08",
     "span_days": 2,
     "moved_n": 3,
-    "aum": 283976224291.0,
+    "aum": 278340707618.0,
     "aum_prev": 285310474996.0,
-    "navps": 30.019551794986505,
+    "navps": 29.411376408340537,
     "navps_prev": 30.03992594382498,
-    "close": 29.89,
-    "close_date": null,
+    "close": 29.44,
+    "close_date": "2026-09-11",
     "premium_pct": null,
     "premium_skipped": true
    },
@@ -32,60 +32,60 @@
     "date": "2026-09-10",
     "prev_date": "2026-09-09",
     "span_days": 1,
-    "moved_n": 6,
-    "aum": 156196406210.0,
+    "moved_n": 7,
+    "aum": 152832664403.0,
     "aum_prev": 158102592651.0,
-    "navps": 10.391258941295288,
+    "navps": 10.206181874890271,
     "navps_prev": 10.401473356776725,
-    "close": 10.34,
-    "close_date": null,
+    "close": 10.17,
+    "close_date": "2026-09-11",
     "premium_pct": null,
     "premium_skipped": true
    },
    "00991A": {
     "synced": true,
-    "date": "2026-09-10",
-    "prev_date": "2026-09-09",
+    "date": "2026-09-11",
+    "prev_date": "2026-09-10",
     "span_days": 1,
-    "moved_n": 1,
-    "aum": 79666111582.0,
-    "aum_prev": 79656376810.0,
-    "navps": 17.816752362562553,
-    "navps_prev": 17.77284018932974,
-    "close": 17.74,
-    "close_date": null,
-    "premium_pct": null,
-    "premium_skipped": true
+    "moved_n": 6,
+    "aum": 77618050696.0,
+    "aum_prev": 79666111582.0,
+    "navps": 17.38983117325385,
+    "navps_prev": 17.816752362562553,
+    "close": 17.36,
+    "close_date": "2026-09-11",
+    "premium_pct": -0.1715437772606525,
+    "premium_skipped": false
    },
    "00982A": {
     "synced": true,
-    "date": "2026-09-10",
-    "prev_date": "2026-09-09",
+    "date": "2026-09-11",
+    "prev_date": "2026-09-10",
     "span_days": 1,
-    "moved_n": 3,
-    "aum": 50757735506.0,
-    "aum_prev": 51292829030.0,
-    "navps": 22.885121800629054,
-    "navps_prev": 22.986466575783485,
-    "close": 22.78,
-    "close_date": null,
-    "premium_pct": null,
-    "premium_skipped": true
+    "moved_n": 1,
+    "aum": 49627477588.0,
+    "aum_prev": 50757735506.0,
+    "navps": 22.400772393334766,
+    "navps_prev": 22.885121800629054,
+    "close": 22.37,
+    "close_date": "2026-09-11",
+    "premium_pct": -0.1373720191180583,
+    "premium_skipped": false
    },
    "00992A": {
     "synced": true,
-    "date": "2026-09-10",
-    "prev_date": "2026-09-09",
+    "date": "2026-09-11",
+    "prev_date": "2026-09-10",
     "span_days": 1,
     "moved_n": 0,
-    "aum": 41382975225.0,
-    "aum_prev": 41636483457.0,
-    "navps": 18.25084741483293,
-    "navps_prev": 18.306136396191615,
-    "close": 18.16,
-    "close_date": null,
-    "premium_pct": null,
-    "premium_skipped": true
+    "aum": 40635770753.0,
+    "aum_prev": 41382975225.0,
+    "navps": 17.921312993201628,
+    "navps_prev": 18.25084741483293,
+    "close": 17.87,
+    "close_date": "2026-09-11",
+    "premium_pct": -0.28632384926870214,
+    "premium_skipped": false
    }
   },
   "schema_ok": true
@@ -95,7 +95,7 @@
    "name": "健策",
    "industry": null,
    "net_shares": 30000,
-   "net_amount": 173700000,
+   "net_amount": 172950000,
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
@@ -110,7 +110,7 @@
    "name": "華星光",
    "industry": null,
    "net_shares": -923000,
-   "net_amount": -527033000,
+   "net_amount": -490113000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -125,7 +125,7 @@
    "name": "勤誠",
    "industry": null,
    "net_shares": -386000,
-   "net_amount": -351260000,
+   "net_amount": -347400000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -140,7 +140,7 @@
    "name": "台積電",
    "industry": null,
    "net_shares": -200000,
-   "net_amount": -490000000,
+   "net_amount": -482000000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -155,7 +155,7 @@
    "name": "旺宏",
    "industry": null,
    "net_shares": -999000,
-   "net_amount": -122377500,
+   "net_amount": -118881000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -170,7 +170,7 @@
    "name": "華邦電",
    "industry": null,
    "net_shares": -500000,
-   "net_amount": -89750000,
+   "net_amount": -85750000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -185,7 +185,7 @@
    "name": "嘉澤",
    "industry": null,
    "net_shares": -50000,
-   "net_amount": -78750000,
+   "net_amount": -79000000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -196,11 +196,28 @@
    ],
    "kind": "sell"
   },
+  "3711": {
+   "name": "日月光投控",
+   "industry": null,
+   "net_shares": 491000,
+   "net_amount": 303438000,
+   "issuer_count": 2,
+   "consensus": 0,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00991A"
+   ],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "buy"
+  },
   "5274": {
    "name": "信驊",
    "industry": null,
    "net_shares": -20000,
-   "net_amount": -374000000,
+   "net_amount": -357700000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -215,7 +232,7 @@
    "name": "金居",
    "industry": null,
    "net_shares": -100000,
-   "net_amount": -52100000,
+   "net_amount": -48500000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -226,11 +243,11 @@
    ],
    "kind": "sell"
   },
-  "7769": {
-   "name": "鴻勁精密",
+  "2345": {
+   "name": "智邦科技",
    "industry": null,
-   "net_shares": -30000,
-   "net_amount": -194250000,
+   "net_shares": -250000,
+   "net_amount": -471250000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -241,50 +258,80 @@
    ],
    "kind": "sell"
   },
-  "3711": {
-   "name": "日月光投控",
+  "3037": {
+   "name": "欣興電子",
    "industry": null,
-   "net_shares": -30000,
-   "net_amount": -19499710,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00982A"
-   ],
-   "kind": "sell"
-  },
-  "6139": {
-   "name": "亞翔",
-   "industry": null,
-   "net_shares": -24000,
-   "net_amount": -18071773,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00982A"
-   ],
-   "kind": "sell"
-  },
-  "6531": {
-   "name": "愛普*",
-   "industry": null,
-   "net_shares": 380000,
-   "net_amount": 391393894,
+   "net_shares": 100000,
+   "net_amount": 97700000,
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
    "span_days": 1,
    "buyers": [
-    "00982A"
+    "00991A"
    ],
    "sellers": [],
    "kind": "buy"
+  },
+  "3189": {
+   "name": "景碩科技",
+   "industry": null,
+   "net_shares": 150000,
+   "net_amount": 123300000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00991A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "8046": {
+   "name": "南亞電路",
+   "industry": null,
+   "net_shares": 50000,
+   "net_amount": 54000000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00991A"
+   ],
+   "sellers": [],
+   "kind": "buy"
+  },
+  "8299": {
+   "name": "群聯電子",
+   "industry": null,
+   "net_shares": -779000,
+   "net_amount": -1550210000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00991A"
+   ],
+   "kind": "sell"
+  },
+  "3583": {
+   "name": "辛耘",
+   "industry": null,
+   "net_shares": -28000,
+   "net_amount": -19711621,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00982A"
+   ],
+   "kind": "sell"
   }
  }
 }
