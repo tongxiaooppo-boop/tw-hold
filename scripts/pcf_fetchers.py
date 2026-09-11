@@ -29,6 +29,8 @@
       "post_date": "2026-09-10",        # 生效日，抓不到就同 data_date
       "nav": 285310474996.0,            # 基金淨資產（給規模重排當 sanity check）
       "close": 29.89,                   # ETF 市價收盤（TWSE STOCK_DAY_ALL，抓不到 None）
+      "close_date": "2026-09-09",       # ↑那個收盤價是哪一天的——跟 data_date 不同天
+                                        #   就不能算折溢價（見 fetch_twse_closes）
       "holdings": [
         {"stock_code": "2330", "stock_name": "台積電",
          "shares": 11864000.0,          # 股（1 張 = 1000 股）
@@ -335,22 +337,43 @@ _FETCHERS = {"tongyi": fetch_tongyi, "capital": fetch_capital, "fuhwa": fetch_fu
 _TWSE_DAY_ALL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL"
 
 
-def fetch_twse_closes(codes: list[str]) -> dict[str, float]:
-    """回 {code: 收盤價}——抓不到的（含整支失敗）就不出現在回傳的 dict 裡，
-    呼叫端用 `.get(code)` 容忍缺值，不當作致命錯誤（折溢價本來就是錦上添花，
-    不该拖累 PCF 快照本身）。"""
+def _roc_compact(s: str) -> str:
+    """TWSE 的 `1150911`（民國）→ `2026-09-11`；解不出回 ''。"""
+    s = str(s or "").strip()
+    if len(s) != 7 or not s.isdigit():
+        return ""
+    try:
+        return f"{int(s[:3]) + 1911:04d}-{int(s[3:5]):02d}-{int(s[5:7]):02d}"
+    except ValueError:
+        return ""
+
+
+def fetch_twse_closes(codes: list[str]) -> tuple[dict[str, float], str]:
+    """回 ({code: 收盤價}, 這份行情的日期 ISO)。抓不到的（含整支失敗）就不出現在
+    dict 裡，呼叫端用 `.get(code)` 容忍缺值，不當作致命錯誤（折溢價本來就是錦上
+    添花，不該拖累 PCF 快照本身）。
+
+    ⚠️ **日期一定要一起回**：折溢價 =（市價 − 淨值）÷ 淨值，兩個數字必須同一天。
+    `STOCK_DAY_ALL` 給的是「最近一個已收盤交易日」，PCF 的 `data_date` 常常是前一
+    交易日——盤後才跑的話兩者就差一天。以前這裡把日期丟掉，跨日也算得出一個數字
+    （2026-09-11 修）。
+    """
     req = urllib.request.Request(_TWSE_DAY_ALL, headers={"User-Agent": _UA})
     text = urllib.request.urlopen(req, timeout=_TIMEOUT, context=_CTX).read().decode("utf-8-sig")
     want = set(codes)
     out: dict[str, float] = {}
+    day = ""
     for cells in csv.reader(io.StringIO(text)):
         # 表頭：日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,...
-        if len(cells) < 9 or cells[1] not in want:
+        if len(cells) < 9 or not cells[0].strip().isdigit():
+            continue
+        day = day or _roc_compact(cells[0])
+        if cells[1] not in want:
             continue
         close = _num(cells[8])
         if close is not None:
             out[cells[1]] = close
-    return out
+    return out, day
 
 
 def fetch_one(fund: dict[str, str]) -> dict[str, Any]:
@@ -381,11 +404,12 @@ def fetch_all(sleep: float = 1.0) -> tuple[list[dict], list[dict]]:
     # 收盤價（折溢價用）——TWSE 這支獨立於 PCF 抓取，失敗也不該讓已經抓到的
     # PCF 資料報廢：接住例外，缺值時 out["close"] 就是 None。
     try:
-        closes = fetch_twse_closes([o["code"] for o in ok])
+        closes, close_day = fetch_twse_closes([o["code"] for o in ok])
     except Exception:                                             # noqa: BLE001
-        closes = {}
+        closes, close_day = {}, ""
     for o in ok:
         o["close"] = closes.get(o["code"])
+        o["close_date"] = close_day or None
 
     return ok, bad
 

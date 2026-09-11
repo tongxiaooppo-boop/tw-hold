@@ -54,6 +54,7 @@ try:
 except Exception:
     pass
 
+import numpy as np                                              # noqa: E402
 import pandas as pd                                             # noqa: E402
 
 from scripts.pcf_fetchers import FUNDS                          # noqa: E402
@@ -83,6 +84,17 @@ def _kind(net_shares, consensus: int) -> str:
     return "neutral"
 
 
+def _span_days(prev_date: str, today_date: str) -> int:
+    """兩份快照相隔幾個交易日。用工作日數（週末自動不算）——台股連假會讓真正
+    相鄰的兩天被算成 2+，方向是**保守**的（寧可多講一句「跨 N 日」，不會反過來
+    把跨日的差分講成近一日）。算不出來 → 1（當作相鄰，維持舊行為）。"""
+    try:
+        n = int(np.busday_count(np.datetime64(prev_date), np.datetime64(today_date)))
+    except Exception:  # noqa: BLE001
+        return 1
+    return max(1, n)
+
+
 def _latest_two(code: str) -> list[tuple[str, pd.DataFrame]]:
     d = PCF_DIR / code
     if not d.is_dir():
@@ -96,6 +108,13 @@ def _scalar(df: pd.DataFrame, col: str):
         return None
     v = df[col].iloc[0]
     return None if pd.isna(v) else float(v)
+
+
+def _text(df: pd.DataFrame, col: str) -> str:
+    if col not in df.columns or df.empty:
+        return ""
+    v = df[col].iloc[0]
+    return "" if pd.isna(v) else str(v)
 
 
 def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
@@ -163,6 +182,7 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             continue
         synced += 1
         anchor = max(anchor, td_date)
+        span = _span_days(pd_date, td_date)
         mv = _fund_moves(today, prev)
         moved = int((mv["direction"] != 0).sum())
 
@@ -176,19 +196,28 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
         navps_t = (aum_t / u_t) if (aum_t and u_t) else None
         navps_p = (aum_p / u_p) if (aum_p and u_p) else None
         close_t = _scalar(today, "fund_close")
-        premium_t = ((close_t - navps_t) / navps_t * 100) if (close_t and navps_t) else None
+        # 折溢價 =（市價 − 淨值）÷ 淨值，兩個數字必須同一天。TWSE 給的是「最近一個
+        # 已收盤交易日」，PCF 基準日常常是前一交易日——盤後跑就差一天，那時寧可不算
+        # 也不要給一個跨日的數字（2026-09-11 修）。舊快照沒有這欄 → 當作不確定。
+        close_d = _text(today, "fund_close_date")
+        close_aligned = bool(close_d) and close_d == td_date
+        premium_t = ((close_t - navps_t) / navps_t * 100)             if (close_t and navps_t and close_aligned) else None
         fund_detail[code] = {"synced": True, "date": td_date, "prev_date": pd_date,
-                             "moved_n": moved,
+                             "span_days": span, "moved_n": moved,
                              "aum": aum_t, "aum_prev": aum_p,
                              "navps": navps_t, "navps_prev": navps_p,
-                             "close": close_t, "premium_pct": premium_t}
+                             "close": close_t, "close_date": close_d or None,
+                             "premium_pct": premium_t,
+                             "premium_skipped": bool(close_t and navps_t
+                                                     and not close_aligned)}
 
         for r in mv.itertuples(index=False):
             if r.direction == 0 and not r.d_shares:
                 continue
             s = per_stock.setdefault(r.stock_code, {
                 "name": r.stock_name, "net_shares": 0.0, "net_amount": 0.0,
-                "_amt_ok": True, "buyers": [], "sellers": []})
+                "_amt_ok": True, "_span": 1, "buyers": [], "sellers": []})
+            s["_span"] = max(s["_span"], span)
             s["net_shares"] += float(r.d_shares)
             if r.price and pd.notna(r.price):
                 s["net_amount"] += float(r.d_shares) * float(r.price)
@@ -216,6 +245,9 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             "issuer_count": len(buyers) + len(sellers),
             "consensus": consensus,
             "consensus_strong": bool(strong),
+            # 這面旗實際涵蓋幾個交易日——某檔基金漏抓一天時，它的差分就是跨日的，
+            # 各頁文案要照這個講，不能一律寫「近一日」（2026-09-11 修）。
+            "span_days": int(s["_span"]),
             "buyers": buyers,
             "sellers": sellers,
             "kind": _kind(ns, consensus),
@@ -230,6 +262,13 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             "total_etfs": total,
             "synced_etfs": synced,
             "stale_etfs": total - synced,
+            # 有基金漏抓一天 → 它的差分跨 > 1 個交易日。stale_etfs 抓不到這種
+            # （它有兩份快照、只是不相鄰），所以另外揭露，各頁文案照這個講。
+            "max_span_days": max([fd.get("span_days", 1)
+                                  for fd in fund_detail.values() if fd.get("synced")],
+                                 default=1),
+            "multi_day_etfs": sorted(c for c, fd in fund_detail.items()
+                                     if fd.get("synced") and fd.get("span_days", 1) > 1),
             "funds": fund_detail,
             "schema_ok": True,
         },

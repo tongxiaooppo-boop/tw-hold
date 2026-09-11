@@ -70,7 +70,11 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
     """月營收：柱＝月營收（億元），線＝YoY%（右軸）。`start` 只裁 x 軸，YoY 用完整歷史算。"""
     d = rev.copy().sort_values("month")
     d["month"] = pd.to_datetime(d["month"])
-    d["yoy"] = d["revenue"] / d["revenue"].shift(12) - 1.0
+    # YoY 對齊曆月，不是位移 12 列——有缺月的公司用 shift(12) 會拿錯月份比而且不報錯
+    # （canonical 版見 screener.candidate_pool.monthly_yoy，2026-09-11）。
+    _ly = d[["month", "revenue"]].assign(month=lambda x: x["month"] + pd.DateOffset(years=1))
+    d = d.merge(_ly.rename(columns={"revenue": "_ly"}), on="month", how="left")
+    d["yoy"] = d["revenue"] / d["_ly"] - 1.0
     fig = go.Figure([
         go.Bar(x=d["month"], y=d["revenue"] / 1e8, name="月營收（億）",
                marker_line_width=0),

@@ -149,10 +149,7 @@ def revenue_yoy(revenue: pd.DataFrame) -> pd.DataFrame:
     r["ticker"] = _bare(r["ticker"])
 
     if "month" in r.columns:                     # 新長表
-        r = r.dropna(subset=["revenue"]).sort_values(["ticker", "month"])
-        g = r.groupby("ticker", sort=False)["revenue"]
-        r["yoy"] = g.transform(lambda s: s / s.shift(12) - 1.0)
-        r["yoy_prev"] = r.groupby("ticker", sort=False)["yoy"].shift(1)
+        r = monthly_yoy(r)
         last = r.groupby("ticker", sort=False).tail(1).set_index("ticker")
         return pd.DataFrame({
             "revenue_yoy": last["yoy"],
@@ -162,6 +159,29 @@ def revenue_yoy(revenue: pd.DataFrame) -> pd.DataFrame:
     r = r.set_index("ticker")                    # 舊單月快照
     yoy = r["revenue"] / r["revenue_last_year"] - 1.0
     return pd.DataFrame({"revenue_yoy": yoy, "revenue_accel": pd.NA}, index=r.index)
+
+
+def monthly_yoy(rev: pd.DataFrame, month_col: str = "month",
+                val_col: str = "revenue") -> pd.DataFrame:
+    """月營收長表 → 加上 `yoy`（vs 去年同月）與 `yoy_prev`（上一個曆月的 yoy）。
+
+    🔴 **對齊曆月，不是位移 12 列**：有些公司中間有缺月（暫停申報、剛上市），
+    `shift(12)` 會拿到錯誤月份去比，而且完全不會報錯。定義本來就是「本月 vs 去年
+    同月」，實作要照定義（2026-09-11 修；當下全市場實測 0 檔受影響，是防未來）。
+    """
+    r = rev.copy()
+    r[month_col] = pd.to_datetime(r[month_col].astype(str), errors="coerce")
+    r = (r.dropna(subset=[month_col, val_col])
+          .drop_duplicates(["ticker", month_col], keep="last")
+          .sort_values(["ticker", month_col]))
+    ly = r[["ticker", month_col, val_col]].copy()
+    ly[month_col] = ly[month_col] + pd.DateOffset(years=1)
+    r = r.merge(ly.rename(columns={val_col: "_ly"}), on=["ticker", month_col], how="left")
+    r["yoy"] = r[val_col] / r["_ly"] - 1.0
+    pm = r[["ticker", month_col, "yoy"]].copy()
+    pm[month_col] = pm[month_col] + pd.DateOffset(months=1)
+    r = r.merge(pm.rename(columns={"yoy": "yoy_prev"}), on=["ticker", month_col], how="left")
+    return r.drop(columns=["_ly"])
 
 
 def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
