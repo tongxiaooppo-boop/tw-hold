@@ -241,7 +241,8 @@ _CSS = """
   --thc-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
 .stApp{background:var(--thc-bg);}
-.stApp, .stApp p, .stApp li, .stApp label, .stApp span{font-family:var(--thc-sans);}
+.stApp, .stApp p, .stApp li, .stApp label,
+.stApp span:not([data-testid="stIconMaterial"]){font-family:var(--thc-sans);}
 .thc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;align-items:stretch;margin-top:.3rem;}
 .thc-grid > .thc-card{height:100%;}
 @media (min-width:900px){.thc-grid{grid-template-columns:1fr 1fr;}}
@@ -1370,6 +1371,26 @@ def main() -> None:
 
     nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
                    label_visibility="collapsed")
+
+    # 目前分頁後面疊一個小雷達徽章（同心圈＋掃描扇形＋中心點，紅色＝台股「紅漲」直覺，
+    # 沿用 --thc-up 同一色號）。用 nth-of-type 對到目前選中的那個 stRadioOption，
+    # 不用去猜 BaseWeb 內部的 checked 狀態怎麼反映在 DOM 上——順序由 NAV 這個 list 保證。
+    _nav_n = NAV.index(nav) + 1
+    st.markdown(f"""<style>
+    div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]:nth-of-type({_nav_n}) {{
+      position: relative; z-index: 0; overflow: visible;
+    }}
+    div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]:nth-of-type({_nav_n})::before {{
+      content: ""; position: absolute; left: 50%; top: 50%; z-index: -1; pointer-events: none;
+      width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%;
+      background:
+        radial-gradient(circle 2px at center, var(--thc-up) 100%, transparent 100%),
+        conic-gradient(from -90deg, rgba(196,87,74,.30) 0deg 45deg, transparent 45deg 360deg),
+        radial-gradient(circle, transparent 0 55%, rgba(196,87,74,.35) 55% 56.5%,
+          transparent 56.5% 85%, rgba(196,87,74,.35) 85% 86.5%, transparent 86.5% 100%);
+    }}
+    </style>""", unsafe_allow_html=True)
+
     if nav == "價值":
         _card_list("value", "價值清單", _load("value_list.json"),
                    "F-Score ≥ 6 + Magic Formula 精神。月看、季換（3/31、5/15、8/14、11/14），"
