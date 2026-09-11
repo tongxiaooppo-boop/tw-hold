@@ -15,12 +15,12 @@ import plotly.graph_objects as go
 _MA_SHORT = [("MA5", 5), ("MA20", 20), ("季線", 60)]
 _MA_LONG = [("MA20", 20), ("季線", 60), ("年線", 240)]
 
-#: 固定深色（app 主題也是深色）。圖例橫排放在**圖下方**——放上方會跟標題重疊、
-#: 手機放右邊會吃掉半個繪圖區。
+#: 固定淺色（app 主題「北歐靜謐」，2026-09-11 改）。圖例橫排放在**圖下方**——
+#: 放上方會跟標題重疊、手機放右邊會吃掉半個繪圖區。
 _LAYOUT = dict(
-    template="plotly_dark",
+    template="plotly_white",
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#d7dbd4"),
+    font=dict(color="#2B333B"),
     legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0),
     margin=dict(t=48, b=76, l=10, r=10),
     # 手機上單指拖曳會被 plotly 吃掉當平移／縮放，害頁面滑不動——關掉拖曳，
@@ -48,8 +48,8 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
         x=x, open=d["open"].astype(float).tolist(), high=d["high"].astype(float).tolist(),
         low=d["low"].astype(float).tolist(), close=close.tolist(),
         name="還原K線",
-        increasing=dict(line=dict(color="#d62728")),      # 台股慣例：紅漲綠跌
-        decreasing=dict(line=dict(color="#2ca02c"))))
+        increasing=dict(line=dict(color="#C4574A")),      # 台股慣例：紅漲綠跌
+        decreasing=dict(line=dict(color="#4A7D74"))))
     ma = ma or (_MA_SHORT if start is not None else _MA_LONG)
     for i, (label, w) in enumerate(ma):
         if len(d) >= w:
@@ -75,11 +75,11 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
         go.Bar(x=d["month"], y=d["revenue"] / 1e8, name="月營收（億）",
                marker_line_width=0),
         go.Scatter(x=d["month"], y=d["yoy"] * 100, name="YoY %", yaxis="y2",
-                   line=dict(width=2, color="#d69f57")),
+                   line=dict(width=2, color="#8A6A5F")),
     ])
     fig.update_layout(
         yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
-                    zeroline=True, zerolinecolor="rgba(214,159,87,.35)"))
+                    zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
     if start is not None:
         fig.update_xaxes(range=[pd.Timestamp(start), d["month"].max()])
     return _style(fig, f"{name} 月營收 + YoY", 360)
@@ -96,11 +96,11 @@ def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
         go.Bar(x=d["date"], y=d["trust"], name="投信", marker_line_width=0),
         go.Bar(x=d["date"], y=d["dealer"], name="自營", marker_line_width=0),
         go.Scatter(x=d["date"], y=d["cum20"], name="三大合計20日累計", yaxis="y2",
-                   line=dict(width=2, color="#e9ece6")),
+                   line=dict(width=2, color="#2B333B")),
     ])
     fig.update_layout(barmode="relative",
                       yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                                  zeroline=True, zerolinecolor="rgba(233,236,230,.25)"))
+                                  zeroline=True, zerolinecolor="rgba(43,51,59,.25)"))
     if start is not None:
         fig.update_xaxes(range=[pd.Timestamp(start), d["date"].max()])
     return _style(fig, f"{name} 法人買賣超（張）", 360)
@@ -146,7 +146,7 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
     # 段跟段之間才看得出「今年配了幾次、各配多少」。按實際配息日排序讓疊放依時序。
     if "pay_date" in d.columns:
         d = d.sort_values(["year", "pay_date"])
-    edge = dict(marker_line_color="rgba(233,236,230,.55)", marker_line_width=1)
+    edge = dict(marker_line_color="rgba(43,51,59,.35)", marker_line_width=1)
     fig = go.Figure([
         go.Bar(x=d["year"], y=d["CashEarningsDistribution"], name="現金股利", **edge),
         go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利", **edge),
@@ -168,16 +168,16 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     m["ttm_eps"] = m["close"] / m["per"]
     qs = m["per"].quantile([0.1, 0.3, 0.5, 0.7, 0.9])
     fig = go.Figure()
-    # 三段有意義的顏色：便宜區（P10–P30）綠、中性（P30–P70）灰、偏貴（P70–P90）琥珀
-    fills = [None, "rgba(104,183,132,.30)", "rgba(150,158,148,.16)",
-             "rgba(150,158,148,.16)", "rgba(214,159,87,.28)"]
+    # 三段有意義的顏色：便宜區（P10–P30）綠、中性（P30–P70）灰、偏貴（P70–P90）赭
+    fills = [None, "rgba(92,122,114,.22)", "rgba(138,151,163,.14)",
+             "rgba(138,151,163,.14)", "rgba(138,106,95,.22)"]
     for (q, mult), col in zip(qs.items(), fills):
         fig.add_trace(go.Scatter(x=m["date"], y=m["ttm_eps"] * mult,
                                  name=f"PE {mult:.0f}x（P{int(q*100)}）",
-                                 line=dict(width=0.6, color="rgba(160,168,158,.35)"),
+                                 line=dict(width=0.6, color="rgba(138,151,163,.35)"),
                                  fill="tonexty" if col else None, fillcolor=col))
     fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
-                             line=dict(color="#e9ece6", width=1.6)))
+                             line=dict(color="#2B333B", width=1.6)))
     if start is not None:
         fig.update_xaxes(range=[pd.Timestamp(start), m["date"].max()])
         vis = m.loc[m["date"] >= pd.Timestamp(start)]
@@ -206,9 +206,9 @@ def balance_health(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure
     d = qf.tail(quarters)
     fig = go.Figure([
         go.Scatter(x=d["period_end"], y=d["debt_ratio"] * 100, name="負債比 %",
-                   line=dict(width=2, color="#d69f57")),
+                   line=dict(width=2, color="#8A6A5F")),
         go.Scatter(x=d["period_end"], y=d["current_ratio"], name="流動比（倍）", yaxis="y2",
-                   line=dict(width=1.6, color="#68b784")),
+                   line=dict(width=1.6, color="#5C7A72")),
     ])
     fig.update_layout(yaxis=dict(ticksuffix="%"),
                       yaxis2=dict(overlaying="y", side="right", showgrid=False))
@@ -222,7 +222,7 @@ def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
     if d.empty:
         return _style(go.Figure(), f"{name} 現金殖利率走勢（無資料）", 320)
     fig = go.Figure([go.Scatter(x=d["date"], y=d["dividend_yield"], name="現金殖利率",
-                                line=dict(width=2, color="#68b784"))])
+                                line=dict(width=2, color="#5C7A72"))])
     fig.update_layout(yaxis=dict(ticksuffix="%"))
     if start is not None:
         fig.update_xaxes(range=[pd.Timestamp(start), pd.to_datetime(d["date"]).max()])
