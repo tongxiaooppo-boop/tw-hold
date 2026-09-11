@@ -1268,7 +1268,7 @@ def _active_etf_page() -> None:
     _disclaimer()
 
 
-APP_NAME = "持股觀測站"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣）
+APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
 NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢", "主動式 ETF"]
 
 
