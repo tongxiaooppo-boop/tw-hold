@@ -293,6 +293,7 @@ _CSS = """
 .sw-h.sup{color:var(--thc-good);}
 .sw-cols ul{margin:0;padding-left:1.05rem;font-size:.84rem;color:var(--thc-soft);}
 .sw-cols li{margin:.16rem 0;}
+.sw-cols li b{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 @media (min-width:560px){.sw-cols{grid-template-columns:1fr 1fr;}}
 .thc-details table{width:100%;border-collapse:collapse;margin-top:.45rem;}
 .thc-details td{padding:.22rem .1rem;border-bottom:.5px solid var(--thc-line);}
@@ -1170,6 +1171,42 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
             f'<div class="thc-body">{"".join(parts)}</div></div>')
 
 
+def _active_summary(fl: dict) -> str:
+    """五檔加總：整體加碼 vs 整體調節（跨五檔彙總，不是單一基金視角）。
+
+    方向沿用 `build_active_etf_flags.py` 的 `kind` 判斷（consensus 優先，
+    否則看淨股數方向）——**不是多數決**。同一檔如果有買有賣（分歧），
+    不會被藏起來：買賣家數直接標在項目旁，例如「3買2賣，淨額計」。
+    """
+    buys = [(tk, f) for tk, f in fl.items() if f.get("kind") in ("consensus_buy", "buy")]
+    sells = [(tk, f) for tk, f in fl.items() if f.get("kind") in ("consensus_sell", "sell")]
+    buys.sort(key=lambda kv: (-(kv[1].get("consensus") or 0),
+                              -abs(kv[1].get("net_amount") or kv[1].get("net_shares") or 0)))
+    sells.sort(key=lambda kv: ((kv[1].get("consensus") or 0),
+                               -abs(kv[1].get("net_amount") or kv[1].get("net_shares") or 0)))
+
+    def _row(tk: str, f: dict) -> str:
+        b, s = f.get("buyers") or [], f.get("sellers") or []
+        ns = f.get("net_shares")
+        lots = f"{ns / 1000:+,.0f} 張" if isinstance(ns, (int, float)) else "—"
+        mix = (f'　<span class="thc-flag">（{len(b)}買{len(s)}賣，淨額計）</span>'
+               if b and s else "")
+        return (f'<li><a href="?code={_esc(tk)}" target="_self">{_esc(tk)}</a>'
+                f'　{_esc(f.get("name") or "")}　<b>{_esc(lots)}</b>{mix}</li>')
+
+    buy_html = "".join(_row(tk, f) for tk, f in buys) or '<li class="flat">—</li>'
+    sell_html = "".join(_row(tk, f) for tk, f in sells) or '<li class="flat">—</li>'
+    return (
+        '<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
+        '<div class="thc-head"><span class="thc-cn">五檔加總</span></div>'
+        f'<div class="thc-ctx">整體加碼 {len(buys)} 檔　·　整體調節 {len(sells)} 檔'
+        '（有買有賣的檔位以淨額判斷方向，比數不隱藏）</div>'
+        '<div class="sw-cols">'
+        f'<div><div class="sw-h sup">整體加碼 / 新進</div><ul>{buy_html}</ul></div>'
+        f'<div><div class="sw-h">整體調節 / 出清</div><ul>{sell_html}</ul></div>'
+        '</div></div></div>')
+
+
 def _active_etf_page() -> None:
     """主動式 ETF 每日動向——那五檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
@@ -1212,6 +1249,9 @@ def _active_etf_page() -> None:
         pass
 
     fl = flags.get("flags") or {}
+    if fl:
+        st.markdown(_active_summary(fl), unsafe_allow_html=True)
+        st.caption("以下逐檔看是哪些基金在買賣：")
 
     def _moved_by(code: str):
         buys = sorted(tk for tk, f in fl.items() if code in (f.get("buyers") or []))
