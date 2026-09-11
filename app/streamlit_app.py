@@ -1283,13 +1283,13 @@ def _route() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title=APP_NAME, layout="wide")
+    st.set_page_config(page_title=APP_NAME, page_icon="📡", layout="wide")
     _inject_css()
     _route()
     goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
     if goto in NAV:
         st.session_state["_nav"] = goto
-    st.title(APP_NAME)
+    st.title(f"📡 {APP_NAME}")
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
