@@ -567,11 +567,10 @@ def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
 
 
 def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
-    _disclaimer()
     st.header(title)
-    st.caption(note)
     if payload is None:
         st.info("清單尚未產出。")
+        st.caption(note)
         _disclaimer()
         return
 
@@ -582,10 +581,9 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
                     + ("（成分凍結）" if meta.get("frozen") else "（本次重算）"))
     bits.append(f"重算 {meta.get('rebuilt_at', '—')}")
     st.caption("　·　".join(bits))
+    _disclaimer()
     if meta.get("warning"):
         st.warning(meta["warning"])
-    if meta.get("g2_note"):
-        st.caption("🔒 " + meta["g2_note"])
 
     holdings = payload.get("holdings", [])
     # 定存的 verdict 內嵌數字（「觀望（殖利率 4.4% < 門檻 5.0%）」）→ 每檔自成一組。
@@ -624,22 +622,26 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
     with st.expander("複製給 AI"):
         st.code(_copy_for_ai(title, meta, rows), language="markdown")
 
+    st.divider()
+    st.caption(note)
+    if meta.get("g2_note"):
+        st.caption("🔒 " + meta["g2_note"])
     _disclaimer()
 
 
 def _swing_page(payload: dict | None) -> None:
-    _disclaimer(SWING_DISCLAIMER)
     st.header("長波段候選池")
-    st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
-               "每日重算。**候選池，不是推薦清單。**")
     if payload is None or not payload.get("candidates_pool"):
         st.info((payload or {}).get("_meta", {}).get("pool_note", "候選池尚未產出。"))
+        st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
+                   "每日重算。**候選池，不是推薦清單。**")
         _disclaimer(SWING_DISCLAIMER)
         return
 
     meta = payload.get("_meta", {})
     st.caption(f"資料日期 {meta.get('trading_date', '—')}　·　{meta.get('pool_note', '')}"
                f"　·　重算 {meta.get('rebuilt_at', '—')}")
+    _disclaimer()
 
     flags = _active_flags()
     if flags:
@@ -660,6 +662,9 @@ def _swing_page(payload: dict | None) -> None:
     with st.expander("複製給 AI"):
         st.code(_copy_for_ai("長波段候選池", meta, payload["candidates_pool"]),
                 language="markdown")
+    st.divider()
+    st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
+               "每日重算。**候選池，不是推薦清單。**")
     _disclaimer(SWING_DISCLAIMER)
 
 
@@ -714,10 +719,7 @@ def _short_b_html(c: dict, flag: dict | None = None) -> str:
 
 
 def _shortterm_page() -> None:
-    _disclaimer(SHORT_DISCLAIMER)
     st.header("短線清單（tw-swing）")
-    st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
-               "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
 
     data = _fetch_swing_share()
     if data is None:
@@ -731,6 +733,7 @@ def _shortterm_page() -> None:
     wd = data.get("weekday", "")
     # 「整群計算時間」放在最顯眼的地方；當天沒產出時明講，不靜默拿舊的當新的。
     st.caption(f"**清單產生日 {asof}（{wd}）**　·　產生時刻 {gen}（台北）　·　來源 tw-swing")
+    _disclaimer()
     today = _taipei_today()
     if asof != "—" and asof < today:
         lag = (pd.Timestamp(today) - pd.Timestamp(asof)).days
@@ -739,8 +742,6 @@ def _shortterm_page() -> None:
                "**別把這份當今天的清單看**。")
         (st.warning if lag >= 4 else st.info)(msg)
 
-    for d in data.get("disclaimer", []):
-        st.caption("· " + d)
     for p in data.get("pools", []):
         if p.get("warn_html"):
             st.warning(p["warn_html"])
@@ -748,6 +749,10 @@ def _shortterm_page() -> None:
     cands = data.get("candidates", [])
     if data.get("empty") or not cands:
         st.info(f"tw-swing 在 {asof} 收盤後跑完，**當日無訊號**。")
+        st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
+                   "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
+        for d in data.get("disclaimer", []):
+            st.caption("· " + d)
         _disclaimer(SHORT_DISCLAIMER)
         return
 
@@ -768,6 +773,11 @@ def _shortterm_page() -> None:
                 f"｜{c.get('note','')}")
         st.code("\n".join(lines), language="markdown")
 
+    st.divider()
+    st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
+               "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
+    for d in data.get("disclaimer", []):
+        st.caption("· " + d)
     _disclaimer(SHORT_DISCLAIMER)
 
 
@@ -847,10 +857,8 @@ def _page_footer(other_nav: str, other_label: str) -> None:
 
 def _stock_page() -> None:
     import stockcharts as ch
-    _disclaimer()
     st.header("個股查詢", anchor="top")
-    st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
-               "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
+    _disclaimer()
     st.markdown("**股票代號**")
     code = _stock_input("stock_query", "查詢")
     if not code:
@@ -937,6 +945,9 @@ def _stock_page() -> None:
         _raw = d["qf"] if not d["qf"].empty else d["fin"]
         st.dataframe(_qf_display(_raw), use_container_width=True)
 
+    st.divider()
+    st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
+               "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
     _disclaimer()
     _page_footer("多軌體檢", f"🔬 多軌體檢 {code} →")
 
@@ -1037,9 +1048,6 @@ def _checklist_page() -> None:
     import checklist as cl
 
     st.subheader("多軌體檢", anchor="top")
-    st.caption("同一檔股票，分別用「短線 / 波段 / 價值 / 定存」四套判準逐條攤開。"
-               "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。"
-               "短線軌零回測、只是把技術面條件列出來（tw-hold 是長期工具，短線用 tw-swing）。")
     code = _stock_input("cl_query", "體檢")
     if not code:
         _disclaimer()
@@ -1132,6 +1140,10 @@ def _checklist_page() -> None:
         if not qf.empty:
             _chart(ch.balance_health, qf, nm, 24)
     st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
+    st.divider()
+    st.caption("同一檔股票，分別用「短線 / 波段 / 價值 / 定存」四套判準逐條攤開。"
+               "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。"
+               "短線軌零回測、只是把技術面條件列出來（tw-hold 是長期工具，短線用 tw-swing）。")
     _disclaimer()
     _page_footer("個股查詢", f"📈 看 {code} 的完整圖表 →")
 
@@ -1232,11 +1244,6 @@ def _active_etf_page() -> None:
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
     兼作「爬五家投信官網有沒有正常」的體檢面板。"""
     st.header("主動式 ETF 每日動向", anchor="top")
-    st.caption(
-        "規模前五大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
-        "真實股數差＝這五檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
-        "賣出也可能是基金應付大額贖回被迫調節，不一定是看壞這檔股票。"
-        f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
 
     idx = _load_pcf_index()
     flags = _load("active_etf_flags.json") or {}
@@ -1256,8 +1263,7 @@ def _active_etf_page() -> None:
     st.markdown(
         f"**資料日 {anchor}**　·　{synced if synced is not None else '—'} / {total} 檔算得出差分"
         f"　·　快照最後更新 {_ago_human(idx_upd)}")
-    st.caption("目前顯示**近 1 交易日**的變化（資料日 vs 前一交易日）。"
-               "近 5 日變化要等每檔基金的快照歷史累積足夠再開。")
+    _disclaimer()
     if meta.get("schema_ok") is False:
         st.error("`schema_ok = False`——旗標已在各分頁 / 卡片整組隱藏，直到管線恢復。")
     _idx_date = (idx_upd or "")[:10]
@@ -1325,6 +1331,13 @@ def _active_etf_page() -> None:
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
+    st.caption(
+        "規模前五大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
+        "真實股數差＝這五檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
+        "賣出也可能是基金應付大額贖回被迫調節，不一定是看壞這檔股票。"
+        f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
+    st.caption("目前顯示**近 1 交易日**的變化（資料日 vs 前一交易日）。"
+               "近 5 日變化要等每檔基金的快照歷史累積足夠再開。")
     st.caption("代號可點進「個股查詢」看該股日線；旗標同時掛在「多軌體檢／長波段／短線」分頁上。"
                f"　·　🔧 爬取失敗會在 CI 顯示 `::warning::`：[rebuild 執行紀錄 →]({_REBUILD_RUNS_URL})")
     _disclaimer()
