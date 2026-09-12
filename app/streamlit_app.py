@@ -106,6 +106,70 @@ def _disclaimer(extra: str | None = None) -> None:
     st.warning(DISCLAIMER + (("\n\n" + extra) if extra else ""))
 
 
+#: 策略邏輯 + 回測結果——2026-09-12 使用者要求搬進頁尾、預設收合（不是每次都要看，
+#: 但要能點開查）。內容是靜態文字（回測數字不會隨每日重算變動），三線各自一份。
+BACKTEST_NOTES = {
+    "value": {
+        "logic": ("F-Score ≥ 6 + Magic Formula 精神（歸一化本益比／盈餘殖利率排序），"
+                 "月看、季換（3/31、5/15、8/14、11/14），前 15、單一產業 ≤ 40%。"
+                 "verdict 只由便宜門檻驅動（PRD §6.3），不做總分排名式的推薦。"),
+        "backtest": (
+            "**實驗 B（2026-09-07，季換股回溯，2016 起）**：N=10 含息年化 **+20.42%**、"
+            "最大回撤 **−21.3%**；同期 0050 含息 **+24.16%**、回撤 **−17.6%**——**報酬跟回撤都輸大盤**。"
+            "N=20 報酬小勝（+25.53%）但回撤一樣更深（−21.5%）。\n\n"
+            "🔴 這組數字**目前重跑不出來**——`research/backtest_rebalance.py` 依賴的 `twswing.value` "
+            "套件已經搬到 tw-hold 自己的 `factors/`／`reference/`，直接跑會 import 失敗（待 port，"
+            "見 HANDOFF §1.6）。\n\n"
+            "🔴 生存者偏差：universe 是回測當時的前 ~500 大，拿去回溯 2016 等於已知誰活到今天，"
+            "**結論當上界看待，真實會更差**。"),
+    },
+    "deposit": {
+        "logic": ("殖利率 ≥ 5%（目標 5.5%）+ 硬門檻（含填息率 ≥ 60%、近 3 年含息報酬 ≥ 0），"
+                 "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（PRD §7.3）。"),
+        "backtest": (
+            "**實驗 B（2026-09-07，季換股回溯，2016 起）**：N=10 含息年化 **+10.80%**、"
+            "最大回撤 **−25.2%**；同期 0056 含息 **+16.36%**、回撤 **−17.2%**——**報酬跟回撤都輸對照 ETF**。\n\n"
+            "🔴 這組數字**目前重跑不出來**（同上，依賴的套件已搬走，待 port）；而且定存線的 "
+            "`cut5y`（近 5 年減配判定）門檻 2026-09-08 之後放寬過（通過檔數 55→~92），這組 "
+            "2026-09-07 的數字沒反映放寬後的候選池，**已經過時**，重跑後可能改變。\n\n"
+            "🔴 生存者偏差：universe 是回測當時的前 ~500 大，**結論當上界看待，真實會更差**。"),
+    },
+    "swing": {
+        "logic": ("候選池六條件全過才進池：CANSLIM 基本面（季 EPS YoY>25%、近3年TTM EPS成長、"
+                 "ROE>15%、毛利率未連兩季惡化、F-Score≥6）∩ 月營收 YoY>0 且加速 ∩ 法人20日"
+                 "淨買超>0 ∩ Minervini 趨勢模板 8/8。停損參考位 = max(50MA, 近20週前低, "
+                 "現價−2×ATR14)。失效條件（任一觸發）：收盤跌破50MA、趨勢模板<5/8、"
+                 "月營收 YoY 連2個月轉負、季 EPS YoY 轉負。"),
+        "backtest": (
+            "**實驗 E（2026-09-12，事件驅動回測，2016-01→2026-09，550 週）**：\n\n"
+            "| 口徑 | 年化 | 最大回撤 | 勝率 |\n"
+            "| :-- | --: | --: | --: |\n"
+            "| 次日開盤（PRD 字面規格：固定停損） | +13.4% | −37.1% | 25% |\n"
+            "| 限價買得到（固定停損） | +12.0% | −37.1% | 23% |\n"
+            "| 次日開盤 + 移動 ATR 停損（非本頁現行規格，對照組） | +19.4% | −31.2% | 42% |\n"
+            "| 0050 同期（含息還原） | +24.0% | −33.8% | — |\n\n"
+            "**現行規格（固定停損）是主要弱點，不是候選池選股本身的問題**：73% 出場都是停損，"
+            "而且停損位進場當下算一次、之後不隨獲利上移——正常拉回就把部位洗出去，吃不到"
+            "後面的行情，報酬跟回撤雙輸大盤。移動停損版本（借用 tw-swing 機制，**目前沒有"
+            "收進候選池邏輯，只是測試對照組**）拿回大部分報酬、回撤還低於大盤，但那是額外"
+            "測試結果，不是這頁現在算給你看的東西。\n\n"
+            "🔴 生存者偏差：universe 是今天 bundle 的 610 檔（市值/成交值前段班），"
+            "**結論當上界看待，真實會更差**。完整報告：`docs/reports/backtest_longswing_20260912.md`。"),
+    },
+}
+
+
+def _strategy_backtest_expander(kind: str) -> None:
+    info = BACKTEST_NOTES.get(kind)
+    if not info:
+        return
+    with st.expander("📖 策略邏輯 + 回測結果（點開看）"):
+        st.markdown("**策略怎麼做的**")
+        st.markdown(info["logic"])
+        st.markdown("**回測結果**")
+        st.markdown(info["backtest"])
+
+
 def _fmt(field: str, v) -> str:
     if v is None or v == "":
         return "—"
@@ -677,6 +741,7 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
     if payload is None:
         st.info("清單尚未產出。")
         st.caption(note)
+        _strategy_backtest_expander(kind)
         _disclaimer()
         return
 
@@ -732,6 +797,7 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
     st.caption(note)
     if meta.get("g2_note"):
         st.caption("🔒 " + meta["g2_note"])
+    _strategy_backtest_expander(kind)
     _disclaimer()
 
 
@@ -741,6 +807,7 @@ def _swing_page(payload: dict | None) -> None:
         st.info((payload or {}).get("_meta", {}).get("pool_note", "候選池尚未產出。"))
         st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
                    "每日重算。**候選池，不是推薦清單。**")
+        _strategy_backtest_expander("swing")
         _disclaimer(SWING_DISCLAIMER)
         return
 
@@ -771,6 +838,7 @@ def _swing_page(payload: dict | None) -> None:
     st.divider()
     st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
                "每日重算。**候選池，不是推薦清單。**")
+    _strategy_backtest_expander("swing")
     _disclaimer(SWING_DISCLAIMER)
 
 
@@ -1079,7 +1147,8 @@ def _stock_page() -> None:
 
     st.divider()
     st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
-               "雲端只服務 bundle 內的股票（前 ~500 大 + 定存宇宙）。")
+               "雲端只服務 bundle 內的股票（約 1000-1980 檔，視資料表而定——不是只有候選池"
+               "篩選用的前 500 大，帶哪一檔的代號都可以查）。")
     _disclaimer()
     _page_footer("多軌體檢", f"🔬 多軌體檢 {code} →")
 
