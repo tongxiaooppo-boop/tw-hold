@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import pandas as pd
 
-from build_factors import DERIVED, screen_all
+from build_factors import DERIVED, _read_bundle_ohlc, screen_all
+from screener.swing_stops import update_stops
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -264,6 +265,23 @@ def main() -> int:
         "changes": {"added": sorted(pool_cur - pool_prev),
                     "removed": sorted(pool_prev - pool_cur)},
     })
+
+    ohlc = _read_bundle_ohlc()
+    if ohlc is not None:
+        prev_stops: dict = {}
+        stops_p = DERIVED / "swing_stops.json"
+        if stops_p.exists():
+            try:
+                prev_stops = json.loads(stops_p.read_text(encoding="utf-8"))
+            except Exception:
+                prev_stops = {}
+        stops = update_stops(prev_stops, pool, ohlc, pd.Timestamp(asof))
+        stops_p.write_text(json.dumps(stops, ensure_ascii=False, indent=2), encoding="utf-8")
+        n_active = sum(1 for r in stops["tracked"].values() if r["status"] != "stopped_out")
+        print(f"  → data/derived/swing_stops.json　（{n_active} 檔追蹤中，"
+             f"{len(stops['tracked']) - n_active} 檔已出場）")
+    else:
+        print("  ⚠ 出場觀察表未算：缺 prices_adj.parquet")
 
     (DERIVED / "_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
