@@ -736,11 +736,10 @@ def _copy_for_ai(title: str, meta: dict, rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
+def _card_list(kind: str, title: str, payload: dict | None) -> None:
     st.header(title)
     if payload is None:
         st.info("清單尚未產出。")
-        st.caption(note)
         _strategy_backtest_expander(kind)
         _disclaimer()
         return
@@ -794,7 +793,6 @@ def _card_list(kind: str, title: str, payload: dict | None, note: str) -> None:
         st.code(_copy_for_ai(title, meta, rows), language="markdown")
 
     st.divider()
-    st.caption(note)
     if meta.get("g2_note"):
         st.caption("🔒 " + meta["g2_note"])
     _strategy_backtest_expander(kind)
@@ -844,8 +842,6 @@ def _swing_page(payload: dict | None) -> None:
     st.header("長波段候選池")
     if payload is None or not payload.get("candidates_pool"):
         st.info((payload or {}).get("_meta", {}).get("pool_note", "候選池尚未產出。"))
-        st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
-                   "每日重算。**候選池，不是推薦清單。**")
         _swing_exit_table()
         _strategy_backtest_expander("swing")
         _disclaimer(SWING_DISCLAIMER)
@@ -876,8 +872,6 @@ def _swing_page(payload: dict | None) -> None:
         st.code(_copy_for_ai("長波段候選池", meta, payload["candidates_pool"]),
                 language="markdown")
     st.divider()
-    st.caption("CANSLIM（歐尼爾）+ Minervini 趨勢模板，全部寫成「條件成立狀態」。"
-               "每日重算。**候選池，不是推薦清單。**")
     _swing_exit_table()
     _strategy_backtest_expander("swing")
     _disclaimer(SWING_DISCLAIMER)
@@ -1650,13 +1644,9 @@ def main() -> None:
                    label_visibility="collapsed")
 
     if nav == "價值":
-        _card_list("value", "價值清單", _load("value_list.json"),
-                   "F-Score ≥ 6 + Magic Formula 精神。月看、季換（3/31、5/15、8/14、11/14），"
-                   "前 15、單一產業 ≤ 40%。verdict 只由便宜門檻驅動（§6.3）。")
+        _card_list("value", "價值清單", _load("value_list.json"))
     elif nav == "定存":
-        _card_list("deposit", "定存清單", _load("deposit_list.json"),
-                   "殖利率 ≥ 5%（目標 5.5%）+ 硬門檻（含填息率 ≥ 60%、近 3 年含息報酬 ≥ 0），"
-                   "季換股，前 15、單一產業 ≤ 40%。買價 = 近 3 年均現金股利 ÷ 殖利率門檻（§7.3）。")
+        _card_list("deposit", "定存清單", _load("deposit_list.json"))
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
     elif nav == "短線":
