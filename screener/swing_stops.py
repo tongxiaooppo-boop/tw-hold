@@ -45,25 +45,38 @@ def update_stops(prev: dict, pool: list[dict], prices_adj: pd.DataFrame,
     out: dict[str, dict] = {}
 
     # 1) 既有追蹤中的（含已出候選池但還在看的）：更新 run_high / 停損 / 是否觸發
+    today_str = asof.date().isoformat()
     for tk, rec in tracked.items():
         if rec.get("status") == "stopped_out":
             out[tk] = rec                    # 已出場的凍結，不再更新
+            continue
+        if rec.get("last_update") == today_str:
+            # 🔴 同一天重算過一次了（本機手動重跑常見；正式排程一天只跑一次不會踩到）——
+            # 不能再跑一次遞增邏輯，run_high 已經含當天最高價，再跑會把「進場當天不套
+            # 移動停損」這條規則繞過去，拿當天自己的高點回頭砍自己（2026-09-12 實測抓到：
+            # 本機同一個 trading_date 重跑兩次，4 檔無端被判定跌破停損）。
+            out[tk] = rec
             continue
         if tk not in today.index:
             out[tk] = rec                    # 今天沒價格資料（停牌等）→ 原樣保留
             continue
         row = today.loc[tk]
-        run_high = max(rec["run_high"], float(row["high"]))
-        trail = max(rec["trail_stop"], run_high - TRAIL_ATR_MULT * rec["atr0"])
+        # 🔴 「收盤後才更新」（比照 tw-swing engine.py）：今天的停損檢查要用「昨天收盤
+        # 為止」建立好的停損位，不能拿今天自己的最高價現算現抬、回頭砍今天自己的最低價
+        # ——那是未來函數（今天盤中創高、當天又拉回，不該反過來變成今天被自己打停損的
+        # 理由）。今天的高點只用來墊高「明天要用」的停損位，順序不能反。
+        effective_stop = rec["trail_stop"]
         still_candidate = tk in pool_by_tk
-        base = {**rec, "run_high": run_high, "last_close": round(float(row["close"]), 2)}
-        if float(row["low"]) <= trail:
-            out[tk] = {**base, "trail_stop": round(trail, 2), "status": "stopped_out",
-                      "exit_date": asof.date().isoformat(), "exit_price": round(trail, 2)}
+        base = {**rec, "last_close": round(float(row["close"]), 2), "last_update": today_str}
+        if float(row["low"]) <= effective_stop:
+            out[tk] = {**base, "status": "stopped_out",
+                      "exit_date": asof.date().isoformat(), "exit_price": round(effective_stop, 2)}
         else:
+            run_high = max(rec["run_high"], float(row["high"]))
+            new_trail = max(effective_stop, run_high - TRAIL_ATR_MULT * rec["atr0"])
             dropped_date = (None if still_candidate
                            else rec.get("dropped_date") or asof.date().isoformat())
-            out[tk] = {**base, "trail_stop": round(trail, 2),
+            out[tk] = {**base, "run_high": run_high, "trail_stop": round(new_trail, 2),
                       "status": "candidate" if still_candidate else "dropped_from_pool",
                       "dropped_date": dropped_date}
 
@@ -71,7 +84,6 @@ def update_stops(prev: dict, pool: list[dict], prices_adj: pd.DataFrame,
     # 🔴 剛剛在上面第 1 步同一天觸發停損的不算「重新達標」——同一天沒有「先停損出場、
     # 又立刻重新進場」這種事，至少要等到下一個交易日（跟回測 open_pos 的邏輯一致：
     # 一週最多處理一次進場，不會同一天出場又進場）。
-    today_str = asof.date().isoformat()
     for tk, p in pool_by_tk.items():
         existing = out.get(tk)
         if existing is not None:
@@ -91,7 +103,7 @@ def update_stops(prev: dict, pool: list[dict], prices_adj: pd.DataFrame,
             "atr0": round(float(a0), 4),
             "run_high": float(row["high"]),
             "trail_stop": round(float(p.get("risk_stop") or row["close"]), 2),
-            "last_close": round(float(row["close"]), 2),
+            "last_close": round(float(row["close"]), 2), "last_update": today_str,
             "status": "candidate", "dropped_date": None,
             "exit_date": None, "exit_price": None,
         }

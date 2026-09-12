@@ -85,6 +85,18 @@ def test_dropped_from_pool_keeps_tracking_until_stopped():
     assert rec["run_high"] >= s0["tracked"]["AAA"]["run_high"]
 
 
+def test_same_day_rerun_is_a_no_op():
+    """2026-09-12 本機手動重跑 refresh_local.py 兩次撞到：同一個 asof 重算第二次，
+    run_high 已經含當天最高價，若再跑一次遞增邏輯等於拿當天自己的高點回頭砍自己，
+    4 檔無端被判定跌破停損。同一天重算兩次必須是 no-op。"""
+    px = _prices("AAA", [100.0])
+    asof = px["date"].iloc[-1]
+    pool = [_pool_row("AAA", risk_stop=95.0)]
+    s0 = update_stops({}, pool, px, asof)
+    s1 = update_stops(s0, pool, px, asof)
+    assert s1["tracked"]["AAA"] == s0["tracked"]["AAA"]
+
+
 def test_reentry_after_stop_starts_new_cycle():
     px = _prices("AAA", [100.0, 140.0, 90.0, 130.0])
     dates = px["date"].iloc[-4:].tolist()
