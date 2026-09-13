@@ -36,16 +36,11 @@ def test_查無該symbol回空序列(_snapshot):
     assert us_macro.load_close("^NOPE").empty
 
 
-def test_latest_change算對絕對值與百分比(_snapshot):
+def test_latest_change_re_export自market_status(_snapshot):
+    # 完整測試在 test_market_status.py——這裡只確認 re-export 沒斷（呼叫點沒改路徑）。
     s = us_macro.load_close("^DJI")
     out = us_macro.latest_change(s)
     assert out["value"] == 99.0
-    assert out["chg"] == pytest.approx(-2.0)
-    assert out["chg_pct"] == pytest.approx(-2.0 / 101.0)
-
-
-def test_latest_change資料不足兩筆回None():
-    assert us_macro.latest_change(pd.Series([1.0])) is None
 
 
 def test_percentile_rank最新值是最大值時回1(_snapshot):

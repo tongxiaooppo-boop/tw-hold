@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from reference.market_status import BAND, ma_verdict, market_card
+from reference.market_status import BAND, latest_change, ma_verdict, market_card
 
 
 def _flat_then_rise(days: int, rise_pct: float) -> pd.Series:
@@ -52,3 +53,14 @@ def test_market_card資料不足200天_ma200為None():
     card = market_card(s)
     assert card["ma60"] is not None
     assert card["ma200"] is None
+
+
+def test_latest_change算對絕對值與百分比():
+    out = latest_change(pd.Series([100.0, 103.0]))
+    assert out["value"] == 103.0
+    assert out["chg"] == 3.0
+    assert out["chg_pct"] == pytest.approx(0.03)
+
+
+def test_latest_change資料不足兩筆回None():
+    assert latest_change(pd.Series([1.0])) is None

@@ -485,9 +485,16 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .mc-card.good .stripe{background:var(--thc-good);}
 .mc-card.warn .stripe{background:var(--thc-warn);}
 .mc-body{padding:.9rem 1.1rem;flex:1;min-width:0;}
-.mc-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.6rem;}
+.mc-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.35rem;}
 .mc-market{font-weight:700;font-size:.95rem;color:var(--thc-ink);}
 .mc-ticker{font-family:var(--thc-mono);font-size:.78rem;color:var(--thc-faint);}
+/* 現價＋漲跌——真價格變動，用 --thc-up/--thc-down（紅漲綠跌），不跟下面 MA 判斷的
+   good/warn/neutral 那組判斷色混在一起。 */
+.mc-px{font-family:var(--thc-mono);font-size:.86rem;font-weight:600;margin-bottom:.5rem;
+  font-variant-numeric:tabular-nums;}
+.mc-px.up{color:var(--thc-up);}
+.mc-px.down{color:var(--thc-down);}
+.mc-px.flat{color:var(--thc-faint);}
 .mc-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;
   padding:.55rem 0;border-top:1px solid var(--thc-line);}
 .mc-row:first-of-type{border-top:none;}
@@ -1679,6 +1686,7 @@ def _active_etf_page() -> None:
 
 
 _MC_VERDICT = {"bull": ("多頭", "good"), "bear": ("空頭", "warn"), "chop": ("盤整", "neutral")}
+_MC_LABEL = {"ma60": "MA60", "ma200": "MA200"}
 #: (代號, 市場標籤) ——0050 對應上市（大盤代理，同 reference.regime 用的那檔）、
 #: 006201 元大富櫃50 是唯一追蹤櫃買（TPEx）指數的 ETF，對應上櫃。
 _MC_MARKETS = [("0050", "上市"), ("006201", "上櫃")]
@@ -1695,15 +1703,28 @@ def _mc_row(label: str, v: dict | None) -> str:
             f'<span class="mc-stat">乖離 {v["gap_pct"]:+.1%}</span></div>')
 
 
-def _mc_card(ticker: str, market: str, card: dict) -> str:
-    # 卡片左側細條：兩個窗口一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
-    states = {v["state"] for v in (card["ma60"], card["ma200"]) if v}
+def _mc_price_line(chg: dict | None) -> str:
+    """卡頭的現價＋漲跌——跟 MA 判斷是分開的兩件事（純價格變動，不是判斷），
+    沿用漲跌色 --thc-up/--thc-down，不用 good/warn 那組判斷色。"""
+    if chg is None:
+        return ''
+    sign = "up" if chg["chg"] > 0 else ("down" if chg["chg"] < 0 else "flat")
+    arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
+    return (f'<div class="mc-px {sign}">{chg["value"]:,.2f}　{arrow} '
+            f'{chg["chg"]:+,.2f}（{chg["chg_pct"]:+.2%}）</div>')
+
+
+def _mc_card(ticker: str, market: str, card: dict, chg: dict | None = None,
+             windows: tuple[str, ...] = ("ma60", "ma200")) -> str:
+    # 卡片左側細條：顯示的窗口全一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
+    states = {card[w]["state"] for w in windows if card.get(w)}
     sev = _MC_VERDICT[next(iter(states))][1] if len(states) == 1 else "neutral"
+    ma_rows = "".join(_mc_row(_MC_LABEL[w], card.get(w)) for w in windows)
     return (
         f'<div class="mc-card {sev}"><div class="stripe"></div><div class="mc-body">'
         f'<div class="mc-head"><span class="mc-market">{market}</span>'
         f'<span class="mc-ticker">{ticker}</span></div>'
-        + _mc_row("MA60", card["ma60"]) + _mc_row("MA200", card["ma200"])
+        + _mc_price_line(chg) + ma_rows
         + '</div></div>'
     )
 
@@ -1753,7 +1774,7 @@ def _macro_compass_page() -> None:
     """
     import bundle_data as bd
     from reference import index_proxy, us_macro
-    from reference.market_status import market_card
+    from reference.market_status import latest_change, market_card
 
     st.header("總經羅盤", anchor="top")
     st.caption("大盤多空狀態 + 美股總經背景，**純顯示、不影響任何清單判斷**。")
@@ -1783,14 +1804,14 @@ def _macro_compass_page() -> None:
         if close.empty:
             missing.append(f"{market}（{ticker}）")
             continue
-        tw_cards.append(_mc_card(ticker, market, market_card(close)))
+        tw_cards.append(_mc_card(ticker, market, market_card(close), latest_change(close)))
     if tw_cards:
         st.markdown(f'<div class="mc-grid">{"".join(tw_cards)}</div>', unsafe_allow_html=True)
     if missing:
         st.info(f"這次沒拿到：{'／'.join(missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
     st.caption("上市＝0050（臺灣50指數，讀 bundle）；上櫃＝006201（元大富櫃50，唯一追蹤櫃買富櫃50"
                "指數的 ETF，資料源另接 FinMind）。乖離帶 ±2% 內視為「盤整」——示意用簡單門檻，"
-               "**沒有回測調過**。")
+               "**沒有回測調過**。台股習慣同時看 MA60/MA200，兩條都列。")
 
     st.divider()
     st.subheader("美股指數")
@@ -1800,9 +1821,13 @@ def _macro_compass_page() -> None:
         if close.empty:
             us_missing.append(f"{name}（{symbol}）")
             continue
-        us_idx_cards.append(_mc_card(symbol, name, market_card(close)))
+        # 美股機構慣例看年線（MA200），不像台股法人那樣同時盯季線（MA60）——
+        # 只列 MA200，見 market-regime.html 附件的〈MA60 vs MA200：機構用哪條線〉。
+        us_idx_cards.append(_mc_card(symbol, name, market_card(close), latest_change(close),
+                                      windows=("ma200",)))
     if us_idx_cards:
         st.markdown(f'<div class="mc-grid">{"".join(us_idx_cards)}</div>', unsafe_allow_html=True)
+    st.caption("美股指數只列 MA200（年線）——國際機構慣例，跟台股法人偏好的 MA60（季線）不同。")
 
     st.divider()
     st.subheader("波動度／殖利率／匯率")
