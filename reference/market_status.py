@@ -64,3 +64,14 @@ def market_card(close: pd.Series) -> dict:
     """
     s = close.sort_index() if isinstance(close.index, pd.DatetimeIndex) else close
     return {"ma60": ma_verdict(s, 60), "ma200": ma_verdict(s, 200)}
+
+
+def latest_change(close: pd.Series) -> dict | None:
+    """最新一筆收盤 + 對前一筆的漲跌（絕對值與 %）——卡片頭顯示現價用，
+    跟 MA 判斷是兩件事：這個不看均線，純粹前一交易日比較。資料不足兩筆回 None。
+    """
+    s = close.dropna()
+    if len(s) < 2:
+        return None
+    last, prev = s.iloc[-1], s.iloc[-2]
+    return {"value": last, "chg": last - prev, "chg_pct": last / prev - 1.0}

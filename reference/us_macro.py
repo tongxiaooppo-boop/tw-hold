@@ -11,6 +11,11 @@ _REPO = Path(__file__).resolve().parents[1]
 US_MACRO = _REPO / "data" / "reference" / "us_macro.parquet"
 
 
+# latest_change 現在被 TW 卡跟 US 卡共用，搬到 market_status.py（更中性的位置）——
+# 這裡保留 re-export，舊的呼叫點跟測試都不用改。
+from reference.market_status import latest_change  # noqa: E402,F401
+
+
 def load_close(symbol: str) -> pd.Series:
     """單一 symbol 的收盤序列，index=date，由舊到新。查無資料回空序列。"""
     if not US_MACRO.exists():
@@ -19,14 +24,6 @@ def load_close(symbol: str) -> pd.Series:
     if df.empty:
         return pd.Series(dtype="float64")
     return df.set_index("date")["close"].sort_index()
-
-
-def latest_change(close: pd.Series) -> dict | None:
-    """最新一筆的現值 + 對前一筆的漲跌（絕對值與 %）。不足兩筆回 None。"""
-    if len(close) < 2:
-        return None
-    last, prev = close.iloc[-1], close.iloc[-2]
-    return {"value": last, "chg": last - prev, "chg_pct": last / prev - 1.0}
 
 
 def percentile_rank(close: pd.Series, window: int = 252) -> float | None:
