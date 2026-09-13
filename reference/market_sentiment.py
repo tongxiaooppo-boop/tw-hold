@@ -2,16 +2,22 @@
 
 ## 為什麼不用 AI
 
-2026-09-13 討論過：這裡只是把 `market_status.py` / `us_macro.py` 已經算好的數字
-（多空狀態、VIX 分位、殖利率曲線形狀……）串成一段話，本質是**模板代入**，不是
-生成——句型設計得誠實、不裝懂，品質就不會差。真的要做「有脈絡感的敘事」（例如
-連結到新聞事件）才是 AI 解說層的事（見 `docs/AI_LAYER.md`，v2 未實作，AI 只解說
-不選股），這裡刻意不越界。
+2026-09-13 討論過：這裡只是把 `market_status.py` / `global_macro.py` 已經算好的
+數字（多空狀態、VIX 分位、殖利率曲線形狀……）串成一段話，本質是**模板代入**，
+不是生成——句型設計得誠實、不裝懂，品質就不會差。真的要做「有脈絡感的敘事」
+（例如連結到新聞事件）才是 AI 解說層的事（見 `docs/AI_LAYER.md`，v2 未實作、
+2026-09-13 討論後**暫緩到 10 月以後**再議，AI 只解說不選股），這裡刻意不越界。
 
 ## 每個句子只做「條列現況」，不做「評論」
 
 例如「VIX 處於近一年低檔」是事實（分位算出來的），但不會說「顯示市場過度樂觀」
 這種需要脈絡判斷的話——後者才是模板容易講出怪句子的地方，所以不做。
+
+## 台股 / 國際情勢分開兩段，不接成一段話
+
+2026-09-13 使用者要求：兩段話題不同（台股是本地部位，國際情勢是背景氛圍），
+接成一段反而模糊掉「這句在講哪裡」。`tw_summary()` / `intl_summary()` 各自
+回傳獨立字串，畫面端各自成一段顯示，也不會互相推論。
 """
 
 from __future__ import annotations
@@ -39,8 +45,8 @@ def tw_market_sentence(name: str, card: dict) -> str:
     return f"{name}季線{_STATE_ZH[ma60['state']]}、年線{_STATE_ZH[ma200['state']]}（短長分歧）"
 
 
-def us_index_sentence(name: str, card: dict) -> str:
-    """道瓊/那斯達克/費半——國際機構慣例只看年線（MA200）。"""
+def index_sentence(name: str, card: dict) -> str:
+    """道瓊/那斯達克/費半/日經/恆生/KOSPI 這種國際指數卡——機構慣例只看年線（MA200）。"""
     v = card.get("ma200")
     if v is None:
         return f"{name}資料不足"
@@ -69,15 +75,17 @@ def yield_curve_sentence(short: float | None, ten: float | None) -> str:
     return "殖利率曲線正常（10年期高於短天期）"
 
 
-def compose(tw_sentences: list[str], us_sentences: list[str],
-            vix_text: str, curve_text: str) -> str:
-    """兜成一段話。台股/美股指數用頓號連，VIX/殖利率單獨成句——三段各自獨立，
-    不做任何跨段推論（不會因為「台股偏多」加「VIX偏低」就講「風險偏好回升」
-    這種需要因果判斷的合成句）。"""
+def tw_summary(tw_sentences: list[str]) -> str:
+    """台股這一段——只接台股句子，不帶國際情勢。"""
+    if not tw_sentences:
+        return "台股資料不足"
+    return "、".join(tw_sentences) + "。"
+
+
+def intl_summary(index_sentences: list[str], vix_text: str, curve_text: str) -> str:
+    """國際情勢這一段——指數句子 + VIX + 殖利率曲線，跟台股那段各自獨立、不互相推論。"""
     parts = []
-    if tw_sentences:
-        parts.append("、".join(tw_sentences) + "。")
-    if us_sentences:
-        parts.append("、".join(us_sentences) + "。")
+    if index_sentences:
+        parts.append("、".join(index_sentences) + "。")
     parts.append(f"{vix_text}，{curve_text}。")
     return "".join(parts)

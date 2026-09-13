@@ -1,5 +1,5 @@
-"""讀 `scripts/fetch_us_macro.py` 產出的美股總經快照。純讀檔，不發網路請求
-（同 `reference/index_proxy.py` 的原則——雲端 app 本身一律不即時抓資料）。
+"""讀 `scripts/fetch_global_macro.py` 產出的國際指數/美股總經快照。純讀檔，
+不發網路請求（同 `reference/index_proxy.py` 的原則——雲端 app 本身一律不即時抓資料）。
 """
 from __future__ import annotations
 
@@ -8,19 +8,19 @@ from pathlib import Path
 import pandas as pd
 
 _REPO = Path(__file__).resolve().parents[1]
-US_MACRO = _REPO / "data" / "reference" / "us_macro.parquet"
+GLOBAL_MACRO = _REPO / "data" / "reference" / "global_macro.parquet"
 
 
-# latest_change 現在被 TW 卡跟 US 卡共用，搬到 market_status.py（更中性的位置）——
+# latest_change 現在被台股卡跟國際指數卡共用，搬到 market_status.py（更中性的位置）——
 # 這裡保留 re-export，舊的呼叫點跟測試都不用改。
 from reference.market_status import latest_change  # noqa: E402,F401
 
 
 def load_close(symbol: str) -> pd.Series:
     """單一 symbol 的收盤序列，index=date，由舊到新。查無資料回空序列。"""
-    if not US_MACRO.exists():
+    if not GLOBAL_MACRO.exists():
         return pd.Series(dtype="float64")
-    df = pd.read_parquet(US_MACRO, filters=[("symbol", "==", symbol)])
+    df = pd.read_parquet(GLOBAL_MACRO, filters=[("symbol", "==", symbol)])
     if df.empty:
         return pd.Series(dtype="float64")
     return df.set_index("date")["close"].sort_index()
