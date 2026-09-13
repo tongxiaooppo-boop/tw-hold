@@ -474,6 +474,30 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
   .thc-big{font-size:1.65rem;}
   .thc-tk{font-size:1.1rem;}
 }
+/* 總經羅盤——市場多空卡（方案 A：雙欄卡片，MA60/MA200 兩列並陳）。
+   跟 reference.regime 的判斷語意色共用同一組 token，但這裡是獨立判斷（見
+   reference/market_status.py 檔頭），不要混成同一件事。 */
+.mc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;margin-top:.3rem;}
+@media (min-width:720px){.mc-grid{grid-template-columns:1fr 1fr;}}
+.mc-card{display:flex;background:var(--thc-surface);border:1px solid var(--thc-line);
+  border-radius:10px;overflow:hidden;}
+.mc-card .stripe{width:4px;flex-shrink:0;background:var(--thc-neutral);}
+.mc-card.good .stripe{background:var(--thc-good);}
+.mc-card.warn .stripe{background:var(--thc-warn);}
+.mc-body{padding:.9rem 1.1rem;flex:1;min-width:0;}
+.mc-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.6rem;}
+.mc-market{font-weight:700;font-size:.95rem;color:var(--thc-ink);}
+.mc-ticker{font-family:var(--thc-mono);font-size:.78rem;color:var(--thc-faint);}
+.mc-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+  padding:.55rem 0;border-top:1px solid var(--thc-line);}
+.mc-row:first-of-type{border-top:none;}
+.mc-ma{font-family:var(--thc-mono);font-size:.74rem;color:var(--thc-faint);width:3.4rem;flex-shrink:0;}
+.mc-verdict{font-weight:700;font-size:.88rem;white-space:nowrap;}
+.mc-verdict.good{color:var(--thc-good);}
+.mc-verdict.warn{color:var(--thc-warn);}
+.mc-verdict.neutral{color:var(--thc-neutral);}
+.mc-stat{font-family:var(--thc-mono);font-size:.76rem;color:var(--thc-soft);
+  text-align:right;font-variant-numeric:tabular-nums;}
 </style>
 """
 
@@ -1635,8 +1659,83 @@ def _active_etf_page() -> None:
     _disclaimer()
 
 
+_MC_VERDICT = {"bull": ("多頭", "good"), "bear": ("空頭", "warn"), "chop": ("盤整", "neutral")}
+#: (代號, 市場標籤) ——0050 對應上市（大盤代理，同 reference.regime 用的那檔）、
+#: 006201 元大富櫃50 是唯一追蹤櫃買（TPEx）指數的 ETF，對應上櫃。
+_MC_MARKETS = [("0050", "上市"), ("006201", "上櫃")]
+
+
+def _mc_row(label: str, v: dict | None) -> str:
+    if v is None:
+        return (f'<div class="mc-row"><span class="mc-ma">{label}</span>'
+                f'<span class="mc-verdict neutral">暖機中</span>'
+                f'<span class="mc-stat">資料不足</span></div>')
+    text, sev = _MC_VERDICT[v["state"]]
+    return (f'<div class="mc-row"><span class="mc-ma">{label}</span>'
+            f'<span class="mc-verdict {sev}">{text}</span>'
+            f'<span class="mc-stat">乖離 {v["gap_pct"]:+.1%}</span></div>')
+
+
+def _mc_card(ticker: str, market: str, card: dict) -> str:
+    # 卡片左側細條：兩個窗口一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
+    states = {v["state"] for v in (card["ma60"], card["ma200"]) if v}
+    sev = _MC_VERDICT[next(iter(states))][1] if len(states) == 1 else "neutral"
+    return (
+        f'<div class="mc-card {sev}"><div class="stripe"></div><div class="mc-body">'
+        f'<div class="mc-head"><span class="mc-market">{market}</span>'
+        f'<span class="mc-ticker">{ticker}</span></div>'
+        + _mc_row("MA60", card["ma60"]) + _mc_row("MA200", card["ma200"])
+        + '</div></div>'
+    )
+
+
+def _macro_compass_page() -> None:
+    """總經羅盤——目前只有台股上市／上櫃的 MA60／MA200 多空卡（2026-09-13 起）。
+    道瓊/那斯達克/費半/七巨頭/美債殖利率/VIX/美元指數等全球總經指標排在後面，
+    資料源（yfinance 每日一次）還沒接，先留這個分頁位子（見「8 方位環」設計）。
+
+    ⚠️ 判斷邏輯是 `reference/market_status.py` 的獨立乖離帶規則，跟 `reference/regime.py`
+    （回測分層用的市況旗標）完全脫鉤——這裡純顯示，不影響任何清單或 verdict。
+    """
+    import bundle_data as bd
+    from reference.market_status import market_card
+
+    st.header("總經羅盤", anchor="top")
+    st.caption("大盤多空狀態，**純顯示、不影響任何清單判斷**。MA60／MA200 各自獨立判定，"
+               "不加總、不取多數決。")
+
+    got = _ensure_bundle()
+    if not any(got.values()):
+        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。"
+                 + (f"（{st.session_state['_bundle_err']}）"
+                    if st.session_state.get("_bundle_err") else ""))
+        _disclaimer()
+        return
+
+    cards = []
+    missing = []
+    for ticker, market in _MC_MARKETS:
+        px = bd.prices(ticker, lookback_days=900)
+        if px.empty:
+            missing.append(f"{market}（{ticker}）")
+            continue
+        close = px.set_index("date")["close"].sort_index()
+        cards.append(_mc_card(ticker, market, market_card(close)))
+
+    if cards:
+        st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    if missing:
+        st.info(f"這次沒拿到：{'／'.join(missing)}（bundle 內可能沒有這檔的價格資料）。")
+
+    st.divider()
+    st.caption("乖離帶 ±2% 內視為「盤整」，超過視為當前窗口的多／空——這是示意用的簡單門檻，"
+               "**沒有回測調過**，因為這裡只做顯示，不是進出場依據。")
+    st.caption("上市＝0050（臺灣50指數）；上櫃＝006201（元大富櫃50，唯一追蹤櫃買富櫃50指數的 ETF）。")
+    _disclaimer()
+
+
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
-NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢", "主動式 ETF"]
+NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢", "主動式 ETF", "總經羅盤"]
 
 
 def _route() -> None:
@@ -1677,8 +1776,10 @@ def main() -> None:
         _stock_page()
     elif nav == "多軌體檢":
         _checklist_page()
-    else:
+    elif nav == "主動式 ETF":
         _active_etf_page()
+    else:
+        _macro_compass_page()
 
 
 if __name__ == "__main__":
