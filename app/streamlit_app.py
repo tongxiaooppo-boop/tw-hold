@@ -1765,7 +1765,9 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
 
 def _macro_compass_page() -> None:
     """總經羅盤——台股上市/上櫃的 MA60/MA200 多空卡 + 美股指數/個股/總經數字卡
-    （2026-09-13 起）。
+    （2026-09-13 起）。頁首放「市場情緒摘要」（固定句型代入數字，見
+    `reference/market_sentiment.py`——不是 AI，也不做任何跨指標的推論），
+    方法論/資料源說明集中放頁尾一個 expander，不散在各段落中間。
 
     ⚠️ 判斷邏輯是 `reference/market_status.py` 的獨立乖離帶規則，跟 `reference/regime.py`
     （回測分層用的市況旗標）完全脫鉤——這裡純顯示，不影響任何清單或 verdict。
@@ -1773,11 +1775,10 @@ def _macro_compass_page() -> None:
     （現值 + 漲跌 + 個股/指數以外的再加近一年分位），不套多空判斷。
     """
     import bundle_data as bd
-    from reference import index_proxy, us_macro
+    from reference import index_proxy, market_sentiment, us_macro
     from reference.market_status import latest_change, market_card
 
     st.header("總經羅盤", anchor="top")
-    st.caption("大盤多空狀態 + 美股總經背景，**純顯示、不影響任何清單判斷**。")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -1793,66 +1794,91 @@ def _macro_compass_page() -> None:
             return pd.Series(dtype="float64")
         return px.set_index("date")["close"].sort_index()
 
-    st.subheader("台股")
+    # ---- 先把所有資料算齊，摘要跟各段卡片共用同一份，不重算兩次 ----
     # 006201 不在 tw-swing data_pack 的 universe 裡（上游單點依賴排除掉的檔），
     # 改讀 `scripts/fetch_index_proxy.py` 另外從 FinMind 拉的獨立小檔
     # （見該檔頭：不碰 data_pack 依賴鏈，2026-09-13）。0050 仍吃 bundle。
     _TW_LOADERS = {"0050": _bundle_close, "006201": lambda _t: index_proxy.load_006201()}
-    tw_cards, missing = [], []
+    tw_data, tw_missing = {}, []
     for ticker, market in _MC_MARKETS:
         close = _TW_LOADERS[ticker](ticker)
         if close.empty:
-            missing.append(f"{market}（{ticker}）")
+            tw_missing.append(f"{market}（{ticker}）")
             continue
-        tw_cards.append(_mc_card(ticker, market, market_card(close), latest_change(close)))
-    if tw_cards:
-        st.markdown(f'<div class="mc-grid">{"".join(tw_cards)}</div>', unsafe_allow_html=True)
-    if missing:
-        st.info(f"這次沒拿到：{'／'.join(missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
-    st.caption("上市＝0050（臺灣50指數，讀 bundle）；上櫃＝006201（元大富櫃50，唯一追蹤櫃買富櫃50"
-               "指數的 ETF，資料源另接 FinMind）。乖離帶 ±2% 內視為「盤整」——示意用簡單門檻，"
-               "**沒有回測調過**。台股習慣同時看 MA60/MA200，兩條都列。")
+        tw_data[ticker] = {"market": market, "card": market_card(close), "chg": latest_change(close)}
 
-    st.divider()
-    st.subheader("美股指數")
-    us_idx_cards, us_missing = [], []
+    us_idx_data, us_idx_missing = {}, []
     for symbol, name in _US_INDICES:
         close = us_macro.load_close(symbol)
         if close.empty:
-            us_missing.append(f"{name}（{symbol}）")
+            us_idx_missing.append(f"{name}（{symbol}）")
             continue
-        # 美股機構慣例看年線（MA200），不像台股法人那樣同時盯季線（MA60）——
-        # 只列 MA200，見 market-regime.html 附件的〈MA60 vs MA200：機構用哪條線〉。
-        us_idx_cards.append(_mc_card(symbol, name, market_card(close), latest_change(close),
-                                      windows=("ma200",)))
-    if us_idx_cards:
-        st.markdown(f'<div class="mc-grid">{"".join(us_idx_cards)}</div>', unsafe_allow_html=True)
-    st.caption("美股指數只列 MA200（年線）——國際機構慣例，跟台股法人偏好的 MA60（季線）不同。")
+        us_idx_data[symbol] = {"name": name, "card": market_card(close), "chg": latest_change(close)}
+
+    gauge_close = {sym: us_macro.load_close(sym) for sym, _n, _s in _US_GAUGES}
+
+    # ---- 頁首：市場情緒摘要（固定句型代入，不是 AI） ----
+    tw_sents = [market_sentiment.tw_market_sentence(d["market"], d["card"]) for d in tw_data.values()]
+    us_sents = [market_sentiment.us_index_sentence(d["name"], d["card"]) for d in us_idx_data.values()]
+    vix_pct = us_macro.percentile_rank(gauge_close.get("^VIX", pd.Series(dtype="float64")))
+    vix_txt = market_sentiment.vix_sentence(vix_pct)
+    short_v = latest_change(gauge_close.get("^IRX", pd.Series(dtype="float64")))
+    ten_v = latest_change(gauge_close.get("^TNX", pd.Series(dtype="float64")))
+    curve_txt = market_sentiment.yield_curve_sentence(
+        short_v["value"] if short_v else None, ten_v["value"] if ten_v else None)
+    summary = market_sentiment.compose(tw_sents, us_sents, vix_txt, curve_txt)
+    st.markdown(f"**{summary}**")
+    st.caption("以上是固定句型代入當下數字，不是 AI 生成、不做跨指標推論（例如不會因為"
+               "「偏多」加「VIX偏低」就合成「風險偏好回升」這種需要判斷的話）。")
+
+    st.divider()
+    st.subheader("台股")
+    if tw_data:
+        cards = [_mc_card(t, d["market"], d["card"], d["chg"]) for t, d in tw_data.items()]
+        st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    if tw_missing:
+        st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
+
+    st.divider()
+    st.subheader("美股指數")
+    if us_idx_data:
+        cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",))
+                 for s, d in us_idx_data.items()]
+        st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
     st.subheader("波動度／殖利率／匯率")
-    gauge_cards = [_gz_card(sym, name, us_macro.load_close(sym), suffix=suf)
+    gauge_cards = [_gz_card(sym, name, gauge_close[sym], suffix=suf)
                    for sym, name, suf in _US_GAUGES]
     st.markdown(f'<div class="gz-grid">{"".join(gauge_cards)}</div>', unsafe_allow_html=True)
-    st.caption("VIX／美元指數為指數點位；美債殖利率為年化 %。「近一年 P」＝目前值在近一年"
-               "交易日分佈中的分位，不是判斷（P90 不代表「太貴」或「該賣」）。")
 
     st.divider()
     st.subheader("美股個股（七巨頭＋美光）")
     stock_cards = [_gz_card(sym, name, us_macro.load_close(sym), show_pct=False)
                    for sym, name in _US_STOCKS]
     st.markdown(f'<div class="gz-grid">{"".join(stock_cards)}</div>', unsafe_allow_html=True)
-    st.caption("美元計價，單純現值＋漲跌，**不打分、不判斷多空**——跟其他分頁的個股一樣，"
-               "不對單一股票下結論。")
 
-    if us_missing or not us_idx_cards:
-        st.info(f"美股資料：{'全部沒拿到' if not us_idx_cards else ('部分沒拿到：' + '／'.join(us_missing))}"
+    if us_idx_missing or not us_idx_data:
+        st.info(f"美股資料：{'全部沒拿到' if not us_idx_data else ('部分沒拿到：' + '／'.join(us_idx_missing))}"
                 "（`fetch_us_macro.py` 是獨立排程，還沒跑過或跑失敗時會這樣）。")
 
     st.divider()
-    st.caption("美股資料源：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
-               "24 小時盤外交易讓收盤價更快過期，不是讓它失效。更新排程跟台股那條觸發鏈"
-               "無關（見 `.github/workflows/us_macro.yml`）。")
+    with st.expander("📖 這頁怎麼算的（點開看）"):
+        st.markdown(
+            "- **純顯示，不影響任何清單判斷**——跟其他分頁的 verdict／候選池完全脫鉤。\n"
+            "- **上市＝0050**（臺灣50指數，讀 bundle）；**上櫃＝006201**（元大富櫃50，"
+            "唯一追蹤櫃買富櫃50指數的 ETF，不在 bundle 的 universe 裡，改直接向 FinMind 拉）。\n"
+            "- **多空判斷**＝乖離帶：|收盤/均線-1| 在 ±2% 內算「盤整」，超過算當下窗口的多／空——"
+            "示意用簡單門檻，**沒有回測調過**，不是進出場依據。\n"
+            "- **台股列 MA60+MA200 兩條**（法人習慣同時盯季線/年線）；**美股指數只列 MA200**"
+            "（國際機構慣例看年線）。\n"
+            "- **VIX／美元指數／美債殖利率**不是「市場」，沒有多空判斷，只有現值＋漲跌"
+            "（＋近一年分位；分位是分佈位置，不是「貴不貴」的判斷）。\n"
+            "- **七巨頭＋美光**維持「不幫個股打分」的立場，只顯示數字。\n"
+            "- **美股資料源**：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
+            "24 小時盤外交易讓收盤價更快過期，不是讓它失效。排程跟台股那條 `rebuild.yml` "
+            "無關（獨立的 `.github/workflows/us_macro.yml`，美股收盤後才跑）。"
+        )
     _disclaimer()
 
 
