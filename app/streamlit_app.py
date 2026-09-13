@@ -1729,13 +1729,18 @@ def _mc_card(ticker: str, market: str, card: dict, chg: dict | None = None,
     )
 
 
-#: 美股指數——收盤序列夠格套跟 0050/006201 一樣的 MA60/MA200 多空卡。
-_US_INDICES = [("^DJI", "道瓊"), ("^IXIC", "那斯達克"), ("^SOX", "費城半導體")]
+#: 國際指數——收盤序列夠格套跟 0050/006201 一樣的 MA60/MA200 多空卡（畫面上只列
+#: MA200，機構慣例）。日經/恆生/KOSPI 是亞股情緒領先指標，隔夜表現常直接影響
+#: 台股開盤，2026-09-13 從「只有美股」擴大進來。
+_INTL_INDICES = [("^DJI", "道瓊"), ("^IXIC", "那斯達克"), ("^SOX", "費城半導體"),
+                  ("^N225", "日經225"), ("^HSI", "恆生指數"), ("^KS11", "韓國KOSPI")]
 #: 七巨頭 + 美光——個股，維持「不幫個股打分」的立場，只顯示數字，不套多空判斷。
 _US_STOCKS = [("AAPL", "Apple"), ("MSFT", "Microsoft"), ("GOOGL", "Alphabet"),
               ("AMZN", "Amazon"), ("META", "Meta"), ("NVDA", "NVIDIA"),
               ("TSLA", "Tesla"), ("MU", "美光")]
 #: VIX/殖利率/美元指數——不是「市場」，數字卡 + 近一年分位，不套多空判斷。
+#: 黃金/白銀/BTC 刻意不收——24/7 交易沒有「收盤」這個市場共識事件，跟這頁
+#: 「只抓已完成收盤」的精神衝突（2026-09-13 使用者否決）。
 #: (symbol, 名稱, 單位後綴)
 _US_GAUGES = [("^VIX", "VIX", ""), ("DX-Y.NYB", "美元指數", ""),
               ("^IRX", "美債短天期(13週)", "%"), ("^TNX", "美債10年", "%"),
@@ -1744,7 +1749,7 @@ _US_GAUGES = [("^VIX", "VIX", ""), ("DX-Y.NYB", "美元指數", ""),
 
 def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
              show_pct: bool = True) -> str:
-    from reference.us_macro import latest_change, percentile_rank
+    from reference.global_macro import latest_change, percentile_rank
     ch = latest_change(close)
     if ch is None:
         body = '<div class="gz-value">—</div><div class="gz-chg flat">資料不足</div>'
@@ -1764,18 +1769,22 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
 
 
 def _macro_compass_page() -> None:
-    """總經羅盤——台股上市/上櫃的 MA60/MA200 多空卡 + 美股指數/個股/總經數字卡
+    """總經羅盤——台股上市/上櫃的 MA60/MA200 多空卡 + 國際指數/個股/總經數字卡
     （2026-09-13 起）。頁首放「市場情緒摘要」（固定句型代入數字，見
-    `reference/market_sentiment.py`——不是 AI，也不做任何跨指標的推論），
-    方法論/資料源說明集中放頁尾一個 expander，不散在各段落中間。
+    `reference/market_sentiment.py`——不是 AI，也不做任何跨指標的推論；台股/
+    國際情勢兩段分開顯示，不接成一段話），方法論/資料源說明集中放頁尾一個
+    expander，不散在各段落中間。
 
     ⚠️ 判斷邏輯是 `reference/market_status.py` 的獨立乖離帶規則，跟 `reference/regime.py`
     （回測分層用的市況旗標）完全脫鉤——這裡純顯示，不影響任何清單或 verdict。
-    美股指數套同一套多空卡；VIX/殖利率/美元指數/個股不是「市場」，改用數字卡
+    國際指數套同一套多空卡；VIX/殖利率/美元指數/個股不是「市場」，改用數字卡
     （現值 + 漲跌 + 個股/指數以外的再加近一年分位），不套多空判斷。
+
+    AI 解說層（`docs/AI_LAYER.md`）2026-09-13 討論後暫緩到 10 月以後，這裡的摘要
+    純粹是規則模板，不要看到「市場情緒」四個字就以為背後有 AI。
     """
     import bundle_data as bd
-    from reference import index_proxy, market_sentiment, us_macro
+    from reference import global_macro, index_proxy, market_sentiment
     from reference.market_status import latest_change, market_card
 
     st.header("總經羅盤", anchor="top")
@@ -1807,29 +1816,30 @@ def _macro_compass_page() -> None:
             continue
         tw_data[ticker] = {"market": market, "card": market_card(close), "chg": latest_change(close)}
 
-    us_idx_data, us_idx_missing = {}, []
-    for symbol, name in _US_INDICES:
-        close = us_macro.load_close(symbol)
+    intl_idx_data, intl_idx_missing = {}, []
+    for symbol, name in _INTL_INDICES:
+        close = global_macro.load_close(symbol)
         if close.empty:
-            us_idx_missing.append(f"{name}（{symbol}）")
+            intl_idx_missing.append(f"{name}（{symbol}）")
             continue
-        us_idx_data[symbol] = {"name": name, "card": market_card(close), "chg": latest_change(close)}
+        intl_idx_data[symbol] = {"name": name, "card": market_card(close), "chg": latest_change(close)}
 
-    gauge_close = {sym: us_macro.load_close(sym) for sym, _n, _s in _US_GAUGES}
+    gauge_close = {sym: global_macro.load_close(sym) for sym, _n, _s in _US_GAUGES}
 
-    # ---- 頁首：市場情緒摘要（固定句型代入，不是 AI） ----
+    # ---- 頁首：市場情緒摘要（固定句型代入，不是 AI）。台股/國際情勢分開兩段，
+    # 不接成一段話——兩個話題不同，接在一起會模糊掉「這句在講哪裡」（2026-09-13）。
     tw_sents = [market_sentiment.tw_market_sentence(d["market"], d["card"]) for d in tw_data.values()]
-    us_sents = [market_sentiment.us_index_sentence(d["name"], d["card"]) for d in us_idx_data.values()]
-    vix_pct = us_macro.percentile_rank(gauge_close.get("^VIX", pd.Series(dtype="float64")))
+    intl_sents = [market_sentiment.index_sentence(d["name"], d["card"]) for d in intl_idx_data.values()]
+    vix_pct = global_macro.percentile_rank(gauge_close.get("^VIX", pd.Series(dtype="float64")))
     vix_txt = market_sentiment.vix_sentence(vix_pct)
     short_v = latest_change(gauge_close.get("^IRX", pd.Series(dtype="float64")))
     ten_v = latest_change(gauge_close.get("^TNX", pd.Series(dtype="float64")))
     curve_txt = market_sentiment.yield_curve_sentence(
         short_v["value"] if short_v else None, ten_v["value"] if ten_v else None)
-    summary = market_sentiment.compose(tw_sents, us_sents, vix_txt, curve_txt)
-    st.markdown(f"**{summary}**")
+    st.markdown(f"**台股：**{market_sentiment.tw_summary(tw_sents)}")
+    st.markdown(f"**國際情勢：**{market_sentiment.intl_summary(intl_sents, vix_txt, curve_txt)}")
     st.caption("以上是固定句型代入當下數字，不是 AI 生成、不做跨指標推論（例如不會因為"
-               "「偏多」加「VIX偏低」就合成「風險偏好回升」這種需要判斷的話）。")
+               "「偏多」加「VIX偏低」就合成「風險偏好回升」這種需要判斷的話），兩段各自獨立。")
 
     st.divider()
     st.subheader("台股")
@@ -1840,10 +1850,10 @@ def _macro_compass_page() -> None:
         st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
 
     st.divider()
-    st.subheader("美股指數")
-    if us_idx_data:
+    st.subheader("國際指數")
+    if intl_idx_data:
         cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",))
-                 for s, d in us_idx_data.items()]
+                 for s, d in intl_idx_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
@@ -1854,13 +1864,13 @@ def _macro_compass_page() -> None:
 
     st.divider()
     st.subheader("美股個股（七巨頭＋美光）")
-    stock_cards = [_gz_card(sym, name, us_macro.load_close(sym), show_pct=False)
+    stock_cards = [_gz_card(sym, name, global_macro.load_close(sym), show_pct=False)
                    for sym, name in _US_STOCKS]
     st.markdown(f'<div class="gz-grid">{"".join(stock_cards)}</div>', unsafe_allow_html=True)
 
-    if us_idx_missing or not us_idx_data:
-        st.info(f"美股資料：{'全部沒拿到' if not us_idx_data else ('部分沒拿到：' + '／'.join(us_idx_missing))}"
-                "（`fetch_us_macro.py` 是獨立排程，還沒跑過或跑失敗時會這樣）。")
+    if intl_idx_missing or not intl_idx_data:
+        st.info(f"國際指數：{'全部沒拿到' if not intl_idx_data else ('部分沒拿到：' + '／'.join(intl_idx_missing))}"
+                "（`fetch_global_macro.py` 是獨立排程，還沒跑過或跑失敗時會這樣）。")
 
     st.divider()
     with st.expander("📖 這頁怎麼算的（點開看）"):
@@ -1870,14 +1880,18 @@ def _macro_compass_page() -> None:
             "唯一追蹤櫃買富櫃50指數的 ETF，不在 bundle 的 universe 裡，改直接向 FinMind 拉）。\n"
             "- **多空判斷**＝乖離帶：|收盤/均線-1| 在 ±2% 內算「盤整」，超過算當下窗口的多／空——"
             "示意用簡單門檻，**沒有回測調過**，不是進出場依據。\n"
-            "- **台股列 MA60+MA200 兩條**（法人習慣同時盯季線/年線）；**美股指數只列 MA200**"
-            "（國際機構慣例看年線）。\n"
+            "- **台股列 MA60+MA200 兩條**（法人習慣同時盯季線/年線）；**國際指數只列 MA200**"
+            "（國際機構慣例看年線）。日經/恆生/KOSPI 是亞股情緒領先指標，隔夜表現常直接"
+            "影響台股開盤，跟道瓊/那斯達克/費半併在同一段。\n"
             "- **VIX／美元指數／美債殖利率**不是「市場」，沒有多空判斷，只有現值＋漲跌"
-            "（＋近一年分位；分位是分佈位置，不是「貴不貴」的判斷）。\n"
+            "（＋近一年分位；分位是分佈位置，不是「貴不貴」的判斷）。黃金/白銀/BTC 刻意"
+            "不收——24/7 交易沒有「收盤」這個市場共識事件，跟這頁的精神衝突。\n"
             "- **七巨頭＋美光**維持「不幫個股打分」的立場，只顯示數字。\n"
-            "- **美股資料源**：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
+            "- **資料源**：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
             "24 小時盤外交易讓收盤價更快過期，不是讓它失效。排程跟台股那條 `rebuild.yml` "
-            "無關（獨立的 `.github/workflows/us_macro.yml`，美股收盤後才跑）。"
+            "無關（獨立的 `.github/workflows/global_macro.yml`，美股收盤後才跑）。\n"
+            "- **頁首摘要是規則模板，不是 AI**——固定句型代入數字，只講事實、不做評論"
+            "（真正的 AI 敘事層還在規劃階段，10 月以後才會再議）。"
         )
     _disclaimer()
 

@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from reference.market_sentiment import (
-    compose,
+    index_sentence,
+    intl_summary,
     tw_market_sentence,
-    us_index_sentence,
+    tw_summary,
     vix_sentence,
     yield_curve_sentence,
 )
@@ -40,16 +41,16 @@ def test_tw_都沒資料():
     assert tw_market_sentence("上市", {"ma60": None, "ma200": None}) == "上市資料不足"
 
 
-def test_us_index_只看ma200_站穩():
-    assert us_index_sentence("那斯達克", {"ma200": _v("bull")}) == "那斯達克站穩年線"
+def test_index_只看ma200_站穩():
+    assert index_sentence("那斯達克", {"ma200": _v("bull")}) == "那斯達克站穩年線"
 
 
-def test_us_index_只看ma200_跌破():
-    assert us_index_sentence("道瓊", {"ma200": _v("bear")}) == "道瓊跌破年線"
+def test_index_只看ma200_跌破():
+    assert index_sentence("道瓊", {"ma200": _v("bear")}) == "道瓊跌破年線"
 
 
-def test_us_index_資料不足():
-    assert us_index_sentence("費半", {"ma200": None}) == "費半資料不足"
+def test_index_資料不足():
+    assert index_sentence("費半", {"ma200": None}) == "費半資料不足"
 
 
 def test_vix_低檔():
@@ -80,11 +81,19 @@ def test_殖利率曲線_缺資料():
     assert yield_curve_sentence(None, 4.0) == "殖利率資料不足，無法判斷曲線形狀"
 
 
-def test_compose串接三段():
-    out = compose(["上市偏多"], ["那斯達克站穩年線"], "VIX 處於近一年低檔", "殖利率曲線正常")
-    assert out == "上市偏多。那斯達克站穩年線。VIX 處於近一年低檔，殖利率曲線正常。"
+def test_tw_summary接台股句子():
+    assert tw_summary(["上市偏多", "上櫃盤整"]) == "上市偏多、上櫃盤整。"
 
 
-def test_compose沒有台股或美股句子時不留空句():
-    out = compose([], [], "VIX 資料不足", "殖利率資料不足，無法判斷曲線形狀")
+def test_tw_summary沒有句子時給資料不足():
+    assert tw_summary([]) == "台股資料不足"
+
+
+def test_intl_summary串接指數句子加vix加殖利率():
+    out = intl_summary(["那斯達克站穩年線"], "VIX 處於近一年低檔", "殖利率曲線正常")
+    assert out == "那斯達克站穩年線。VIX 處於近一年低檔，殖利率曲線正常。"
+
+
+def test_intl_summary沒有指數句子時不留空句():
+    out = intl_summary([], "VIX 資料不足", "殖利率資料不足，無法判斷曲線形狀")
     assert out == "VIX 資料不足，殖利率資料不足，無法判斷曲線形狀。"
