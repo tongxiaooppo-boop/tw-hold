@@ -1,0 +1,50 @@
+name: 美股總經快照
+
+# 獨立於 rebuild.yml——那條是台股 bundle 觸發（台北午後），美股都還沒開盤。
+# 這條排 UTC 22:00（美東 4pm 收盤最晚 21:00 UTC，留 1 小時緩衝）＝台北隔天 06:00。
+#
+# yfinance 免費、tw-hold 是公開 repo → Actions 分鐘數無限（2026-09-13 查證，
+# 不佔 tw-swing 那顆私有 repo 的每月 2000 分鐘額度）。
+#
+# 見 scripts/fetch_us_macro.py 檔頭：一天一次抓「已完成的常規盤收盤」，絕不即時
+# （memory `tw-hold-us-stock-tracking-design`，2026-09-11 定案）。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 22 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: us-macro
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # 刻意不動 requirements.txt——那份是給 Streamlit Cloud app 用的（PRD 明講
+      # 「刻意控依賴」），yfinance 只有這支 CI 腳本要，裝在這裡就好。
+      - run: pip install pandas pyarrow yfinance
+
+      - name: 抓美股指數/個股/總經指標
+        run: python scripts/fetch_us_macro.py
+
+      - name: commit data/reference/us_macro.parquet
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/reference/us_macro.parquet
+          git diff --cached --quiet -- data/reference/us_macro.parquet && {
+            echo "無實質變更——跳過 commit"; exit 0; }
+          git commit -m "美股總經快照 $(date -u +%F)"
+          git push
