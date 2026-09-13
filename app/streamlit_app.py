@@ -1698,6 +1698,7 @@ def _macro_compass_page() -> None:
     （回測分層用的市況旗標）完全脫鉤——這裡純顯示，不影響任何清單或 verdict。
     """
     import bundle_data as bd
+    from reference import index_proxy
     from reference.market_status import market_card
 
     st.header("總經羅盤", anchor="top")
@@ -1712,25 +1713,37 @@ def _macro_compass_page() -> None:
         _disclaimer()
         return
 
+    def _bundle_close(ticker: str) -> pd.Series:
+        px = bd.prices(ticker, lookback_days=900)
+        if px.empty:
+            return pd.Series(dtype="float64")
+        return px.set_index("date")["close"].sort_index()
+
+    # 006201 不在 tw-swing data_pack 的 universe 裡（上游單點依賴排除掉的檔），
+    # 改讀 `scripts/fetch_index_proxy.py` 另外從 FinMind 拉的獨立小檔
+    # （見該檔頭：不碰 data_pack 依賴鏈，2026-09-13）。0050 仍吃 bundle。
+    _CLOSE_LOADERS = {"0050": _bundle_close, "006201": lambda _t: index_proxy.load_006201()}
+
     cards = []
     missing = []
     for ticker, market in _MC_MARKETS:
-        px = bd.prices(ticker, lookback_days=900)
-        if px.empty:
+        close = _CLOSE_LOADERS[ticker](ticker)
+        if close.empty:
             missing.append(f"{market}（{ticker}）")
             continue
-        close = px.set_index("date")["close"].sort_index()
         cards.append(_mc_card(ticker, market, market_card(close)))
 
     if cards:
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
     if missing:
-        st.info(f"這次沒拿到：{'／'.join(missing)}（bundle 內可能沒有這檔的價格資料）。")
+        st.info(f"這次沒拿到：{'／'.join(missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
 
     st.divider()
     st.caption("乖離帶 ±2% 內視為「盤整」，超過視為當前窗口的多／空——這是示意用的簡單門檻，"
                "**沒有回測調過**，因為這裡只做顯示，不是進出場依據。")
-    st.caption("上市＝0050（臺灣50指數）；上櫃＝006201（元大富櫃50，唯一追蹤櫃買富櫃50指數的 ETF）。")
+    st.caption("上市＝0050（臺灣50指數，讀 bundle）；上櫃＝006201（元大富櫃50，唯一追蹤櫃買富櫃50"
+               "指數的 ETF——不在 bundle 的 universe 裡，改由 `fetch_index_proxy.py` 直接向"
+               "FinMind 拉，兩者資料源不同、但都是每日收盤，可比較）。")
     _disclaimer()
 
 
