@@ -47,6 +47,15 @@ jobs:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
 
+      # 006201（元大富櫃50，唯一追蹤櫃買指數的 ETF）不在 tw-swing data_pack 的
+      # universe 裡，獨立向 FinMind 抓（總經羅盤 MA60/MA200 卡用）。跟三清單
+      # 無關，失敗不擋主線——見 scripts/fetch_index_proxy.py 檔頭。
+      - name: 櫃買代理 006201 快照
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python scripts/fetch_index_proxy.py
+
       # 偵測到 bundle 有未還原的分割/減資跳空 → 抓 FinMind 事件表自動算 factor、
       # 寫進 corporate_actions_resolved.json。要在 build_lists 之前跑，當次就修好。
       - name: 自動解析未還原分割
@@ -105,14 +114,15 @@ jobs:
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
-          git add data/derived/ data/pcf/ reference/corporate_actions_resolved.json || true
-          # 三張清單 JSON 沒實質變動、resolved.json 沒新增分割、且 PCF 快照無新增 →
+          git add data/derived/ data/pcf/ data/reference/ reference/corporate_actions_resolved.json || true
+          # 三張清單 JSON 沒實質變動、resolved.json 沒新增分割、且 PCF 快照/006201 代理無新增 →
           # 整批跳過（不為「只有 _meta.json 的 rebuilt_at / flags 的 fetched_at 變了」留 commit）。
           if git diff --cached --quiet -- \
                data/derived/value_list.json \
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
                data/pcf/ \
+               data/reference/ \
                reference/corporate_actions_resolved.json; then
             echo "三清單 + resolved.json + PCF 快照 皆無實質變更——跳過 commit"; exit 0
           fi
