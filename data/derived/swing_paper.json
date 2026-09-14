@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "updated_at": "2026-09-14T11:11:15+00:00",
+    "cost": 0.00585,
+    "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日收盤成交（同 swing_stops.py 的進場代理）。"
+  },
+  "trades": [],
+  "stats": {
+    "n": 0,
+    "win_rate": null,
+    "avg_ret_gross": null,
+    "expectancy_net": null,
+    "vs_backtest": null,
+    "by_month": []
+  }
+}
