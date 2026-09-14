@@ -178,13 +178,12 @@ BACKTEST_NOTES = {
             "\n\n" + _WHY_0050),
     },
     "short": {
-        "logic": ("這份清單完全由 **tw-swing**（另一個獨立維護的專案）自己的規則引擎產生——"
-                 "tw-hold 只原樣轉呈，不重新計算、不做自己的回測，也不修改任何欄位。"
-                 "表上每一格：`pool_label`＝命中哪組規則、`進場`／`停損`＝進場價與停損參考位、"
+        # 「原樣轉呈、不做自己的回測」已經在頁面上面的說明文字 + tw-swing 自帶的
+        # disclaimer 清單講過，這裡不重複——只補那兩處都沒講的「欄位是什麼意思」。
+        "logic": ("`pool_label`＝命中哪組規則、`進場`／`停損`＝進場價與停損參考位、"
                  "`風險%`／`部位%`＝那個停損位換算出的部位風險與建議部位大小、`RS`＝相對強度"
                  "百分位、`量比`＝成交量對均量的倍數、`觸發日`＝訊號出現的那天。"
-                 "規則本身的邏輯與回測結果記在 tw-swing 自己的文件裡，這裡不重複收錄——"
-                 "兩邊各自獨立維護，重複收錄反而容易其中一邊先過期。"),
+                 "規則本身的邏輯與回測結果記在 tw-swing 自己的文件裡，這裡不重複收錄。"),
     },
 }
 
@@ -193,11 +192,12 @@ def _strategy_backtest_expander(kind: str) -> None:
     info = BACKTEST_NOTES.get(kind)
     if not info:
         return
-    title = "📖 策略邏輯 + 回測結果（點開看）" if "backtest" in info else "📖 策略規格說明（點開看）"
+    has_bt = "backtest" in info
+    title = "📖 策略邏輯 + 回測結果（點開看）" if has_bt else "📖 策略規格說明（點開看）"
     with st.expander(title):
-        st.markdown("**策略怎麼做的**")
+        st.markdown("**策略怎麼做的**" if has_bt else "**表格欄位是什麼意思**")
         st.markdown(info["logic"])
-        if "backtest" in info:
+        if has_bt:
             st.markdown("**回測結果**")
             st.markdown(info["backtest"])
 
@@ -1402,6 +1402,7 @@ def _checklist_page() -> None:
     import checklist as cl
 
     st.subheader("多軌體檢", anchor="top")
+    _disclaimer()
     code = _stock_input("cl_query", "體檢")
     if not code:
         _disclaimer()
@@ -1899,6 +1900,7 @@ def _macro_compass_page() -> None:
     from reference.market_status import latest_change, market_card
 
     st.header("總經導航", anchor="top")
+    _disclaimer()
 
     got = _ensure_bundle()
     if not any(got.values()):
