@@ -136,6 +136,24 @@ def test_build_pool_大盤震盪週仍顯示新候選():
     assert market_regime_ok(_flat_index(), ASOF) is True
 
 
+def test_canslim_fundamental_低基期標註():
+    """去年同期單季 EPS 接近 0 → eps_yoy_q 比例爆量，標 low_base，不擋門檻本身。"""
+    f = canslim_fundamental(_qf("1001", eps_now=3.0, eps_yoy_ago=0.01), ASOF)
+    assert f.loc["1001", "eps_yoy_low_base"] == True          # noqa: E712
+    assert f.loc["1001", "c_eps_yoy"] == True                 # noqa: E712 —— 門檻判斷不變
+    pool = build_candidate_pool(
+        _qf("1001", eps_now=3.0, eps_yoy_ago=0.01), _uptrend_prices("1001"), _flat_index(),
+        _chips("1001"), _revenue("1001"), universe={"1001"}, asof=ASOF)
+    assert len(pool) == 1
+    rec = pool[0]
+    assert rec["eps_yoy_low_base"] is True
+    assert any("基期過低" in s for s in rec["oppose"])
+    # 事實（YoY 數字本身）照樣進支持欄——只是附註改成「基期過低」而不是「遠超門檻」
+    assert any("季 EPS YoY" in s and "基期過低" in s for s in rec["support"])
+    assert not any("遠超 25% 門檻" in s for s in rec["support"])
+    assert "基期過低" in rec["conditions"][0]["狀態"]
+
+
 def test_build_pool_新長表營收_進池且帶accel():
     pool = build_candidate_pool(
         _qf("1001"), _uptrend_prices("1001"), _flat_index(),

@@ -28,6 +28,7 @@ INST_WINDOW = 20           # 法人淨買超回看交易日
 RS_PCTILE_MIN = 70         # Minervini ⑧
 ATR_N = 14
 STOP_BUFFER = 0.10         # §5.3 可買上限 = 停損位 ÷ (1 − 10%)
+EPS_LOW_BASE_ABS = 1.0     # 去年同期單季 EPS 低於此值（元）→ YoY 比例視為基期過低、失真
 
 
 def _bare(s: pd.Series) -> pd.Series:
@@ -118,7 +119,8 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     q["ticker"] = _bare(q["ticker"])
     q = q[q["disclosure_date"] <= pd.Timestamp(asof)].sort_values(["ticker", "period_end"])
     g = q.groupby("ticker", sort=False)
-    q["eps_yoy_q"] = q["eps"] / g["eps"].shift(4) - 1.0
+    q["eps_base_q"] = g["eps"].shift(4)
+    q["eps_yoy_q"] = q["eps"] / q["eps_base_q"] - 1.0
     q["ttm_eps_3y"] = g["ttm_eps"].shift(12)
     q["gm_p1"] = g["gross_margin"].shift(1)
     q["gm_p2"] = g["gross_margin"].shift(2)
@@ -126,6 +128,12 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
 
     out = pd.DataFrame(index=latest.index)
     out["eps_yoy_q"] = latest["eps_yoy_q"]
+    out["eps_yoy_base"] = latest["eps_base_q"]
+    # 🔴 低基期：去年同期單季 EPS 接近 0 時，YoY 分母趨近零，比例會爆到幾百∕幾千 %，
+    # 數字本身沒算錯，但不代表可持續成長——只標註，不影響 c_eps_yoy 門檻判斷本身
+    # （2026-09-14 使用者反映候選池 YoY 看起來離譜，查出來是這個，例：3037 欣興
+    # 去年同季 EPS 0.02 元，今年 8.45 元，YoY 顯示 +42150%）。
+    out["eps_yoy_low_base"] = out["eps_yoy_base"].abs() < EPS_LOW_BASE_ABS
     out["roe"] = latest["roe"]
     out["f_score"] = latest["f_score"]
     out["gross_margin"] = latest["gross_margin"]
@@ -191,13 +199,19 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
     不是重述門檻（門檻全過才進池，重述沒資訊量）。反對空 → 呼叫端標『檢查不足』。"""
     support, oppose = [], []
     eps = rec.get("eps_yoy_q")
+    eps_base = rec.get("eps_yoy_base")
+    eps_low_base = rec.get("eps_yoy_low_base")
     rev = rec.get("revenue_yoy")
     d50 = rec.get("dist_50ma")
     d52 = rec.get("dist_52w_high")
     riskp = rec.get("risk_pct_at_close")
 
     if eps is not None and eps > 0.60:
-        support.append(f"季 EPS YoY {eps:+.0%}（遠超 25% 門檻）")
+        note = "（基期過低，數字供參考）" if eps_low_base else "（遠超 25% 門檻）"
+        support.append(f"季 EPS YoY {eps:+.0%}{note}")
+    if eps_low_base:
+        oppose.append(f"去年同期單季 EPS 僅 {eps_base:.2f} 元"
+                      "（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）")
     if rev is not None and rev > 0.20:
         support.append(f"月營收 YoY {rev:+.0%}（成長明確）")
     elif rev is not None and rev < 0.05:
@@ -281,6 +295,8 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
             **{k: bool(f[k]) for k in
                ["c_eps_yoy", "c_eps_3y_growth", "c_roe", "c_gm_not_deteriorating", "c_fscore"]},
             "eps_yoy_q": float(f["eps_yoy_q"]) if pd.notna(f["eps_yoy_q"]) else None,
+            "eps_yoy_base": float(f["eps_yoy_base"]) if pd.notna(f["eps_yoy_base"]) else None,
+            "eps_yoy_low_base": bool(f["eps_yoy_low_base"]) if pd.notna(f["eps_yoy_low_base"]) else False,
             "roe": float(f["roe"]) if pd.notna(f["roe"]) else None,
             "f_score": float(f["f_score"]) if pd.notna(f["f_score"]) else None,
             "revenue_yoy": float(ryoy.get(tk)) if pd.notna(ryoy.get(tk, np.nan)) else None,
@@ -311,7 +327,8 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
         rec["close"] = round(close, 2)
 
         rec["conditions"] = [
-            {"項": "季 EPS YoY > 25%", "狀態": "成立"},
+            {"項": "季 EPS YoY > 25%",
+             "狀態": "成立（基期過低，數字供參考）" if rec["eps_yoy_low_base"] else "成立"},
             {"項": "近 3 年 TTM EPS 成長", "狀態": "成立"},
             {"項": "ROE > 15%", "狀態": "成立"},
             {"項": "毛利率未連兩季惡化", "狀態": "成立"},

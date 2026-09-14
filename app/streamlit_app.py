@@ -355,7 +355,20 @@ def _active_chip(f: dict | None) -> str:
     label = _ACTIVE_LABEL.get(f["kind"], "🏦 主動ETF")
     cons = f.get("consensus")
     tail = f" ×{abs(cons)}" if isinstance(cons, int) and abs(cons) >= 2 else ""
+    notes = set((f.get("exit_notes") or {}).values())
+    if "出清" in notes:
+        tail += "・已出清"
+    elif "僅剩1張" in notes:
+        tail += "・僅剩1張"
     return f'<span class="thc-flag">{_esc(label + tail)}</span>'
+
+
+def _exit_note_text(exit_notes: dict) -> str:
+    """{基金代號: "出清"/"僅剩1張"} → 附在賣出證據句後面的括號註記。"""
+    if not exit_notes:
+        return ""
+    parts = [f"{code} {note}" for code, note in sorted(exit_notes.items())]
+    return "（" + "、".join(parts) + "）"
 
 
 def _active_evidence(f: dict | None) -> tuple[str, str]:
@@ -372,7 +385,8 @@ def _active_evidence(f: dict | None) -> tuple[str, str]:
     win = _span_label(f.get("span_days"))
     if f["kind"] in ("consensus_buy", "buy"):
         return f"主動式 ETF：{who}{win}淨買超 {lots}{same}", ""
-    return "", f"主動式 ETF 調節：{who}{win}淨賣超 {lots.lstrip('+')}{same}"
+    exit_txt = _exit_note_text(f.get("exit_notes") or {})
+    return "", f"主動式 ETF 調節：{who}{win}淨賣超 {lots.lstrip('+')}{same}{exit_txt}"
 
 
 def _active_legend(flags: dict) -> str:
@@ -1622,14 +1636,18 @@ def _fmt_aum_navps(fmd: dict) -> str:
 
 def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *,
              buys: list | None = None, sells: list | None = None,
-             names: dict | None = None, qty: dict | None = None, note: str | None = None,
+             names: dict | None = None, qty: dict | None = None,
+             exit_notes: dict | None = None, note: str | None = None,
              top_line: str = "", meta_line: str = "") -> str:
     """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。
 
     `qty`：{ticker: 這檔基金當天實際動了幾張}，來自 `by_fund`（見
-    build_active_etf_flags.py）——**不是**跨基金淨額，是這一檔基金自己的股數差。"""
+    build_active_etf_flags.py）——**不是**跨基金淨額，是這一檔基金自己的股數差。
+    `exit_notes`：{ticker: "出清"/"僅剩1張"}——賣出後這檔基金手上只剩 0 或 1 張，
+    跟「大部位小減碼」意義差很多，特別標出來（2026-09-14）。"""
     names = names or {}
     qty = qty or {}
+    exit_notes = exit_notes or {}
 
     def _li(tks: list | None) -> str:
         if not tks:
@@ -1638,8 +1656,10 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
         for t in tks:
             q = qty.get(t)
             lots = f"　<b>{q / 1000:+,.0f} 張</b>" if isinstance(q, (int, float)) else ""
+            en = exit_notes.get(t)
+            exit_tag = (f'　<span class="thc-flag">⚠ {_esc(en)}</span>' if en else "")
             parts.append(f'<li><a href="?code={_esc(t)}" target="_self">{_esc(t)}</a>'
-                         f'　{_esc(names.get(t, ""))}{lots}</li>')
+                         f'　{_esc(names.get(t, ""))}{lots}{exit_tag}</li>')
         return "".join(parts)
 
     parts = [
@@ -1707,6 +1727,11 @@ def _active_summary(fl: dict) -> str:
         sp = f.get("span_days")
         if isinstance(sp, int) and sp > 1:      # 漏抓一天 → 這一列不是「近一日」
             mix += f'　<span class="thc-flag">（跨 {sp} 個交易日）</span>'
+        en = set((f.get("exit_notes") or {}).values())
+        if "出清" in en:
+            mix += '　<span class="thc-flag">⚠ 有基金出清</span>'
+        elif "僅剩1張" in en:
+            mix += '　<span class="thc-flag">⚠ 有基金僅剩1張</span>'
         return (f'<li><a href="?code={_esc(tk)}" target="_self">{_esc(tk)}</a>'
                 f'　{_esc(f.get("name") or "")}　<b>{_esc(lots)}</b>{mix}</li>')
 
@@ -1769,7 +1794,8 @@ def _active_etf_page() -> None:
         sells = sorted(tk for tk, f in fl.items() if code in (f.get("sellers") or []))
         nm = {tk: (fl[tk].get("name") or "") for tk in (*buys, *sells)}
         qty = {tk: (fl[tk].get("by_fund") or {}).get(code) for tk in (*buys, *sells)}
-        return buys, sells, nm, qty
+        exit_n = {tk: (fl[tk].get("exit_notes") or {}).get(code) for tk in sells}
+        return buys, sells, nm, qty, exit_n
 
     order = ([r["code"] for r in (idx or {}).get("nav_rank") or []]
              or list(idx_funds) or list(fm_all))
@@ -1803,7 +1829,7 @@ def _active_etf_page() -> None:
             continue
 
         date = fmd.get("date") or fi.get("latest_date") or "—"
-        buys, sells, nm, qty = _moved_by(code)
+        buys, sells, nm, qty, exit_n = _moved_by(code)
         aum_line = _fmt_aum_navps(fmd)
         meta_line = (f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
                      f"　·　磁碟留存 {snaps_n} 份快照")
@@ -1813,7 +1839,7 @@ def _active_etf_page() -> None:
             f"　·　調節 {len(sells)} 檔"
             f"（濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔）"
             + (f"　·　{aum_line}" if aum_line else ""),
-            buys=buys, sells=sells, names=nm, qty=qty,
+            buys=buys, sells=sells, names=nm, qty=qty, exit_notes=exit_n,
             top_line=_top_holdings(code, date), meta_line=meta_line))
 
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)

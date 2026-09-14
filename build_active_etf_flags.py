@@ -63,6 +63,8 @@ PCF_DIR = REPO / "data" / "pcf"
 OUT = REPO / "data" / "derived" / "active_etf_flags.json"
 
 EPS_W = 0.03            # 主動買賣的權重當量門檻（百分點）——低於此視為沒動作
+LOT_SHARES = 1000       # 1 張 = 1000 股
+EXIT_LOT_MAX = 1        # 賣出後剩 ≤ 此張數 → 特別註記（出清 / 僅剩 1 張）
 REL_EPS = 0.03          # 沒有 nav/price 時的退路：主動股數差 / 部位 ≥ 3%
 CONSENSUS_MIN = 2       # |buyers - sellers| ≥ 此值 → consensus_buy / consensus_sell
 SOURCE = "自建 PCF（統一／復華／群益官網每日揭露）"
@@ -144,6 +146,7 @@ def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=codes)
     out["stock_name"] = t["stock_name"].reindex(codes).fillna(p["stock_name"].reindex(codes))
     out["d_shares"] = active_d
+    out["shares_after"] = sh_t          # 該基金今天實際持有股數——判斷賣出後是否出清/僅剩1張
     out["price"] = price
     if nav_t and nav_t > 0:
         wt_eq = (active_d * price.fillna(0)).abs() / nav_t * 100
@@ -229,6 +232,13 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
                 s["buyers"].append(code)
             elif r.direction < 0:
                 s["sellers"].append(code)
+                # 賣出後這檔基金手上剩幾張——剩 0（出清）或 1（僅剩 1 張）張特別註記，
+                # 這種「賣到快沒了」跟「大部位小減碼」意義差很多，光看 net_shares 看不出來
+                # （2026-09-14 使用者要求）。
+                after = getattr(r, "shares_after", None)
+                if after is not None and pd.notna(after) and after / LOT_SHARES <= EXIT_LOT_MAX:
+                    note = "出清" if after <= 0 else "僅剩1張"
+                    s.setdefault("exit_notes", {})[code] = note
 
     flags: dict[str, dict] = {}
     for sc, s in per_stock.items():
@@ -256,6 +266,8 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             # 個別基金那天真實動了幾股（不是彙總淨額）——一檔股票被多檔基金
             # 同時買賣時，總表的 net_shares 是淨額，這裡才是「這檔基金自己動多少」。
             "by_fund": {c: v for c, v in s["by_fund"].items()},
+            # {基金代號: "出清"/"僅剩1張"}——只有賣出且賣完後剩 ≤1 張的基金才會出現。
+            "exit_notes": s.get("exit_notes", {}),
         }
 
     return {
