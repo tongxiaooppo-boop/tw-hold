@@ -500,7 +500,7 @@
             </div>
           </li>
           <li>
-            <code>rebuild.yml</code>（每日重算三清單）依序執行：拉 bundle → 自動解析分割 → 算因子產三清單 → 主動式 ETF PCF 快照與認養旗標 → 因子表上傳到 <code>derived-latest</code> Release → commit 回 <code>data/derived/</code>。
+            <code>rebuild.yml</code>（每日重算三清單）依序執行：拉 bundle → 自動解析分割 → 算因子產三清單 + 族群動向排行 → 主動式 ETF PCF 快照與認養旗標 → 因子表上傳到 <code>derived-latest</code> Release → commit 回 <code>data/derived/</code>。
             <span class="sub">
               <b>目前刻意只手動觸發</b>（<code>workflow_dispatch</code>）或等 tw-swing 端接上
               <code>repository_dispatch</code>（type <code>bundle-published</code>）——PLAN 裡寫「先手動跑幾天觀察再開排程」，
@@ -520,8 +520,8 @@
       <h2><span class="num">03</span> 驗收測試清單</h2>
       <p class="lede">部署完，用這張清單勾過一次，確認「真的有通」而不是「檔案有放對地方」。</p>
       <ul class="checklist">
-        <li><span class="box"></span><span><code>pytest -q</code> 全過（對照基準：最新交接記錄 <b>110 passed</b>，數字變少要查為什麼）</span></li>
-        <li><span class="box"></span><span>本機 <code>streamlit run app/streamlit_app.py</code> 打得開，7 個分頁（價值／定存／長波段／短線／個股查詢／多軌體檢／主動式ETF）都能切換不噴 traceback</span></li>
+        <li><span class="box"></span><span><code>pytest -q</code> 全過（對照基準：最新交接記錄 <b>154 passed</b>，數字變少要查為什麼）</span></li>
+        <li><span class="box"></span><span>本機 <code>streamlit run app/streamlit_app.py</code> 打得開，8 個分頁（總經導航／短線／長波段／價值／定存／個股查詢／多軌體檢／主動式ETF）都能切換不噴 traceback</span></li>
         <li><span class="box"></span><span>Streamlit Cloud 網址打得開，個股查詢頁不是顯示「拉不到 bundle」（代表 Secrets 有設對）</span></li>
         <li><span class="box"></span><span>三清單頁面的「資料日期／重算時間」不是很舊的日期，且沒有「清單過期」的紅字警告</span></li>
         <li><span class="box"></span><span>手動跑一次 <code>rebuild.yml</code>（Actions → 選 workflow → Run workflow）是綠的，<code>data/derived/_meta.json</code> 的 <code>rebuilt_at</code> 有更新</span></li>
@@ -535,18 +535,18 @@
       <h2><span class="num">04</span> 怎麼看各分頁</h2>
       <p class="lede">
         這是單人工具，沒有登入或角色之分——App 顯示名稱是「股市雷達」（repo 仍叫 tw-hold）。
-        以下按 7 個分頁（<code>NAV</code> 順序）整理「打開來看什麼、能不能拿來下單」，而不是硬套「管理者／使用者」角色卡。
+        以下按 8 個分頁（<code>NAV</code> 順序）整理「打開來看什麼、能不能拿來下單」，而不是硬套「管理者／使用者」角色卡。
       </p>
       <div class="page-grid">
         <div class="page-card">
-          <h4>價值 <span class="freq">月看．季換</span></h4>
-          <p>台版 Magic Formula 式因子指數：品質 rank + 便宜 rank，季換股（3/6/9/12 月，財報公告後）。每檔給買入建議價或「不推薦」＋原因。</p>
-          <span class="verdict given">有 verdict / 買價</span>
+          <h4>總經導航 <span class="freq">每日</span></h4>
+          <p>台股上市／上櫃 MA60／MA200 多空卡 + 國際指數／VIX／殖利率／七巨頭數字卡，外加「族群動向」——全市場各產業近1週／1月中位報酬排行（不用紅綠燈，排序位置本身就是訊號），逆風產業沿用既有判定標純文字標籤。純顯示，不影響任何清單判斷。</p>
+          <span class="verdict none">純顯示，不影響清單</span>
         </div>
         <div class="page-card">
-          <h4>定存 <span class="freq">季調整</span></h4>
-          <p>高股息低波動因子指數（想成 00713 式），殖利率＋品質＋低波動＋填息率複合分。定位是接手美元收益部位，基準不是大盤而是使用者自己賣掉的美元資產稅後殖利率。</p>
-          <span class="verdict given">有 verdict / 買價</span>
+          <h4>短線</h4>
+          <p>逐條攤開日線技術面條件，零回測零驗證，雜訊極高。短線交易的守備範圍是姊妹專案 tw-swing，這裡只是資訊展示。</p>
+          <span class="verdict none">🔴🔴 不給訊號／不給買賣點</span>
         </div>
         <div class="page-card">
           <h4>長波段 <span class="freq">週更</span></h4>
@@ -554,9 +554,14 @@
           <span class="verdict none">🔴 無 verdict／無回測</span>
         </div>
         <div class="page-card">
-          <h4>短線</h4>
-          <p>逐條攤開日線技術面條件，零回測零驗證，雜訊極高。短線交易的守備範圍是姊妹專案 tw-swing，這裡只是資訊展示。</p>
-          <span class="verdict none">🔴🔴 不給訊號／不給買賣點</span>
+          <h4>價值 <span class="freq">季換</span></h4>
+          <p>台版 Magic Formula 式因子指數：品質 rank + 便宜 rank，季換股（3/6/9/12 月，財報公告後）。每檔給買入建議價或「不推薦」＋原因。</p>
+          <span class="verdict given">有 verdict / 買價</span>
+        </div>
+        <div class="page-card">
+          <h4>定存 <span class="freq">季調整</span></h4>
+          <p>高股息低波動因子指數（想成 00713 式），殖利率＋品質＋低波動＋填息率複合分。定位是接手美元收益部位，基準不是大盤而是使用者自己賣掉的美元資產稅後殖利率。</p>
+          <span class="verdict given">有 verdict / 買價</span>
         </div>
         <div class="page-card">
           <h4>個股查詢 <span class="freq">隨時</span></h4>
@@ -570,7 +575,7 @@
         </div>
         <div class="page-card">
           <h4>主動式 ETF</h4>
-          <p>抓規模前五大主動式 ETF 的官網每日 PCF 快照，差分出「認養旗標」（context flag）。永遠不 gate 任何進出場，頁面固定標註「非官方三大法人／投信買賣超」。</p>
+          <p>抓規模前五大主動式 ETF 的官網每日 PCF 快照，差分出「認養旗標」（context flag）——五檔加總總表之外，每檔基金自己也有加碼／調節檔數、逐筆張數、前5大持股。永遠不 gate 任何進出場，頁面固定標註「非官方三大法人／投信買賣超」。</p>
           <span class="verdict none">context flag，不 gate</span>
         </div>
       </div>
@@ -593,6 +598,7 @@
             <tr><td><code>fetch_bundle.py</code></td><td>拉 tw-swing 私有 Release（tag <code>data-latest</code>）的財報/日線/估值/月營收/universe，做 schema 校驗</td><td><code>data/upstream/*</code></td><td>否（可重拉）</td></tr>
             <tr><td><code>resolve_splits.py --write</code></td><td>偵測未還原的分割/減資跳空，查 FinMind 事件表自動修正</td><td><code>reference/corporate_actions_resolved.json</code></td><td>是</td></tr>
             <tr><td><code>build_lists.py</code>（呼叫 <code>build_factors.py</code> 的 <code>screen_all()</code>）</td><td>算因子（F-Score、normalized PE、存股安全分…）、跑三軌篩選</td><td><code>data/derived/{value,deposit,swing}_list.json</code> + <code>_meta.json</code></td><td>是（JSON，小、可 diff）</td></tr>
+            <tr><td>同上（<code>build_factors.py</code> 收工時順帶算）</td><td>全市場各產業近1週／1月中位報酬排行 + 沿用產業逆風判定的標記</td><td><code>data/derived/industry_rotation.json</code></td><td>是（小）</td></tr>
             <tr><td>同上</td><td>逐檔因子明細表</td><td><code>data/derived/factors_{value,deposit}.parquet</code></td><td>否——改上傳到 <code>derived-latest</code> Release，App 執行期讀</td></tr>
             <tr><td><code>snapshot_pcf.py</code></td><td>抓主動式 ETF 官網每日 PCF</td><td><code>data/pcf/&lt;code&gt;/&lt;date&gt;.parquet</code></td><td>是</td></tr>
             <tr><td><code>build_active_etf_flags.py</code></td><td>PCF 前後日差分，算認養旗標</td><td><code>data/derived/active_etf_flags.json</code></td><td>是</td></tr>
