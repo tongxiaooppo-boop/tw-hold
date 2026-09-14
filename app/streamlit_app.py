@@ -1502,17 +1502,25 @@ def _fmt_aum_navps(fmd: dict) -> str:
 
 def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *,
              buys: list | None = None, sells: list | None = None,
-             names: dict | None = None, note: str | None = None,
-             meta_line: str = "") -> str:
-    """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。"""
+             names: dict | None = None, qty: dict | None = None, note: str | None = None,
+             top_line: str = "", meta_line: str = "") -> str:
+    """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。
+
+    `qty`：{ticker: 這檔基金當天實際動了幾張}，來自 `by_fund`（見
+    build_active_etf_flags.py）——**不是**跨基金淨額，是這一檔基金自己的股數差。"""
     names = names or {}
+    qty = qty or {}
 
     def _li(tks: list | None) -> str:
         if not tks:
             return '<li class="flat">—</li>'
-        return "".join(
-            f'<li><a href="?code={_esc(t)}" target="_self">{_esc(t)}</a>'
-            f'　{_esc(names.get(t, ""))}</li>' for t in tks)
+        parts = []
+        for t in tks:
+            q = qty.get(t)
+            lots = f"　<b>{q / 1000:+,.0f} 張</b>" if isinstance(q, (int, float)) else ""
+            parts.append(f'<li><a href="?code={_esc(t)}" target="_self">{_esc(t)}</a>'
+                         f'　{_esc(names.get(t, ""))}{lots}</li>')
+        return "".join(parts)
 
     parts = [
         '<div class="thc-head">',
@@ -1524,6 +1532,8 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
     ]
     if note:
         parts.append(f'<div class="thc-note">{_esc(note)}</div>')
+    if top_line:
+        parts.append(f'<div class="thc-barcap">{_esc(top_line)}</div>')
     if buys is not None or sells is not None:
         parts.append(
             '<div class="sw-cols">'
@@ -1534,6 +1544,24 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
         parts.append(f'<div class="thc-barcap" style="margin-top:.5rem">{_esc(meta_line)}</div>')
     return (f'<div class="thc-card thc-{sev}"><div class="thc-stripe"></div>'
             f'<div class="thc-body">{"".join(parts)}</div></div>')
+
+
+def _top_holdings(code: str, date: str, n: int = 5) -> str:
+    """該檔基金當天 PCF 權重前 N 大持股——直接讀快照的 `weight` 欄（PCF 本來就有，
+    不是算出來的），跟差分（買賣）無關，純粹「這檔基金資金最集中在哪」。"""
+    p = REPO / "data" / "pcf" / code / f"{date}.parquet"
+    if not p.exists():
+        return ""
+    try:
+        df = pd.read_parquet(p, columns=["stock_code", "stock_name", "weight"])
+    except Exception:  # noqa: BLE001
+        return ""
+    if df.empty or "weight" not in df.columns:
+        return ""
+    top = df.sort_values("weight", ascending=False).head(n)
+    items = "、".join(f"{r.stock_code} {r.stock_name} {r.weight:.1f}%"
+                      for r in top.itertuples(index=False))
+    return f"前{n}大持股：{items}"
 
 
 def _active_summary(fl: dict) -> str:
@@ -1620,7 +1648,8 @@ def _active_etf_page() -> None:
         buys = sorted(tk for tk, f in fl.items() if code in (f.get("buyers") or []))
         sells = sorted(tk for tk, f in fl.items() if code in (f.get("sellers") or []))
         nm = {tk: (fl[tk].get("name") or "") for tk in (*buys, *sells)}
-        return buys, sells, nm
+        qty = {tk: (fl[tk].get("by_fund") or {}).get(code) for tk in (*buys, *sells)}
+        return buys, sells, nm, qty
 
     order = ([r["code"] for r in (idx or {}).get("nav_rank") or []]
              or list(idx_funds) or list(fm_all))
@@ -1654,15 +1683,18 @@ def _active_etf_page() -> None:
             continue
 
         date = fmd.get("date") or fi.get("latest_date") or "—"
-        buys, sells, nm = _moved_by(code)
+        buys, sells, nm, qty = _moved_by(code)
         aum_line = _fmt_aum_navps(fmd)
         meta_line = (f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
                      f"　·　磁碟留存 {snaps_n} 份快照")
         cards.append(_ae_card(
             code, issuer, name, "good", "🟢 差分已算",
-            f"{fmd.get('prev_date', '?')} → {date}　·　濾掉零星微調後共動 "
-            f"{fmd.get('moved_n', 0)} 檔" + (f"　·　{aum_line}" if aum_line else ""),
-            buys=buys, sells=sells, names=nm, meta_line=meta_line))
+            f"{fmd.get('prev_date', '?')} → {date}　·　加碼 {len(buys)} 檔"
+            f"　·　調節 {len(sells)} 檔"
+            f"（濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔）"
+            + (f"　·　{aum_line}" if aum_line else ""),
+            buys=buys, sells=sells, names=nm, qty=qty,
+            top_line=_top_holdings(code, date), meta_line=meta_line))
 
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
 

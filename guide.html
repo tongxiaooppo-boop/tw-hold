@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股市雷達（tw-hold）部署與使用說明書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF1F4;
+    --surface: #FFFFFF;
+    --surface2: #F5F7F9;
+    --line: #E4E8EC;
+    --ink: #2B333B;
+    --soft: #5E6B76;
+    --faint: #8A97A3;
+    --accent: #5C7A72;
+    --accent-ink: #FFFFFF;
+    --good: #5C7A72;
+    --good-bg: #DEE9E6;
+    --warn: #8A6A5F;
+    --warn-bg: #F1E3DF;
+    --bad: #B5453B;
+    --bad-bg: #F4DEDC;
+    --up: #C4574A;
+    --down: #4A7D74;
+    --shadow: 0 1px 2px rgba(43,51,59,.06), 0 1px 12px rgba(43,51,59,.05);
+    --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12171C;
+      --surface: #1B2229;
+      --surface2: #212930;
+      --line: #2E3841;
+      --ink: #E7EBEE;
+      --soft: #A9B4BD;
+      --faint: #71808C;
+      --accent: #86AB9E;
+      --accent-ink: #10161A;
+      --good: #86AB9E;
+      --good-bg: #1E2D2A;
+      --warn: #C79A82;
+      --warn-bg: #2E241D;
+      --bad: #E28277;
+      --bad-bg: #33201D;
+      --up: #E4776A;
+      --down: #71B7A9;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 16px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12171C;
+    --surface: #1B2229;
+    --surface2: #212930;
+    --line: #2E3841;
+    --ink: #E7EBEE;
+    --soft: #A9B4BD;
+    --faint: #71808C;
+    --accent: #86AB9E;
+    --accent-ink: #10161A;
+    --good: #86AB9E;
+    --good-bg: #1E2D2A;
+    --warn: #C79A82;
+    --warn-bg: #2E241D;
+    --bad: #E28277;
+    --bad-bg: #33201D;
+    --up: #E4776A;
+    --down: #71B7A9;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 1px 16px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 max(16px, calc((100vw - 1180px) / 2));
+  }
+  a { color: var(--accent); }
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    padding: 2.2rem 0 1.4rem;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2rem 2rem;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .masthead h1 {
+    font-size: 1.7rem;
+    font-weight: 800;
+    margin: 0 0 .35rem;
+    letter-spacing: -.01em;
+  }
+  .masthead .tagline { color: var(--soft); font-size: .95rem; max-width: 62ch; }
+  .masthead .badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    background: var(--good-bg);
+    color: var(--good);
+    padding: .18rem .55rem;
+    border-radius: 5px;
+    margin-bottom: .5rem;
+  }
+  .masthead .meta {
+    font-size: .82rem;
+    color: var(--soft);
+    text-align: right;
+    display: grid;
+    gap: .25rem;
+  }
+  .masthead .meta b { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+
+  /* ---------- Layout ---------- */
+  .layout { display: flex; gap: 2.5rem; align-items: flex-start; padding: 2rem 0 5rem; }
+  .toc {
+    position: sticky;
+    top: 1.2rem;
+    flex: 0 0 200px;
+    font-size: .85rem;
+  }
+  .toc .toc-h { font-family: var(--font-mono); font-size: .7rem; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--faint); font-weight: 600; margin-bottom: .6rem; }
+  .toc a {
+    display: block;
+    padding: .38rem 0 .38rem .7rem;
+    border-left: 2px solid var(--line);
+    color: var(--soft);
+    text-decoration: none;
+    margin-bottom: .1rem;
+  }
+  .toc a:hover { color: var(--ink); }
+  .toc a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+  .content { flex: 1 1 auto; min-width: 0; }
+
+  section { margin-bottom: 3.2rem; scroll-margin-top: 1rem; }
+  section h2 {
+    font-size: 1.28rem;
+    font-weight: 700;
+    margin: 0 0 .3rem;
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+  }
+  section h2 .num { color: var(--faint); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; }
+  section > .lede { color: var(--soft); font-size: .92rem; margin: 0 0 1.2rem; max-width: 74ch; }
+
+  /* ---------- Step cards ---------- */
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.1rem 1.3rem 1.2rem;
+    margin-bottom: 1rem;
+  }
+  .step h3 {
+    margin: 0 0 .6rem;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+  }
+  .step h3 .tag {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    font-weight: 700;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 5px;
+    padding: .1rem .48rem;
+  }
+  .step ol { margin: 0; padding-left: 1.25rem; }
+  .step li { margin-bottom: .5rem; }
+  .step li:last-child { margin-bottom: 0; }
+  .step .sub { display: block; color: var(--soft); font-size: .85rem; margin-top: .15rem; }
+  .step pre {
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: .7rem .9rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    margin: .4rem 0;
+  }
+
+  /* ---------- Callout / field-note ---------- */
+  .callout {
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    font-size: .87rem;
+    margin: .8rem 0;
+    border: 1px solid var(--line);
+    background: var(--surface2);
+  }
+  .callout.warn { background: var(--warn-bg); border-color: var(--warn); color: var(--ink); }
+  .callout.bad { background: var(--bad-bg); border-color: var(--bad); color: var(--ink); }
+  .callout .lbl { font-weight: 700; font-family: var(--font-mono); font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .06em; display: block; margin-bottom: .3rem; }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.bad .lbl { color: var(--bad); }
+
+  /* ---------- Checklist ---------- */
+  .checklist { list-style: none; margin: 0; padding: 0; }
+  .checklist li {
+    display: flex;
+    gap: .6rem;
+    align-items: flex-start;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: .92rem;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist .box {
+    flex: 0 0 18px;
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--faint);
+    border-radius: 4px;
+    margin-top: .15rem;
+  }
+
+  /* ---------- Page cards (usage manual, by tab not by role) ---------- */
+  .page-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .9rem;
+  }
+  .page-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1rem 1.1rem;
+  }
+  .page-card h4 {
+    margin: 0 0 .4rem;
+    font-size: .98rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .page-card h4 .freq {
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    font-weight: 600;
+    color: var(--soft);
+    background: var(--surface2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: .08rem .4rem;
+  }
+  .page-card p { margin: 0; font-size: .85rem; color: var(--soft); }
+  .page-card .verdict {
+    display: inline-block;
+    margin-top: .55rem;
+    font-size: .74rem;
+    font-family: var(--font-mono);
+    padding: .12rem .45rem;
+    border-radius: 5px;
+  }
+  .page-card .verdict.none { background: var(--warn-bg); color: var(--warn); }
+  .page-card .verdict.given { background: var(--good-bg); color: var(--good); }
+
+  /* ---------- Table ---------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: .87rem; background: var(--surface); }
+  th, td { text-align: left; padding: .55rem .8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--surface2); font-family: var(--font-mono); font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--faint); font-weight: 600; }
+  td code { background: var(--surface2); padding: .05rem .35rem; border-radius: 4px; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---------- FAQ (details) ---------- */
+  details {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: .75rem 1rem;
+    margin-bottom: .6rem;
+    font-size: .9rem;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸ "; color: var(--accent); }
+  details[open] summary::before { content: "▾ "; }
+  details p { margin: .55rem 0 0; color: var(--soft); }
+
+  .up { color: var(--up); font-weight: 600; }
+  .down { color: var(--down); font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 1.5rem 0 3rem;
+    color: var(--faint);
+    font-size: .8rem;
+  }
+
+  @media (max-width: 880px) {
+    .layout { flex-direction: column; gap: 1.5rem; }
+    .toc { position: static; width: 100%; flex-basis: auto; }
+    .toc-list { display: flex; flex-wrap: wrap; gap: .3rem .6rem; }
+    .toc a { border-left: none; border-bottom: 2px solid var(--line); padding: .25rem .1rem; }
+    .masthead { flex-direction: column; align-items: flex-start; }
+    .masthead .meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div>
+    <span class="badge">部署／使用說明書</span>
+    <h1>股市雷達（repo：tw-hold）</h1>
+    <div class="tagline">
+      台股長波段候選池／價值／定存三份清單 + 個股查詢的決策支援工具。
+      本文整理自 README、PRD、PLAN 與最新交接文件，供部署與日常操作查閱——
+      <b>不是投資建議書</b>。
+    </div>
+  </div>
+  <div class="meta">
+    <div>資料上游　<b>tw-swing</b>（私有 Release）</div>
+    <div>執行環境　<b>Streamlit Community Cloud</b></div>
+    <div>PRD 狀態　<b>3.1-draft／未定案</b></div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="toc-h">目錄</div>
+    <div class="toc-list">
+      <a href="#before">開始之前</a>
+      <a href="#deploy">部署步驟</a>
+      <a href="#verify">驗收測試清單</a>
+      <a href="#usage">怎麼看各分頁</a>
+      <a href="#data">資料模型速查</a>
+      <a href="#faq">FAQ</a>
+      <a href="#safety">安全聲明</a>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <section id="before">
+      <h2><span class="num">01</span> 開始之前</h2>
+      <p class="lede">
+        這是單人使用的決策支援工具，不是多租戶產品——「開始之前」要準備的是帳號與金鑰，不是找使用者名單。
+      </p>
+
+      <div class="callout bad">
+        <span class="lbl">誠實狀態</span>
+        PRD 目前版本標記為 <code>3.1-draft（未定案）</code>：長波段候選池「只測過每週能篩出幾檔，
+        沒測過報酬或回撤」；價值／定存線曾在 2026-09-07 做過一次組合回溯（實驗 B），
+        但該回溯腳本引用的 <code>twswing.value</code> 之後被搬進 tw-hold、tw-swing 端已刪除，
+        <b>現在重新執行會直接 import 失敗，數字目前無法重現</b>。三清單已經在跑、App 已經上線，
+        但背後的因子設計仍視為「假設」而非定案——部署這個系統前請先知道這件事。
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>要準備的東西</th><th>用途</th><th>從哪拿</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>GitHub 帳號 + <code>tw-swing</code> repo 存取權</td>
+              <td>tw-hold 的核心資料（財報/日線/估值 bundle）發佈在 tw-swing 私有 repo 的 Release（tag <code>data-latest</code>），tw-hold 完全不 import tw-swing 程式碼，純用 PAT 拉檔案</td>
+              <td>tw-swing repo 擁有者本人核發</td>
+            </tr>
+            <tr>
+              <td>Fine-grained PAT（<code>TWSWING_BUNDLE_PAT</code>）</td>
+              <td>對 <code>tongxiaooppo-boop/tw-swing</code> 的 <code>contents: read</code> 權限，本地／Actions／Streamlit Cloud 三處都要各自設定</td>
+              <td>GitHub → Settings → Developer settings → Fine-grained tokens</td>
+            </tr>
+            <tr>
+              <td>（選填）FinMind token</td>
+              <td>只有「個股即時補抓」（查不到 bundle 裡前 500 大以外的個股時）與 <code>resolve_splits.py</code> 自動解析分割才需要，純本地／CI 用，不會落地成公開資料</td>
+              <td><a href="https://finmind.github.io/" target="_blank" rel="noopener">FinMind</a> 官網申請</td>
+            </tr>
+            <tr>
+              <td>（選填）Alert webhook（Discord／Slack）</td>
+              <td>rebuild 失敗、清單超過 180 小時沒重算時告警用，不設也能跑，只是沒人會被通知</td>
+              <td>自建 Discord/Slack Incoming Webhook</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">預估時間</span>
+        本機環境（pip install + 拉 bundle + 跑起來）約 10–15 分鐘；
+        Streamlit Cloud 部署（含填 Secrets）約 10 分鐘；GitHub Actions 排程設定約 10 分鐘。
+        整套跑通抓 30–40 分鐘，前提是 PAT 已經核發好。
+      </div>
+    </section>
+
+    <section id="deploy">
+      <h2><span class="num">02</span> 部署步驟</h2>
+      <p class="lede">分三段：A 本機跑起來（開發／驗證用）、B Streamlit Cloud 上線、C GitHub Actions 每日重算管線。B、C 互相獨立，可以先做 A+B 讓網頁能看，C 之後再接。</p>
+
+      <div class="step">
+        <h3><span class="tag">A</span>本機環境</h3>
+        <ol>
+          <li>
+            安裝依賴：
+            <pre>pip install -r requirements.txt</pre>
+            <span class="sub">requirements.txt 版本刻意釘死（pandas==3.0.3 / pyarrow==24.0.0 / streamlit==1.60.0 / plotly==6.9.0）——不要自己改成 <code>&gt;=</code>，檔頭註解記著這曾經讓 Cloud 抓到跟本地不同版本、個股頁的 K 線圖直接 <code>AttributeError</code>。改版本前務必先本機 <code>pytest -q</code> + <code>streamlit run</code> 都過。</span>
+          </li>
+          <li>
+            建立 <code>.env</code>（專案根目錄，已 gitignore）：
+            <pre>TWSWING_BUNDLE_PAT=你的 fine-grained PAT
+# 選填，只有本地進階模式（查不到的個股即時補抓）才需要：
+# FINMIND_TOKEN=你的 FinMind token</pre>
+          </li>
+          <li>
+            拉上游資料 bundle（第一次跑或想手動更新資料時執行）：
+            <pre>python fetch_bundle.py</pre>
+            <span class="sub">會把 tw-swing Release 的財報/日線/估值資料解到 <code>data/upstream/</code>（不進版控，隨時可重拉）。這一步做 schema 校驗（G1，版本不合直接失敗）跟日期新鮮度檢查（G3，不合只標記不失敗）。</span>
+          </li>
+          <li>
+            算因子、產出三清單：
+            <pre>python build_lists.py</pre>
+            <span class="sub">這一步要用到上一步 <code>data/upstream/</code> 的資料。輸出 <code>data/derived/{value,deposit,swing}_list.json</code> + <code>_meta.json</code>（進版控）與 <code>factors_*.parquet</code>（不進版控）。</span>
+          </li>
+          <li>
+            啟動網頁：
+            <pre>streamlit run app/streamlit_app.py</pre>
+            <span class="sub">第一次載入個股查詢頁時，App 自己也會再拉一次 bundle／因子表（<code>@st.cache_resource</code>），所以就算跳過步驟 3–4 也能開起來，只是清單頁會顯示「資料過期」或空清單。</span>
+          </li>
+          <li>
+            跑測試確認沒壞：
+            <pre>pytest -q</pre>
+            <span class="sub">最近一次交接記錄的基準是 <b>110 passed</b>，可以拿來對照有沒有測試漏跑或新壞掉。</span>
+          </li>
+        </ol>
+        <div class="callout warn">
+          <span class="lbl">跟 README 對一下</span>
+          README 目前的「跑」段落只列了 <code>pip install</code> → <code>python build_factors.py</code> → <code>streamlit run</code> → <code>pytest -q</code>，
+          <b>省略了 <code>fetch_bundle.py</code> 這一步、也沒提到 <code>build_lists.py</code></b>。
+          實際 CI（<code>rebuild.yml</code>）用的是 <code>fetch_bundle.py</code> → <code>build_lists.py</code>（它內部呼叫
+          <code>build_factors.py</code> 的 <code>screen_all()</code>，會產出三清單而不只是 README 註解說的「因子 + 兩清單」）。
+          這份說明書照 CI 實際流程走；<b>建議之後回頭把 README 的「跑」段落也同步更新</b>。
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">B</span>Streamlit Community Cloud 上線</h3>
+        <ol>
+          <li>repo push 到 GitHub（<code>tw-hold</code> 目前是 <b>public</b> repo；bundle 走 PAT 保護，App 本身公開沒關係）。</li>
+          <li>到 <a href="https://share.streamlit.io" target="_blank" rel="noopener">share.streamlit.io</a> 建立 App，指到主檔 <code>app/streamlit_app.py</code>，分支選 <code>main</code>。</li>
+          <li>
+            App → Settings → Secrets，貼上（TOML 格式）：
+            <pre>TWSWING_BUNDLE_PAT = "你的 fine-grained PAT"
+# 選填：
+# FINMIND_TOKEN = "你的 FinMind token"</pre>
+            <span class="sub">這一步要用到「開始之前」拿到的 PAT——沒設的話個股頁會直接顯示「拉不到 bundle」錯誤訊息。</span>
+          </li>
+          <li>
+            主題不用另外設定：<code>.streamlit/config.toml</code> 已經把主題釘死成固定淺色「北歐靜謐」（<code>base = "light"</code>），
+            Cloud 會直接套用，<b>不會跟著使用者系統深色模式切換</b>（這是 2026-09-11 使用者裁決，取代了 2026-09-08 的深色版）。
+          </li>
+          <li>之後每次 push 到 <code>main</code>，Cloud 會自動重新部署，不用手動觸發。</li>
+        </ol>
+        <div class="callout">
+          <span class="lbl">目前已上線</span>
+          <a href="https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/" target="_blank" rel="noopener">tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app</a>
+          （出自最新交接文件，若你是重新部署到自己帳號，網址會不同）。
+        </div>
+      </div>
+
+      <div class="step">
+        <h3><span class="tag">C</span>GitHub Actions 每日重算管線</h3>
+        <ol>
+          <li>
+            repo → Settings → Secrets and variables → Actions，設定：
+            <div class="table-wrap" style="margin-top:.5rem">
+              <table>
+                <thead><tr><th>Secret</th><th>必要性</th><th>用途</th></tr></thead>
+                <tbody>
+                  <tr><td><code>TWSWING_BUNDLE_PAT</code></td><td>必要</td><td><code>fetch_bundle.py</code> 拉上游資料</td></tr>
+                  <tr><td><code>FINMIND_TOKEN</code></td><td>選填</td><td><code>resolve_splits.py</code> 自動解析未還原分割（<code>continue-on-error</code>，缺了不會擋清單重算）</td></tr>
+                  <tr><td><code>ALERT_WEBHOOK</code></td><td>選填</td><td>rebuild 失敗 / 清單過舊 / 分割解不掉時發告警</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </li>
+          <li>
+            <code>rebuild.yml</code>（每日重算三清單）依序執行：拉 bundle → 自動解析分割 → 算因子產三清單 → 主動式 ETF PCF 快照與認養旗標 → 因子表上傳到 <code>derived-latest</code> Release → commit 回 <code>data/derived/</code>。
+            <span class="sub">
+              <b>目前刻意只手動觸發</b>（<code>workflow_dispatch</code>）或等 tw-swing 端接上
+              <code>repository_dispatch</code>（type <code>bundle-published</code>）——PLAN 裡寫「先手動跑幾天觀察再開排程」，
+              <b>目前還沒有 cron，需要你自己決定要接哪一種自動觸發</b>（檔案內註解列了兩個方案：tw-swing 端 dispatch，或直接在這裡加 cron）。
+            </span>
+          </li>
+          <li>
+            <code>heartbeat.yml</code> 每週一 UTC 01:00 自動跑，檢查 <code>data/derived/_meta.json</code> 的 <code>rebuilt_at</code>
+            是否超過 180 小時沒更新，超過就發告警（需要 <code>ALERT_WEBHOOK</code>，沒設就只留在 Actions 紀錄裡）。
+            <span class="sub">這支自己絕不能失敗——檢查不過只是 warning，不會讓 workflow 顯示紅字。</span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="verify">
+      <h2><span class="num">03</span> 驗收測試清單</h2>
+      <p class="lede">部署完，用這張清單勾過一次，確認「真的有通」而不是「檔案有放對地方」。</p>
+      <ul class="checklist">
+        <li><span class="box"></span><span><code>pytest -q</code> 全過（對照基準：最新交接記錄 <b>110 passed</b>，數字變少要查為什麼）</span></li>
+        <li><span class="box"></span><span>本機 <code>streamlit run app/streamlit_app.py</code> 打得開，7 個分頁（價值／定存／長波段／短線／個股查詢／多軌體檢／主動式ETF）都能切換不噴 traceback</span></li>
+        <li><span class="box"></span><span>Streamlit Cloud 網址打得開，個股查詢頁不是顯示「拉不到 bundle」（代表 Secrets 有設對）</span></li>
+        <li><span class="box"></span><span>三清單頁面的「資料日期／重算時間」不是很舊的日期，且沒有「清單過期」的紅字警告</span></li>
+        <li><span class="box"></span><span>手動跑一次 <code>rebuild.yml</code>（Actions → 選 workflow → Run workflow）是綠的，<code>data/derived/_meta.json</code> 的 <code>rebuilt_at</code> 有更新</span></li>
+        <li><span class="box"></span><span>手動跑一次 <code>heartbeat.yml</code> 確認 jq 解析邏輯沒壞（webhook 留空也能跑，只是不會真的發通知）</span></li>
+        <li><span class="box"></span><span><code>git status</code> 乾淨：<code>.env</code>、<code>positions*.json</code>、<code>data/upstream/</code>、<code>data/cache/</code>、<code>*.parquet</code> 都沒有被意外加進版控</span></li>
+        <li><span class="box"></span><span>三張清單 JSON（<code>data/derived/{value,deposit,swing}_list.json</code>）確實有進 git 歷史；<code>factors_*.parquet</code> 確實沒有</span></li>
+      </ul>
+    </section>
+
+    <section id="usage">
+      <h2><span class="num">04</span> 怎麼看各分頁</h2>
+      <p class="lede">
+        這是單人工具，沒有登入或角色之分——App 顯示名稱是「股市雷達」（repo 仍叫 tw-hold）。
+        以下按 7 個分頁（<code>NAV</code> 順序）整理「打開來看什麼、能不能拿來下單」，而不是硬套「管理者／使用者」角色卡。
+      </p>
+      <div class="page-grid">
+        <div class="page-card">
+          <h4>價值 <span class="freq">月看．季換</span></h4>
+          <p>台版 Magic Formula 式因子指數：品質 rank + 便宜 rank，季換股（3/6/9/12 月，財報公告後）。每檔給買入建議價或「不推薦」＋原因。</p>
+          <span class="verdict given">有 verdict / 買價</span>
+        </div>
+        <div class="page-card">
+          <h4>定存 <span class="freq">季調整</span></h4>
+          <p>高股息低波動因子指數（想成 00713 式），殖利率＋品質＋低波動＋填息率複合分。定位是接手美元收益部位，基準不是大盤而是使用者自己賣掉的美元資產稅後殖利率。</p>
+          <span class="verdict given">有 verdict / 買價</span>
+        </div>
+        <div class="page-card">
+          <h4>長波段 <span class="freq">週更</span></h4>
+          <p>CANSLIM + Minervini 趨勢模板組成的「主動選股候選池」，狀態型條件全過才進池，不排名次不配權重。只給風控推導的可買上限與失效條件。</p>
+          <span class="verdict none">🔴 無 verdict／無回測</span>
+        </div>
+        <div class="page-card">
+          <h4>短線</h4>
+          <p>逐條攤開日線技術面條件，零回測零驗證，雜訊極高。短線交易的守備範圍是姊妹專案 tw-swing，這裡只是資訊展示。</p>
+          <span class="verdict none">🔴🔴 不給訊號／不給買賣點</span>
+        </div>
+        <div class="page-card">
+          <h4>個股查詢 <span class="freq">隨時</span></h4>
+          <p>不打分，純數據 + plotly 圖表（K 線／營收等）。查詢範圍限 bundle 內的前 500 大約 1,000 檔，不即時抓單股資料（PRD 明定的紅線）。</p>
+          <span class="verdict none">不打分</span>
+        </div>
+        <div class="page-card">
+          <h4>多軌體檢</h4>
+          <p>三條清單的資料健康度檢查（CI 有沒有跑、schema 對不對、快照新不新鮮）。只打勾、只解說——不加總、不評分、不給 verdict。</p>
+          <span class="verdict none">純體檢，不評分</span>
+        </div>
+        <div class="page-card">
+          <h4>主動式 ETF</h4>
+          <p>抓規模前五大主動式 ETF 的官網每日 PCF 快照，差分出「認養旗標」（context flag）。永遠不 gate 任何進出場，頁面固定標註「非官方三大法人／投信買賣超」。</p>
+          <span class="verdict none">context flag，不 gate</span>
+        </div>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">每頁都有的警語</span>
+        全站共用一句免責聲明：「這不是投資建議，買賣由你決定，真金下單前自己再查一次」。
+        長波段與短線頁另外各疊一層更強的警語（分別標 🔴 與 🔴🔴），因為這兩條完全沒有回測支撐。
+        表頭只留「資料日期／重算時間 + 投資警語」，方法論說明搬到頁尾，但「資料異常的即時警報」（CI 沒跑、schema 錯、快照過期）刻意留在原位，不搬——這是設計選擇，不是漏改。
+      </div>
+    </section>
+
+    <section id="data">
+      <h2><span class="num">05</span> 資料模型速查</h2>
+      <p class="lede">給要維護管線的人看，不是整份 PRD 搬過來。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>階段</th><th>做什麼</th><th>輸出</th><th>進不進版控</th></tr></thead>
+          <tbody>
+            <tr><td><code>fetch_bundle.py</code></td><td>拉 tw-swing 私有 Release（tag <code>data-latest</code>）的財報/日線/估值/月營收/universe，做 schema 校驗</td><td><code>data/upstream/*</code></td><td>否（可重拉）</td></tr>
+            <tr><td><code>resolve_splits.py --write</code></td><td>偵測未還原的分割/減資跳空，查 FinMind 事件表自動修正</td><td><code>reference/corporate_actions_resolved.json</code></td><td>是</td></tr>
+            <tr><td><code>build_lists.py</code>（呼叫 <code>build_factors.py</code> 的 <code>screen_all()</code>）</td><td>算因子（F-Score、normalized PE、存股安全分…）、跑三軌篩選</td><td><code>data/derived/{value,deposit,swing}_list.json</code> + <code>_meta.json</code></td><td>是（JSON，小、可 diff）</td></tr>
+            <tr><td>同上</td><td>逐檔因子明細表</td><td><code>data/derived/factors_{value,deposit}.parquet</code></td><td>否——改上傳到 <code>derived-latest</code> Release，App 執行期讀</td></tr>
+            <tr><td><code>snapshot_pcf.py</code></td><td>抓主動式 ETF 官網每日 PCF</td><td><code>data/pcf/&lt;code&gt;/&lt;date&gt;.parquet</code></td><td>是</td></tr>
+            <tr><td><code>build_active_etf_flags.py</code></td><td>PCF 前後日差分，算認養旗標</td><td><code>data/derived/active_etf_flags.json</code></td><td>是</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="lbl">跟其他 repo 的關係</span>
+        <b>tw-swing</b>：唯一資料上游，發佈 bundle 到自己私有 repo 的 Release；tw-hold 執行期對 <code>twswing</code> package 零依賴，共用邏輯（regime／指標／FinMind client）用複製的，放進 <code>reference/</code>。
+        <b>me（taiwan-stock-analyzer-v3）</b>：只是參考程式碼來源，不 import、不執行依賴。
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>環境變數 / Secret</th><th>誰讀</th><th>必要性</th></tr></thead>
+          <tbody>
+            <tr><td><code>TWSWING_BUNDLE_PAT</code></td><td>本地 <code>.env</code> ／ GitHub Actions secret ／ Streamlit <code>st.secrets</code>（三處各自設定，互不共用）</td><td>必要</td></tr>
+            <tr><td><code>FINMIND_TOKEN</code></td><td>同上三處</td><td>選填（個股即時補抓 + 自動分割解析才用）</td></tr>
+            <tr><td><code>ALERT_WEBHOOK</code></td><td>GitHub Actions secret</td><td>選填</td></tr>
+            <tr><td><code>GH_TOKEN</code></td><td><code>rebuild.yml</code> 內用 <code>github.token</code> 自動帶入，不用手動設</td><td>系統自帶</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="faq">
+      <h2><span class="num">06</span> FAQ</h2>
+
+      <details>
+        <summary>為什麼「長波段候選池」不給建議買價、也不排名次？</summary>
+        <p>因為它從沒被回測驗證過報酬或勝率——唯一測過的是「可行性普查」：中位數每週 2–5 檔候選、空頭週接近空手。這代表它篩得動、不代表跟著它買會賺。目前只給風控算出來的可買上限（<code>停損 ÷ (1-10%)</code>）與失效條件，不給 verdict。</p>
+      </details>
+
+      <details>
+        <summary>價值／定存清單的回測數字準嗎？</summary>
+        <p>2026-09-07 做過一次組合層回溯（實驗 B），當時價值線 N=10 報酬 <span class="down">+20.42%</span>／回撤 <span class="up">-21.3%</span>，輸大盤 0050 同期（+24.16%／-17.6%）；定存線也輸對照的 0056。但回溯用的腳本 <code>research/backtest_rebalance.py</code> import 的 <code>twswing.value</code> 之後已經整包搬進 tw-hold、tw-swing 端刪除了原始檔案，<b>現在重跑這支腳本會直接因為 import 失敗而炸掉</b>，數字目前無法重現，需要先做搬移修正才能重新驗證。</p>
+      </details>
+
+      <details>
+        <summary>三清單一直沒更新怎麼辦？</summary>
+        <p>先確認 <code>rebuild.yml</code> 是不是真的有觸發——目前刻意只支援手動（<code>workflow_dispatch</code>）或 tw-swing 端主動 dispatch，<b>沒有排程 cron</b>。如果指望它自動天天跑，需要先接好其中一種自動觸發。<code>heartbeat.yml</code> 每週一會檢查 <code>_meta.json</code> 超過 180 小時沒重算就告警（要設 <code>ALERT_WEBHOOK</code> 才會真的通知到人）。</p>
+      </details>
+
+      <details>
+        <summary>App 是不是深色主題？跟股票分析工具常見的深色風格不一樣？</summary>
+        <p>曾經是——2026-09-08 版本是深色，但 2026-09-11 使用者裁決改成固定淺色「北歐靜謐」主題（低飽和灰綠 accent、白卡片、淺灰底），且刻意不跟隨系統深色模式切換。這是 App 本身的設計決定；本說明書沿用同一組色票（<code>--thc-*</code> 系列變數）但另外處理了淺／深色模式，因為說明書本身沒有理由強迫讀者用淺色看。</p>
+      </details>
+
+      <details>
+        <summary>改 requirements.txt 的版本號安全嗎？</summary>
+        <p>不建議隨意放寬。檔頭註解記著教訓：Cloud 用 <code>&gt;=</code> 曾經抓到跟本地測試不同的 <code>plotly</code> 版本，個股頁的 K 線圖直接 <code>AttributeError</code>。要改版本，先在本機把 <code>pytest -q</code> 跟 <code>streamlit run</code> 都過一遍再上。</p>
+      </details>
+
+      <details>
+        <summary>PAT 什麼時候要換？</summary>
+        <p>依最新交接記錄：<code>tw-hold-bundle-read</code> PAT 約 2026-12-07 到期，建議 11 月底前換新；<code>TWHOLD_DISPATCH_PAT</code>（tw-swing 端用來觸發 tw-hold rebuild 的那顆）約 2027-09-08 到期。到期前沒換會讓 <code>fetch_bundle.py</code> 直接拉不到資料。</p>
+      </details>
+
+      <details>
+        <summary>positions.json 會不會不小心外洩到公開 repo？</summary>
+        <p><code>tw-hold</code> 是 public repo，<code>.gitignore</code> 已經排除 <code>positions.json</code> / <code>positions.*.json</code> / <code>data/positions/</code>（進場價、部位大小、投入金額）。檔案裡特別註記「一旦 commit 進公開歷史就洗不掉」——本機操作務必自己再檢查一次 <code>git status</code>，不要靠 <code>git add -A</code> 硬加。</p>
+      </details>
+
+      <details>
+        <summary>「主動式 ETF」的旗標可以當成三大法人買賣超看嗎？</summary>
+        <p>不行，頁面本身就標明「非官方三大法人／投信買賣超」。這是抓法定公開揭露的 PCF 資料自己差分算出來的「認養旗標」，設計上永遠不 gate 任何進出場，純粹是 context 標籤。</p>
+      </details>
+    </section>
+
+    <section id="safety">
+      <h2><span class="num">07</span> 安全聲明</h2>
+      <ul class="checklist">
+        <li><span class="box"></span><span><b>不是投資建議</b>——全站每頁都掛這句免責聲明；清單的 verdict／買價是規則算出來的，不是預測，不上真錢（tw-swing 才是真錢系統，tw-hold 純決策支援）。</span></li>
+        <li><span class="box"></span><span><b>tw-hold 是 public repo</b>——App 頁面本身公開沒關係，但 <code>.env</code>、任何 PAT／API key、私有端點 URL 絕不能進版控；<code>.gitignore</code> 已排除 <code>.env</code>、<code>*.token</code>、<code>*.pat</code>、<code>positions*.json</code>。</span></li>
+        <li><span class="box"></span><span>PAT 建議用 <b>fine-grained token</b>、只給 <code>contents: read</code> 這一種最小權限，且限定在 <code>tw-swing</code> 單一 repo，不要核發成 classic token 或全 repo 權限。</span></li>
+        <li><span class="box"></span><span>抓外部資料尊重來源站規範：投信 PCF 是法定公開揭露、TWSE <code>STOCK_DAY_ALL</code> 是官方公開行情，都只做低頻讀取，不轉發全量、不重製成別的產品。</span></li>
+        <li><span class="box"></span><span>個股查詢刻意限制在 bundle 內約 1,000 檔，不做即時單股抓取——這是 PRD 明定的邊界，不是效能限制順便定的。</span></li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+
+<footer>
+  依 <code>D:\ok\write.md</code> SOP 產出，素材來自 tw-hold 的 <code>README.md</code>／<code>PRD.md</code>／<code>PLAN.md</code>／
+  <code>docs/M0_HANDOFF.md</code>／<code>docs/HANDOFF_2026-09-11d.md</code>／<code>.github/workflows/*</code>／
+  <code>app/streamlit_app.py</code> 等既有文件與程式碼；配色沿用 App 本身 <code>.streamlit/config.toml</code> 與
+  <code>--thc-*</code> CSS 變數定義的「北歐靜謐」主題，字體同為 Manrope + JetBrains Mono。
+</footer>
+
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var sections = links.map(function (a) {
+    return document.querySelector(a.getAttribute('href'));
+  });
+  function onScroll() {
+    var pos = window.scrollY + 120;
+    var current = 0;
+    sections.forEach(function (sec, i) {
+      if (sec && sec.offsetTop <= pos) current = i;
+    });
+    links.forEach(function (a, i) {
+      a.classList.toggle('active', i === current);
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+
+</body>
+</html>

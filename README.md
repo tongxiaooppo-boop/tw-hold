@@ -1,5 +1,7 @@
 # tw-hold
 
+> 📘 [部署／使用說明書](guide.html)
+
 `me`（`taiwan-stock-analyzer-v3`）的升級版。長波段/價值/定存推薦 + 個股查詢。
 **核心宇宙（前 500 大）資料上游 = tw-swing**：tw-swing 抓 FinMind 財報/日線/估值、
 整併成 data bundle 發佈到 **tw-swing 私有 repo 的 Release（tag `data-latest`）**；
