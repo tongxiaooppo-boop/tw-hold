@@ -312,12 +312,14 @@ def screen_all() -> dict:
         df["name"] = df["ticker"].astype(str).map(names)
 
     # ③ 產業逆風旗標（只顯示、不進 verdict——比照循環高峰旗標，PRD §9 待定）
-    from screener.industry import add_industry_headwind
+    from screener.industry import add_industry_headwind, industry_rotation
     _asof = (pd.Timestamp(price_hist["date"].max())
              if price_hist is not None and not price_hist.empty
              else pd.Timestamp.now())
     val = add_industry_headwind(val, price_hist, ind, _asof)
     dep = add_industry_headwind(dep, price_hist, ind, _asof)
+    # 族群動向：全市場產業排行（跟上面逆風旗標同一份底層資料，總經羅盤頁用）
+    rotation = industry_rotation(price_hist, ind, _asof)
 
     # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
     pool, pool_note = [], "候選池未算"
@@ -338,7 +340,8 @@ def screen_all() -> dict:
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
     return {
-        "deposit": dep, "value": val, "pool": pool,
+        "deposit": dep, "value": val, "pool": pool, "industry_rotation": rotation,
+        "industry_rotation_asof": _asof.strftime("%Y-%m-%d") if pd.notna(_asof) else None,
         "context": {
             "pool_note": pool_note,
             "quarters": list(qf.shape), "tickers": int(qf.ticker.nunique()),
@@ -367,6 +370,12 @@ def main() -> int:
     dep.to_parquet(DERIVED / "factors_deposit.parquet", index=False)
     val.to_parquet(DERIVED / "factors_value.parquet", index=False)
     print(f"  → {DERIVED/'factors_deposit.parquet'} / factors_value.parquet", flush=True)
+
+    rot_out = DERIVED / "industry_rotation.json"
+    rot_out.write_text(json.dumps(
+        {"asof": r["industry_rotation_asof"], "industries": r["industry_rotation"]},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"  → {rot_out}（{len(r['industry_rotation'])} 個產業）", flush=True)
 
     _write_report(dep, val)
     print(f"  → {REPORT}", flush=True)

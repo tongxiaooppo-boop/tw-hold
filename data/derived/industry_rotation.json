@@ -1,0 +1,292 @@
+{
+ "asof": "2026-09-11",
+ "industries": [
+  {
+   "industry": "金融業",
+   "n": 9,
+   "ret_1w": -0.0093,
+   "ret_1m": 0.1,
+   "headwind": false
+  },
+  {
+   "industry": "金融保險",
+   "n": 32,
+   "ret_1w": 0.0102,
+   "ret_1m": 0.0911,
+   "headwind": false
+  },
+  {
+   "industry": "塑膠工業",
+   "n": 26,
+   "ret_1w": -0.001,
+   "ret_1m": 0.0287,
+   "headwind": false
+  },
+  {
+   "industry": "航運業",
+   "n": 33,
+   "ret_1w": -0.0037,
+   "ret_1m": 0.0147,
+   "headwind": false
+  },
+  {
+   "industry": "油電燃氣業",
+   "n": 12,
+   "ret_1w": 0.0018,
+   "ret_1m": 0.0083,
+   "headwind": false
+  },
+  {
+   "industry": "居家生活",
+   "n": 3,
+   "ret_1w": 0.0,
+   "ret_1m": 0.0039,
+   "headwind": true
+  },
+  {
+   "industry": "玻璃陶瓷",
+   "n": 5,
+   "ret_1w": -0.0079,
+   "ret_1m": 0.0037,
+   "headwind": false
+  },
+  {
+   "industry": "建材營造",
+   "n": 77,
+   "ret_1w": -0.01,
+   "ret_1m": -0.0041,
+   "headwind": false
+  },
+  {
+   "industry": "資訊服務業",
+   "n": 47,
+   "ret_1w": 0.0059,
+   "ret_1m": -0.0075,
+   "headwind": false
+  },
+  {
+   "industry": "造紙工業",
+   "n": 7,
+   "ret_1w": -0.0179,
+   "ret_1m": -0.009,
+   "headwind": false
+  },
+  {
+   "industry": "電器電纜",
+   "n": 18,
+   "ret_1w": -0.0113,
+   "ret_1m": -0.0103,
+   "headwind": false
+  },
+  {
+   "industry": "水泥工業",
+   "n": 7,
+   "ret_1w": -0.0181,
+   "ret_1m": -0.0114,
+   "headwind": false
+  },
+  {
+   "industry": "化學生技醫療",
+   "n": 37,
+   "ret_1w": -0.0146,
+   "ret_1m": -0.0119,
+   "headwind": false
+  },
+  {
+   "industry": "其他電子業",
+   "n": 53,
+   "ret_1w": -0.025,
+   "ret_1m": -0.0156,
+   "headwind": false
+  },
+  {
+   "industry": "化學工業",
+   "n": 42,
+   "ret_1w": -0.0238,
+   "ret_1m": -0.0164,
+   "headwind": false
+  },
+  {
+   "industry": "通信網路業",
+   "n": 93,
+   "ret_1w": -0.0217,
+   "ret_1m": -0.0167,
+   "headwind": false
+  },
+  {
+   "industry": "光電業",
+   "n": 127,
+   "ret_1w": -0.032,
+   "ret_1m": -0.0181,
+   "headwind": false
+  },
+  {
+   "industry": "電機機械",
+   "n": 106,
+   "ret_1w": -0.022,
+   "ret_1m": -0.0182,
+   "headwind": false
+  },
+  {
+   "industry": "其他電子類",
+   "n": 47,
+   "ret_1w": -0.0293,
+   "ret_1m": -0.0192,
+   "headwind": false
+  },
+  {
+   "industry": "貿易百貨",
+   "n": 37,
+   "ret_1w": -0.01,
+   "ret_1m": -0.0208,
+   "headwind": false
+  },
+  {
+   "industry": "生技醫療業",
+   "n": 118,
+   "ret_1w": -0.0102,
+   "ret_1m": -0.0212,
+   "headwind": false
+  },
+  {
+   "industry": "橡膠工業",
+   "n": 11,
+   "ret_1w": -0.0164,
+   "ret_1m": -0.0218,
+   "headwind": false
+  },
+  {
+   "industry": "紡織纖維",
+   "n": 57,
+   "ret_1w": -0.0096,
+   "ret_1m": -0.0219,
+   "headwind": false
+  },
+  {
+   "industry": "綠能環保",
+   "n": 14,
+   "ret_1w": -0.0121,
+   "ret_1m": -0.0221,
+   "headwind": true
+  },
+  {
+   "industry": "創新版股票",
+   "n": 13,
+   "ret_1w": 0.0042,
+   "ret_1m": -0.0222,
+   "headwind": false
+  },
+  {
+   "industry": "鋼鐵工業",
+   "n": 48,
+   "ret_1w": -0.0141,
+   "ret_1m": -0.0251,
+   "headwind": false
+  },
+  {
+   "industry": "食品工業",
+   "n": 32,
+   "ret_1w": -0.0101,
+   "ret_1m": -0.0254,
+   "headwind": false
+  },
+  {
+   "industry": "其他",
+   "n": 130,
+   "ret_1w": -0.0139,
+   "ret_1m": -0.0257,
+   "headwind": false
+  },
+  {
+   "industry": "觀光餐旅",
+   "n": 7,
+   "ret_1w": 0.0011,
+   "ret_1m": -0.0259,
+   "headwind": true
+  },
+  {
+   "industry": "電子零組件業",
+   "n": 220,
+   "ret_1w": -0.0311,
+   "ret_1m": -0.0263,
+   "headwind": false
+  },
+  {
+   "industry": "觀光事業",
+   "n": 43,
+   "ret_1w": -0.0089,
+   "ret_1m": -0.0264,
+   "headwind": true
+  },
+  {
+   "industry": "數位雲端",
+   "n": 12,
+   "ret_1w": -0.0083,
+   "ret_1m": -0.0284,
+   "headwind": false
+  },
+  {
+   "industry": "汽車工業",
+   "n": 34,
+   "ret_1w": -0.0182,
+   "ret_1m": -0.0332,
+   "headwind": false
+  },
+  {
+   "industry": "半導體業",
+   "n": 195,
+   "ret_1w": -0.0356,
+   "ret_1m": -0.0336,
+   "headwind": false
+  },
+  {
+   "industry": "電子商務業",
+   "n": 8,
+   "ret_1w": -0.008,
+   "ret_1m": -0.0351,
+   "headwind": false
+  },
+  {
+   "industry": "文化創意業",
+   "n": 27,
+   "ret_1w": -0.0147,
+   "ret_1m": -0.0421,
+   "headwind": true
+  },
+  {
+   "industry": "農業科技業",
+   "n": 4,
+   "ret_1w": -0.0275,
+   "ret_1m": -0.0424,
+   "headwind": false
+  },
+  {
+   "industry": "電腦及週邊設備業",
+   "n": 114,
+   "ret_1w": -0.0397,
+   "ret_1m": -0.0496,
+   "headwind": false
+  },
+  {
+   "industry": "運動休閒",
+   "n": 4,
+   "ret_1w": -0.0393,
+   "ret_1m": -0.0559,
+   "headwind": true
+  },
+  {
+   "industry": "創新板股票",
+   "n": 3,
+   "ret_1w": -0.0155,
+   "ret_1m": -0.0565,
+   "headwind": true
+  },
+  {
+   "industry": "電子通路業",
+   "n": 37,
+   "ret_1w": -0.0282,
+   "ret_1m": -0.065,
+   "headwind": false
+  }
+ ]
+}

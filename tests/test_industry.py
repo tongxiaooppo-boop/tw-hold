@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from screener.industry import add_industry_headwind, industry_headwind
+from screener.industry import add_industry_headwind, industry_headwind, industry_rotation
 
 _ASOF = pd.Timestamp("2026-09-07")
 
@@ -48,3 +48,24 @@ def test_無價格歷史_不炸():
     out = add_industry_headwind(pd.DataFrame({"ticker": ["1"], "industry": ["A"]}),
                                 None, {"1": "A"}, _ASOF)
     assert out.loc[0, "industry_headwind"] == False        # noqa: E712
+
+
+def test_族群動向_排序由高到低_且沿用逆風判定():
+    ph = _price_hist({"1": -0.22, "2": -0.18, "3": -0.25,   # A：崩（逆風）
+                      "4": 0.03, "5": -0.02, "6": 0.06,      # B：持平
+                      "7": 0.30, "8": 0.28, "9": 0.32})      # C：噴出
+    im = {"1": "A", "2": "A", "3": "A", "4": "B", "5": "B", "6": "B",
+          "7": "C", "8": "C", "9": "C"}
+    rot = industry_rotation(ph, im, _ASOF)
+    assert [r["industry"] for r in rot] == ["C", "B", "A"]
+    by_ind = {r["industry"]: r for r in rot}
+    assert by_ind["A"]["headwind"] is True
+    assert by_ind["B"]["headwind"] is False and by_ind["C"]["headwind"] is False
+    assert by_ind["A"]["n"] == 3
+
+
+def test_族群動向_樣本太小的產業不列():
+    ph = _price_hist({"1": 0.1, "2": 0.1, "3": 0.1, "4": -0.1, "5": -0.1})
+    im = {"1": "A", "2": "A", "3": "A", "4": "B", "5": "C"}   # B/C 各只有 1 檔
+    rot = industry_rotation(ph, im, _ASOF)
+    assert [r["industry"] for r in rot] == ["A"]
