@@ -524,6 +524,24 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .gz-chg.down{color:var(--thc-down);}
 .gz-chg.flat{color:var(--thc-faint);}
 .gz-pct{display:block;font-family:var(--thc-mono);font-size:.7rem;color:var(--thc-faint);margin-top:.15rem;}
+/* 總經羅盤——族群動向。刻意不用紅綠燈：排行順序本身就是訊號（上面領漲、
+   下面落後），量條只用單一中性色階＋透明度表大小，不分正負色；逆風是純
+   文字標籤，不是判斷色的燈號（跟 industry_headwind 那個既有旗標同語意）。 */
+.ir-table{width:100%;border-collapse:collapse;font-size:.86rem;margin-top:.4rem;}
+.ir-table th{text-align:left;font-weight:600;color:var(--thc-faint);font-size:.74rem;
+  padding:.3rem .5rem;border-bottom:1px solid var(--thc-line);}
+.ir-table th.num,.ir-table td.num{text-align:right;}
+.ir-table td{padding:.5rem;border-bottom:1px solid var(--thc-line);vertical-align:middle;}
+.ir-table tr:last-child td{border-bottom:none;}
+.ir-name{font-weight:600;color:var(--thc-ink);}
+.ir-n{color:var(--thc-faint);font-size:.76rem;}
+.ir-val{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;font-weight:600;
+  color:var(--thc-ink);}
+.ir-bar-wrap{display:inline-flex;align-items:center;gap:.4rem;justify-content:flex-end;width:100%;}
+.ir-bar{height:.5rem;border-radius:2px;background:var(--thc-accent);flex-shrink:0;}
+.ir-tag{display:inline-block;margin-left:.5rem;font-size:.7rem;color:var(--thc-soft);
+  background:var(--thc-surface2,var(--thc-line));border:1px solid var(--thc-line);
+  border-radius:4px;padding:.05rem .4rem;white-space:nowrap;}
 </style>
 """
 
@@ -1800,6 +1818,39 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
             f'<span class="gz-ticker">{symbol}</span></div>{body}</div>')
 
 
+def _industry_rotation_table(rows: list[dict]) -> str:
+    """族群動向表——排行本身就是訊號，不用紅綠燈（見上面 .ir-table CSS 註解）。
+    量條只用單一色階＋透明度表 |1月報酬| 的相對大小，逆風是純文字標籤。"""
+    if not rows:
+        return ""
+    max_abs = max((abs(r["ret_1m"]) for r in rows if r.get("ret_1m") is not None),
+                  default=0) or 1.0
+
+    def _row(r: dict) -> str:
+        w1 = r.get("ret_1w")
+        m1 = r.get("ret_1m")
+        w1_txt = f'{w1:+.1%}' if w1 is not None else "—"
+        m1_txt = f'{m1:+.1%}' if m1 is not None else "—"
+        pct = min(100, abs(m1) / max_abs * 100) if m1 is not None else 0
+        opacity = 0.35 + 0.5 * (abs(m1) / max_abs) if m1 is not None else 0
+        bar = (f'<span class="ir-bar" style="width:{pct * 0.5:.0f}px;opacity:{opacity:.2f}"></span>'
+               if m1 is not None else "")
+        tag = '<span class="ir-tag">近6月逆風</span>' if r.get("headwind") else ""
+        return (
+            '<tr>'
+            f'<td><span class="ir-name">{_esc(r["industry"])}</span>'
+            f'　<span class="ir-n">{r["n"]} 檔</span>{tag}</td>'
+            f'<td class="num"><span class="ir-val">{w1_txt}</span></td>'
+            f'<td class="num"><div class="ir-bar-wrap">{bar}'
+            f'<span class="ir-val">{m1_txt}</span></div></td>'
+            '</tr>')
+
+    return (
+        '<table class="ir-table"><thead><tr>'
+        '<th>產業</th><th class="num">近1週</th><th class="num">近1月</th>'
+        '</tr></thead><tbody>' + "".join(_row(r) for r in rows) + '</tbody></table>')
+
+
 def _macro_compass_page() -> None:
     """總經羅盤——台股上市/上櫃的 MA60/MA200 多空卡 + 國際指數/個股/總經數字卡
     （2026-09-13 起）。頁首放「市場情緒摘要」（固定句型代入數字，見
@@ -1880,6 +1931,20 @@ def _macro_compass_page() -> None:
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
     if tw_missing:
         st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
+
+    st.divider()
+    st.subheader("族群動向")
+    ir = _load("industry_rotation.json") or {}
+    ir_rows = ir.get("industries") or []
+    if ir_rows:
+        st.caption(f"資料日 {ir.get('asof', '—')}　·　依近1月中位報酬排序（上面領漲、下面落後），"
+                   "不做多空判斷。「近6月逆風」沿用既有的產業逆風判定（門檻是6個月報酬，"
+                   "跟表上顯示的1週/1月是不同窗口，可能短線翻正但長線仍標記逆風，不是矛盾）。")
+        st.markdown(_industry_rotation_table(ir_rows), unsafe_allow_html=True)
+        st.caption("樣本數 < 3 檔的產業不列（中位數沒意義）。報酬皆用還原股價的中位數，"
+                   "不是市值加權指數。")
+    else:
+        st.info("還沒有族群動向產出——`build_factors.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
     st.subheader("國際指數")

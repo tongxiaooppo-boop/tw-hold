@@ -26,16 +26,16 @@ REL_CUT = -0.08          # 且比全市場中位數再差這麼多
 MIN_N = 3               # 產業至少要這麼多檔才判
 
 
-def _six_month_return(price_hist: pd.DataFrame, asof: pd.Timestamp,
-                      months: int = MONTHS) -> pd.Series:
-    """每檔近 `months` 個月的還原報酬 → index=ticker。缺任一端點的檔留 NaN。"""
+def _lookback_return(price_hist: pd.DataFrame, asof: pd.Timestamp,
+                     offset: pd.DateOffset, label: str) -> pd.Series:
+    """每檔近 `offset` 的還原報酬 → index=ticker。缺任一端點的檔留 NaN。"""
     if price_hist is None or price_hist.empty:
         return pd.Series(dtype=float)
     d = price_hist.copy()
     d["date"] = pd.to_datetime(d["date"])
     d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
     asof = pd.Timestamp(asof).normalize()
-    start = asof - pd.DateOffset(months=months)
+    start = asof - offset
     d = d[d["date"] <= asof].sort_values("date")
 
     def _ret(g: pd.DataFrame) -> float:
@@ -45,7 +45,12 @@ def _six_month_return(price_hist: pd.DataFrame, asof: pd.Timestamp,
         p0, p1 = past["close"].iloc[-1], g["close"].iloc[-1]
         return p1 / p0 - 1.0 if p0 and p0 > 0 else np.nan
 
-    return d.groupby("ticker").apply(_ret, include_groups=False).rename("ret_6m")
+    return d.groupby("ticker").apply(_ret, include_groups=False).rename(label)
+
+
+def _six_month_return(price_hist: pd.DataFrame, asof: pd.Timestamp,
+                      months: int = MONTHS) -> pd.Series:
+    return _lookback_return(price_hist, asof, pd.DateOffset(months=months), "ret_6m")
 
 
 def industry_headwind(price_hist: pd.DataFrame, ind_map: dict[str, str],
@@ -70,6 +75,40 @@ def industry_headwind(price_hist: pd.DataFrame, ind_map: dict[str, str],
         if med < ABS_CUT and (med - market_median) < REL_CUT:
             out[ind] = {"median_ret": round(med, 4), "n": int(len(g)),
                         "vs_market": round(med - market_median, 4)}
+    return out
+
+
+def industry_rotation(price_hist: pd.DataFrame, ind_map: dict[str, str],
+                      asof: pd.Timestamp) -> list[dict]:
+    """族群動向：每個產業近1週/1月中位報酬排行，由高到低。
+
+    跟 `industry_headwind()` 是同一份底層資料的兩種呈現層次——這裡給全貌
+    （所有產業都列），逆風只是排行墊底、又符合那兩條件（6個月夠差＋落後大盤
+    夠多）的那幾個，用既有判定結果標一個文字欄位，不重新發明門檻。
+    """
+    if price_hist is None or price_hist.empty:
+        return []
+    w1 = _lookback_return(price_hist, asof, pd.DateOffset(weeks=1), "ret_1w")
+    m1 = _lookback_return(price_hist, asof, pd.DateOffset(months=1), "ret_1m")
+    df = pd.concat([w1, m1], axis=1)
+    df["industry"] = df.index.map(lambda t: ind_map.get(t))
+    df = df.dropna(subset=["industry"])
+    if df.empty:
+        return []
+    hw = industry_headwind(price_hist, ind_map, asof)
+
+    out = []
+    for ind, g in df.groupby("industry"):
+        n = int(g["ret_1m"].notna().sum())
+        if n < MIN_N:
+            continue
+        out.append({
+            "industry": ind, "n": n,
+            "ret_1w": None if g["ret_1w"].isna().all() else round(float(g["ret_1w"].median()), 4),
+            "ret_1m": None if g["ret_1m"].isna().all() else round(float(g["ret_1m"].median()), 4),
+            "headwind": ind in hw,
+        })
+    out.sort(key=lambda r: (r["ret_1m"] is None, -(r["ret_1m"] or 0)))
     return out
 
 
