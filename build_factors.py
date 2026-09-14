@@ -318,7 +318,7 @@ def screen_all() -> dict:
              else pd.Timestamp.now())
     val = add_industry_headwind(val, price_hist, ind, _asof)
     dep = add_industry_headwind(dep, price_hist, ind, _asof)
-    # 族群動向：全市場產業排行（跟上面逆風旗標同一份底層資料，總經羅盤頁用）
+    # 族群動向：全市場產業排行（跟上面逆風旗標同一份底層資料，總經導航頁用）
     rotation = industry_rotation(price_hist, ind, _asof)
 
     # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
