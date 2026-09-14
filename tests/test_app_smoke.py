@@ -26,9 +26,9 @@ def test_app_不丟例外():
 
 def test_三清單分頁都有標題():
     # 改成 session_state 導覽後只渲染選中分頁——逐頁切過去確認標題都在。
+    # 預設分頁是「總經導航」（NAV[0]），三清單要切過去才看得到。
     at = _run()
-    assert "價值清單" in " ".join(h.value for h in at.header)
-    for label, want in [("定存", "定存清單"), ("長波段", "長波段候選池")]:
+    for label, want in [("價值", "價值清單"), ("定存", "定存清單"), ("長波段", "長波段候選池")]:
         at.radio(key="_nav").set_value(label).run()
         assert want in " ".join(h.value for h in at.header)
 
@@ -90,6 +90,7 @@ def test_切頁保留代號():
 
 def test_代號連結指向個股查詢():
     at = _run()
+    at.radio(key="_nav").set_value("價值").run()          # 預設分頁「總經導航」沒有代號卡片
     md = " ".join(m.value for m in at.markdown)
     assert 'href="?code=' in md and 'target="_self"' in md
 

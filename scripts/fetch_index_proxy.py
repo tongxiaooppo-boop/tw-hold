@@ -14,7 +14,7 @@ append 的複雜度），完全不碰 data_pack 那條依賴鏈。
 
 ## 用途
 
-只餵 `reference/market_status.py`（總經羅盤的 MA60/MA200 顯示卡），**不是**
+只餵 `reference/market_status.py`（總經導航的 MA60/MA200 顯示卡），**不是**
 `reference/regime.py` 用的大盤代理，兩者判斷邏輯本來就已經脫鉤。
 
 ## 排程

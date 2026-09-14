@@ -48,7 +48,7 @@ jobs:
         run: python fetch_bundle.py
 
       # 006201（元大富櫃50，唯一追蹤櫃買指數的 ETF）不在 tw-swing data_pack 的
-      # universe 裡，獨立向 FinMind 抓（總經羅盤 MA60/MA200 卡用）。跟三清單
+      # universe 裡，獨立向 FinMind 抓（總經導航 MA60/MA200 卡用）。跟三清單
       # 無關，失敗不擋主線——見 scripts/fetch_index_proxy.py 檔頭。
       - name: 櫃買代理 006201 快照
         continue-on-error: true

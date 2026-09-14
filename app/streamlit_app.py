@@ -27,8 +27,7 @@ for _p in (str(REPO), str(REPO / "app")):
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
 
 DISCLAIMER = (
-    "**這不是投資建議。** tw-hold 是決策支援工具：給候選標的 + 判斷依據（支持／反對／"
-    "風險量化），**買賣由你決定**。所有數字可能有誤、可能過期、有生存者偏差；"
+    "**這不是投資建議。** 只給候選標的與判斷依據，**買賣由你決定**；數字可能有誤或過期，"
     "verdict／買價是規則算出來的，不是預測。真金下單前自己再查一次。"
 )
 SWING_DISCLAIMER = (
@@ -178,6 +177,15 @@ BACKTEST_NOTES = {
             "**結論當上界看待，真實會更差**。完整報告：`docs/reports/backtest_longswing_20260912.md`。"
             "\n\n" + _WHY_0050),
     },
+    "short": {
+        "logic": ("這份清單完全由 **tw-swing**（另一個獨立維護的專案）自己的規則引擎產生——"
+                 "tw-hold 只原樣轉呈，不重新計算、不做自己的回測，也不修改任何欄位。"
+                 "表上每一格：`pool_label`＝命中哪組規則、`進場`／`停損`＝進場價與停損參考位、"
+                 "`風險%`／`部位%`＝那個停損位換算出的部位風險與建議部位大小、`RS`＝相對強度"
+                 "百分位、`量比`＝成交量對均量的倍數、`觸發日`＝訊號出現的那天。"
+                 "規則本身的邏輯與回測結果記在 tw-swing 自己的文件裡，這裡不重複收錄——"
+                 "兩邊各自獨立維護，重複收錄反而容易其中一邊先過期。"),
+    },
 }
 
 
@@ -185,11 +193,13 @@ def _strategy_backtest_expander(kind: str) -> None:
     info = BACKTEST_NOTES.get(kind)
     if not info:
         return
-    with st.expander("📖 策略邏輯 + 回測結果（點開看）"):
+    title = "📖 策略邏輯 + 回測結果（點開看）" if "backtest" in info else "📖 策略規格說明（點開看）"
+    with st.expander(title):
         st.markdown("**策略怎麼做的**")
         st.markdown(info["logic"])
-        st.markdown("**回測結果**")
-        st.markdown(info["backtest"])
+        if "backtest" in info:
+            st.markdown("**回測結果**")
+            st.markdown(info["backtest"])
 
 
 def _fmt(field: str, v) -> str:
@@ -474,7 +484,7 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
   .thc-big{font-size:1.65rem;}
   .thc-tk{font-size:1.1rem;}
 }
-/* 總經羅盤——市場多空卡（方案 A：雙欄卡片，MA60/MA200 兩列並陳）。
+/* 總經導航——市場多空卡（方案 A：雙欄卡片，MA60/MA200 兩列並陳）。
    跟 reference.regime 的判斷語意色共用同一組 token，但這裡是獨立判斷（見
    reference/market_status.py 檔頭），不要混成同一件事。 */
 .mc-grid{display:grid;gap:.7rem;grid-template-columns:1fr;margin-top:.3rem;}
@@ -505,7 +515,7 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .mc-verdict.neutral{color:var(--thc-neutral);}
 .mc-stat{font-family:var(--thc-mono);font-size:.76rem;color:var(--thc-soft);
   text-align:right;font-variant-numeric:tabular-nums;}
-/* 總經羅盤——美股數字卡（VIX/殖利率/美元指數/個股）。這些不是「市場多空」，
+/* 總經導航——美股數字卡（VIX/殖利率/美元指數/個股）。這些不是「市場多空」，
    不套 good/warn/neutral 判斷色；漲跌用台股慣例的 --thc-up/--thc-down
    （紅漲綠跌，真價格變動才用這組色，不跟判斷色混）。 */
 .gz-grid{display:grid;gap:.6rem;grid-template-columns:repeat(2,1fr);margin-top:.3rem;}
@@ -524,7 +534,7 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .gz-chg.down{color:var(--thc-down);}
 .gz-chg.flat{color:var(--thc-faint);}
 .gz-pct{display:block;font-family:var(--thc-mono);font-size:.7rem;color:var(--thc-faint);margin-top:.15rem;}
-/* 總經羅盤——族群動向。刻意不用紅綠燈：排行順序本身就是訊號（上面領漲、
+/* 總經導航——族群動向。刻意不用紅綠燈：排行順序本身就是訊號（上面領漲、
    下面落後），量條只用單一中性色階＋透明度表大小，不分正負色；逆風是純
    文字標籤，不是判斷色的燈號（跟 industry_headwind 那個既有旗標同語意）。 */
 .ir-table{width:100%;border-collapse:collapse;font-size:.86rem;margin-top:.4rem;}
@@ -549,11 +559,11 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 def _nav_badge_css(nav: str) -> str:
     """目前分頁文字後面疊一個小雷達徽章（同心圈＋掃描扇形＋中心點）。
 
-    - 用 `nth-of-type` 對到選中的那個 `stRadioOption`（react-aria 把 7 個選項渲染成
-      radiogroup 底下 7 個相鄰 `<label>`，順序由 `NAV` 保證），不用去猜 BaseWeb 內部
-      的 checked 狀態怎麼反映在 DOM 上。
-    - 掃描扇形照 NAV 在「8 方位環」（含未來第 8 個美股焦點）上的順位轉：
-      價值=正上方(0°)，之後每項順時針 +45°。
+    - 用 `nth-of-type` 對到選中的那個 `stRadioOption`（react-aria 把 `NAV` 幾個選項
+      渲染成 radiogroup 底下對應數量的相鄰 `<label>`，順序由 `NAV` 保證），不用去猜
+      BaseWeb 內部的 checked 狀態怎麼反映在 DOM 上。
+    - 掃描扇形照 NAV 在「8 方位環」上的順位轉：`NAV[0]`＝正上方(0°)，
+      之後每項順時針 +45°（跟著 `NAV` 排序自動轉，不寫死是哪一頁）。
     - 🔴 圓圈的半徑一定要寫死 `circle 23px`：不寫的話 radial-gradient 預設是
       farthest-corner（23√2 = 32.5px），百分比停點會算到盒子外——外圈整圈被
       `border-radius:50%` 裁掉、內圈只剩 0.5px（2026-09-11 修）。
@@ -1024,6 +1034,7 @@ def _shortterm_page() -> None:
     if data is None:
         st.error("拉不到 tw-swing 每日清單（網路或來源暫時無法存取）。"
                  "可直接看 https://tw-swing.pages.dev/share-latest")
+        _strategy_backtest_expander("short")
         _disclaimer(SHORT_DISCLAIMER)
         return
 
@@ -1052,6 +1063,7 @@ def _shortterm_page() -> None:
                    "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
         for d in data.get("disclaimer", []):
             st.caption("· " + d)
+        _strategy_backtest_expander("short")
         _disclaimer(SHORT_DISCLAIMER)
         return
 
@@ -1077,6 +1089,7 @@ def _shortterm_page() -> None:
                "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
     for d in data.get("disclaimer", []):
         st.caption("· " + d)
+    _strategy_backtest_expander("short")
     _disclaimer(SHORT_DISCLAIMER)
 
 
@@ -1818,6 +1831,21 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
             f'<span class="gz-ticker">{symbol}</span></div>{body}</div>')
 
 
+def _industry_rotation_summary(rows: list[dict]) -> str:
+    """族群動向頁首一句話——固定句型代入數字，跟頁首「市場情緒摘要」同精神：
+    只講事實（誰領漲/誰落後/幾個逆風），不做推論、不下多空判斷。"""
+    ranked = [r for r in rows if r.get("ret_1m") is not None]
+    if not ranked:
+        return ""
+    top, bottom = ranked[0], ranked[-1]
+    n_hw = sum(1 for r in rows if r.get("headwind"))
+    parts = [f"近1月領漲：{top['industry']}（{top['ret_1m']:+.1%}）"]
+    if bottom["industry"] != top["industry"]:
+        parts.append(f"落後最多：{bottom['industry']}（{bottom['ret_1m']:+.1%}）")
+    parts.append(f"{n_hw} 個產業符合近6月逆風判定" if n_hw else "目前沒有產業符合近6月逆風判定")
+    return "　·　".join(parts)
+
+
 def _industry_rotation_table(rows: list[dict]) -> str:
     """族群動向表——排行本身就是訊號，不用紅綠燈（見上面 .ir-table CSS 註解）。
     量條只用單一色階＋透明度表 |1月報酬| 的相對大小，逆風是純文字標籤。"""
@@ -1852,7 +1880,7 @@ def _industry_rotation_table(rows: list[dict]) -> str:
 
 
 def _macro_compass_page() -> None:
-    """總經羅盤——台股上市/上櫃的 MA60/MA200 多空卡 + 國際指數/個股/總經數字卡
+    """總經導航——台股上市/上櫃的 MA60/MA200 多空卡 + 國際指數/個股/總經數字卡
     （2026-09-13 起）。頁首放「市場情緒摘要」（固定句型代入數字，見
     `reference/market_sentiment.py`——不是 AI，也不做任何跨指標的推論；台股/
     國際情勢兩段分開顯示，不接成一段話），方法論/資料源說明集中放頁尾一個
@@ -1870,7 +1898,7 @@ def _macro_compass_page() -> None:
     from reference import global_macro, index_proxy, market_sentiment
     from reference.market_status import latest_change, market_card
 
-    st.header("總經羅盤", anchor="top")
+    st.header("總經導航", anchor="top")
 
     got = _ensure_bundle()
     if not any(got.values()):
@@ -1937,10 +1965,15 @@ def _macro_compass_page() -> None:
     ir = _load("industry_rotation.json") or {}
     ir_rows = ir.get("industries") or []
     if ir_rows:
+        st.markdown(f"**{_industry_rotation_summary(ir_rows)}**")
         st.caption(f"資料日 {ir.get('asof', '—')}　·　依近1月中位報酬排序（上面領漲、下面落後），"
                    "不做多空判斷。「近6月逆風」沿用既有的產業逆風判定（門檻是6個月報酬，"
                    "跟表上顯示的1週/1月是不同窗口，可能短線翻正但長線仍標記逆風，不是矛盾）。")
-        st.markdown(_industry_rotation_table(ir_rows), unsafe_allow_html=True)
+        top, rest = ir_rows[:10], ir_rows[10:]
+        st.markdown(_industry_rotation_table(top), unsafe_allow_html=True)
+        if rest:
+            with st.expander(f"看其他 {len(rest)} 個產業"):
+                st.markdown(_industry_rotation_table(rest), unsafe_allow_html=True)
         st.caption("樣本數 < 3 檔的產業不列（中位數沒意義）。報酬皆用還原股價的中位數，"
                    "不是市值加權指數。")
     else:
@@ -2066,7 +2099,7 @@ def _macro_compass_page() -> None:
 
 
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
-NAV = ["價值", "定存", "長波段", "短線", "個股查詢", "多軌體檢", "主動式 ETF", "總經羅盤"]
+NAV = ["總經導航", "短線", "長波段", "價值", "定存", "個股查詢", "多軌體檢", "主動式 ETF"]
 
 
 def _route() -> None:
@@ -2089,8 +2122,6 @@ def main() -> None:
     # 寫回去了，所以這裡就能知道等一下會選中哪一頁，徽章 CSS 才併得進同一次注入。
     _inject_css(st.session_state.get("_nav") or NAV[0])
     st.title(f"📡 {APP_NAME}")
-    st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
-               + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
     nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
                    label_visibility="collapsed")
@@ -2111,6 +2142,10 @@ def main() -> None:
         _active_etf_page()
     else:
         _macro_compass_page()
+
+    st.divider()
+    st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
+               + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
 
 if __name__ == "__main__":
