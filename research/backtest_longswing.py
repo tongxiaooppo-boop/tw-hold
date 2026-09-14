@@ -74,6 +74,7 @@ LIMIT_WINDOW = 3                # limit_at_close：幾個交易日內沒成交�
 REVENUE_LAG_DAYS = 9            # 月營收公告落後：涵蓋月次月 1 日 + 9 天 ≈ 次月 10 日法定期限
 OOS_SPLIT = pd.Timestamp("2022-01-01")
 TRAIL_ATR_MULT = 2.0            # 移動停損倍數，比照 tw-swing `H2-trailatr2`（見下方 simulate() 說明）
+TRAIL_ATR_MULT_TIGHT = 1.5       # 2026-09-14「市況緊縮」變體：空頭/震盪週收緊，多頭維持 TRAIL_ATR_MULT
 
 
 def _bare(s: pd.Series) -> pd.Series:
@@ -223,7 +224,7 @@ def weekly_candidates(qf, rev_st, inst20, panels, weeks, universe) -> dict[pd.Ti
 # ─────────────────────────── 逐檔事件模擬 ───────────────────────────
 
 def simulate(entry_mode: str, weeks, cand_by_week, panels, rev_st, qf_eps_state, trading_days,
-            trailing: bool = False):
+            trailing: bool = False, trail_mult_by_week: dict | None = None):
     """回傳 `(交易清單, 放棄筆數)`。交易清單元素：`{ticker, entry_date, entry_price,
     exit_date, exit_price, exit_reason, stop, still_open}`。放棄筆數＝訊號成交時
     價格已經跌破當初算的停損位（不合理進場，直接放棄，見 main() 呼叫端說明）。
@@ -234,10 +235,15 @@ def simulate(entry_mode: str, weeks, cand_by_week, panels, rev_st, qf_eps_state,
     正常拉回時價格常態性跌破自己的 50MA，公式重算會瞬間跳到收盤價之上、幾乎每次都秒殺，
     見 HANDOFF 對話紀錄）。改照 tw-swing `H2-trailatr2` 實際的作法（`twswing/backtest/
     engine.py` `run_high - trail_atr × 進場日 ATR14`）：追蹤「進場後最高價」，停損＝
-    `run_high − TRAIL_ATR_MULT × atr0`（`atr0` 是進場當天的 ATR14，固定不變，只有
+    `run_high − mult × atr0`（`atr0` 是進場當天的 ATR14，固定不變，只有
     `run_high` 會變，且只漲不跌）——完全不碰 50MA，天生只會往上調，沒有上面那種公式
     暴衝問題。`trailing=False`＝PRD §5.2.3 字面規格，停損進場當下算一次、之後固定不動
-    （比照使用者「掛券商停損單」的實務動作）。"""
+    （比照使用者「掛券商停損單」的實務動作）。
+
+    `trail_mult_by_week`：`{week -> mult}`，None 或查無該週時退回 `TRAIL_ATR_MULT`
+    （固定倍數）。每週檢查時用**當週**的倍數重算 `cur_stop`——倍數改變只影響「用多大
+    的緩衝去追」，不會讓已經抬高的停損位倒退（`max(pos["stop"], ...)` 保證單調不降），
+    比照 2026-09-14「市況緊縮：空頭/震盪收窄到 1.5×，多頭維持 2.0×」的測試。"""
     close, openp, low, high = panels["close"], panels["open"], panels["low"], panels["high"]
     trend_cnt, risk_stop_panel, atr_panel = panels["trend_cnt"], panels["risk_stop"], panels["atr"]
     td = trading_days
@@ -312,7 +318,9 @@ def simulate(entry_mode: str, weeks, cand_by_week, panels, rev_st, qf_eps_state,
             # 移動停損：用「上次檢查前」的 run_high 抬停損（跟 tw-swing engine.py 同一個
             # 「收盤後才更新」精神——本週的新高不能拿來抬本週自己要用的停損，否則是未來函數）。
             if trailing and pos.get("atr0"):
-                cur_stop = max(pos["stop"], pos["run_high"] - TRAIL_ATR_MULT * pos["atr0"])
+                mult = (trail_mult_by_week.get(wk, TRAIL_ATR_MULT)
+                       if trail_mult_by_week is not None else TRAIL_ATR_MULT)
+                cur_stop = max(pos["stop"], pos["run_high"] - mult * pos["atr0"])
             else:
                 cur_stop = pos["stop"]
             # 停損：只掃「上次檢查後到本週五」的新區間（逐日看盤中低點，避免每週重掃全歷史）
@@ -443,31 +451,55 @@ def main() -> int:
     counts = pd.Series({wk: len(s) for wk, s in cand_by_week.items()})
     print(f"  候選數：中位數 {counts.median():.0f}｜空白週 {(counts == 0).mean():.0%}", flush=True)
 
-    # 🆕 CANSLIM「M」（大盤方向）當硬性 gate 測試（2026-09-14，使用者要求「依市況重新
-    # 做過」）——只在大盤（0050）處於 `reference.regime` 判定的「多頭」那週才允許
-    # *新進場*，已經持有的部位不受影響（現實中不會因為市況轉弱就強制平倉既有部位，
-    # 那是另一個問題）。跟 app 端顯示用的 context flag 是兩件事：這裡是真的擋掉進場，
-    # 用來回答「如果真的拿 M 當硬門檻會不會比較好」。
+    # 市況進場篩選（2026-09-14，HANDOFF_2026-09-14b.md §4：「市況進場 × 移動停損」
+    # 組合矩陣，補上「M gate + 移動停損」「更軟的市況篩選」這兩個沒測過的空格）。
+    # 只影響*新進場*，已持有部位不受影響（現實中不會因市況轉弱就強制平倉既有部位）。
     idx_close_full = idx_close.reindex(td).ffill()
     week_regime = regime_at(pd.Series(weeks), idx_close_full)
     week_regime.index = weeks
     week_regime = week_regime.where(week_regime.notna(), None)   # pd.NA → None，避免三態比較歧義
-    cand_by_week_mgate = {wk: (s if week_regime.get(wk) == "bull" else set())
-                         for wk, s in cand_by_week.items()}
-    n_blocked_weeks = int((week_regime != "bull").sum())
-    print(f"  M-gate（只留多頭週）：{n_blocked_weeks}/{len(weeks)} 週被擋掉新進場"
-         f"（{n_blocked_weeks / len(weeks):.0%}）", flush=True)
 
-    RUNS = [("next_open", "next_open", False, cand_by_week),
-           ("limit_at_close", "limit_at_close", False, cand_by_week),
-           ("next_open_trailing", "next_open", True, cand_by_week),
-           ("next_open_mgate_bull", "next_open", False, cand_by_week_mgate)]
+    cand_by_week_bull = {wk: (s if week_regime.get(wk) == "bull" else set())
+                        for wk, s in cand_by_week.items()}
+    cand_by_week_notbear = {wk: (s if week_regime.get(wk) != "bear" else set())
+                           for wk, s in cand_by_week.items()}
+    n_bull = int((week_regime == "bull").sum())
+    n_bear = int((week_regime == "bear").sum())
+    print(f"  市況週數：多頭 {n_bull}/{len(weeks)}（{n_bull / len(weeks):.0%}）｜"
+         f"空頭 {n_bear}/{len(weeks)}（{n_bear / len(weeks):.0%}）——"
+         f"bull_only 擋掉 {len(weeks) - n_bull} 週、not_bear 擋掉 {n_bear} 週的新進場",
+         flush=True)
+
+    # 🆕 市況緊縮移動停損（HANDOFF 使用者 2026-09-14 拍板要測）：空頭/震盪週收緊到
+    # TRAIL_ATR_MULT_TIGHT，多頭維持 TRAIL_ATR_MULT——只影響每週重算 `cur_stop` 用的
+    # 倍數，停損位本身仍然只漲不跌（simulate() 的 `max(pos["stop"], ...)`）。
+    trail_mult_tight = {wk: (TRAIL_ATR_MULT if week_regime.get(wk) == "bull"
+                             else TRAIL_ATR_MULT_TIGHT) for wk in weeks}
+
+    REGIME_FILTERS = [("none", cand_by_week), ("bull", cand_by_week_bull),
+                     ("notbear", cand_by_week_notbear)]
+    # 舊 key 名沿用（跟 20260912 報告、既有 CSV 檔名對得起來），新增的三格用
+    # `next_open_{市況}_{停損}` 命名。
+    KEY_ALIAS = {("none", "fixed"): "next_open", ("none", "trailing"): "next_open_trailing",
+                ("bull", "fixed"): "next_open_mgate_bull"}
+
+    RUNS = [("limit_at_close", "limit_at_close", False, cand_by_week, None)]
+    for rkey, cbw in REGIME_FILTERS:
+        for skey, trailing in (("fixed", False), ("trailing", True)):
+            key = KEY_ALIAS.get((rkey, skey), f"next_open_{rkey}_{skey}")
+            RUNS.append((key, "next_open", trailing, cbw, None))
+    # 只在目前最佳格（not_bear）上疊加市況緊縮變體，不是全矩陣都測——這格已經是
+    # 「排除空頭週 + 移動 ATR 停損」最佳解，緊縮變體要回答的問題是「同一個進場篩選下，
+    # 停損倍數再依市況微調會不會更好」，跟其他進場篩選組合疊加緊縮不是這次的問題。
+    RUNS.append(("next_open_notbear_trailtight", "next_open", True,
+                cand_by_week_notbear, trail_mult_tight))
+
     results = {}
     abandoned = {}
-    for key, mode, trailing, cbw in RUNS:
+    for key, mode, trailing, cbw, trail_map in RUNS:
         print(f"模擬進出場（{key}）…", flush=True)
         trades, n_abandoned = simulate(mode, weeks, cbw, panels, rev_st, eps_neg, td,
-                                       trailing=trailing)
+                                       trailing=trailing, trail_mult_by_week=trail_map)
         curve = portfolio_curve(trades, panels["close"], td)
         results[key] = (trades, curve)
         abandoned[key] = n_abandoned
@@ -491,15 +523,33 @@ def main() -> int:
          f"- 候選池：中位數 {counts.median():.0f} 檔/週｜空白週 {(counts == 0).mean():.0%}"
          "（跟實驗 D 2026-09-11 的普查數字一致，見 candidate_pool_survey.md）", ""]
 
-    for mode, label in (("next_open", "次日開盤（無條件，PRD §5.2.3 字面規格：固定停損）"),
-                       ("limit_at_close", "限價於訊號收盤（買得到口徑，固定停損）"),
-                       ("next_open_trailing", "次日開盤 + 移動 ATR 停損（比照 tw-swing "
-                        "H2-trailatr2 的做法，非 PRD 原規格，只為了回答「是規格保守還是"
-                        "出場拖累」）"),
-                       ("next_open_mgate_bull", f"🆕 次日開盤 + CANSLIM「M」硬性 gate"
-                        f"（只在大盤多頭週才新進場，{n_blocked_weeks}/{len(weeks)} 週"
-                        f"（{n_blocked_weeks / len(weeks):.0%}）被擋掉新進場，已持有部位"
-                        "不受影響；固定停損，跟 next_open 對照才看得出 M gate 本身的效果）")):
+    REGIME_LABEL = {"none": "不限市況", "bull": "只在多頭週新進場（M gate）",
+                   "notbear": "排除空頭週新進場（多頭+震盪皆可）"}
+    STOP_LABEL = {"fixed": "固定停損", "trailing": "移動 ATR 停損"}
+    RUN_LABELS = [("next_open", "次日開盤（無條件，PRD §5.2.3 字面規格：固定停損）"),
+                 ("limit_at_close", "限價於訊號收盤（買得到口徑，固定停損）"),
+                 ("next_open_trailing", "次日開盤 + 移動 ATR 停損（比照 tw-swing "
+                  "H2-trailatr2 的做法，非 PRD 原規格，只為了回答「是規格保守還是"
+                  "出場拖累」）"),
+                 ("next_open_mgate_bull", f"次日開盤 + CANSLIM「M」硬性 gate"
+                  f"（只在大盤多頭週才新進場，{len(weeks) - n_bull}/{len(weeks)} 週"
+                  f"（{(len(weeks) - n_bull) / len(weeks):.0%}）被擋掉新進場，已持有部位"
+                  "不受影響；固定停損，跟 next_open 對照才看得出 M gate 本身的效果）")]
+    existing_keys = {k for k, _ in RUN_LABELS}
+    for rkey, _ in REGIME_FILTERS:
+        for skey in ("fixed", "trailing"):
+            key = KEY_ALIAS.get((rkey, skey), f"next_open_{rkey}_{skey}")
+            if key in existing_keys:
+                continue
+            RUN_LABELS.append((key, f"🆕 次日開盤 + {REGIME_LABEL[rkey]} + {STOP_LABEL[skey]}"
+                              "（市況進場 × 移動停損組合矩陣，HANDOFF_2026-09-14b.md §4）"))
+    RUN_LABELS.append(("next_open_notbear_trailtight",
+                      f"🆕 次日開盤 + 排除空頭週新進場 + 市況緊縮移動停損（多頭 {TRAIL_ATR_MULT}×"
+                      f"ATR14、空頭/震盪收緊到 {TRAIL_ATR_MULT_TIGHT}×ATR14——在目前最佳格"
+                      "（排除空頭週+移動停損）上疊加，回答「同一個進場篩選下停損倍數依市況"
+                      "微調會不會更好」，使用者 2026-09-14 拍板要測）"))
+
+    for mode, label in RUN_LABELS:
         trades, curve = results[mode]
         st = stats(curve)
         completed = [t for t in trades if not t["still_open"]]
@@ -558,9 +608,9 @@ def main() -> int:
           "沒有套用 tw-hold `reference/corporate_actions.py` 那份手動面額變更/分割對照表——"
           "兩邊上游各自的還原品質可能不完全一致，跟 v1 產品頁看到的價格未必逐檔一致。", ""]
 
-    out_md = OUT / "backtest_longswing_20260912.md"
+    out_md = OUT / "backtest_longswing_20260914.md"
     out_md.write_text("\n".join(md), encoding="utf-8")
-    for mode, _, _, _ in RUNS:
+    for mode, _, _, _, _ in RUNS:
         trades, _ = results[mode]
         pd.DataFrame(trades).to_csv(OUT / f"backtest_longswing_{mode}.csv", index=False)
 
