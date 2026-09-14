@@ -7,6 +7,12 @@
 ⚠️ 研究腳本不是產品碼——直接 import tw-swing 的 twswing.value / twswing.data。
 ⚠️ 生存者偏差：universe = 今天的前 ~514 大（data/fundamentals），拿它回掃
    2016 等於已知誰活到今天。報告要寫明、結論當上界。
+⚠️ 2026-09-14：市況判斷改吃 tw-hold 自己的 reference/regime.py（跟
+   research/backtest_longswing.py 統一），不再直接吃 twswing.data.regime，
+   避免兩支腳本各自 import 到不同版本卻沒有錯誤訊息。
+⚠️ twswing.value（factors/loader）已被 tw-swing 那邊刪除（搬進 tw-hold 了），
+   這支腳本目前應該跑不動——只有要重跑實驗D本身時才需要處理，這次的大規模
+   回測不依賴這支腳本。
 """
 
 from __future__ import annotations
@@ -19,13 +25,14 @@ import pandas as pd
 
 TWSWING = Path(r"d:\g\claude\tw-swing")
 sys.path.insert(0, str(TWSWING / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from twswing.data import fundamentals as fd
 from twswing.data import market as mkt
-from twswing.data import regime as rg
 from twswing.data import store
 from twswing.value import factors, loader
+from reference import regime as rg
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "reports"
 OUT.mkdir(parents=True, exist_ok=True)

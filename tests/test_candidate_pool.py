@@ -24,6 +24,13 @@ def _flat_index(n: int = 400):
     return pd.DataFrame({"date": dates, "close": 100.0})
 
 
+def _bear_index(n: int = 400, start: float = 150.0, drift: float = -0.004):
+    """跌破 MA200 + 60 日報酬 < -5%，觸發 `reference.regime` 的空頭判定。"""
+    dates = pd.date_range(ASOF - pd.Timedelta(days=n * 2), ASOF, freq="B")[-n:]
+    close = start * (1 + drift) ** np.arange(len(dates))
+    return pd.DataFrame({"date": dates, "close": close})
+
+
 def _qf(ticker: str, eps_now: float = 3.0, eps_yoy_ago: float = 1.0,
         roe: float = 0.25, fscore: float = 8, gm: float = 0.3):
     rows = []
@@ -110,6 +117,23 @@ def test_revenue_yoy_新長表_算加速():
     assert abs(up.loc["1001", "revenue_yoy"] - 0.3) < 1e-6
     down = revenue_yoy(_revenue_hist("1001", yoy=0.3, accel=False))
     assert down.loc["1001", "revenue_accel"] == False       # noqa: E712
+
+
+def test_build_pool_大盤空頭週不顯示新候選():
+    """2026-09-14 拍板的市況進場門檻：股票本身條件全過，但大盤（0050）判定空頭時
+    候選池整批回空——不是股票本身變差，是這週不開放新進場。"""
+    from screener.candidate_pool import market_regime_ok
+    assert market_regime_ok(_bear_index(), ASOF) is False
+    pool = build_candidate_pool(
+        _qf("1001"), _uptrend_prices("1001"), _bear_index(),
+        _chips("1001"), _revenue("1001"), universe={"1001"}, asof=ASOF)
+    assert pool == []
+
+
+def test_build_pool_大盤震盪週仍顯示新候選():
+    """市況門檻只排除空頭，震盪（`_flat_index`）不擋——比照 not_bear，不是 bull_only。"""
+    from screener.candidate_pool import market_regime_ok
+    assert market_regime_ok(_flat_index(), ASOF) is True
 
 
 def test_build_pool_新長表營收_進池且帶accel():

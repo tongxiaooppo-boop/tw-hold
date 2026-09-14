@@ -18,6 +18,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from reference.regime import classify as regime_classify
+
 # CANSLIM 門檻（PRD §5.2.1）
 EPS_YOY_MIN = 0.25
 ROE_MIN = 0.15
@@ -221,14 +223,41 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
     return support, oppose
 
 
+def market_regime_ok(index_0050: pd.DataFrame, asof: pd.Timestamp) -> bool:
+    """市況進場門檻（PRD §5.2 之外的新進場閘門，2026-09-14 拍板）：只排除大盤（0050）
+    處於 `reference.regime` 判定「空頭」的那週，多頭／震盪皆可新進場。
+
+    🔴 這不是「只在多頭週才進場」（那個測過會讓表現變差，回測見
+    `research/backtest_longswing.py` next_open_bull_*／HANDOFF_2026-09-14b.md §4）——
+    是比較軟的門檻，只擋掉驗證過真的有害的空頭週，震盪週不擋。
+    暖機期（不足 200 個交易日算不出 MA200）或市況算不出來 → 不擋（回 True），
+    比照 `reference/regime.py` 的「不知道就不猜」原則。
+    """
+    idx = index_0050.copy()
+    idx["date"] = pd.to_datetime(idx["date"])
+    close = idx.set_index("date")["close"].sort_index()
+    close = close[close.index <= pd.Timestamp(asof)]
+    if close.empty:
+        return True
+    reg = regime_classify(close).iloc[-1]
+    return bool(pd.isna(reg) or reg != "bear")
+
+
 def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
                          index_0050: pd.DataFrame, chips: pd.DataFrame,
                          revenue: pd.DataFrame, universe: set[str] | None,
                          asof: pd.Timestamp | None = None) -> list[dict]:
-    """候選池：CANSLIM 基本面 ∩ 月營收 YoY>0 ∩ 法人 20 日淨買超>0 ∩ 趨勢模板 8/8。
-    每檔回一個 dict（狀態 + 支持/反對 + 風控 + 失效條件），**無總分、無排名、無 verdict**。
+    """候選池：CANSLIM 基本面 ∩ 月營收 YoY>0 ∩ 法人 20 日淨買超>0 ∩ 趨勢模板 8/8，
+    再疊加市況進場門檻（`market_regime_ok`，只排除空頭週）。每檔回一個 dict
+    （狀態 + 支持/反對 + 風控 + 失效條件），**無總分、無排名、無 verdict**。
+
+    ⚠️ v3.1 不追蹤持倉：市況門檻擋的是「這週要不要顯示新候選」，不是「既有持倉要不要
+    出場」——現實中不會因市況轉空就強制平倉，這裡沒有持倉概念也無從平倉。空頭週
+    回傳空池只代表「這週沒有新的候選可以看」，不代表「你手上的部位有問題」。
     """
     asof = pd.Timestamp(asof or pd.Timestamp.now()).normalize()
+    if not market_regime_ok(index_0050, asof):
+        return []
     fund = canslim_fundamental(qf, asof)
     tt = trend_template(prices_adj, index_0050, asof)
     inst = institutional_net20(chips, asof)
