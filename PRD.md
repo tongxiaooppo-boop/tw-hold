@@ -879,6 +879,15 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 
 ## 11. 變更記錄
 
+- **2026-09-14（再續）修正長波段進場口徑（bug fix）**——使用者關機前問「模擬單
+  依據策略買的到原則嗎」查出來的：`screener/swing_stops.py` 的進場價一直是
+  「訊號當天的收盤價」，現實中買不到（收盤後才算得出達標）。改成兩階段狀態機
+  （`pending_entry` → 次一交易日開盤才轉正 `candidate`），跟回測實際採用格
+  `research/backtest_longswing.py` 的 `entry_mode="next_open"` 對齊；次日開盤
+  已跌破訊號日停損位的訊號放棄（同回測 `abandoned_below_stop`）。既有 21 檔
+  追蹤（舊口徑、entry_price 不可信）已重置重新走正確流程，模擬單 0 筆已結算
+  完全不受影響。詳見 `docs/HANDOFF_2026-09-14e.md`。
+
 - **2026-09-14（續）低基期 EPS YoY 標註 + 主動ETF出清註記 + 長波段模擬單
   （輕量版）**——三件事都是使用者直接反饋起頭：
   1. `screener/candidate_pool.py` `canslim_fundamental()` 新增
