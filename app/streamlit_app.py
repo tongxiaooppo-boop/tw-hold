@@ -1001,40 +1001,47 @@ def _card_list(kind: str, title: str, payload: dict | None) -> None:
     _disclaimer()
 
 
-_SWING_STOP_STATUS = {"candidate": "候選中", "dropped_from_pool": "已出候選池（停損未觸發）",
+_SWING_STOP_STATUS = {"pending_entry": "待進場（次日開盤）", "candidate": "候選中",
+                      "dropped_from_pool": "已出候選池（停損未觸發）",
                       "stopped_out": "已跌破移動停損"}
 
 
 def _swing_exit_table() -> None:
     """出場觀察表（2026-09-12 使用者要求）——**不是持倉追蹤**，不需要你輸入買在哪天/哪個價。
-    系統用「第一次通過候選池六條件那天」當進場代理，逐日追蹤移動停損（進場後最高價 −
-    2×進場當天 ATR14，比照 tw-swing H2-trailatr2）。候選池把它移除後這裡**不會馬上停止**，
-    繼續看價格走勢直到真的跌破停損才算出場——回答「被移除之後接下來怎麼走」。"""
+    系統用「第一次通過候選池六條件那天」當訊號日，**次一交易日開盤**才算進場（2026-09-14
+    修正，見 `screener/swing_stops.py` docstring「進場口徑」——訊號當天收盤價買不到），
+    之後逐日追蹤移動停損（進場後最高價 − 2×進場當天 ATR14，比照 tw-swing
+    H2-trailatr2）。候選池把它移除後這裡**不會馬上停止**，繼續看價格走勢直到真的跌破
+    停損才算出場——回答「被移除之後接下來怎麼走」。"""
     data = _load("swing_stops.json")
     if not data or not data.get("tracked"):
         return
     rows = []
     for tk, r in data["tracked"].items():
+        is_pending = r.get("status") == "pending_entry"
         last = r.get("last_close")
         stop = r.get("trail_stop")
         dist = (last / stop - 1.0) if last and stop else None
         rows.append({
             "代號": tk, "狀態": _SWING_STOP_STATUS.get(r["status"], r["status"]),
-            "入池日": r.get("first_seen"), "進場價": r.get("entry_price"),
+            "入池日": r.get("first_seen") or r.get("signal_date"),
+            "進場價": r.get("entry_price") or ("待次日開盤" if is_pending else "—"),
             "現價": last, "目前停損價": stop,
             "距停損%": f"{dist:+.1%}" if dist is not None else "—",
             "出池日": r.get("dropped_date") or "—",
             "出場日": r.get("exit_date") or "—", "出場價": r.get("exit_price") or "—",
         })
-    order = {"候選中": 0, "已出候選池（停損未觸發）": 1, "已跌破移動停損": 2}
+    order = {"待進場（次日開盤）": 0, "候選中": 1, "已出候選池（停損未觸發）": 2,
+            "已跌破移動停損": 3}
     rows.sort(key=lambda r: (order.get(r["狀態"], 9), r["入池日"] or ""), reverse=False)
     with st.expander(f"📉 出場觀察表（移動停損，非官方持倉，{len(rows)} 檔｜點開看）"):
         st.caption(
-            "**不是持倉追蹤**——系統用「第一次通過候選池六條件那天」當進場代理，之後逐日"
-            "追蹤移動停損（進場後最高價 − 2×進場當天 ATR14，只漲不跌，比照 tw-swing "
-            "`H2-trailatr2`）。從候選池被移除**不會馬上讓這裡停止**，會繼續看價格走勢直到"
-            "真的跌破停損才算出場，方便回顧「被移除之後接下來怎麼走」。**只是觀察參考，"
-            "不是買賣建議、不保證你當初真的買在進場價。**")
+            "**不是持倉追蹤**——系統用「第一次通過候選池六條件那天」當訊號日，**次一交易日"
+            "開盤**才算進場（訊號當天收盤後才算得出達標，那個收盤價買不到，跟回測驗證過的"
+            "`next_open` 口徑一致），之後逐日追蹤移動停損（進場後最高價 − 2×進場當天 "
+            "ATR14，只漲不跌，比照 tw-swing `H2-trailatr2`）。從候選池被移除**不會馬上讓"
+            "這裡停止**，會繼續看價格走勢直到真的跌破停損才算出場，方便回顧「被移除之後"
+            "接下來怎麼走」。**只是觀察參考，不是買賣建議、不保證你當初真的買在進場價。**")
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         meta = data.get("_meta", {})
         st.caption(f"最後更新：{meta.get('asof', '—')}　·　移動停損倍數 {meta.get('trail_atr_mult', '—')}×ATR14")
