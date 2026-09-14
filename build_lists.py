@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pandas as pd
 
 from build_factors import DERIVED, _read_bundle_ohlc, screen_all
+from screener.swing_paper import build as build_swing_paper
 from screener.swing_stops import update_stops
 
 try:
@@ -280,6 +281,22 @@ def main() -> int:
         n_active = sum(1 for r in stops["tracked"].values() if r["status"] != "stopped_out")
         print(f"  → data/derived/swing_stops.json　（{n_active} 檔追蹤中，"
              f"{len(stops['tracked']) - n_active} 檔已出場）")
+
+        # 模擬單（輕量版，見 screener/swing_paper.py）——用出場觀察表這次判定
+        # stopped_out 的瞬間記一筆「已實現」，不受之後同一檔重新達標蓋掉舊資訊
+        # 影響（那是 tracked 本身的行為，見 swing_stops.py docstring）。
+        paper_p = DERIVED / "swing_paper.json"
+        prev_paper = {}
+        if paper_p.exists():
+            try:
+                prev_paper = json.loads(paper_p.read_text(encoding="utf-8"))
+            except Exception:
+                prev_paper = {}
+        paper = build_swing_paper(prev_paper, prev_stops.get("tracked", {}), stops["tracked"])
+        paper_p.write_text(json.dumps(paper, ensure_ascii=False, indent=2), encoding="utf-8")
+        st = paper["stats"]
+        print(f"  → data/derived/swing_paper.json　（累積 {st['n']} 筆已結算"
+             f"{'' if st['n'] >= 10 else '，< 10 筆待驗'}）")
     else:
         print("  ⚠ 出場觀察表未算：缺 prices_adj.parquet")
 

@@ -98,6 +98,7 @@ def update_stops(prev: dict, pool: list[dict], prices_adj: pd.DataFrame,
             continue                          # ATR 還在暖機，開不了新一輪（跟回測同條件）
         row = today.loc[tk]
         out[tk] = {
+            "name": p.get("name", ""),   # 進場當天的名稱，供 swing_paper 記錄用不必再查表
             "first_seen": asof.date().isoformat(),
             "entry_price": round(float(row["close"]), 2),
             "atr0": round(float(a0), 4),

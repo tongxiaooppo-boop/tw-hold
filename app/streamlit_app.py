@@ -1040,11 +1040,54 @@ def _swing_exit_table() -> None:
         st.caption(f"最後更新：{meta.get('asof', '—')}　·　移動停損倍數 {meta.get('trail_atr_mult', '—')}×ATR14")
 
 
+def _swing_paper_section() -> None:
+    """長波段模擬單（輕量版，2026-09-14 使用者要求「仿照 tw-swing 跑模擬單」）——
+    見 `screener/swing_paper.py`。真實市場價格逐日累積的已實現結果，出場觀察表
+    （`_swing_exit_table`）判定跌破移動停損那一刻記一筆，跟回測不是同一份資料、
+    也不是同一個口徑。"""
+    data = _load("swing_paper.json")
+    if not data:
+        return
+    st_ = data.get("stats", {})
+    n = st_.get("n", 0)
+    with st.expander(f"📒 模擬單（自動累積，累計 {n} 筆已結算｜點開看）"):
+        st.caption(
+            "**不是回測，是真實市場價格逐日累積的已實現結果**——出場觀察表判定"
+            "跌破移動停損的那一刻記一筆，進場口徑＝訊號日收盤成交（跟出場觀察表"
+            "的進場代理一致）。用來驗證候選池上線後是不是真的照回測預期表現，"
+            "**不是買賣建議**。")
+        if n < 10:
+            st.info(f"目前只有 {n} 筆已結算——長波段持有期可能拉很長，累積到能看"
+                    "勝率需要一段時間，這是正常現象不是故障。")
+        else:
+            vs = st_.get("vs_backtest") or {}
+            gap = vs.get("gap_pp")
+            wr, exp = st_.get("win_rate"), st_.get("expectancy_net")
+            diverge_txt = ("　⚠️ **差距超過 15pp，值得留意是不是規則失效**"
+                           if vs.get("diverging") else "")
+            st.markdown(
+                f"- 累計 **{n}** 筆　·　勝率 **{wr:.0%}**　·　淨期望值（扣成本）"
+                f" **{exp:+.2%}**\n"
+                f"- 對照回測基準：勝率 {vs.get('backtest_win_rate', 0):.0%}"
+                f"（差 {gap:+.1f}pp）{diverge_txt}")
+        by_month = st_.get("by_month") or []
+        if by_month:
+            st.markdown("**月度分解（出場月）**")
+            st.dataframe(pd.DataFrame([
+                {"月": r["ym"], "筆數": r["n"], "勝率": f"{r['win_rate']:.0%}",
+                 "平均淨報酬": f"{r['avg_ret_net']:+.2%}"} for r in by_month
+            ]), hide_index=True, use_container_width=True)
+        meta = data.get("_meta", {})
+        st.caption(f"最後更新：{meta.get('updated_at', '—')}　·　"
+                   f"成本假設 {meta.get('cost', 0):.3%} 往返")
+
+
 def _swing_page(payload: dict | None) -> None:
     st.header("長波段候選池")
     if payload is None or not payload.get("candidates_pool"):
         st.info((payload or {}).get("_meta", {}).get("pool_note", "候選池尚未產出。"))
         _swing_exit_table()
+        _swing_paper_section()
         _strategy_backtest_expander("swing")
         _disclaimer(SWING_DISCLAIMER)
         return
@@ -1075,6 +1118,7 @@ def _swing_page(payload: dict | None) -> None:
                 language="markdown")
     st.divider()
     _swing_exit_table()
+    _swing_paper_section()
     _strategy_backtest_expander("swing")
     _disclaimer(SWING_DISCLAIMER)
 
