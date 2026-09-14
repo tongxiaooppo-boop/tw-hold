@@ -443,13 +443,30 @@ def main() -> int:
     counts = pd.Series({wk: len(s) for wk, s in cand_by_week.items()})
     print(f"  候選數：中位數 {counts.median():.0f}｜空白週 {(counts == 0).mean():.0%}", flush=True)
 
-    RUNS = [("next_open", "next_open", False), ("limit_at_close", "limit_at_close", False),
-           ("next_open_trailing", "next_open", True)]
+    # 🆕 CANSLIM「M」（大盤方向）當硬性 gate 測試（2026-09-14，使用者要求「依市況重新
+    # 做過」）——只在大盤（0050）處於 `reference.regime` 判定的「多頭」那週才允許
+    # *新進場*，已經持有的部位不受影響（現實中不會因為市況轉弱就強制平倉既有部位，
+    # 那是另一個問題）。跟 app 端顯示用的 context flag 是兩件事：這裡是真的擋掉進場，
+    # 用來回答「如果真的拿 M 當硬門檻會不會比較好」。
+    idx_close_full = idx_close.reindex(td).ffill()
+    week_regime = regime_at(pd.Series(weeks), idx_close_full)
+    week_regime.index = weeks
+    week_regime = week_regime.where(week_regime.notna(), None)   # pd.NA → None，避免三態比較歧義
+    cand_by_week_mgate = {wk: (s if week_regime.get(wk) == "bull" else set())
+                         for wk, s in cand_by_week.items()}
+    n_blocked_weeks = int((week_regime != "bull").sum())
+    print(f"  M-gate（只留多頭週）：{n_blocked_weeks}/{len(weeks)} 週被擋掉新進場"
+         f"（{n_blocked_weeks / len(weeks):.0%}）", flush=True)
+
+    RUNS = [("next_open", "next_open", False, cand_by_week),
+           ("limit_at_close", "limit_at_close", False, cand_by_week),
+           ("next_open_trailing", "next_open", True, cand_by_week),
+           ("next_open_mgate_bull", "next_open", False, cand_by_week_mgate)]
     results = {}
     abandoned = {}
-    for key, mode, trailing in RUNS:
+    for key, mode, trailing, cbw in RUNS:
         print(f"模擬進出場（{key}）…", flush=True)
-        trades, n_abandoned = simulate(mode, weeks, cand_by_week, panels, rev_st, eps_neg, td,
+        trades, n_abandoned = simulate(mode, weeks, cbw, panels, rev_st, eps_neg, td,
                                        trailing=trailing)
         curve = portfolio_curve(trades, panels["close"], td)
         results[key] = (trades, curve)
@@ -458,7 +475,6 @@ def main() -> int:
              f"（{len(trades)} 筆含未平倉，另有 {n_abandoned} 筆訊號成交時已跌破停損位、放棄）",
              flush=True)
 
-    idx_close_full = idx_close.reindex(td).ffill()
     bench = bench_stats(idx_close_full)
     reg = regime_at(pd.Series(td), idx_close_full)
 
@@ -479,7 +495,11 @@ def main() -> int:
                        ("limit_at_close", "限價於訊號收盤（買得到口徑，固定停損）"),
                        ("next_open_trailing", "次日開盤 + 移動 ATR 停損（比照 tw-swing "
                         "H2-trailatr2 的做法，非 PRD 原規格，只為了回答「是規格保守還是"
-                        "出場拖累」）")):
+                        "出場拖累」）"),
+                       ("next_open_mgate_bull", f"🆕 次日開盤 + CANSLIM「M」硬性 gate"
+                        f"（只在大盤多頭週才新進場，{n_blocked_weeks}/{len(weeks)} 週"
+                        f"（{n_blocked_weeks / len(weeks):.0%}）被擋掉新進場，已持有部位"
+                        "不受影響；固定停損，跟 next_open 對照才看得出 M gate 本身的效果）")):
         trades, curve = results[mode]
         st = stats(curve)
         completed = [t for t in trades if not t["still_open"]]
@@ -540,7 +560,7 @@ def main() -> int:
 
     out_md = OUT / "backtest_longswing_20260912.md"
     out_md.write_text("\n".join(md), encoding="utf-8")
-    for mode, _, _ in RUNS:
+    for mode, _, _, _ in RUNS:
         trades, _ = results[mode]
         pd.DataFrame(trades).to_csv(OUT / f"backtest_longswing_{mode}.csv", index=False)
 
