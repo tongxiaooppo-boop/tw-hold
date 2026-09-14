@@ -216,13 +216,15 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
                 continue
             s = per_stock.setdefault(r.stock_code, {
                 "name": r.stock_name, "net_shares": 0.0, "net_amount": 0.0,
-                "_amt_ok": True, "_span": 1, "buyers": [], "sellers": []})
+                "_amt_ok": True, "_span": 1, "buyers": [], "sellers": [],
+                "by_fund": {}})
             s["_span"] = max(s["_span"], span)
             s["net_shares"] += float(r.d_shares)
             if r.price and pd.notna(r.price):
                 s["net_amount"] += float(r.d_shares) * float(r.price)
             else:
                 s["_amt_ok"] = False
+            s["by_fund"][code] = round(float(r.d_shares))
             if r.direction > 0:
                 s["buyers"].append(code)
             elif r.direction < 0:
@@ -251,6 +253,9 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             "buyers": buyers,
             "sellers": sellers,
             "kind": _kind(ns, consensus),
+            # 個別基金那天真實動了幾股（不是彙總淨額）——一檔股票被多檔基金
+            # 同時買賣時，總表的 net_shares 是淨額，這裡才是「這檔基金自己動多少」。
+            "by_fund": {c: v for c, v in s["by_fund"].items()},
         }
 
     return {
