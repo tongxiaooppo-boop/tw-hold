@@ -59,9 +59,11 @@ jobs:
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
           git add data/reference/global_macro.parquet data/reference/global_macro_meta.json \
-                  data/reference/tx_futures.parquet data/reference/put_call_ratio.parquet
+                  data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
+                  data/reference/put_call_ratio.parquet
           git diff --cached --quiet -- data/reference/global_macro.parquet data/reference/global_macro_meta.json \
-                  data/reference/tx_futures.parquet data/reference/put_call_ratio.parquet && {
+                  data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
+                  data/reference/put_call_ratio.parquet && {
             echo "無實質變更——跳過 commit"; exit 0; }
           git commit -m "國際總經快照 $(date -u +%F)"
           git push
@@ -81,6 +83,28 @@ jobs:
           $DETAIL
           → 通常下一輪（明天）重抓會自動補上（腳本是整段 2 年全量覆寫）；連續好幾天都
           過期才需要人工介入。
+          ${RUN_URL}"
+          echo "$MSG"
+          [ -z "$WEBHOOK" ] && { echo "::warning::沒設 ALERT_WEBHOOK，這次只留在 Actions 紀錄裡"; exit 0; }
+          curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
+          exit 0
+
+      # 台指期夜盤沒有回補機制（date 參數是裝飾用的，帶什麼都回最新一天）——
+      # 抓不到當天的夜盤就永久遺失，跟「部分過期」不一樣不會自己好，一定要告警。
+      - name: 台指期夜盤缺失才告警
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MISSING=$(python -c "import json; print(json.load(open('data/reference/tx_futures_meta.json')).get('missing_night', False))" 2>/dev/null || echo "False")
+          [ "$MISSING" != "True" ] && { echo "夜盤資料正常"; exit 0; }
+          DETAIL=$(python scripts/_tx_futures_alert_detail.py)
+          MSG="🟠 tw-hold 台指期：這次沒抓到夜盤資料，且這支 API 沒有回補機制
+          $DETAIL
+          → 這天的夜盤收盤可能永久遺失了（不像其他資料源明天重抓會自動補）。
+          偶爾一次可能是 TAIFEX 那邊延遲發布，連續好幾天才需要真的介入。
           ${RUN_URL}"
           echo "$MSG"
           [ -z "$WEBHOOK" ] && { echo "::warning::沒設 ALERT_WEBHOOK，這次只留在 Actions 紀錄裡"; exit 0; }
