@@ -2092,7 +2092,7 @@ def _macro_compass_page() -> None:
     純粹是規則模板，不要看到「市場情緒」四個字就以為背後有 AI。
     """
     import bundle_data as bd
-    from reference import global_macro, index_proxy, market_sentiment
+    from reference import global_macro, index_proxy, market_sentiment, tx_futures
     from reference.market_status import latest_change, market_card
 
     st.header("總經導航", anchor="top")
@@ -2155,6 +2155,18 @@ def _macro_compass_page() -> None:
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
     if tw_missing:
         st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
+
+    st.divider()
+    st.subheader("台指期（近月）")
+    tx_day, tx_night = tx_futures.load_session("day"), tx_futures.load_session("night")
+    if not tx_day.empty or not tx_night.empty:
+        cards = [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
+                 _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)]
+        st.markdown(f'<div class="gz-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        st.caption("台指期近月合約，資料源 TAIFEX OpenAPI（`DailyMarketReportFut`）。"
+                   "夜盤沒有獨立結算價，這裡顯示的是夜盤最後成交價，跨夜到隔天 05:00。")
+    else:
+        st.info("還沒有台指期資料——`fetch_tx_futures.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
     st.subheader("族群動向")
