@@ -313,7 +313,7 @@ def screen_all() -> dict:
         df["name"] = df["ticker"].astype(str).map(names)
 
     # ③ 產業逆風旗標（只顯示、不進 verdict——比照循環高峰旗標，PRD §9 待定）
-    from screener.industry import add_industry_headwind, industry_rotation
+    from screener.industry import add_industry_headwind, industry_money_flow, industry_rotation
     _asof = (pd.Timestamp(price_hist["date"].max())
              if price_hist is not None and not price_hist.empty
              else pd.Timestamp.now())
@@ -325,12 +325,19 @@ def screen_all() -> dict:
     val = add_peer_comparison(val, metric="roe")
     # 族群動向：全市場產業排行（跟上面逆風旗標同一份底層資料，總經導航頁用）
     rotation = industry_rotation(price_hist, ind, _asof)
+    # 族群資金排行（2026-09-15 補：漲跌幅排行的互補視角，見 industry.py 檔頭）——
+    # chips 要先讀出來才能算，候選池那邊本來就要讀，這裡提前到這來一起用。
+    chips = _read_bundle_simple("chips")
+    money_flow = industry_money_flow(chips, price_hist, ind, _asof)
+    for row in rotation:
+        mf = money_flow.get(row["industry"])
+        row["net_1w"] = mf["net_1w"] if mf else None
+        row["net_1m"] = mf["net_1m"] if mf else None
 
     # M1 §5：主動選股候選池（狀態型，無 verdict / 無總分 / 無排名）
     pool, pool_note = [], "候選池未算"
     ohlc = _read_bundle_ohlc()
     idx0050 = _read_bundle_simple("index_0050")
-    chips = _read_bundle_simple("chips")
     rev = _read_bundle_simple("revenue")
     if all(x is not None for x in (ohlc, idx0050, chips, rev)):
         uni = top500 if isinstance(top500, set) else None

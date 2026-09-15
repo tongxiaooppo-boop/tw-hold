@@ -112,6 +112,60 @@ def industry_rotation(price_hist: pd.DataFrame, ind_map: dict[str, str],
     return out
 
 
+def _trailing_value_sum(chips: pd.DataFrame, price_hist: pd.DataFrame,
+                        asof: pd.Timestamp, n_days: int) -> pd.Series:
+    """每檔近 `n_days` 個交易日「三大法人合計買賣超股數 × 當日收盤價」加總（元）
+    → index=ticker。用還原收盤價換算——近幾天的還原價幾乎等於原始成交價（除權息
+    調整是往回推算歷史，不影響最近幾天），拿來估買賣超金額的排行夠用，不是
+    精確的結算金額。"""
+    if chips is None or chips.empty or price_hist is None or price_hist.empty:
+        return pd.Series(dtype=float)
+    c = chips.copy()
+    c["date"] = pd.to_datetime(c["date"])
+    c["ticker"] = c["ticker"].astype(str).str.split(".").str[0]
+    c = c[c["date"] <= pd.Timestamp(asof)]
+
+    p = price_hist[["date", "ticker", "close"]].copy()
+    p["date"] = pd.to_datetime(p["date"])
+    p["ticker"] = p["ticker"].astype(str).str.split(".").str[0]
+
+    m = c.merge(p, on=["date", "ticker"], how="inner").sort_values(["ticker", "date"])
+    m["value"] = m["total_net"].fillna(0) * m["close"]
+    return (m.groupby("ticker")["value"]
+             .apply(lambda s: s.tail(n_days).sum())
+             .rename(f"net_value_{n_days}d"))
+
+
+def industry_money_flow(chips: pd.DataFrame, price_hist: pd.DataFrame,
+                        ind_map: dict[str, str], asof: pd.Timestamp) -> dict[str, dict]:
+    """族群資金排行：每個產業近1週/1月三大法人合計買賣超金額（億元）加總，
+    跟 `industry_rotation()` 的漲跌幅排行是互補視角——資金看「錢往哪個產業去」，
+    不是「哪個產業漲最多」，兩者常常不同步（資金流入不一定馬上反映在報酬上）。
+
+    回傳 `{產業: {"net_1w": 億元, "net_1m": 億元, "n": 檔數}}`，缺 chips 或
+    join 不到價格的檔不列入。跟 `industry_rotation()` 分開算，呼叫端自己合併。
+    """
+    w1 = _trailing_value_sum(chips, price_hist, asof, 5)
+    m1 = _trailing_value_sum(chips, price_hist, asof, 21)
+    df = pd.concat([w1, m1], axis=1)
+    df.columns = ["net_1w", "net_1m"]
+    df["industry"] = df.index.map(lambda t: ind_map.get(t))
+    df = df.dropna(subset=["industry"])
+    if df.empty:
+        return {}
+
+    out = {}
+    for ind, g in df.groupby("industry"):
+        if len(g) < MIN_N:
+            continue
+        out[ind] = {
+            "n": int(len(g)),
+            "net_1w": round(float(g["net_1w"].sum()) / 1e8, 2),
+            "net_1m": round(float(g["net_1m"].sum()) / 1e8, 2),
+        }
+    return out
+
+
 def add_industry_headwind(df: pd.DataFrame, price_hist: pd.DataFrame,
                           ind_map: dict[str, str], asof: pd.Timestamp) -> pd.DataFrame:
     """在清單 df 上加 `industry_headwind`（bool）+ `industry_ret_6m`（float，逆風時才填）。"""
