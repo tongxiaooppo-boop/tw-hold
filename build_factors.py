@@ -297,7 +297,8 @@ def screen_all() -> dict:
     dep = screen_deposit(qf, divf, prices=prices, vol=vol,
                          industry=uni_industry if not uni_industry.empty else None,
                          market_cap=fin_mktcap if not fin_mktcap.empty else None)
-    val = screen_value(qf, prices=prices)
+    val = screen_value(qf, prices=prices,
+                       industry=uni_industry if not uni_industry.empty else None)
     dep["in_top500"] = True if top500 is None else dep["ticker"].isin(top500)
     val["in_top500"] = True if top500 is None else val["ticker"].isin(top500)
 
