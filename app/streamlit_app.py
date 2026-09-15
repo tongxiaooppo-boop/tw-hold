@@ -2012,7 +2012,15 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
     from reference.global_macro import latest_change, percentile_rank
     ch = latest_change(close)
     if ch is None:
-        body = '<div class="gz-value">—</div><div class="gz-chg flat">資料不足</div>'
+        # 剛上線的新序列只有 1 筆時，latest_change 算不出漲跌（回 None）——與其整張
+        # 卡空白，先把那唯一一筆的值印出來，比等到第 2 天才有東西看更有用（2026-09-15
+        # 台指期上線當天發現的：使用者看到「資料不足」還以為抓失敗）。
+        s = close.dropna()
+        if len(s) == 1:
+            body = (f'<div class="gz-value">{s.iloc[-1]:,.2f}{suffix}</div>'
+                    '<div class="gz-chg flat">尚無前一筆可比</div>')
+        else:
+            body = '<div class="gz-value">—</div><div class="gz-chg flat">資料不足</div>'
     else:
         sign = "up" if ch["chg"] > 0 else ("down" if ch["chg"] < 0 else "flat")
         arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
