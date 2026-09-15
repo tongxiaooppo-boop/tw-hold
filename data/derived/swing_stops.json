@@ -17,6 +17,12 @@
       "signal_date": "2026-09-14",
       "risk_stop_ref": 512.69
     },
+    "3711": {
+      "name": "日月光投控",
+      "status": "pending_entry",
+      "signal_date": "2026-09-14",
+      "risk_stop_ref": 611.56
+    },
     "1560": {
       "name": "中砂",
       "first_seen": "2026-09-11",
@@ -286,12 +292,6 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
-    },
-    "3711": {
-      "name": "日月光投控",
-      "status": "pending_entry",
-      "signal_date": "2026-09-14",
-      "risk_stop_ref": 611.56
     }
   }
 }
