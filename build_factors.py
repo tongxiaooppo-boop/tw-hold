@@ -319,6 +319,10 @@ def screen_all() -> dict:
              else pd.Timestamp.now())
     val = add_industry_headwind(val, price_hist, ind, _asof)
     dep = add_industry_headwind(dep, price_hist, ind, _asof)
+    # 同業比較（只顯示、不進 verdict/value_score，2026-09-15 補——單一 ROE
+    # 數字沒有同業基準看不出高低，見 screener/industry.py 檔頭）。
+    from screener.industry import add_peer_comparison
+    val = add_peer_comparison(val, metric="roe")
     # 族群動向：全市場產業排行（跟上面逆風旗標同一份底層資料，總經導航頁用）
     rotation = industry_rotation(price_hist, ind, _asof)
 

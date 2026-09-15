@@ -43,6 +43,7 @@ VALUE_COLS = ["name", "close", "verdict", "value_score", "f_score", "roe", "norm
               "industry", "cheap_threshold", "valuation_ceiling", "upside_pct",
               "cyclical_peak_flag", "eps_basis_suspect", "industry_headwind",
               "industry_ret_6m", "pe_p30", "pe_p70", "pe_market",
+              "peer_metric_median", "peer_rank", "peer_n",
               "buy_low", "buy_high", "buy_note", "reject_reason"]
 DEPOSIT_COLS = ["name", "close", "verdict", "safety_score", "cur_yield", "yield_floor",
                 "est_buy_price", "buy_low", "buy_high", "buy_note", "industry",

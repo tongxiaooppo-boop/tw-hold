@@ -4,7 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from screener.industry import add_industry_headwind, industry_headwind, industry_rotation
+from screener.industry import (add_industry_headwind, add_peer_comparison,
+                               industry_headwind, industry_rotation)
 
 _ASOF = pd.Timestamp("2026-09-07")
 
@@ -69,3 +70,33 @@ def test_族群動向_樣本太小的產業不列():
     im = {"1": "A", "2": "A", "3": "A", "4": "B", "5": "C"}   # B/C 各只有 1 檔
     rot = industry_rotation(ph, im, _ASOF)
     assert [r["industry"] for r in rot] == ["A"]
+
+
+def test_同業比較_名次與中位數():
+    df = pd.DataFrame({
+        "ticker": ["1", "2", "3", "4"],
+        "industry": ["A", "A", "A", "B"],
+        "roe": [0.20, 0.10, 0.05, 0.30],   # B 只有 1 檔（< MIN_N），A 有 3 檔
+    })
+    out = add_peer_comparison(df, metric="roe")
+    a = out.set_index("ticker")
+    assert a.loc["1", "peer_rank"] == 1 and a.loc["1", "peer_n"] == 3
+    assert a.loc["3", "peer_rank"] == 3
+    assert a.loc["1", "peer_metric_median"] == 0.10
+    assert np.isnan(a.loc["4", "peer_rank"])          # B 樣本太小 → 不比
+
+
+def test_同業比較_垃圾桶分類不比():
+    df = pd.DataFrame({
+        "ticker": ["1", "2", "3"],
+        "industry": ["其他", "其他", "其他"],
+        "roe": [0.20, 0.10, 0.05],
+    })
+    out = add_peer_comparison(df, metric="roe")
+    assert out["peer_rank"].isna().all()
+
+
+def test_同業比較_缺metric欄不炸():
+    df = pd.DataFrame({"ticker": ["1"], "industry": ["A"]})
+    out = add_peer_comparison(df, metric="roe")
+    assert np.isnan(out.loc[0, "peer_rank"])
