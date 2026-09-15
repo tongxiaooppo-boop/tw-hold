@@ -2060,54 +2060,46 @@ def _industry_rank_by_money(rows: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda r: (r.get("net_1m") is None, -(r.get("net_1m") or 0)))
 
 
-def _industry_rotation_table(rows: list[dict]) -> str:
+def _industry_rotation_table(rows: list[dict], mode: str = "漲跌幅") -> str:
     """族群動向表——排行本身就是訊號，不用紅綠燈（見上面 .ir-table CSS 註解）。
-    量條只用單一色階＋透明度表 |1月報酬| 的相對大小，逆風是純文字標籤。
+    量條只用單一色階＋透明度表 |1月| 的相對大小，逆風是純文字標籤。
 
-    漲跌幅（ret_1w/ret_1m）+ 資金（net_1w/net_1m，三大法人合計買賣超億元，
-    2026-09-15 補）兩組欄位並排顯示，各自的量條各自算 max_abs——不是同一把尺，
-    漲跌幅是比例、資金是金額，強行共用一個量條寬度會失真。排序由呼叫端決定
-    （哪個排行榜就把哪組欄位排在前面），這裡只負責畫表，不重排。"""
+    只畫 `mode` 對應的那組欄位（近1週/近1月 + 單位），不是兩組都塞進同一張表——
+    2026-09-15 補資金排行時本來兩組（漲跌幅+資金）並排常駐，手機寬度放不下
+    5 欄會橫向溢出；改成「排序依據選哪個、表就只畫哪個」，欄數跟補資金排行
+    以前一樣還是 3 欄（產業＋近1週＋近1月），跟排序切換本來就綁在一起，不算
+    少功能——想看另一組數字，切換排序依據就會換過來。"""
     if not rows:
         return ""
-    max_abs_ret = max((abs(r["ret_1m"]) for r in rows if r.get("ret_1m") is not None),
-                      default=0) or 1.0
-    max_abs_net = max((abs(r["net_1m"]) for r in rows if r.get("net_1m") is not None),
-                      default=0) or 1.0
-
-    def _bar_cell(val: float | None, max_abs: float, text: str) -> str:
-        if val is None:
-            return '<td class="num"><span class="ir-val">—</span></td>'
-        pct = min(100, abs(val) / max_abs * 100)
-        opacity = 0.35 + 0.5 * (abs(val) / max_abs)
-        bar = f'<span class="ir-bar" style="width:{pct * 0.5:.0f}px;opacity:{opacity:.2f}"></span>'
-        return (f'<td class="num"><div class="ir-bar-wrap">{bar}'
-                f'<span class="ir-val">{text}</span></div></td>')
+    field, fmt, suffix = (("net", "+.1f", "億") if mode == "資金" else ("ret", "+.1%", ""))
+    w_key, m_key = f"{field}_1w", f"{field}_1m"
+    max_abs = max((abs(r[m_key]) for r in rows if r.get(m_key) is not None),
+                  default=0) or 1.0
 
     def _row(r: dict) -> str:
-        w1 = r.get("ret_1w")
-        w1_txt = f'{w1:+.1%}' if w1 is not None else "—"
-        nw1 = r.get("net_1w")
-        nw1_txt = f'{nw1:+.1f}億' if nw1 is not None else "—"
-        m1 = r.get("ret_1m")
-        m1_txt = f'{m1:+.1%}' if m1 is not None else "—"
-        nm1 = r.get("net_1m")
-        nm1_txt = f'{nm1:+.1f}億' if nm1 is not None else "—"
+        w1 = r.get(w_key)
+        w1_txt = f'{w1:{fmt}}{suffix}' if w1 is not None else "—"
+        m1 = r.get(m_key)
+        m1_txt = f'{m1:{fmt}}{suffix}' if m1 is not None else "—"
         tag = '<span class="ir-tag">近6月逆風</span>' if r.get("headwind") else ""
+        if m1 is None:
+            bar_cell = '<td class="num"><span class="ir-val">—</span></td>'
+        else:
+            pct = min(100, abs(m1) / max_abs * 100)
+            opacity = 0.35 + 0.5 * (abs(m1) / max_abs)
+            bar = f'<span class="ir-bar" style="width:{pct * 0.5:.0f}px;opacity:{opacity:.2f}"></span>'
+            bar_cell = (f'<td class="num"><div class="ir-bar-wrap">{bar}'
+                       f'<span class="ir-val">{m1_txt}</span></div></td>')
         return (
             '<tr>'
             f'<td><span class="ir-name">{_esc(r["industry"])}</span>'
             f'　<span class="ir-n">{r["n"]} 檔</span>{tag}</td>'
             f'<td class="num"><span class="ir-val">{w1_txt}</span></td>'
-            + _bar_cell(m1, max_abs_ret, m1_txt)
-            + f'<td class="num"><span class="ir-val">{nw1_txt}</span></td>'
-            + _bar_cell(nm1, max_abs_net, nm1_txt)
-            + '</tr>')
+            + bar_cell + '</tr>')
 
     return (
         '<table class="ir-table"><thead><tr>'
-        '<th>產業</th><th class="num">近1週漲跌</th><th class="num">近1月漲跌</th>'
-        '<th class="num">近1週資金</th><th class="num">近1月資金</th>'
+        f'<th>產業</th><th class="num">近1週{mode}</th><th class="num">近1月{mode}</th>'
         '</tr></thead><tbody>' + "".join(_row(r) for r in rows) + '</tbody></table>')
 
 
@@ -2234,10 +2226,10 @@ def _macro_compass_page() -> None:
                        "不做多空判斷。「近6月逆風」沿用既有的產業逆風判定（門檻是6個月報酬，"
                        "跟表上顯示的1週/1月是不同窗口，可能短線翻正但長線仍標記逆風，不是矛盾）。")
         top, rest = ranked[:10], ranked[10:]
-        st.markdown(_industry_rotation_table(top), unsafe_allow_html=True)
+        st.markdown(_industry_rotation_table(top, mode=sort_mode), unsafe_allow_html=True)
         if rest:
             with st.expander(f"看其他 {len(rest)} 個產業"):
-                st.markdown(_industry_rotation_table(rest), unsafe_allow_html=True)
+                st.markdown(_industry_rotation_table(rest, mode=sort_mode), unsafe_allow_html=True)
         st.caption("樣本數 < 3 檔的產業不列（中位數/加總沒意義）。報酬用還原股價的中位數，"
                    "不是市值加權指數；資金缺口少數產業可能沒有 chips 資料。")
     else:
