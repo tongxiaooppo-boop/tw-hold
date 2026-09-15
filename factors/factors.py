@@ -61,7 +61,8 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
       ttm_revenue/eps/net_income/gross_profit/ocf/capex/fcf、
       roe、roa、gross_margin、debt_ratio、current_ratio、asset_turnover、
       rev_yoy、fcf_ttm、
-      f_score（0–9，capital_stock 缺就 0–8 換算）、f_* 各分項、
+      f_score（0–9，缺項依算出的項數換算回 9 分制）、f_score_partial（缺幾項，
+      只顯示不進門檻）、f_* 各分項（缺資料是 NaN，不是悄悄算 0 分）、
       normalized_eps（近 5 年年度 EPS 均值）。
     """
     q = q.sort_values(["ticker", "period_end"]).reset_index(drop=True).copy()
@@ -110,28 +111,44 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     gm_p = g["gross_margin"].shift(4)
     at_p = g["asset_turnover"].shift(4)
 
-    q["f_roa"] = (q["ttm_net_income"] > 0).astype("float")
-    q["f_ocf"] = (q["ttm_ocf"] > 0).astype("float")
-    q["f_droa"] = (q["roa"] > roa_p).astype("float")
-    q["f_accrual"] = (q["ttm_ocf"] > q["ttm_net_income"]).astype("float")
-    q["f_leverage"] = (q["debt_ratio"] < dr_p).astype("float")
-    q["f_liquidity"] = (q["current_ratio"] > cr_p).astype("float")
-    q["f_margin"] = (q["gross_margin"] > gm_p).astype("float")
-    q["f_turnover"] = (q["asset_turnover"] > at_p).astype("float")
+    def _pt_item(cond: pd.Series, *sources: pd.Series) -> pd.Series:
+        """Piotroski 分項：cond 轉 0.0/1.0；`sources`（比較用到的欄位）任一為 NaN
+        → 整格 NaN，不能悄悄變成 0（`(NaN > x)` 在 pandas 就是 False，直接
+        `.astype(float)` 會把「缺資料」跟「真的沒過」混在一起——2026-09-15 修，
+        見 `f_score_partial`）。"""
+        nan_mask = sources[0].isna()
+        for s in sources[1:]:
+            nan_mask = nan_mask | s.isna()
+        return cond.astype("float").mask(nan_mask)
+
+    q["f_roa"] = _pt_item(q["ttm_net_income"] > 0, q["ttm_net_income"])
+    q["f_ocf"] = _pt_item(q["ttm_ocf"] > 0, q["ttm_ocf"])
+    q["f_droa"] = _pt_item(q["roa"] > roa_p, q["roa"], roa_p)
+    q["f_accrual"] = _pt_item(q["ttm_ocf"] > q["ttm_net_income"], q["ttm_ocf"], q["ttm_net_income"])
+    q["f_leverage"] = _pt_item(q["debt_ratio"] < dr_p, q["debt_ratio"], dr_p)
+    q["f_liquidity"] = _pt_item(q["current_ratio"] > cr_p, q["current_ratio"], cr_p)
+    q["f_margin"] = _pt_item(q["gross_margin"] > gm_p, q["gross_margin"], gm_p)
+    q["f_turnover"] = _pt_item(q["asset_turnover"] > at_p, q["asset_turnover"], at_p)
+    f_cols = ["f_roa", "f_ocf", "f_droa", "f_accrual", "f_leverage",
+              "f_liquidity", "f_margin", "f_turnover"]
     if "capital_stock" in q.columns:
         cs_p = g["capital_stock"].shift(4)
-        q["f_noissue"] = (q["capital_stock"] <= cs_p * 1.001).astype("float")
-        f_cols = ["f_roa", "f_ocf", "f_droa", "f_accrual", "f_leverage",
-                  "f_liquidity", "f_margin", "f_turnover", "f_noissue"]
-        q["f_score"] = q[f_cols].sum(axis=1, min_count=1)
-    else:
-        f_cols = ["f_roa", "f_ocf", "f_droa", "f_accrual", "f_leverage",
-                  "f_liquidity", "f_margin", "f_turnover"]
-        # 缺「無現金增資」那項 → 8 分制換算回 9 分制
-        q["f_score"] = q[f_cols].sum(axis=1, min_count=1) * 9.0 / 8.0
+        q["f_noissue"] = _pt_item(q["capital_stock"] <= cs_p * 1.001, q["capital_stock"], cs_p)
+        f_cols = f_cols + ["f_noissue"]
+
+    # 固定 9 分制：不管實際算出幾項分項（capital_stock 整欄缺，或任一分項因
+    # 缺資料變 NaN——金融業結構上沒有 gross_margin/current_ratio），一律用
+    # 「算出的分數 ÷ 算出的項數 × 9」換算，換算後才跟 `< 6` 的門檻比，
+    # 不會因為缺項就被拉低。`f_score_partial` 記缺幾項——只顯示、不進門檻，
+    # 比照既有的 `cyclical_peak_flag`/`industry_headwind`。
+    n_valid = q[f_cols].notna().sum(axis=1)
+    raw = q[f_cols].sum(axis=1, min_count=1)
+    q["f_score"] = (raw / n_valid * 9.0).where(n_valid > 0)
+    q["f_score_partial"] = 9 - n_valid
 
     # 去年同期算不出來的前 4 季，F-Score 沒有意義 → NaN
     q.loc[roa_p.isna(), "f_score"] = np.nan
+    q.loc[roa_p.isna(), "f_score_partial"] = np.nan
 
     # normalized EPS：到當期年份之前、最近 5 個完整年度的年度 EPS 均值
     q["normalized_eps"] = _normalized_eps(q, annual_eps(q))

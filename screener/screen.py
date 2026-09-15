@@ -145,11 +145,21 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
 
 
 def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
-                 asof: pd.Timestamp | None = None) -> pd.DataFrame:
+                 asof: pd.Timestamp | None = None,
+                 industry: pd.Series | None = None) -> pd.DataFrame:
     """價值區篩選。品質門檻 Piotroski F-Score ≥ 6 + 剔除價值陷阱，
-    再按 Magic Formula 精神 rank(品質) + rank(便宜)。"""
+    再按 Magic Formula 精神 rank(品質) + rank(便宜)。
+
+    industry: `ticker → 產業別`（來自 universe）——結構性高槓桿產業（金融）的
+    `gross_margin`/`current_ratio` 本來就沒有（見 factors.py 的 `f_score_partial`），
+    這裡的品質/便宜度因子（`norm_ey`/`fcf_yield`/`ev_ebit`/`net_cash_to_mktcap`）
+    整組對金融業結構上不適用，用一條說真話的理由剔除，不要讓它們掛著
+    `F-Score < 6` 這種看起來像「考過但沒過」、其實根本沒被公平考過的假理由
+    （2026-09-15 修，見 `f_score_partial` 同一輪查證）。沒給 → 一律不特別處理，
+    照舊只用 F-Score 判斷。"""
     asof = pd.Timestamp(asof or pd.Timestamp.now()).normalize()
     d = _latest_per_ticker(qf, asof).set_index("ticker")
+    ind = industry.reindex(d.index) if industry is not None else None
 
     # 營收 YoY 走弱：近 3 季 rev_yoy 都 < 0
     ry3 = (qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
@@ -179,6 +189,11 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
 
     reasons = {
         "財報不完整（缺資產負債表）": d["total_assets"].isna() | d["equity_parent"].isna(),
+        # 排在 F-Score 前面：金融業結構上沒有 gross_margin/current_ratio，
+        # 本篩選整組品質/便宜度因子不適用，結果不變（照樣不進價值清單），
+        # 但不能讓它們掛著看起來像「考過沒過」的 F-Score 理由。
+        "金融業：本篩選的品質/便宜度因子不適用": (ind.isin(_LEVERAGED_INDUSTRIES)
+                                    if ind is not None else pd.Series(False, index=d.index)),
         "F-Score < 6": d["f_score"] < 6,
         "營收連3季衰退": weak_rev.reindex(d.index).fillna(False),
         "毛利率5年下滑": (gm_now.reindex(d.index) < gm_old.reindex(d.index)),
