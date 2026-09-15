@@ -2220,8 +2220,8 @@ def _macro_compass_page() -> None:
     ir_rows = ir.get("industries") or []
     if ir_rows:
         st.markdown(f"**{_industry_rotation_summary(ir_rows)}**")
-        sort_mode = st.radio("排序依據", ["漲跌幅", "資金"], index=1, horizontal=True,
-                             key="ir_sort_mode", label_visibility="collapsed")
+        sort_mode = st.segmented_control("排序依據", ["資金", "漲跌幅"], default="資金",
+                                         key="ir_sort_mode") or "資金"
         if sort_mode == "資金":
             ranked = _industry_rank_by_money(ir_rows)
             st.caption(f"資料日 {ir.get('asof', '—')}　·　依近1月三大法人合計買賣超金額排序"
