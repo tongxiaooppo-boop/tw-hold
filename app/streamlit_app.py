@@ -569,6 +569,17 @@ div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]
 .ae-stack .sw-cols a{color:var(--thc-accent);text-decoration:none;}
 .ae-stack .sw-cols a:hover{text-decoration:underline;}
 .ae-stack .sw-cols li.flat{list-style:none;margin-left:-1.05rem;color:var(--thc-faint);}
+/* 主動式 ETF 卡片內的持股明細——用 .thc-details 展開，表格本身限高可捲動
+   （先看前段、往下拉看其餘全部），表頭黏在捲動區頂端方便對欄。 */
+.ae-hold-wrap{max-height:340px;overflow-y:auto;margin-top:.35rem;border:1px solid var(--thc-line);border-radius:6px;}
+.ae-hold-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+.ae-hold-table thead th{position:sticky;top:0;background:var(--thc-surface2);text-align:left;
+  padding:.32rem .5rem;border-bottom:1px solid var(--thc-line);color:var(--thc-faint);
+  font-weight:600;font-size:.72rem;}
+.ae-hold-table td{padding:.28rem .5rem;border-bottom:.5px solid var(--thc-line);color:var(--thc-soft);}
+.ae-hold-table tr:last-child td{border-bottom:none;}
+.ae-hold-table td.num,.ae-hold-table th.num{text-align:right;font-family:var(--thc-mono);
+  font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 /* 頁尾「回到頂部」——樣式對齊隔壁的 st.button（切換分頁那顆） */
 a.thc-toplink{display:block;text-align:center;padding:.55rem .8rem;border-radius:.5rem;
   border:1px solid var(--thc-line);color:var(--thc-soft)!important;
@@ -1691,7 +1702,7 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
              buys: list | None = None, sells: list | None = None,
              names: dict | None = None, qty: dict | None = None,
              exit_notes: dict | None = None, note: str | None = None,
-             meta_line: str = "") -> str:
+             holdings_html: str = "", meta_line: str = "") -> str:
     """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。
 
     `qty`：{ticker: 這檔基金當天實際動了幾張}，來自 `by_fund`（見
@@ -1731,6 +1742,8 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
             f'<div><div class="sw-h sup">加碼 / 新進</div><ul>{_li(buys)}</ul></div>'
             f'<div><div class="sw-h">調節 / 出清</div><ul>{_li(sells)}</ul></div>'
             '</div>')
+    if holdings_html:
+        parts.append(holdings_html)
     if meta_line:
         parts.append(f'<div class="thc-barcap" style="margin-top:.5rem">{_esc(meta_line)}</div>')
     return (f'<div class="thc-card thc-{sev}"><div class="thc-stripe"></div>'
@@ -1751,6 +1764,22 @@ def _holdings_df(code: str, date: str) -> pd.DataFrame:
     if df.empty or "weight" not in df.columns:
         return pd.DataFrame()
     return df.sort_values("weight", ascending=False).reset_index(drop=True)
+
+
+def _holdings_table_html(df: pd.DataFrame) -> str:
+    """完整持股（已依權重排序）→ 卡片內可展開的捲動表格，跟其他卡片「明細」用同一套
+    `.thc-details` 語言（沿用 `_detail_html` 的視覺，這裡欄數/內容不同另建一份）。"""
+    if df.empty:
+        return ""
+    rows = "".join(
+        f'<tr><td>{_esc(r.stock_code)}</td><td>{_esc(r.stock_name)}</td>'
+        f'<td class="num">{r.weight:.2f}%</td></tr>'
+        for r in df.itertuples(index=False))
+    return (
+        f'<details class="thc-details"><summary>持股明細（{len(df)} 檔，依權重排序）</summary>'
+        '<div class="ae-hold-wrap"><table class="ae-hold-table">'
+        '<thead><tr><th>代號</th><th>名稱</th><th class="num">權重%</th></tr></thead>'
+        f'<tbody>{rows}</tbody></table></div></details>')
 
 
 def _active_summary(fl: dict) -> str:
@@ -1851,7 +1880,6 @@ def _active_etf_page() -> None:
     missing = set((idx or {}).get("missing") or [])
 
     cards: list[str] = []
-    holdings: list[tuple[str, str, str]] = []  # (code, label, date)——持股明細表用
     for code in order:
         fi = idx_funds.get(code) or {}
         fmd = fm_all.get(code) or {}
@@ -1890,20 +1918,10 @@ def _active_etf_page() -> None:
             f"（濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔）"
             + (f"　·　{aum_line}" if aum_line else ""),
             buys=buys, sells=sells, names=nm, qty=qty, exit_notes=exit_n,
+            holdings_html=_holdings_table_html(_holdings_df(code, date)),
             meta_line=meta_line))
-        holdings.append((code, f"{code} {issuer}{('・' + name) if name else ''}", date))
 
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
-
-    for code, label, date in holdings:
-        hdf = _holdings_df(code, date)
-        if hdf.empty:
-            continue
-        with st.expander(f"{label} 持股明細（{len(hdf)} 檔，依權重排序，點開看）"):
-            st.dataframe(
-                hdf.rename(columns={"stock_code": "代號", "stock_name": "名稱", "weight": "權重%"}),
-                hide_index=True, use_container_width=True, height=388,
-                column_config={"權重%": st.column_config.NumberColumn(format="%.2f%%")})
 
     st.divider()
     st.caption(
