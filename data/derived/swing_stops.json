@@ -5,6 +5,18 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "4979": {
+      "name": "華星光",
+      "status": "pending_entry",
+      "signal_date": "2026-09-14",
+      "risk_stop_ref": 496.17
+    },
+    "6196": {
+      "name": "帆宣",
+      "status": "pending_entry",
+      "signal_date": "2026-09-14",
+      "risk_stop_ref": 512.69
+    },
     "1560": {
       "name": "中砂",
       "first_seen": "2026-09-11",
@@ -275,17 +287,11 @@
       "exit_date": null,
       "exit_price": null
     },
-    "4979": {
-      "name": "華星光",
+    "3711": {
+      "name": "日月光投控",
       "status": "pending_entry",
       "signal_date": "2026-09-14",
-      "risk_stop_ref": 496.17
-    },
-    "6196": {
-      "name": "帆宣",
-      "status": "pending_entry",
-      "signal_date": "2026-09-14",
-      "risk_stop_ref": 512.69
+      "risk_stop_ref": 611.56
     }
   }
 }
