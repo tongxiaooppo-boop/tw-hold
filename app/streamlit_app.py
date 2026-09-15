@@ -1105,8 +1105,6 @@ def _swing_page(payload: dict | None) -> None:
     _disclaimer()
 
     flags = _active_flags()
-    if flags:
-        st.caption(_active_legend(flags))
 
     chg = payload.get("changes", {})
     if chg.get("added") or chg.get("removed"):
@@ -1127,6 +1125,8 @@ def _swing_page(payload: dict | None) -> None:
     _swing_exit_table()
     _swing_paper_section()
     _strategy_backtest_expander("swing")
+    if flags:
+        st.caption(_active_legend(flags))
     _disclaimer(SWING_DISCLAIMER)
 
 
@@ -1221,8 +1221,6 @@ def _shortterm_page() -> None:
         return
 
     flags = _active_flags()
-    if flags:
-        st.caption(_active_legend(flags))
     st.subheader(f"當日候選（{len(cands)} 檔）")
     st.markdown('<div class="thc-grid">'
                 + "".join(_short_b_html(c, _active_of(c.get("ticker"), flags)) for c in cands)
@@ -1243,6 +1241,8 @@ def _shortterm_page() -> None:
     for d in data.get("disclaimer", []):
         st.caption("· " + d)
     _strategy_backtest_expander("short")
+    if flags:
+        st.caption(_active_legend(flags))
     _disclaimer(SHORT_DISCLAIMER)
 
 
@@ -1502,9 +1502,8 @@ def _safe_checks(fn, *args, **kwargs) -> list[dict]:
         return []
 
 
-def _render_checks(rows: list[dict], note: str, missing: str | None = None,
+def _render_checks(rows: list[dict], missing: str | None = None,
                    disclaimer: str | None = None) -> None:
-    st.caption(note)
     if missing:
         st.info(missing)
         return
@@ -1590,8 +1589,6 @@ def _checklist_page() -> None:
     # 來源過期／抓不到 → 傳 None，檢核表整列不出現。
     _aflags = _active_flags()
     _aef = (_active_of(code, _aflags) or {}) if _aflags else None
-    if _aflags:
-        st.caption(_active_legend(_aflags))
 
     qf, px, per, div, rev, chp = (d["qf"], d["px"], d["per"], d["div"], d["rev"], d["chips"])
     end = pd.to_datetime(px["date"]).max() if not px.empty else None
@@ -1603,7 +1600,6 @@ def _checklist_page() -> None:
     with t0:
         # 短線是日尺度 → 圖只看近 3 個月
         _render_checks(_safe_checks(cl.short_checks, d, active_etf=_aef),
-                       "純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。",
                        missing=("這檔在 bundle 沒有價量資料，無法體檢短線軌。"
                                 if px.empty else None),
                        disclaimer=SHORT_DISCLAIMER)
@@ -1615,8 +1611,6 @@ def _checklist_page() -> None:
     with t1:
         # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
         _render_checks(_safe_checks(cl.swing_checks, d, active_etf=_aef),
-                       "門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。趨勢模板只做 7 條，"
-                       "不含相對強弱 RS（需全市場橫斷面）。",
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
                                 if px_fin_empty else None),
                        disclaimer=SWING_DISCLAIMER)
@@ -1630,8 +1624,8 @@ def _checklist_page() -> None:
     with t2:
         # 價值是年度尺度 → 逐季圖看近 6 年、PE 河流看近 5 年
         _render_checks(_safe_checks(cl.value_checks, fv),
-                       "F-Score + Magic Formula 精神；門檻與價值清單同一份因子。",
-                       None if fv is not None else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。")
+                       missing=(None if fv is not None
+                                else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。"))
         st.caption("——對應圖表（價值尺度：近 5～6 年）——")
         if not qf.empty:
             c1, c2 = st.columns(2)
@@ -1642,8 +1636,8 @@ def _checklist_page() -> None:
     with t3:
         # 定存看長期：股利連續性 10+ 年、殖利率 5 年分位、負債結構近 6 年
         _render_checks(_safe_checks(cl.deposit_checks, fd),
-                       "殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。",
-                       None if fd is not None else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。")
+                       missing=(None if fd is not None
+                                else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。"))
         st.caption("——對應圖表（定存尺度：股利近 12 年、殖利率近 5 年）——")
         if not div.empty:
             _chart(ch.dividends_chart, div, nm)
@@ -1653,6 +1647,14 @@ def _checklist_page() -> None:
             _chart(ch.balance_health, qf, nm, 24)
     st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     st.divider()
+    with st.expander("📖 四軌各自怎麼算的（點開看）"):
+        st.markdown("**⚡ 短線**：純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。")
+        st.markdown("**🟠 波段**：門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。"
+                    "趨勢模板只做 7 條，不含相對強弱 RS（需全市場橫斷面）。")
+        st.markdown("**🔵 價值**：F-Score + Magic Formula 精神；門檻與價值清單同一份因子。")
+        st.markdown("**🟢 定存**：殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定；門檻與定存清單一致。")
+    if _aflags:
+        st.caption(_active_legend(_aflags))
     st.caption("同一檔股票，分別用「短線 / 波段 / 價值 / 定存」四套判準逐條攤開。"
                "**只打勾、不加總、不給 verdict／買價／排名**——成立幾條、缺哪條，自己衡量。"
                "短線軌零回測、只是把技術面條件列出來（tw-hold 是長期工具，短線用 tw-swing）。")
@@ -1689,7 +1691,7 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
              buys: list | None = None, sells: list | None = None,
              names: dict | None = None, qty: dict | None = None,
              exit_notes: dict | None = None, note: str | None = None,
-             top_line: str = "", meta_line: str = "") -> str:
+             meta_line: str = "") -> str:
     """主動式 ETF 單檔卡片——沿用版型 B 的 thc-card / sw-cols 語言（同長波段那張）。
 
     `qty`：{ticker: 這檔基金當天實際動了幾張}，來自 `by_fund`（見
@@ -1723,8 +1725,6 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
     ]
     if note:
         parts.append(f'<div class="thc-note">{_esc(note)}</div>')
-    if top_line:
-        parts.append(f'<div class="thc-barcap">{_esc(top_line)}</div>')
     if buys is not None or sells is not None:
         parts.append(
             '<div class="sw-cols">'
@@ -1737,22 +1737,20 @@ def _ae_card(code: str, issuer: str, name: str, sev: str, pill: str, ctx: str, *
             f'<div class="thc-body">{"".join(parts)}</div></div>')
 
 
-def _top_holdings(code: str, date: str, n: int = 5) -> str:
-    """該檔基金當天 PCF 權重前 N 大持股——直接讀快照的 `weight` 欄（PCF 本來就有，
-    不是算出來的），跟差分（買賣）無關，純粹「這檔基金資金最集中在哪」。"""
+def _holdings_df(code: str, date: str) -> pd.DataFrame:
+    """該檔基金當天 PCF 完整持股，依權重由大到小排序——直接讀快照的 `weight` 欄
+    （PCF 本來就有全部持股，不是只算前幾大），跟差分（買賣）無關，純粹「這檔基金
+    資金放在哪」。表格用，不是字串。"""
     p = REPO / "data" / "pcf" / code / f"{date}.parquet"
     if not p.exists():
-        return ""
+        return pd.DataFrame()
     try:
         df = pd.read_parquet(p, columns=["stock_code", "stock_name", "weight"])
     except Exception:  # noqa: BLE001
-        return ""
+        return pd.DataFrame()
     if df.empty or "weight" not in df.columns:
-        return ""
-    top = df.sort_values("weight", ascending=False).head(n)
-    items = "、".join(f"{r.stock_code} {r.stock_name} {r.weight:.1f}%"
-                      for r in top.itertuples(index=False))
-    return f"前{n}大持股：{items}"
+        return pd.DataFrame()
+    return df.sort_values("weight", ascending=False).reset_index(drop=True)
 
 
 def _active_summary(fl: dict) -> str:
@@ -1853,6 +1851,7 @@ def _active_etf_page() -> None:
     missing = set((idx or {}).get("missing") or [])
 
     cards: list[str] = []
+    holdings: list[tuple[str, str, str]] = []  # (code, label, date)——持股明細表用
     for code in order:
         fi = idx_funds.get(code) or {}
         fmd = fm_all.get(code) or {}
@@ -1891,9 +1890,20 @@ def _active_etf_page() -> None:
             f"（濾掉零星微調後共動 {fmd.get('moved_n', 0)} 檔）"
             + (f"　·　{aum_line}" if aum_line else ""),
             buys=buys, sells=sells, names=nm, qty=qty, exit_notes=exit_n,
-            top_line=_top_holdings(code, date), meta_line=meta_line))
+            meta_line=meta_line))
+        holdings.append((code, f"{code} {issuer}{('・' + name) if name else ''}", date))
 
     st.markdown(f'<div class="ae-stack">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+    for code, label, date in holdings:
+        hdf = _holdings_df(code, date)
+        if hdf.empty:
+            continue
+        with st.expander(f"{label} 持股明細（{len(hdf)} 檔，依權重排序，點開看）"):
+            st.dataframe(
+                hdf.rename(columns={"stock_code": "代號", "stock_name": "名稱", "weight": "權重%"}),
+                hide_index=True, use_container_width=True, height=388,
+                column_config={"權重%": st.column_config.NumberColumn(format="%.2f%%")})
 
     st.divider()
     st.caption(
@@ -2116,8 +2126,6 @@ def _macro_compass_page() -> None:
         short_v["value"] if short_v else None, ten_v["value"] if ten_v else None)
     st.markdown(f"**台股：**{market_sentiment.tw_summary(tw_sents)}")
     st.markdown(f"**國際情勢：**{market_sentiment.intl_summary(intl_sents, vix_txt, curve_txt)}")
-    st.caption("以上是固定句型代入當下數字，不是 AI 生成、不做跨指標推論（例如不會因為"
-               "「偏多」加「VIX偏低」就合成「風險偏好回升」這種需要判斷的話），兩段各自獨立。")
 
     st.divider()
     st.subheader("台股")
@@ -2187,7 +2195,9 @@ def _macro_compass_page() -> None:
             "- **資料源**：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
             "24 小時盤外交易讓收盤價更快過期，不是讓它失效。排程跟台股那條 `rebuild.yml` "
             "無關（獨立的 `.github/workflows/global_macro.yml`，美股收盤後才跑）。\n"
-            "- **頁首摘要是規則模板，不是 AI**——固定句型代入數字，只講事實、不做評論"
+            "- **頁首摘要是規則模板，不是 AI**——固定句型代入數字，只講事實、不做評論，"
+            "**不做跨指標推論**（例如不會因為「偏多」加「VIX偏低」就合成「風險偏好回升」"
+            "這種需要判斷的話），台股／國際情勢兩段各自獨立、不接成一段話"
             "（真正的 AI 敘事層還在規劃階段，10 月以後才會再議）。"
         )
 
