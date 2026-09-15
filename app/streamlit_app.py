@@ -2100,7 +2100,7 @@ def _macro_compass_page() -> None:
     純粹是規則模板，不要看到「市場情緒」四個字就以為背後有 AI。
     """
     import bundle_data as bd
-    from reference import global_macro, index_proxy, market_sentiment, tx_futures
+    from reference import global_macro, index_proxy, market_sentiment, put_call_ratio, tx_futures
     from reference.market_status import latest_change, market_card
 
     st.header("總經導航", anchor="top")
@@ -2175,6 +2175,20 @@ def _macro_compass_page() -> None:
                    "夜盤沒有獨立結算價，這裡顯示的是夜盤最後成交價，跨夜到隔天 05:00。")
     else:
         st.info("還沒有台指期資料——`fetch_tx_futures.py` 應該還沒跑過或還沒重新部署。")
+
+    st.divider()
+    st.subheader("台指選擇權 Put/Call Ratio")
+    pcr_vol = put_call_ratio.load_series("put_call_volume_ratio")
+    pcr_oi = put_call_ratio.load_series("put_call_oi_ratio")
+    if not pcr_vol.empty or not pcr_oi.empty:
+        cards = [_gz_card("TXO", "量比", pcr_vol, suffix="%", show_pct=False),
+                 _gz_card("TXO", "未平倉比", pcr_oi, suffix="%", show_pct=False)]
+        st.markdown(f'<div class="gz-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        st.caption("Put/Call 比＝Put 量(或未平倉)÷Call 量(或未平倉)×100。>100 偏防守"
+                   "（怕跌買 Put 的比買 Call 的多）、<100 偏樂觀，沒有官方多空分界線，"
+                   "看趨勢比看單點有意義。資料源 TAIFEX OpenAPI（`PutCallRatio`）。")
+    else:
+        st.info("還沒有 Put/Call Ratio 資料——`fetch_put_call_ratio.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
     st.subheader("族群動向")

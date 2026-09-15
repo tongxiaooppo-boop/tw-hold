@@ -48,12 +48,20 @@ jobs:
         continue-on-error: true
         run: python scripts/fetch_tx_futures.py
 
+      # Put/Call Ratio——這支 API 自帶 ~21 個交易日歷史，跟只給最新一天的
+      # DailyMarketReportFut 不同，一樣 continue-on-error 不擋主線。
+      - name: 台指選擇權 Put/Call Ratio
+        continue-on-error: true
+        run: python scripts/fetch_put_call_ratio.py
+
       - name: commit data/reference/global_macro.parquet
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
-          git add data/reference/global_macro.parquet data/reference/global_macro_meta.json data/reference/tx_futures.parquet
-          git diff --cached --quiet -- data/reference/global_macro.parquet data/reference/global_macro_meta.json data/reference/tx_futures.parquet && {
+          git add data/reference/global_macro.parquet data/reference/global_macro_meta.json \
+                  data/reference/tx_futures.parquet data/reference/put_call_ratio.parquet
+          git diff --cached --quiet -- data/reference/global_macro.parquet data/reference/global_macro_meta.json \
+                  data/reference/tx_futures.parquet data/reference/put_call_ratio.parquet && {
             echo "無實質變更——跳過 commit"; exit 0; }
           git commit -m "國際總經快照 $(date -u +%F)"
           git push
