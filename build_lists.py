@@ -238,6 +238,14 @@ def main() -> int:
     r["value"].to_parquet(DERIVED / "factors_value.parquet", index=False)
     r["deposit"].to_parquet(DERIVED / "factors_deposit.parquet", index=False)
 
+    # 族群動向——原本只有 build_factors.py 的 main() 會寫，rebuild.yml 每天只跑
+    # build_lists.py，導致這個檔案卡在上次手動跑的那天不會更新（2026-09-16 修）。
+    rot_out = DERIVED / "industry_rotation.json"
+    rot_out.write_text(json.dumps(
+        {"asof": r["industry_rotation_asof"], "industries": r["industry_rotation"]},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"  → {rot_out}（{len(r['industry_rotation'])} 個產業）")
+
     from build_factors import detect_unhandled_splits
     split_warn = detect_unhandled_splits()
     for w in split_warn:

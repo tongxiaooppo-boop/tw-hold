@@ -43,12 +43,24 @@
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
 
 OUT = Path(__file__).resolve().parents[1] / "data" / "reference" / "global_macro.parquet"
+META_OUT = OUT.with_name("global_macro_meta.json")
+
+#: 這支腳本每次都整段 2 年全量覆寫（不是增量），理論上每檔的最新日期應該跟
+#: 「這批一起抓到的最新日期」一致（都是同一次收盤後跑的）。2026-09-15 第一次
+#: 自動排程就發生過美股個股 + 恆生卡在 4 天前、指數/利率卻是最新的情況——
+#: Yahoo 那端對同一批次裡部分 ticker 回傳了還沒補齊尾端的資料，腳本本身沒報錯、
+#: 也沒有任何地方會發現，直到有人手動去翻 parquet 才注意到。這裡補上「部分過期」
+#: 偵測（跟原本只抓「整檔全空」的 missing 判斷是兩回事）。門檻抓 3 天，蓋過一個
+#: 長週末，避免遇到假日就誤報。
+STALE_THRESHOLD_DAYS = 3
 
 #: symbol -> 中文名。四組意義不同，畫面端各自決定怎麼呈現，這裡只負責抓齊。
 INDICES = {"^DJI": "道瓊", "^IXIC": "那斯達克", "^SOX": "費城半導體",
@@ -80,14 +92,70 @@ def fetch() -> pd.DataFrame:
     return out.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
+def _check_staleness(df: pd.DataFrame) -> list[dict]:
+    """回傳落後參考日期超過門檻的 symbol 清單（部分過期，不是整檔全空）。"""
+    latest = df.groupby("symbol")["date"].max()
+    ref = latest.max()
+    stale = []
+    for sym, d in latest.items():
+        lag = (ref - d).days
+        if lag > STALE_THRESHOLD_DAYS:
+            stale.append({"symbol": sym, "name": ALL_SYMBOLS[sym],
+                          "latest": d.strftime("%Y-%m-%d"), "lag_days": lag})
+    return stale
+
+
+def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
+    """對過期的 symbol 個別重抓一次短天期序列，補進去蓋掉過期的尾端。
+
+    只挑「這批批次下載卡住的那幾檔」單獨重試，不整批重抓——那幾檔的問題是
+    Yahoo 對長天期批次請求回應過期，短天期單檔請求常常打到不同的路徑而拿到
+    當下資料（yfinance 已知現象，不是本專案能控制的）。10 天夠蓋過一個長週末。
+    """
+    frames = [df]
+    for sym in symbols:
+        try:
+            raw = yf.download(sym, period="10d", interval="1d",
+                               progress=False, auto_adjust=True)
+            sub = raw[["Close"]].dropna().rename(columns={"Close": "close"})
+            if sub.empty:
+                continue
+            sub = sub.reset_index().rename(columns={"Date": "date"})
+            sub["symbol"] = sym
+            sub["date"] = pd.to_datetime(sub["date"]).dt.tz_localize(None)
+            frames.append(sub[["symbol", "date", "close"]])
+        except Exception as e:
+            print(f"  ⚠️ {sym} 重試失敗：{e}")
+    merged = pd.concat(frames, ignore_index=True)
+    # 同一天同一檔以後蓋前——重試的資料排在 frames 後面，keep="last" 讓它贏。
+    merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
+    return merged.sort_values(["symbol", "date"]).reset_index(drop=True)
+
+
 def main() -> None:
     df = fetch()
+
+    stale = _check_staleness(df)
+    if stale:
+        print(f"偵測到 {len(stale)} 檔部分過期，單獨重試：{[s['symbol'] for s in stale]}")
+        df = _retry_stale(df, [s["symbol"] for s in stale])
+        stale = _check_staleness(df)  # 重試後才是最終結果，寫進 meta／告警的是這份
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(OUT, index=False)
     got = sorted(df["symbol"].unique())
     missing = sorted(set(ALL_SYMBOLS) - set(got))
     print(f"寫入 {OUT}：{len(df)} 筆、{len(got)}/{len(ALL_SYMBOLS)} 檔"
           + (f"　缺：{missing}" if missing else ""))
+
+    META_OUT.write_text(json.dumps({
+        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "reference_date": df["date"].max().strftime("%Y-%m-%d"),
+        "stale": stale,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    for s in stale:
+        print(f"::warning::{s['symbol']}（{s['name']}）資料落後 {s['lag_days']} 天"
+              f"（最新只到 {s['latest']}）——Yahoo 這批可能沒補齊，不是整檔全空但已經過期")
 
 
 if __name__ == "__main__":
