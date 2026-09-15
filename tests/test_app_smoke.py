@@ -112,6 +112,28 @@ def test_卡片HTML有進到頁面():
     assert "thc-card" in md and "thc-hero" in md
 
 
+def test_族群動向資金排序_舊schema缺欄位不炸():
+    # 2026-09-15 Streamlit Cloud 上線當天真的炸過：industry_rotation.json 還沒
+    # 被新版 build_lists.py 重新產出前，rows 完全沒有 net_1m/net_1w 這兩個 key
+    # （不是 None，是 KeyError），直接 r["net_1m"] 會把整頁炸掉。
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    old_schema_rows = [
+        {"industry": "A", "n": 5, "ret_1w": 0.01, "ret_1m": 0.05, "headwind": False},
+        {"industry": "B", "n": 4, "ret_1w": -0.02, "ret_1m": -0.03, "headwind": False},
+    ]
+    ranked = app._industry_rank_by_money(old_schema_rows)
+    assert {r["industry"] for r in ranked} == {"A", "B"}
+
+    mixed_rows = old_schema_rows + [
+        {"industry": "C", "n": 6, "ret_1w": 0.0, "ret_1m": 0.0, "headwind": False,
+         "net_1w": 10.0, "net_1m": 50.0},
+    ]
+    ranked = app._industry_rank_by_money(mixed_rows)
+    assert ranked[0]["industry"] == "C"  # 有資金資料的排前面
+
+
 def test_card_b_html_單張():
     import sys
     sys.path.insert(0, "app")

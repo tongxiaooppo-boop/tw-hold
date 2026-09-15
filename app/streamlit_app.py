@@ -2051,6 +2051,15 @@ def _industry_rotation_summary(rows: list[dict]) -> str:
     return "　·　".join(parts)
 
 
+def _industry_rank_by_money(rows: list[dict]) -> list[dict]:
+    """族群動向依資金(`net_1m`)由高到低重排——`.get()` 不是 `[]`，因為部署後第一次
+    這頁被打開時 `industry_rotation.json` 可能還是舊 schema（沒有 net_1m/net_1w
+    兩個欄位，要等 rebuild.yml 跑過一次新版 build_lists.py 才會補上），直接用
+    `r["net_1m"]` 會 KeyError 把整頁炸掉（2026-09-15 上線當天在 Streamlit Cloud
+    真的炸過一次）。缺欄位視同 None，排到最後面。"""
+    return sorted(rows, key=lambda r: (r.get("net_1m") is None, -(r.get("net_1m") or 0)))
+
+
 def _industry_rotation_table(rows: list[dict]) -> str:
     """族群動向表——排行本身就是訊號，不用紅綠燈（見上面 .ir-table CSS 註解）。
     量條只用單一色階＋透明度表 |1月報酬| 的相對大小，逆風是純文字標籤。
@@ -2211,10 +2220,10 @@ def _macro_compass_page() -> None:
     ir_rows = ir.get("industries") or []
     if ir_rows:
         st.markdown(f"**{_industry_rotation_summary(ir_rows)}**")
-        sort_mode = st.radio("排序依據", ["漲跌幅", "資金"], horizontal=True,
+        sort_mode = st.radio("排序依據", ["漲跌幅", "資金"], index=1, horizontal=True,
                              key="ir_sort_mode", label_visibility="collapsed")
         if sort_mode == "資金":
-            ranked = sorted(ir_rows, key=lambda r: (r["net_1m"] is None, -(r["net_1m"] or 0)))
+            ranked = _industry_rank_by_money(ir_rows)
             st.caption(f"資料日 {ir.get('asof', '—')}　·　依近1月三大法人合計買賣超金額排序"
                        "（上面買最多、下面賣最多），金額用「合計買賣超股數 × 收盤價」估算，"
                        "不是精確結算金額。跟漲跌幅排行是互補視角——資金流入不一定馬上反映在"
