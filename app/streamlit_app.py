@@ -63,6 +63,7 @@ LABELS = {
     "yield_pctile_5y": "殖利率5年分位", "div_years": "連續配息年", "last_cash_dividend": "近一次現金股利",
     "ann_vol": "年化週波動", "payout_ratio_ttm": "配息率TTM", "cyclical_penalty": "景氣循環懲罰",
     "debt_ratio": "負債比",
+    "peer_metric_median": "同業ROE中位數", "peer_rank": "產業內排名", "peer_n": "產業檔數",
     # 長波段候選池（狀態型，沒有 verdict）——沒登記的話「複製給 AI」會吐英文欄名，
     # 而且比率欄不會換算成 %（0.92 其實是 +92%，AI 讀不出來，2026-09-11 修）。
     "eps_yoy_q": "季 EPS YoY", "revenue_yoy": "月營收 YoY", "revenue_accel": "月營收 YoY 加速",
@@ -75,7 +76,7 @@ LABELS = {
 PCT_FIELDS = {"roe", "fcf_yield", "norm_ey", "gross_margin", "upside_pct", "cur_yield",
               "yield_floor", "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
               "yield_pctile_5y", "net_cash_to_mktcap", "payout_ratio_ttm", "debt_ratio",
-              "industry_ret_6m",
+              "industry_ret_6m", "peer_metric_median",
               "eps_yoy_q", "revenue_yoy", "dist_50ma", "dist_52w_high", "dist_200ma",
               "risk_pct_at_close"}
 
@@ -296,6 +297,8 @@ def _fmt(field: str, v) -> str:
     if isinstance(v, bool):
         return "是" if v else "否"
     if isinstance(v, (int, float)):
+        if field in ("peer_rank", "peer_n"):          # 名次/檔數：整數，不要顯示 .00
+            return f"{int(v)}"
         if field in PCT_FIELDS:
             return f"{v * 100:.1f}%"
         return f"{v:,}" if isinstance(v, int) else f"{v:,.2f}"

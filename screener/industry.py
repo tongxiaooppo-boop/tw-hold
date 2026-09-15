@@ -121,3 +121,41 @@ def add_industry_headwind(df: pd.DataFrame, price_hist: pd.DataFrame,
     d["industry_ret_6m"] = d["industry"].map(
         lambda i: hw[i]["median_ret"] if i in hw else np.nan)
     return d
+
+
+#: 分類太雜的垃圾桶產業——樣本夠大也不該互相比較（放在一起的公司彼此不是
+#: 真的同業），比 MIN_N 的樣本數門檻更根本的一種「不適用」。
+_JUNK_INDUSTRIES = {"其他", "其他電子業", "其他電子類"}
+
+
+def add_peer_comparison(df: pd.DataFrame, metric: str = "roe",
+                        min_n: int = MIN_N) -> pd.DataFrame:
+    """同業比較（只顯示、不進 verdict／value_score——比照 `industry_headwind`，
+    2026-09-15 補：單一 ROE 數字沒有同業基準，看不出高低）。
+
+    在 `df`（已有 `industry` 欄）上加：
+      - `peer_metric_median`：同產業 `metric` 中位數
+      - `peer_rank` / `peer_n`：產業內名次（1 = 最好）／產業檔數
+    產業檔數 < `min_n`，或落在垃圾桶分類（`其他`/`其他電子業`/`其他電子類`，
+    裡面的公司彼此根本不是真的同業）→ 該產業整組留 NaN，不強行比較。
+    """
+    d = df.copy()
+    d["peer_metric_median"] = np.nan
+    d["peer_rank"] = np.nan
+    d["peer_n"] = np.nan
+    if metric not in d.columns or "industry" not in d.columns:
+        return d
+
+    valid = d["industry"].notna() & ~d["industry"].isin(_JUNK_INDUSTRIES) & d[metric].notna()
+    sub = d.loc[valid]
+    g = sub.groupby("industry")[metric]
+    counts = g.transform("size")
+    idx = sub.index[counts >= min_n]
+    if len(idx) == 0:
+        return d
+
+    d.loc[idx, "peer_metric_median"] = g.transform("median").loc[idx]
+    # 名次：同產業內由大到小排（越大越好），1 = 最好
+    d.loc[idx, "peer_rank"] = g.rank(ascending=False, method="min").loc[idx]
+    d.loc[idx, "peer_n"] = counts.loc[idx]
+    return d
