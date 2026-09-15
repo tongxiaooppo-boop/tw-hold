@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from screener.industry import (add_industry_headwind, add_peer_comparison,
-                               industry_headwind, industry_rotation)
+                               industry_headwind, industry_money_flow, industry_rotation)
 
 _ASOF = pd.Timestamp("2026-09-07")
 
@@ -100,3 +101,44 @@ def test_同業比較_缺metric欄不炸():
     df = pd.DataFrame({"ticker": ["1"], "industry": ["A"]})
     out = add_peer_comparison(df, metric="roe")
     assert np.isnan(out.loc[0, "peer_rank"])
+
+
+def _chips(spec: dict[str, float]) -> pd.DataFrame:
+    """spec: {ticker: 每日合計買賣超股數（固定值）} → 跟 _price_hist 同一組日期。"""
+    dates = pd.date_range("2026-02-20", _ASOF, freq="B")
+    rows = [(d, tk, net, 0.0, 0.0, net) for tk, net in spec.items() for d in dates]
+    return pd.DataFrame(rows, columns=["date", "ticker", "foreign_net", "trust_net",
+                                       "dealer_net", "total_net"])
+
+
+def test_族群資金排行_股數乘價格加總換算億元():
+    # 收盤價固定 100，買超 100 萬股/天 → 近1月(21天) 單檔 = 21,000,000 * 100 = 21億元
+    ph = _price_hist({"1": 0.0, "2": 0.0, "3": 0.0})
+    chips = _chips({"1": 1_000_000, "2": 1_000_000, "3": 1_000_000})
+    im = {"1": "A", "2": "A", "3": "A"}
+    mf = industry_money_flow(chips, ph, im, _ASOF)
+    assert set(mf) == {"A"}
+    assert mf["A"]["n"] == 3
+    assert mf["A"]["net_1m"] == pytest.approx(63.0, rel=0.05)  # 3 檔加總 21億*3
+    assert mf["A"]["net_1w"] < mf["A"]["net_1m"]
+
+
+def test_族群資金排行_賣超為負():
+    ph = _price_hist({"1": 0.0, "2": 0.0, "3": 0.0})
+    chips = _chips({"1": -500_000, "2": -500_000, "3": -500_000})
+    im = {"1": "A", "2": "A", "3": "A"}
+    mf = industry_money_flow(chips, ph, im, _ASOF)
+    assert mf["A"]["net_1m"] < 0
+
+
+def test_族群資金排行_樣本太小不列():
+    ph = _price_hist({"1": 0.0, "2": 0.0})
+    chips = _chips({"1": 100_000, "2": 100_000})
+    im = {"1": "A", "2": "B"}  # 各只有 1 檔
+    assert industry_money_flow(chips, ph, im, _ASOF) == {}
+
+
+def test_族群資金排行_缺chips不炸():
+    ph = _price_hist({"1": 0.0, "2": 0.0, "3": 0.0})
+    assert industry_money_flow(None, ph, {"1": "A"}, _ASOF) == {}
+    assert industry_money_flow(pd.DataFrame(), ph, {"1": "A"}, _ASOF) == {}
