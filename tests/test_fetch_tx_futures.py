@@ -1,5 +1,7 @@
-"""scripts.fetch_tx_futures 的純邏輯部分（近月篩選 + 欄位轉換），不打網路。"""
+"""scripts.fetch_tx_futures 的純邏輯部分（近月篩選 + 欄位轉換 + 夜盤缺失偵測），不打網路。"""
 from __future__ import annotations
+
+import json
 
 from scripts.fetch_tx_futures import _to_record, fetch_front_month_rows
 
@@ -44,3 +46,47 @@ def test_to_record日盤夜盤標籤與結算價():
 def test_to_record沒有last值回None():
     assert _to_record(_row("202609", "一般", last="-")) is None
     assert _to_record(_row("202609", "未知時段")) is None
+
+
+class _Resp:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def read(self):
+        return json.dumps(self._rows).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_夜盤缺席時main寫meta並標記missing_night(monkeypatch, tmp_path):
+    import scripts.fetch_tx_futures as mod
+
+    out, meta = tmp_path / "tx_futures.parquet", tmp_path / "tx_futures_meta.json"
+    monkeypatch.setattr(mod, "OUT", out)
+    monkeypatch.setattr(mod, "META_OUT", meta)
+    # 只有日盤，沒有夜盤那列
+    monkeypatch.setattr(mod.urllib.request, "urlopen",
+                         lambda *a, **k: _Resp([_row("202609", "一般")]))
+
+    mod.main()
+    m = json.loads(meta.read_text(encoding="utf-8"))
+    assert m["missing_night"] is True
+    assert m["date"] == "2026-09-14"
+
+
+def test_日盤夜盤都有時main寫meta標記正常(monkeypatch, tmp_path):
+    import scripts.fetch_tx_futures as mod
+
+    out, meta = tmp_path / "tx_futures.parquet", tmp_path / "tx_futures_meta.json"
+    monkeypatch.setattr(mod, "OUT", out)
+    monkeypatch.setattr(mod, "META_OUT", meta)
+    monkeypatch.setattr(mod.urllib.request, "urlopen",
+                         lambda *a, **k: _Resp([_row("202609", "一般"), _row("202609", "盤後")]))
+
+    mod.main()
+    m = json.loads(meta.read_text(encoding="utf-8"))
+    assert m["missing_night"] is False

@@ -2165,30 +2165,27 @@ def _macro_compass_page() -> None:
         st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
 
     st.divider()
-    st.subheader("台指期（近月）")
+    st.subheader("台指期／選擇權")
     tx_day, tx_night = tx_futures.load_session("day"), tx_futures.load_session("night")
-    if not tx_day.empty or not tx_night.empty:
-        cards = [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
-                 _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)]
-        st.markdown(f'<div class="gz-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
-        st.caption("台指期近月合約，資料源 TAIFEX OpenAPI（`DailyMarketReportFut`）。"
-                   "夜盤沒有獨立結算價，這裡顯示的是夜盤最後成交價，跨夜到隔天 05:00。")
-    else:
-        st.info("還沒有台指期資料——`fetch_tx_futures.py` 應該還沒跑過或還沒重新部署。")
-
-    st.divider()
-    st.subheader("台指選擇權 Put/Call Ratio")
     pcr_vol = put_call_ratio.load_series("put_call_volume_ratio")
     pcr_oi = put_call_ratio.load_series("put_call_oi_ratio")
+    tx_cards = []
+    if not tx_day.empty or not tx_night.empty:
+        tx_cards += [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
+                     _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)]
     if not pcr_vol.empty or not pcr_oi.empty:
-        cards = [_gz_card("TXO", "量比", pcr_vol, suffix="%", show_pct=False),
-                 _gz_card("TXO", "未平倉比", pcr_oi, suffix="%", show_pct=False)]
-        st.markdown(f'<div class="gz-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
-        st.caption("Put/Call 比＝Put 量(或未平倉)÷Call 量(或未平倉)×100。>100 偏防守"
-                   "（怕跌買 Put 的比買 Call 的多）、<100 偏樂觀，沒有官方多空分界線，"
-                   "看趨勢比看單點有意義。資料源 TAIFEX OpenAPI（`PutCallRatio`）。")
+        tx_cards += [_gz_card("TXO", "量比", pcr_vol, suffix="%", show_pct=False),
+                     _gz_card("TXO", "未平倉比", pcr_oi, suffix="%", show_pct=False)]
+    if tx_cards:
+        st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
+        st.caption("台指期近月合約 + 台指選擇權 Put/Call Ratio，資料源 TAIFEX OpenAPI"
+                   "（`DailyMarketReportFut`／`PutCallRatio`）。夜盤沒有獨立結算價，顯示的是"
+                   "夜盤最後成交價，跨夜到隔天 05:00。Put/Call 比＝Put 量(或未平倉)÷Call 量"
+                   "(或未平倉)×100，>100 偏防守、<100 偏樂觀，沒有官方多空分界線，看趨勢比"
+                   "看單點有意義。")
     else:
-        st.info("還沒有 Put/Call Ratio 資料——`fetch_put_call_ratio.py` 應該還沒跑過或還沒重新部署。")
+        st.info("還沒有台指期/Put-Call Ratio 資料——`fetch_tx_futures.py`／"
+                "`fetch_put_call_ratio.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
     st.subheader("族群動向")
