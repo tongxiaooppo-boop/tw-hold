@@ -516,6 +516,8 @@ div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]
 .thc-barcap{font-size:.72rem;color:var(--thc-soft);font-family:var(--thc-mono);
   display:flex;justify-content:space-between;gap:.5rem;}
 .thc-note{font-size:.8rem;color:var(--thc-soft);margin:.5rem 0 .1rem;}
+.thc-header-badge{display:flex;justify-content:flex-end;align-items:center;
+  height:100%;padding-top:1.1rem;}
 .thc-chips{display:flex;flex-wrap:wrap;gap:.38rem;margin:.7rem 0 .1rem;}
 .thc-chip{font-size:.77rem;background:var(--thc-surface2);border:1px solid var(--thc-line);
   border-radius:6px;padding:.2rem .5rem;white-space:nowrap;color:var(--thc-soft);}
@@ -976,10 +978,12 @@ def _card_list(kind: str, title: str, payload: dict | None) -> None:
     # 篩選按**類別**（推薦 / 觀望 / 資料不足 / 不推薦），不按完整字串。
     cats = [c for c in ("推薦", "觀望", "資料不足", "不推薦")
             if any(_verdict_cat(h.get("verdict", "")) == c for h in holdings)]
-    c1, c2 = st.columns([2, 1])
+    c1, c2 = st.columns([3, 2])
     pick = c1.pills("篩選 verdict（點掉不想看的）", cats, selection_mode="multi",
                     default=cats, key=f"_pick_{kind}") or cats
-    sort_label = c2.selectbox("排序", list(SORT_KEYS[kind]))
+    sort_opts = list(SORT_KEYS[kind])
+    sort_label = c2.segmented_control("排序依據", sort_opts, default=sort_opts[0],
+                                      key=f"_sort_{kind}") or sort_opts[0]
     sk = SORT_KEYS[kind][sort_label]
     rows = [h for h in holdings if _verdict_cat(h.get("verdict", "")) in pick]
     rows.sort(key=lambda h: (h.get(sk) is None, -(h.get(sk) or 0)))
@@ -1260,10 +1264,15 @@ def _shortterm_page() -> None:
     _disclaimer(SHORT_DISCLAIMER)
 
 
-@st.cache_resource(show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
+@st.cache_resource(ttl=3600, show_spinner="第一次載入：從 tw-swing Release 拉 bundle…")
 def _ensure_bundle():
     """回 `{檔名: 有沒有}`。下載中途斷線 / GitHub API 抽風 → 不要讓整頁吐 traceback，
-    退化成「一個都沒有」，呼叫端已經有寫好的提示（2026-09-11 修）。"""
+    退化成「一個都沒有」，呼叫端已經有寫好的提示（2026-09-11 修）。
+
+    `ttl=3600`：容器活著就一直用同一份 bundle，即使上游 Release 已經更新也不會
+    跟進——0050／個股查詢頁都吃這支，2026-09-16 加 TTL 讓它每小時重新比對一次
+    size（`ensure_assets` 本身已經是「沒變就不重抓」，TTL 只是讓「有沒有變」的
+    檢查會發生，不是每小時整包重抓）。"""
     from bundle_data import ensure_assets
     try:
         return ensure_assets()
@@ -2118,32 +2127,37 @@ def _macro_compass_page() -> None:
     AI 解說層（`docs/AI_LAYER.md`）2026-09-13 討論後暫緩到 10 月以後，這裡的摘要
     純粹是規則模板，不要看到「市場情緒」四個字就以為背後有 AI。
     """
-    import bundle_data as bd
     from reference import global_macro, index_proxy, market_sentiment, put_call_ratio, tx_futures
     from reference.market_status import latest_change, market_card
 
     st.header("總經導航", anchor="top")
     _disclaimer()
 
-    got = _ensure_bundle()
-    if not any(got.values()):
-        st.error("拉不到 bundle——雲端需要 `TWSWING_BUNDLE_PAT`（st.secrets），本地需要 `.env`。"
-                 + (f"（{st.session_state['_bundle_err']}）"
-                    if st.session_state.get("_bundle_err") else ""))
-        _disclaimer()
-        return
-
     def _bundle_close(ticker: str) -> pd.Series:
+        """備援路徑——只有本地小檔缺資料時才會走到這裡，才真的去拉整包 bundle。
+        2026-09-16 拿掉整頁前面那道 `_ensure_bundle()` 硬性關卡：這頁除了 0050，
+        其餘（006201／國際指數／總經數字卡）全部純讀本地檔，不該讓 0050 一張卡
+        （原本要拖 ~25MB 的 prices_adj.parquet）決定整頁能不能顯示。"""
+        import bundle_data as bd
+        got = _ensure_bundle()
+        if not any(got.values()):
+            return pd.Series(dtype="float64")
         px = bd.prices(ticker, lookback_days=900)
         if px.empty:
             return pd.Series(dtype="float64")
         return px.set_index("date")["close"].sort_index()
 
+    def _load_0050(_t: str) -> pd.Series:
+        close = index_proxy.load_0050()
+        return close if not close.empty else _bundle_close("0050")
+
     # ---- 先把所有資料算齊，摘要跟各段卡片共用同一份，不重算兩次 ----
-    # 006201 不在 tw-swing data_pack 的 universe 裡（上游單點依賴排除掉的檔），
-    # 改讀 `scripts/fetch_index_proxy.py` 另外從 FinMind 拉的獨立小檔
-    # （見該檔頭：不碰 data_pack 依賴鏈，2026-09-13）。0050 仍吃 bundle。
-    _TW_LOADERS = {"0050": _bundle_close, "006201": lambda _t: index_proxy.load_006201()}
+    # 0050／006201 都改讀 tw-swing bundle 本來就有附的小檔，經
+    # `scripts/promote_index_0050.py`／`scripts/fetch_index_proxy.py` 驗證後落地成
+    # committed 小檔（各自檔頭有驗證邏輯：資料倒退／疑似損毀就保留舊檔不覆寫，
+    # 「前一日資料錯誤不可原諒」）。本地小檔缺才退回 `_bundle_close` 吃整包 bundle
+    # 當備援，不會讓 0050 這張卡直接消失。
+    _TW_LOADERS = {"0050": _load_0050, "006201": lambda _t: index_proxy.load_006201()}
     tw_data, tw_missing = {}, []
     for ticker, market in _MC_MARKETS:
         close = _TW_LOADERS[ticker](ticker)
@@ -2360,6 +2374,22 @@ APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個
 NAV = ["總經導航", "短線", "長波段", "價值", "定存", "個股查詢", "多軌體檢", "主動式 ETF"]
 
 
+def _freshness_badge_html() -> str:
+    """表頭右側新鮮度徽章——只看 bundle trading_date（涵蓋面最廣：三清單／個股查詢／
+    總經導航 0050 都吃這條），純顯示不擋頁（使用者 2026-09-16 裁決：badge-only、
+    單一時鐘）。燈號用既有的 `.thc-pill`（good/warn 兩色點+底色），跟卡片上的判斷
+    徽章同一套視覺語彙，不是另外找 emoji（同一天使用者要求「更符合UI風格」改的）。
+    新鮮度判斷直接借 `scripts/freshness_check.py`，跟 heartbeat 那邊「預期交易日」
+    的定義是同一份，不要兩邊各自維護一套容忍天數。"""
+    from datetime import date
+
+    from scripts.freshness_check import _check_one, _meta_trading_date
+    c = _check_one("bundle", _meta_trading_date(), date.today())
+    sev = "good" if c["ok"] else "warn"
+    label = f"資料日期 {c.get('last_date') or '—'}"
+    return f'<span class="thc-pill thc-{sev}">{_esc(label)}</span>'
+
+
 def _route() -> None:
     """卡片上的代號連結 `?code=XXXX` → 預填個股查詢 + 切分頁。
     處理完就把 query param 清掉，否則每次 rerun 都被鎖在個股查詢分頁。"""
@@ -2379,7 +2409,10 @@ def main() -> None:
     # radio 還沒建，但 key 綁 session_state——使用者點過的那一頁在 rerun 一開始就已經
     # 寫回去了，所以這裡就能知道等一下會選中哪一頁，徽章 CSS 才併得進同一次注入。
     _inject_css(st.session_state.get("_nav") or NAV[0])
-    st.title(f"📡 {APP_NAME}")
+    hc1, hc2 = st.columns([5, 2])
+    hc1.title(f"📡 {APP_NAME}")
+    hc2.markdown(f'<div class="thc-header-badge">{_freshness_badge_html()}</div>',
+                 unsafe_allow_html=True)
 
     nav = st.radio("分頁", NAV, horizontal=True, key="_nav",
                    label_visibility="collapsed")

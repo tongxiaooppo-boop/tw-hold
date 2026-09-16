@@ -56,6 +56,15 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: python scripts/fetch_index_proxy.py
 
+      # 0050 卡片改讀這份 tw-swing 早就有附的小檔（見 index_0050.parquet），
+      # 不用再讓總經導航拖一整包 prices_adj.parquet 才能顯示（2026-09-16）。
+      # 驗證沒過（資料倒退/疑似損毀）就保留舊檔案不覆寫，見 scripts/promote_index_0050.py
+      # 檔頭——「前一日資料錯誤不可原諒」，寧可暫時舊也不要覆蓋成錯的。
+      - name: 上市代理 0050 快照（驗證後才覆寫）
+        id: promote_0050
+        continue-on-error: true
+        run: python scripts/promote_index_0050.py
+
       # 偵測到 bundle 有未還原的分割/減資跳空 → 抓 FinMind 事件表自動算 factor、
       # 寫進 corporate_actions_resolved.json。要在 build_lists 之前跑，當次就修好。
       - name: 自動解析未還原分割
@@ -109,6 +118,20 @@ jobs:
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
           exit 0
+
+      - name: 0050 驗證沒過才告警
+        if: steps.promote_0050.outcome == 'failure'
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::warning::0050 快照驗證沒過，data/reference/index_0050.parquet 保留舊檔案沒被覆寫"
+          MSG="🟠 tw-hold：0050 快照驗證沒過（見上一步 log：資料倒退或疑似漲跌幅損毀），
+          已保留舊檔案、沒有覆寫——總經導航 0050 卡片會顯示舊資料，不會顯示錯的資料。
+          ${RUN_URL}"
+          [ -z "$WEBHOOK" ] && exit 0
+          curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
 
       - name: commit data/derived/ + resolved.json
         run: |
