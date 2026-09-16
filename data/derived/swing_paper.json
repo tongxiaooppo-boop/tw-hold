@@ -1,16 +1,43 @@
 {
   "_meta": {
-    "updated_at": "2026-09-15T12:29:18+00:00",
+    "updated_at": "2026-09-16T00:01:01+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日收盤成交（同 swing_stops.py 的進場代理）。"
   },
-  "trades": [],
+  "trades": [
+    {
+      "ticker": "2027",
+      "name": "大成鋼",
+      "entry_date": "2026-09-11",
+      "entry_price": 46.5,
+      "exit_date": "2026-09-15",
+      "exit_price": 45.58,
+      "ret_pct": -0.019785
+    },
+    {
+      "ticker": "2535",
+      "name": "達欣工",
+      "entry_date": "2026-09-11",
+      "entry_price": 89.1,
+      "exit_date": "2026-09-15",
+      "exit_price": 89.03,
+      "ret_pct": -0.000786
+    }
+  ],
   "stats": {
-    "n": 0,
+    "n": 2,
     "win_rate": null,
     "avg_ret_gross": null,
     "expectancy_net": null,
+    "n_min": 10,
     "vs_backtest": null,
-    "by_month": []
+    "by_month": [
+      {
+        "ym": "2026-09",
+        "n": 2,
+        "win_rate": 0.0,
+        "avg_ret_net": -0.0161355
+      }
+    ]
   }
 }
