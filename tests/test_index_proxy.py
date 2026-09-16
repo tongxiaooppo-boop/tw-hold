@@ -23,3 +23,22 @@ def test_讀到的序列由舊到新排序(monkeypatch, tmp_path):
     out = index_proxy.load_006201()
     assert out.index.is_monotonic_increasing
     assert out.iloc[0] == 10.0 and out.iloc[-1] == 12.0
+
+
+def test_0050_檔案不存在回空序列(monkeypatch, tmp_path):
+    monkeypatch.setattr(index_proxy, "INDEX_0050", tmp_path / "nope.parquet")
+    out = index_proxy.load_0050()
+    assert out.empty
+
+
+def test_0050_讀到的序列由舊到新排序(monkeypatch, tmp_path):
+    p = tmp_path / "index_0050.parquet"
+    df = pd.DataFrame({
+        "date": pd.to_datetime(["2026-01-03", "2026-01-02", "2026-01-01"]),
+        "close": [102.0, 101.0, 100.0],
+    })
+    df.to_parquet(p, index=False)
+    monkeypatch.setattr(index_proxy, "INDEX_0050", p)
+    out = index_proxy.load_0050()
+    assert out.index.is_monotonic_increasing
+    assert out.iloc[0] == 100.0 and out.iloc[-1] == 102.0

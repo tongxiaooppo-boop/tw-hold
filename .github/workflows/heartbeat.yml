@@ -1,19 +1,28 @@
-name: 心跳（清單新鮮度守門）
+name: 心跳（開盤前新鮮度守門）
 
 # 守門員 G4（PLAN §M0.2）：rebuild 由 tw-swing 的 repository_dispatch 觸發——
 # 若 tw-swing publish 斷了、dispatch 不再來，rebuild **不會失敗、只是不再跑**，
-# 沒人會發現。這支每週醒來檢查 data/derived/_meta.json 的重算時間，
-# 太舊就告警。
+# 沒人會發現。這支在台股開盤前醒來檢查：
+#   1. data/derived/_meta.json 的 trading_date（三清單／個股查詢底層 bundle）
+#   2. data/reference/index_006201.parquet 最後一筆日期（總經導航上櫃卡）
+# 邏輯見 scripts/freshness_check.py。
+#
+# 2026-09-16：從每週一次、只看 rebuilt_at 有沒有變，改成每個交易日開盤前跑、
+# 直接比對 trading_date 本身——因為「rebuild 有跑」不等於「bundle 資料是新的」
+# （G3 只警告不擋），舊機制抓不到「rebuild 準時跑但吃到舊 bundle」這種情況。
+# 告警訊息把兩項各自的落後天數列出來，讓「為什麼沒更新」直接從告警看得出來，
+# 不用回頭挖 workflow log。
 #
 # ⚠️ 這個 job 自己不可以失敗（同 notify-failure 的理由）——檢查不過是 warning + 告警，
 #    不是 exit 1。
 #
 # GitHub 排程政策：repo 連續 60 天無活動會自動停用 cron。rebuild 每天 commit
-# → 只要 rebuild 還活著這支就不會被停；這支要抓的正是「rebuild 不再活著」。
+# → 只要 rebuild 還活著這支就不會被停；這支要抓的正是「rebuild 不再活著／
+# 活著但沒吃到新資料」。
 
 on:
   schedule:
-    - cron: "0 1 * * 1"        # 每週一 UTC 01:00
+    - cron: "30 0 * * 1-5"     # 平日 UTC 00:30 = 台北 08:30，開盤（09:00）前 30 分
   workflow_dispatch:
 
 permissions:
@@ -24,25 +33,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 檢查清單新鮮度
-        env:
-          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
-          MAX_AGE_HOURS: "180"      # 7.5 天——季換股清單不會每天變，但重算應每日跑
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install pandas pyarrow
+
+      - name: 開盤前新鮮度檢查
+        id: freshness
+        run: |
+          python scripts/freshness_check.py || true
+          python scripts/freshness_check.py --json > /tmp/freshness.json
+
+      - name: 附帶重算時間（診斷用：rebuild 有沒有跑 vs 跑了但資料還是舊的）
         run: |
           META=data/derived/_meta.json
-          if [ ! -f "$META" ]; then
-            echo "::warning::$META 不存在——rebuild 還沒產出過任何清單（M0 未完成則正常）"
-            exit 0
+          if [ -f "$META" ]; then
+            echo "上次重算 rebuilt_at：$(jq -r '.rebuilt_at // "未知"' "$META")"
+          else
+            echo "$META 不存在——rebuild 還沒產出過任何清單"
           fi
-          REBUILT=$(jq -r '.rebuilt_at // empty' "$META")
-          echo "上次重算：${REBUILT:-未知}"
-          if [ -z "$REBUILT" ]; then exit 0; fi
-          AGE=$(( ( $(date -u +%s) - $(date -u -d "$REBUILT" +%s) ) / 3600 ))
-          echo "距今 ${AGE} 小時（門檻 ${MAX_AGE_HOURS}）"
-          if [ "$AGE" -le "$MAX_AGE_HOURS" ]; then echo "OK"; exit 0; fi
-          MSG="🟠 tw-hold 清單 ${AGE}h 沒重算了（門檻 ${MAX_AGE_HOURS}h）。
-          可能 tw-swing publish 斷了 → repository_dispatch 不再觸發 rebuild。
-          查 tw-swing 的 fundamentals.yml / publish_bundle.yml。"
+
+      - name: 有 stale 就告警
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+        run: |
+          ALL_OK=$(jq -r '.all_ok' /tmp/freshness.json)
+          if [ "$ALL_OK" = "true" ]; then echo "OK：兩項都新鮮"; exit 0; fi
+
+          META=data/derived/_meta.json
+          REBUILT=$(jq -r '.rebuilt_at // "未知"' "$META" 2>/dev/null || echo "未知")
+          DETAIL=$(jq -r '.checks[] | select(.ok==false) |
+            "・\(.label)：最後 \(.last_date // "無資料")，預期交易日 \(.expected)（\(.reason)）"' \
+            /tmp/freshness.json)
+
+          MSG="🟠 tw-hold 開盤前資料還是舊的
+          ${DETAIL}
+          上次三清單重算（rebuilt_at）：${REBUILT}
+
+          怎麼判斷是哪一段斷的：
+          - rebuilt_at 也很舊 → tw-swing publish 沒觸發 repository_dispatch，
+            或 rebuild.yml 本身失敗，查 tw-hold Actions 的 rebuild 執行紀錄。
+          - rebuilt_at 是今天、但 trading_date 還是舊的 → rebuild 有跑，但
+            fetch_bundle.py 拉到的 bundle 本身就是舊的（tw-swing 那邊沒發新版），
+            查 tw-swing 的 fundamentals.yml / publish_bundle.yml。
+          - 只有 006201 項目 stale、三清單正常 → 是 scripts/fetch_index_proxy.py
+            單獨失敗（FinMind API 或 token），查 rebuild.yml 該步驟的 log，不影響三清單。"
           echo "$MSG"
           [ -z "$WEBHOOK" ] && { echo "::warning::無 ALERT_WEBHOOK"; exit 0; }
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
