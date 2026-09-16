@@ -50,7 +50,10 @@ jobs:
       # 006201（元大富櫃50，唯一追蹤櫃買指數的 ETF）不在 tw-swing data_pack 的
       # universe 裡，獨立向 FinMind 抓（總經導航 MA60/MA200 卡用）。跟三清單
       # 無關，失敗不擋主線——見 scripts/fetch_index_proxy.py 檔頭。
-      - name: 櫃買代理 006201 快照
+      # 2026-09-16 起跟 0050 共用同一套驗證（reference/price_series_guard.py）：
+      # 抓到的資料沒過驗證就保留舊檔不覆寫、exit 1，被下面的告警步驟撿到。
+      - name: 櫃買代理 006201 快照（驗證後才覆寫）
+        id: fetch_006201
         continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
@@ -119,15 +122,28 @@ jobs:
             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
           exit 0
 
-      - name: 0050 驗證沒過才告警
-        if: steps.promote_0050.outcome == 'failure'
+      # 兩支市場代理共用一個告警步驟：任一沒更新都要有人知道，否則「保留舊檔」
+      # 會變成沒人發現的慢性問題（卡片悄悄一直顯示舊資料）。
+      - name: 市場代理快照沒更新才告警
+        if: steps.promote_0050.outcome == 'failure' || steps.fetch_006201.outcome == 'failure'
         env:
           WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          F50: ${{ steps.promote_0050.outcome }}
+          F62: ${{ steps.fetch_006201.outcome }}
         run: |
-          echo "::warning::0050 快照驗證沒過，data/reference/index_0050.parquet 保留舊檔案沒被覆寫"
-          MSG="🟠 tw-hold：0050 快照驗證沒過（見上一步 log：資料倒退或疑似漲跌幅損毀），
-          已保留舊檔案、沒有覆寫——總經導航 0050 卡片會顯示舊資料，不會顯示錯的資料。
+          WHICH=""
+          [ "$F50" = "failure" ] && WHICH="${WHICH}・上市 0050（scripts/promote_index_0050.py）
+          "
+          [ "$F62" = "failure" ] && WHICH="${WHICH}・上櫃 006201（scripts/fetch_index_proxy.py）
+          "
+          echo "::warning::市場代理快照沒更新：${WHICH}"
+          MSG="🟠 tw-hold：總經導航的市場代理快照沒更新
+          ${WHICH}
+          原因看上面那一步的 log：[REJECT] 開頭是驗證擋下來的（資料縮水／日期倒退／
+          歷史被改寫／單日跳空），其他則是抓取本身失敗（FinMind API、token、網路）。
+          任一種情況都**保留舊檔案沒有覆寫**——卡片會顯示舊資料，不會顯示錯的資料。
+          連續幾天都收到這則 → 上游格式可能悄悄變了，要去看驗證條件是不是該調。
           ${RUN_URL}"
           [ -z "$WEBHOOK" ] && exit 0
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \

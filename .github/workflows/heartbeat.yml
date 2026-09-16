@@ -4,13 +4,18 @@ name: 心跳（開盤前新鮮度守門）
 # 若 tw-swing publish 斷了、dispatch 不再來，rebuild **不會失敗、只是不再跑**，
 # 沒人會發現。這支在台股開盤前醒來檢查：
 #   1. data/derived/_meta.json 的 trading_date（三清單／個股查詢底層 bundle）
-#   2. data/reference/index_006201.parquet 最後一筆日期（總經導航上櫃卡）
-# 邏輯見 scripts/freshness_check.py。
+#   2. data/reference/index_0050.parquet 最後一筆日期（總經導航上市卡）
+#   3. data/reference/index_006201.parquet 最後一筆日期（總經導航上櫃卡）
+# 邏輯見 scripts/freshness_check.py（判斷本體在 reference/freshness.py）。
+#
+# 2 和 3 是 2026-09-16 起獨立落地的小檔，各有自己的時鐘（不再跟 bundle 共用），
+# 且兩支腳本都是「驗證沒過就保留舊檔」——所以「檔案日期凍住」正是那種
+# 「rebuild 天天跑得好好的、但某支代理連續被驗證擋下」的慢性問題的唯一外顯徵兆。
 #
 # 2026-09-16：從每週一次、只看 rebuilt_at 有沒有變，改成每個交易日開盤前跑、
 # 直接比對 trading_date 本身——因為「rebuild 有跑」不等於「bundle 資料是新的」
 # （G3 只警告不擋），舊機制抓不到「rebuild 準時跑但吃到舊 bundle」這種情況。
-# 告警訊息把兩項各自的落後天數列出來，讓「為什麼沒更新」直接從告警看得出來，
+# 告警訊息把各項的落後天數列出來，讓「為什麼沒更新」直接從告警看得出來，
 # 不用回頭挖 workflow log。
 #
 # ⚠️ 這個 job 自己不可以失敗（同 notify-failure 的理由）——檢查不過是 warning + 告警，
@@ -59,7 +64,7 @@ jobs:
           WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
         run: |
           ALL_OK=$(jq -r '.all_ok' /tmp/freshness.json)
-          if [ "$ALL_OK" = "true" ]; then echo "OK：兩項都新鮮"; exit 0; fi
+          if [ "$ALL_OK" = "true" ]; then echo "OK：三項都新鮮"; exit 0; fi
 
           META=data/derived/_meta.json
           REBUILT=$(jq -r '.rebuilt_at // "未知"' "$META" 2>/dev/null || echo "未知")
@@ -77,8 +82,12 @@ jobs:
           - rebuilt_at 是今天、但 trading_date 還是舊的 → rebuild 有跑，但
             fetch_bundle.py 拉到的 bundle 本身就是舊的（tw-swing 那邊沒發新版），
             查 tw-swing 的 fundamentals.yml / publish_bundle.yml。
-          - 只有 006201 項目 stale、三清單正常 → 是 scripts/fetch_index_proxy.py
-            單獨失敗（FinMind API 或 token），查 rebuild.yml 該步驟的 log，不影響三清單。"
+          - 只有 0050／006201 其中一項 stale、三清單正常 → 那支代理自己斷了：
+            要嘛抓取失敗（FinMind API／token／網路），要嘛**資料沒過驗證被擋下、
+            保留了舊檔**（reference/price_series_guard.py）。查 rebuild.yml 的
+            「市場代理快照沒更新才告警」那步跟它上面那步的 log，不影響三清單。
+          - 若正值國定連假／農曆春節：SLACK_DAYS 只留 2 天緩衝，蓋不住長假，
+            這段期間每個平日早上都會收到這則，是已知的假警報，不用理。"
           echo "$MSG"
           [ -z "$WEBHOOK" ] && { echo "::warning::無 ALERT_WEBHOOK"; exit 0; }
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \

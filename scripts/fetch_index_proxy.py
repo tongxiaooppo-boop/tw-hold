@@ -17,6 +17,18 @@ append 的複雜度），完全不碰 data_pack 那條依賴鏈。
 只餵 `reference/market_status.py`（總經導航的 MA60/MA200 顯示卡），**不是**
 `reference/regime.py` 用的大盤代理，兩者判斷邏輯本來就已經脫鉤。
 
+## 驗證（2026-09-16 加）
+
+原本是「抓到就整份覆寫」，零驗證——而 FinMind 實測**真的會吐壞資料**：
+落地檔裡 2016-08-24、2017-04-10 兩筆 `close = 0`（日報酬因此是 `inf`）。
+今天畫面沒被影響只是因為 `market_status` 只吃尾端 200 筆，同樣的 0 若落在最近
+一天，卡片就會顯示 `inf%`——正是使用者說「不可原諒」的那一類。
+
+現在跟 0050 共用 `reference/price_series_guard.py`：先 sanitize（丟掉 0／NaN／
+重複日期，這種列每次全量重抓都會再來，設計成「看到就拒絕」會讓資料凍死），
+再 validate（筆數縮水／日期倒退／歷史被改寫／最後一筆跳空 → 保留舊檔、exit 1）。
+這支是**全量重抓**，縮水風險比 0050 更高，那條檢查對它更重要。
+
 ## 排程
 
 沒有獨立 cron——搭 tw-hold 既有的 `rebuild.yml`（由 tw-swing 台股 bundle 發佈
@@ -35,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pandas as pd
 
+from reference import price_series_guard as guard
 from reference.finmind_client import Client, read_token
 
 TICKER = "006201"
@@ -52,12 +65,22 @@ def fetch() -> pd.DataFrame:
     return df.sort_values("date").reset_index(drop=True)
 
 
-def main() -> None:
-    df = fetch()
+def main() -> int:
+    new = guard.sanitize(fetch())
+    old = guard.load_clean(OUT)
+    reasons = guard.validate(new, old)
+    if reasons:
+        for r in reasons:
+            print(f"[REJECT] {r}")
+        print("→ 不覆寫，保留舊檔案（前一日的資料錯誤不可原諒，寧可暫時舊）")
+        return 1
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(OUT, index=False)
-    print(f"寫入 {OUT}：{len(df)} 筆，{df['date'].min().date()} ~ {df['date'].max().date()}")
+    new.to_parquet(OUT, index=False)
+    print(f"[OK] 寫入 {OUT}：{len(new)} 筆，"
+          f"{new['date'].min().date()} ~ {new['date'].max().date()}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

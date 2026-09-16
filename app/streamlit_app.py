@@ -2147,9 +2147,17 @@ def _macro_compass_page() -> None:
             return pd.Series(dtype="float64")
         return px.set_index("date")["close"].sort_index()
 
+    fell_back: list[str] = []
+
     def _load_0050(_t: str) -> pd.Series:
         close = index_proxy.load_0050()
-        return close if not close.empty else _bundle_close("0050")
+        if not close.empty:
+            return close
+        # 小檔缺／是空的 → 走備援。要留痕跡：CI 端若連續好幾天驗證沒過、
+        # 小檔一直沒更新，使用者只會覺得「這頁最近怎麼變慢了」，不會聯想到
+        # 0050 的資料被擋下來了（2026-09-16 審核）。
+        fell_back.append("0050")
+        return _bundle_close("0050")
 
     # ---- 先把所有資料算齊，摘要跟各段卡片共用同一份，不重算兩次 ----
     # 0050／006201 都改讀 tw-swing bundle 本來就有附的小檔，經
@@ -2194,8 +2202,14 @@ def _macro_compass_page() -> None:
     if tw_data:
         cards = [_mc_card(t, d["market"], d["card"], d["chg"]) for t, d in tw_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    if fell_back:
+        st.caption(f"·「{'／'.join(fell_back)}」這次改走備援資料來源，日期可能落後一兩天。")
     if tw_missing:
-        st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。")
+        # 原本整頁關卡失敗時會有 st.error 附具體錯誤（PAT 找不到／GitHub API 錯誤碼），
+        # 拿掉關卡後診斷細節會消失——把 `_ensure_bundle` 存下的原因接回來（同 :1381）。
+        st.info(f"這次沒拿到：{'／'.join(tw_missing)}（資料源缺這檔，或 `fetch_index_proxy.py` 還沒跑過）。"
+                + (f"（{st.session_state['_bundle_err']}）"
+                   if st.session_state.get("_bundle_err") else ""))
 
     st.divider()
     st.subheader("台指期／選擇權")
@@ -2375,18 +2389,25 @@ NAV = ["總經導航", "短線", "長波段", "價值", "定存", "個股查詢"
 
 
 def _freshness_badge_html() -> str:
-    """表頭右側新鮮度徽章——只看 bundle trading_date（涵蓋面最廣：三清單／個股查詢／
-    總經導航 0050 都吃這條），純顯示不擋頁（使用者 2026-09-16 裁決：badge-only、
-    單一時鐘）。燈號用既有的 `.thc-pill`（good/warn 兩色點+底色），跟卡片上的判斷
-    徽章同一套視覺語彙，不是另外找 emoji（同一天使用者要求「更符合UI風格」改的）。
-    新鮮度判斷直接借 `scripts/freshness_check.py`，跟 heartbeat 那邊「預期交易日」
-    的定義是同一份，不要兩邊各自維護一套容忍天數。"""
+    """表頭右側新鮮度徽章——只看 bundle trading_date，純顯示不擋頁（使用者 2026-09-16
+    裁決：badge-only、單一時鐘）。燈號用既有的 `.thc-pill`（good/warn 兩色點+底色），
+    跟卡片上的判斷徽章同一套視覺語彙，不是另外找 emoji（同一天使用者要求
+    「更符合UI風格」改的）。
+
+    ⚠️ 文案寫死「清單資料」而不是籠統的「資料日期」：0050／006201 從 2026-09-16 起
+    各自獨立落地、**不再跟 bundle 共用同一個時鐘**，這顆徽章已經涵蓋不到總經導航的
+    那兩張卡了。寫成全站語氣會讓使用者站在總經導航頁把它誤認成那頁卡片的日期。
+    那兩支的新鮮度由 `heartbeat.yml`（開盤前）顧，不上表頭——一顆徽章講三個時鐘
+    只會變成沒人看得懂的東西。
+
+    新鮮度判斷借 `reference/freshness.py`，跟 heartbeat 那邊「預期交易日」的定義
+    是同一份，不要兩邊各自維護一套容忍天數。"""
     from datetime import date
 
-    from scripts.freshness_check import _check_one, _meta_trading_date
-    c = _check_one("bundle", _meta_trading_date(), date.today())
+    from reference.freshness import check_one, meta_trading_date
+    c = check_one("bundle", meta_trading_date(), date.today())
     sev = "good" if c["ok"] else "warn"
-    label = f"資料日期 {c.get('last_date') or '—'}"
+    label = f"清單資料 {c.get('last_date') or '—'}"
     return f'<span class="thc-pill thc-{sev}">{_esc(label)}</span>'
 
 
