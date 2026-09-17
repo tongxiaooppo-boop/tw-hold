@@ -26,6 +26,11 @@
 才轉正成 `candidate`（真正開始追蹤移動停損）。跟回測一樣，若次日開盤已經
 跌破訊號日算的停損位，這筆訊號放棄（不合理的進場，不開倉）。
 
+**進場緩衝：離停損位不到 1 倍 ATR14 也放棄**（2026-09-17 加）——`risk_stop_ref`
+用訊號日收盤算、`entry_price` 用次日開盤算，兩者沒有掛勾，訊號日股價若剛好貼在
+50MA／20週前低上方（常見型態：「站上」的當下本來就貼線），隔天開盤緩衝就可能
+趨近 0，一點雜訊就觸發停損（不是判斷錯方向）。見 `MIN_BUFFER_ATR_MULT`。
+
 **「次一交易日」不是額外多等一天**（2026-09-14 使用者確認過的時間軸）：
 `asof` 本來就是 bundle 裡最新收盤日，不是「現在」——bundle 每天約台灣 06:00
 發佈（含前一交易日收盤），rebuild 緊接著跑，都在當天開盤（09:00）**之前**
@@ -50,6 +55,15 @@ import pandas as pd
 from screener.candidate_pool import _bare, atr14
 
 TRAIL_ATR_MULT = 2.0   # 比照 tw-swing H2-trailatr2
+MIN_BUFFER_ATR_MULT = 1.0
+# 2026-09-17 加：進場價到停損參考位至少要留 1 倍 ATR14 的緩衝，不夠就放棄這筆訊號。
+# 起因：risk_stop_ref 用訊號日收盤算、entry_price 用次日開盤算，兩者中間沒有掛勾——
+# 訊號日股價若本來就貼在 50MA／20週前低上方（這其實是常見型態，「站上」的當下本來就
+# 貼線），隔天開盤沒跳空,緩衝就趨近 0，一點雜訊就觸發停損（2026-09-17 實測抓到：
+# 4 筆已結算裡 3 筆進場當下緩衝 <0.1×ATR，出場報酬 -0.01%~-1.98%，明顯不是「判斷錯
+# 方向」而是沒有容錯空間）。用 ATR 而不是固定 % 當門檻，是因為股價量級差很大（一籃子
+# 訊號裡有 89 元和 5580 元的股票），固定 % 對低價股跟高價股風險意義不對等，ATR 已經
+# 反映各股自己的日常波動幅度，也跟移動停損用同一把量尺。
 
 
 def _today_ohlc(prices_adj: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
@@ -87,13 +101,14 @@ def update_stops(prev: dict, pool: list[dict], prices_adj: pd.DataFrame,
         row = today.loc[tk]
         open_px = float(row["open"])
         stop_ref = rec["risk_stop_ref"]
-        if open_px <= stop_ref:
-            # 訊號日收盤到次日開盤之間已經跌破當初算的停損位——不合理的進場，
-            # 跟回測 abandoned_below_stop 一致：這筆訊號放棄，不留紀錄。
-            continue
         a0 = atr_today.get(tk)
         if pd.isna(a0):
             out[tk] = rec                     # ATR 還在暖機，明天再試
+            continue
+        if open_px - stop_ref < MIN_BUFFER_ATR_MULT * a0:
+            # 訊號日收盤到次日開盤之間，進場價離停損位不到 1 倍 ATR14（含已經跌破的
+            # 情形）——緩衝不夠，一點雜訊就會被洗出去，跟回測 abandoned_below_stop
+            # 一致：這筆訊號放棄，不留紀錄。
             continue
         out[tk] = {
             "name": rec.get("name", ""),

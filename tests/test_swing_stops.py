@@ -86,6 +86,16 @@ def test_abandoned_if_next_open_already_below_stop():
     assert "AAA" not in s1["tracked"]
 
 
+def test_abandoned_if_buffer_below_one_atr():
+    """次日開盤價雖然還沒跌破停損位，但緩衝不到 1 倍 ATR14——2026-09-17 加的
+    門檻，一樣放棄這筆訊號，不留紀錄（否則一點雜訊就會把它洗出場）。"""
+    px = _bars("AAA", [100.0, 95.2], opens=[100.0, 95.2])  # 開盤 95.2，停損 95，緩衝僅 0.2
+    d0, d1 = px["date"].iloc[-2:]
+    s0 = update_stops({}, [_pool_row("AAA", risk_stop=95.0)], px, d0)
+    s1 = update_stops(s0, [], px, d1)
+    assert "AAA" not in s1["tracked"]
+
+
 def test_trail_stop_only_rises_with_run_high():
     px = _bars("AAA", [100.0, 110.0, 120.0, 130.0])
     d0, d1, d2, d3 = px["date"].iloc[-4:]
