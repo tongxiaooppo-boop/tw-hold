@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-09-16T01:50:13+00:00",
+    "updated_at": "2026-09-17T00:07:17+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日收盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -22,10 +22,28 @@
       "exit_date": "2026-09-15",
       "exit_price": 89.03,
       "ret_pct": -0.000786
+    },
+    {
+      "ticker": "3037",
+      "name": "欣興",
+      "entry_date": "2026-09-11",
+      "entry_price": 947.0,
+      "exit_date": "2026-09-16",
+      "exit_price": 946.88,
+      "ret_pct": -0.000127
+    },
+    {
+      "ticker": "3653",
+      "name": "健策",
+      "entry_date": "2026-09-11",
+      "entry_price": 5580.0,
+      "exit_date": "2026-09-16",
+      "exit_price": 5270.71,
+      "ret_pct": -0.055428
     }
   ],
   "stats": {
-    "n": 2,
+    "n": 4,
     "win_rate": null,
     "avg_ret_gross": null,
     "expectancy_net": null,
@@ -34,9 +52,9 @@
     "by_month": [
       {
         "ym": "2026-09",
-        "n": 2,
+        "n": 4,
         "win_rate": 0.0,
-        "avg_ret_net": -0.0161355
+        "avg_ret_net": -0.0248815
       }
     ]
   }
