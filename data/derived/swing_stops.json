@@ -1,8 +1,105 @@
 {
   "_meta": {
-    "asof": null,
+    "asof": "2026-09-17",
     "trail_atr_mult": 2.0,
-    "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。2026-09-17 重置：加入進場緩衝門檻（>=1x ATR14）後，舊資料在新規則下無法可靠回算，整批歸零重新開始。"
+    "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
-  "tracked": {}
+  "tracked": {
+    "1560": {
+      "name": "中砂",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 738.86
+    },
+    "2006": {
+      "name": "東和鋼鐵",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 79.13
+    },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 46.14
+    },
+    "2303": {
+      "name": "聯電",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 133.57
+    },
+    "2455": {
+      "name": "全新",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 456.43
+    },
+    "3017": {
+      "name": "奇鋐",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 2837.24
+    },
+    "3081": {
+      "name": "聯亞",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 2438.05
+    },
+    "3264": {
+      "name": "欣銓",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 221.0
+    },
+    "3406": {
+      "name": "玉晶光",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 770.0
+    },
+    "3653": {
+      "name": "健策",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 4707.14
+    },
+    "3711": {
+      "name": "日月光投控",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 608.72
+    },
+    "4979": {
+      "name": "華星光",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 502.64
+    },
+    "5274": {
+      "name": "信驊",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 16014.29
+    },
+    "6196": {
+      "name": "帆宣",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 510.65
+    },
+    "6206": {
+      "name": "飛捷",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 135.14
+    },
+    "6491": {
+      "name": "晶碩",
+      "status": "pending_entry",
+      "signal_date": "2026-09-17",
+      "risk_stop_ref": 374.93
+    }
+  }
 }
