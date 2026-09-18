@@ -1,105 +1,234 @@
 {
   "_meta": {
-    "asof": "2026-09-17",
+    "asof": "2026-09-18",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
     "1560": {
       "name": "中砂",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 738.86
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 855.0,
+      "atr0": 41.7143,
+      "run_high": 896.0,
+      "trail_stop": 738.86,
+      "last_close": 896.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "2006": {
       "name": "東和鋼鐵",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 79.13
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 46.14
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 83.0,
+      "atr0": 2.0571,
+      "run_high": 89.0,
+      "trail_stop": 79.13,
+      "last_close": 87.6,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "2303": {
       "name": "聯電",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 133.57
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 155.0,
+      "atr0": 7.4643,
+      "run_high": 160.5,
+      "trail_stop": 133.57,
+      "last_close": 156.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "2455": {
       "name": "全新",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 456.43
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 545.0,
+      "atr0": 38.3571,
+      "run_high": 563.0,
+      "trail_stop": 456.43,
+      "last_close": 556.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "3017": {
       "name": "奇鋐",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 2837.24
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 3345.0,
+      "atr0": 181.4286,
+      "run_high": 3450.0,
+      "trail_stop": 2837.24,
+      "last_close": 3430.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "3081": {
       "name": "聯亞",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 2438.05
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 2780.0,
+      "atr0": 223.5714,
+      "run_high": 2915.0,
+      "trail_stop": 2438.05,
+      "last_close": 2880.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "3264": {
       "name": "欣銓",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 221.0
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 251.0,
+      "atr0": 12.4286,
+      "run_high": 268.5,
+      "trail_stop": 221.0,
+      "last_close": 268.5,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "3406": {
       "name": "玉晶光",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 770.0
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 996.0,
+      "atr0": 94.2143,
+      "run_high": 999.0,
+      "trail_stop": 770.0,
+      "last_close": 972.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "3653": {
       "name": "健策",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 4707.14
-    },
-    "3711": {
-      "name": "日月光投控",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 608.72
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 5520.0,
+      "atr0": 319.6429,
+      "run_high": 5650.0,
+      "trail_stop": 4707.14,
+      "last_close": 5525.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "4979": {
       "name": "華星光",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 502.64
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 578.0,
+      "atr0": 42.5,
+      "run_high": 611.0,
+      "trail_stop": 502.64,
+      "last_close": 611.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "5274": {
       "name": "信驊",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 16014.29
-    },
-    "6196": {
-      "name": "帆宣",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 510.65
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 18890.0,
+      "atr0": 1137.1428,
+      "run_high": 19500.0,
+      "trail_stop": 16014.29,
+      "last_close": 19290.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "6206": {
       "name": "飛捷",
-      "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 135.14
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 142.0,
+      "atr0": 4.3214,
+      "run_high": 142.0,
+      "trail_stop": 135.14,
+      "last_close": 138.5,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "6491": {
       "name": "晶碩",
+      "first_seen": "2026-09-17",
+      "entry_date": "2026-09-18",
+      "entry_price": 401.0,
+      "atr0": 11.9643,
+      "run_high": 401.0,
+      "trail_stop": 374.93,
+      "last_close": 396.0,
+      "last_update": "2026-09-18",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
+    },
+    "3037": {
+      "name": "欣興",
       "status": "pending_entry",
-      "signal_date": "2026-09-17",
-      "risk_stop_ref": 374.93
+      "signal_date": "2026-09-18",
+      "risk_stop_ref": 955.54
+    },
+    "3044": {
+      "name": "健鼎",
+      "status": "pending_entry",
+      "signal_date": "2026-09-18",
+      "risk_stop_ref": 478.21
+    },
+    "3265": {
+      "name": "台星科",
+      "status": "pending_entry",
+      "signal_date": "2026-09-18",
+      "risk_stop_ref": 165.73
+    },
+    "3617": {
+      "name": "碩天",
+      "status": "pending_entry",
+      "signal_date": "2026-09-18",
+      "risk_stop_ref": 233.12
+    },
+    "6257": {
+      "name": "矽格",
+      "status": "pending_entry",
+      "signal_date": "2026-09-18",
+      "risk_stop_ref": 223.64
     }
   }
 }
