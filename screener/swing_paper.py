@@ -20,8 +20,11 @@
 
 **跟回測不是同一份程式碼、也不是同一個口徑**：回測是全歷史模擬（PRD §5.2.4／
 `research/backtest_longswing.py`），這裡是真實市場價格逐日累積出來的實際結果，
-用「訊號日收盤成交」這個最樂觀的進場假設（跟 `swing_stops.py` 進場代理一致，
-沒有另外做限價/次日開盤對照——樣本量小時做多口徑對照沒意義，先求有再求全）。
+進場口徑直接沿用 `swing_stops.py` 的 `entry_price`（訊號日**次一交易日開盤**
+成交，2026-09-14 修正過，見該模組 docstring「進場口徑」一節）——沒有另外做
+限價對照（樣本量小時做多口徑對照沒意義，先求有再求全）。這份 docstring
+2026-09-17 之前曾誤寫成「訊號日收盤成交」，那是修正前的舊口徑殘留文字，
+已更正（app 顯示文字同步修過）。
 """
 from __future__ import annotations
 
@@ -148,7 +151,8 @@ def build(prev_payload: dict, prev_tracked: dict, new_tracked: dict,
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "cost": cost,
             "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，"
-                    "不是回測。進場口徑＝訊號日收盤成交（同 swing_stops.py 的進場代理）。",
+                    "不是回測。進場口徑＝訊號日次一交易日開盤成交"
+                    "（同 swing_stops.py 的進場代理）。",
         },
         "trades": trades,
         "stats": stats,
