@@ -67,6 +67,7 @@ LOT_SHARES = 1000       # 1 張 = 1000 股
 EXIT_LOT_MAX = 1        # 賣出後剩 ≤ 此張數 → 特別註記（出清 / 僅剩 1 張）
 REL_EPS = 0.03          # 沒有 nav/price 時的退路：主動股數差 / 部位 ≥ 3%
 CONSENSUS_MIN = 2       # |buyers - sellers| ≥ 此值 → consensus_buy / consensus_sell
+MIN_SYNC_HOLDINGS = 5    # 今天筆數 < max(此值, 前一份一半) → 當沒同步，見 build_flags
 SOURCE = "自建 PCF（統一／復華／群益官網每日揭露）"
 
 
@@ -181,6 +182,16 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             continue
         (pd_date, prev), (td_date, today) = hist[-2], hist[-1]
         if td_date <= pd_date:                               # 同日 / 或抓到更舊的
+            fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0}
+            continue
+        # 第二層防守：snapshot_pcf.py 2026-09-22 起會擋掉異常少的 holdings，但
+        # 這道防不到「這次改動之前」就已經落在 data/pcf/ 的壞快照（Opus 審出）。
+        # 今天筆數掉到前一份一半以下（且 < MIN_SYNC_HOLDINGS）視為可疑，直接當
+        # 沒同步，不算差分——不然會把「holdings 幾乎全空」誤判成「幾乎全部
+        # 出清」，產出假的全體 consensus_sell（同 memory tw-hold-active-etf-flag
+        # 那次假買訊號事故的反向版本）。MIN_SYNC_HOLDINGS 拉成模組常數，方便
+        # 測試用小 fixture 時 monkeypatch 關掉這道門檻。
+        if len(today) < max(MIN_SYNC_HOLDINGS, 0.5 * len(prev)):
             fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0}
             continue
         synced += 1

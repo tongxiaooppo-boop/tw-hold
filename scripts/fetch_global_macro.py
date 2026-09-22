@@ -44,7 +44,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -61,6 +61,11 @@ META_OUT = OUT.with_name("global_macro_meta.json")
 #: 偵測（跟原本只抓「整檔全空」的 missing 判斷是兩回事）。門檻抓 3 天，蓋過一個
 #: 長週末，避免遇到假日就誤報。
 STALE_THRESHOLD_DAYS = 3
+
+#: 日經/恆生/KOSPI 各自的國定連假（日本黃金週、農曆年、韓國連假）常讓這三檔
+#: 相對美股落後 4~6 天，用同一個 3 天門檻會連續好幾天誤報、還每次觸發一次
+#: 沒意義的 _retry_stale 重抓。2026-09-22 Opus 審出，門檻放寬到 7。
+_ASIA_STALE_THRESHOLD_DAYS = {"^N225": 7, "^HSI": 7, "^KS11": 7}
 
 #: symbol -> 中文名。四組意義不同，畫面端各自決定怎麼呈現，這裡只負責抓齊。
 INDICES = {"^DJI": "道瓊", "^IXIC": "那斯達克", "^SOX": "費城半導體",
@@ -99,7 +104,8 @@ def _check_staleness(df: pd.DataFrame) -> list[dict]:
     stale = []
     for sym, d in latest.items():
         lag = (ref - d).days
-        if lag > STALE_THRESHOLD_DAYS:
+        threshold = _ASIA_STALE_THRESHOLD_DAYS.get(sym, STALE_THRESHOLD_DAYS)
+        if lag > threshold:
             stale.append({"symbol": sym, "name": ALL_SYMBOLS[sym],
                           "latest": d.strftime("%Y-%m-%d"), "lag_days": lag})
     return stale
@@ -137,6 +143,17 @@ def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     return merged.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
+def _business_days_since(d, today) -> int:
+    """`d`（date）到 `today`（date）之間的營業日數，只扣週末，不管國定假日——
+    跟 `STALE_THRESHOLD_DAYS` 同精神，粗略夠用，不追求精確。"""
+    n, cur = 0, d
+    while cur < today:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:
+            n += 1
+    return n
+
+
 def main() -> None:
     df = fetch()
 
@@ -153,11 +170,24 @@ def main() -> None:
     print(f"寫入 {OUT}：{len(df)} 筆、{len(got)}/{len(ALL_SYMBOLS)} 檔"
           + (f"　缺：{missing}" if missing else ""))
 
+    # 絕對新鮮度——2026-09-22 Opus 審出：`_check_staleness()` 只比「這批自己
+    # 最新的那檔」，如果整批（例如這支 CI 連續好幾天沒跑成功）都卡在同一個
+    # 舊日期，彼此之間沒有落差，stale 會是空的，app 卡片一個 ⚠️ 都不會出現。
+    # 這裡另外記一個跟「執行當下」比的落後天數，才是使用者真正在意的
+    # 「這批資料是不是新的」。
+    ref_date = df["date"].max().date()
+    today = datetime.now(timezone.utc).date()
+    snapshot_lag_days = _business_days_since(ref_date, today)
+
     META_OUT.write_text(json.dumps({
         "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "reference_date": df["date"].max().strftime("%Y-%m-%d"),
+        "snapshot_lag_days": snapshot_lag_days,
         "stale": stale,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
+    if snapshot_lag_days > 2:
+        print(f"::warning::整批快照落後 {snapshot_lag_days} 個營業日"
+              f"（最新只到 {ref_date}）——這條 workflow 本身可能連續沒跑成功")
     for s in stale:
         print(f"::warning::{s['symbol']}（{s['name']}）資料落後 {s['lag_days']} 天"
               f"（最新只到 {s['latest']}）——Yahoo 這批可能沒補齊，不是整檔全空但已經過期")
