@@ -23,6 +23,12 @@
       "signal_date": "2026-09-21",
       "risk_stop_ref": 510.15
     },
+    "3037": {
+      "name": "欣興",
+      "status": "pending_entry",
+      "signal_date": "2026-09-21",
+      "risk_stop_ref": 957.88
+    },
     "3044": {
       "name": "健鼎",
       "first_seen": "2026-09-18",
@@ -277,12 +283,6 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
-    },
-    "3037": {
-      "name": "欣興",
-      "status": "pending_entry",
-      "signal_date": "2026-09-21",
-      "risk_stop_ref": 957.88
     }
   }
 }
