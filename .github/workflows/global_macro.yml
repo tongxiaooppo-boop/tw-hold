@@ -67,12 +67,26 @@ jobs:
             echo "無實質變更——跳過 commit"; exit 0; }
           git commit -m "國際總經快照 $(date -u +%F)"
           # 跟 rebuild.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕一次
-          # 觸發兩條時常常撞在一起——push 被拒就 rebase 後重試。
-          for i in 1 2 3; do
-            git push && break
-            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
-            git pull --rebase origin main
+          # 觸發兩條時常常撞在一起。2026-09-22 Opus 審過：原本迴圈跑完最後一步若
+          # 剛好是成功的 pull（push 其實沒成功），exit code 會是 0——靜默掉資料，
+          # 改用 $pushed 旗標明確判斷；衝突時這批產出檔取自己這輪的版本
+          # （rebase 中 HEAD 是目標分支、這裡的新 commit 才是 --theirs）。
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            echo "push 被拒（第 $i 次），rebase 後重試"
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- data/reference/global_macro.parquet \
+                data/reference/global_macro_meta.json data/reference/tx_futures.parquet \
+                data/reference/tx_futures_meta.json data/reference/put_call_ratio.parquet 2>/dev/null || true
+              git add -A data/reference/global_macro.parquet data/reference/global_macro_meta.json \
+                data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
+                data/reference/put_call_ratio.parquet 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
           done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }
 
       # 部分過期（某幾檔比同批其他檔舊超過 3 天，見 fetch_global_macro.py::_check_staleness）
       # 不擋 commit——資料照樣是「這批抓到最新的」，只是有落後的幾檔，先讓 app 有得用。

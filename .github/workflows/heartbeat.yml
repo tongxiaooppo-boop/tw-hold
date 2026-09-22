@@ -77,8 +77,12 @@ jobs:
           上次三清單重算（rebuilt_at）：${REBUILT}
 
           怎麼判斷是哪一段斷的：
-          - rebuilt_at 也很舊 → tw-swing publish 沒觸發 repository_dispatch，
-            或 rebuild.yml 本身失敗，查 tw-hold Actions 的 rebuild 執行紀錄。
+          - rebuilt_at 也很舊 → 先去 tw-hold Actions 查 rebuild.yml 最近幾次
+            run 的時間，不要只看 rebuilt_at 這個數字：三清單/bundle 內容沒變
+            的日子 rebuild.yml 會正常跑完但**刻意不 commit**（見 rebuild.yml
+            的 diff --cached --quiet 那段），rebuilt_at 就不會前進，這種情況
+            看起來像「斷了」但其實是正常運作；只有「rebuild.yml 最近都沒有
+            run 記錄」才是真的 dispatch 沒送到或 rebuild.yml 本身失敗。
           - rebuilt_at 是今天、但 trading_date 還是舊的 → rebuild 有跑，但
             fetch_bundle.py 拉到的 bundle 本身就是舊的（tw-swing 那邊沒發新版），
             查 tw-swing 的 fundamentals.yml / publish_bundle.yml。

@@ -5,10 +5,15 @@ name: 主動式 ETF PCF 補跑
 # 一旦當天沒抓到就永久缺一格（見 scripts/snapshot_pcf.py 檔頭）。
 #
 # rebuild.yml 每天已經跑一次 snapshot_pcf.py（隨 bundle-published dispatch 或
-# 那條的排程備援），這支只在「那次沒抓齊」時再補打一次——單一投信官網偶爾
-# 反爬擋/網路抖動，同一天晚一點再試一次常常就過了。平日 10:00／12:00 台北各
-# 一次，是「多給幾次機會」而非跟主排程搶快，不需要每次都空跑全部（`_index.json`
-# 的 `missing` 欄位若是空的就直接跳過，不會平白多打投信官網）。
+# 那條的排程備援，通常落在台北 08:00~16:00 之間），這支只在「那次沒抓齊」時
+# 再補打一次——單一投信官網偶爾反爬擋/網路抖動，同一天晚一點再試一次常常就
+# 過了。
+#
+# ⚠️ 2026-09-22 Opus 審過抓到時序問題：原本排在台北 10:00／12:00，比主排程
+#    （最晚 16:00）還早，讀到的 `_index.json.missing` 是前一天那輪的結果，
+#    根本補不到當天要補的東西。改排在主排程之後（17:00／19:00），且判斷條件
+#    從「單看 missing」擴大成「missing 非空 或 今天完全沒有任何一檔的日期」——
+#    後者順便涵蓋 rebuild.yml 整條掛掉、當天根本沒跑過 PCF 的情境。
 #
 # 只做 PCF 這一段（snapshot_pcf.py + build_active_etf_flags.py + commit），
 # 不重跑整條 rebuild.yml（不必要再拉一次 bundle、重算三清單）。
@@ -16,8 +21,8 @@ name: 主動式 ETF PCF 補跑
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * 1-5"   # 台北 10:00
-    - cron: "0 4 * * 1-5"   # 台北 12:00
+    - cron: "0 9 * * 1-5"    # 台北 17:00（rebuild.yml 排程備援 16:00 之後）
+    - cron: "0 11 * * 1-5"   # 台北 19:00
 
 permissions:
   contents: write
@@ -37,26 +42,47 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: 今天還有沒抓到的投信才要補
+      - name: 今天還有沒抓到／根本沒抓過的投信才要補
         id: check
         run: |
-          MISSING=$(python -c "import json; idx=json.load(open('data/pcf/_index.json')); print('1' if idx.get('missing') else '0')" 2>/dev/null || echo 1)
-          echo "need_retry=$MISSING" >> "$GITHUB_OUTPUT"
-          [ "$MISSING" = "1" ] && echo "有缺，補跑" || echo "五檔都齊了，不用補"
+          NEED=$(python -c "
+          import json
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          try:
+              idx = json.load(open('data/pcf/_index.json'))
+          except Exception:
+              print('1'); raise SystemExit
+          today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
+          dates = [v.get('post_date') or v.get('latest_date') for v in idx.get('funds', {}).values()]
+          dates = [d for d in dates if d]
+          need = bool(idx.get('missing')) or not dates or max(dates) < today
+          print('1' if need else '0')
+          " 2>/dev/null || echo 1)
+          echo "need_retry=$NEED" >> "$GITHUB_OUTPUT"
+          [ "$NEED" = "1" ] && echo "有缺或今天還沒抓過，補跑" || echo "今天都齊了，不用補"
 
       - run: pip install -r requirements.txt
         if: steps.check.outputs.need_retry == '1'
 
       - name: 補抓 PCF
         if: steps.check.outputs.need_retry == '1'
+        continue-on-error: true
+        id: fetch_pcf
         run: python scripts/snapshot_pcf.py
 
       - name: 重算主動式 ETF 認養旗標
         if: steps.check.outputs.need_retry == '1'
+        continue-on-error: true
         run: python build_active_etf_flags.py
 
+      # continue-on-error：上面兩步任一步出錯都不該擋到這步——已經補抓到的
+      # PCF 快照是這條 workflow 唯一存在的理由、且永久不可回復，不能因為
+      # build_active_etf_flags.py 這種下游步驟失敗就連 commit 都不做
+      # （2026-09-22 Opus 審出的坑：原本只有 need_retry 條件、沒有 always()，
+      # 補抓步驟一失敗整個 job 就停在那裡，快照白抓了）。
       - name: commit（有補到才 commit）
-        if: steps.check.outputs.need_retry == '1'
+        if: always() && steps.check.outputs.need_retry == '1'
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
@@ -64,10 +90,47 @@ jobs:
           git diff --cached --quiet -- data/pcf/ data/derived/active_etf_flags.json && {
             echo "補跑後內容還是沒變（投信那邊還是沒有）——跳過 commit"; exit 0; }
           git commit -m "PCF 補跑 $(date -u +%F)"
-          # 跟 rebuild.yml／global_macro.yml 都會 commit 回 main，撞期時 push
-          # 被拒就 rebase 後重試。
-          for i in 1 2 3; do
-            git push && break
-            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
-            git pull --rebase origin main
+          # 跟 rebuild.yml／global_macro.yml 都會 commit 回 main，撞期時
+          # push 被拒就 rebase 後重試；迴圈結束仍沒成功就 exit 1，不能讓
+          # 「最後一步剛好是成功的 pull」把沒推上去的失敗蓋成綠燈
+          # （同 rebuild.yml／global_macro.yml 的修法，2026-09-22 Opus 審出）。
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            echo "push 被拒（第 $i 次），rebase 後重試"
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- data/pcf/ data/derived/active_etf_flags.json 2>/dev/null || true
+              git add -A data/pcf/ data/derived/active_etf_flags.json 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
           done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次補到的 PCF 快照沒有推上 main"; exit 1; }
+
+  # 三條會 commit 回 main 的 workflow 裡本來只有這條沒有失敗告警
+  # （2026-09-22 Opus 審出）——PCF 快照永久不可回復，這條失敗比其他兩條
+  # 更該讓人知道，跟 rebuild.yml::notify-failure 同款式。
+  notify-failure:
+    needs: retry
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 送出失敗通知
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="🔴 tw-hold PCF 補跑失敗——這個資料源沒有歷史回補 API，今天沒補到
+          就永久缺一格
+          ${RUN_URL}"
+          echo "$MSG"
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::沒設 ALERT_WEBHOOK Secret，這次失敗只留在 Actions 紀錄裡"
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content: $m, text: $m}')" \
+            || echo "::warning::告警送不出去，但失敗這件事仍記在 Actions 紀錄裡"
+          exit 0

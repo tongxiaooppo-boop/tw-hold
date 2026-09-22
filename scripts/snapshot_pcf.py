@@ -72,6 +72,15 @@ def _prune(fund_dir: Path) -> None:
         p.unlink()
 
 
+#: 五檔主動式 ETF 正常都是數十檔持股——holdings 少於這個數字（或加總股數 <=0）
+#: 不當「有抓到」，當「抓失敗」處理（不落快照、記進 missing）。2026-09-22
+#: Opus 審出：原本完全不檢查內容，投信網站改版/回傳空陣列但沒丟例外時，
+#: 會把「今天全部賣光」這種假訊號寫進快照，下游 build_active_etf_flags.py
+#: 算差分會產出全體 consensus_sell（跟 memory tw-hold-active-etf-flag 那次
+#: 假買訊號同類事故，方向相反）。順帶讓 pcf_retry.yml 的 missing 判斷接住。
+MIN_HOLDINGS = 10
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -86,6 +95,11 @@ def main() -> int:
     for o in ok:
         code, dd = o["code"], o["data_date"]
         df = _frame(o)
+        if len(df) < MIN_HOLDINGS or df["shares"].sum() <= 0:
+            bad.append({"code": code, "issuer": o["issuer"],
+                        "error": f"holdings 異常少（{len(df)} 檔，加總股數 {df['shares'].sum():.0f}）"
+                                 "——當作抓失敗，不落地"})
+            continue
         fund_dir = PCF_DIR / code
         path = fund_dir / f"{dd}.parquet"
         idx["funds"][code] = {

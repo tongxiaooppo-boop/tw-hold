@@ -2130,6 +2130,31 @@ _GH_REPO = "tongxiaooppo-boop/tw-hold"
 _REFRESH_WORKFLOWS = [("rebuild.yml", "三清單/台股/族群動向"), ("global_macro.yml", "國際總經")]
 
 
+def _latest_run(workflow_file: str, token: str) -> dict | None:
+    """查這條 workflow 最新一次 run 的狀態——按鈕觸發前用來擋「上一輪還在跑」，
+    觸發後把連結給使用者，不用再靠猜（2026-09-22 Opus 審出的兩個缺口一次補）。
+    查不到就回 None（沿用同一套「拿不到就不擋」的容錯原則，不因為這個附加功能
+    讓按鈕本身變得更脆弱）。
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = (f"https://api.github.com/repos/{_GH_REPO}/actions/workflows/"
+           f"{workflow_file}/runs?per_page=1")
+    req = urllib.request.Request(
+        url, headers={"Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = _json.loads(r.read().decode("utf-8"))
+        runs = data.get("workflow_runs") or []
+        return runs[0] if runs else None
+    except Exception:
+        return None
+
+
 def _trigger_workflow(workflow_file: str, token: str) -> tuple[bool, str]:
     """打 GitHub REST API 的 workflow_dispatch，觸發雲端重跑（不在這裡本地抓資料——
     app 一律不即時抓資料的原則沒變，這裡只是「叫 CI 現在跑」，資料還是 CI 產生、
@@ -2160,6 +2185,18 @@ def _trigger_workflow(workflow_file: str, token: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+@st.cache_resource
+def _refresh_gate() -> dict:
+    """按鈕冷卻的存放處——刻意用 `cache_resource`（同一個 Streamlit 行程內
+    所有 session 共用）不是 `session_state`（per-browser-session）。
+
+    這個 app 是公開連結、按鈕沒有身分驗證，`session_state` 版冷卻換一個無痕
+    視窗/清 cookie 就繞過去了，等於形同虛設（2026-09-22 Opus 審出）。行程級
+    冷卻讓「不管是誰按的」都受同一個節流限制，只有 app 重啟才會重置。
+    """
+    return {"until": 0.0}
+
+
 def _macro_refresh_button() -> None:
     """頁尾手動重整——使用者發現卡片過期時按下去，觸發 rebuild.yml +
     global_macro.yml 雲端重跑，不用等排程時間到或自己去 GitHub Actions 點按鈕
@@ -2181,24 +2218,40 @@ def _macro_refresh_button() -> None:
     st.caption("發現上面卡片有 ⚠️ 過期標記時可以按這個——觸發雲端重跑，通常幾分鐘後"
                "資料就會更新，但這頁本身**不會自動跳新**，要手動重新整理瀏覽器再看一次。")
 
-    cooldown_until = st.session_state.get("_macro_refresh_cooldown", 0)
+    gate = _refresh_gate()
     now = time.time()
-    if now < cooldown_until:
-        st.button(f"🔄 立即重新整理資料（{int(cooldown_until - now)}s 後可再按）",
+    if now < gate["until"]:
+        st.button(f"🔄 立即重新整理資料（{int(gate['until'] - now)}s 後可再按）",
                   disabled=True, key="macro_refresh_btn")
         return
 
     if st.button("🔄 立即重新整理資料", key="macro_refresh_btn"):
+        gate["until"] = time.time() + 900   # 15 分鐘，行程級、任何人按都算數
+        # 觸發前先問 GitHub 這兩條最近一輪跑完了沒——這層判斷在 GitHub 端，
+        # 任何 client（不管是不是這個按鈕）都繞不過，比單純的本地冷卻更權威，
+        # 也順便擋掉「連點兩次放大 push race 機率」（2026-09-22 Opus 審出）。
+        busy = []
+        for wf, label in _REFRESH_WORKFLOWS:
+            run = _latest_run(wf, token)
+            if run and run.get("status") in ("in_progress", "queued"):
+                busy.append(label)
+        if busy:
+            st.info(f"「{'／'.join(busy)}」上一輪還在跑，這次先不重複觸發，"
+                    "等它跑完（通常幾分鐘）再按。")
+            return
+
         results = [(label, *_trigger_workflow(wf, token)) for wf, label in _REFRESH_WORKFLOWS]
-        st.session_state["_macro_refresh_cooldown"] = time.time() + 60
         failed = [(label, err) for label, ok, err in results if not ok]
+        actions_url = f"https://github.com/{_GH_REPO}/actions"
         if not failed:
-            st.success("已觸發雲端重跑（三清單 + 國際總經），幾分鐘後重新整理頁面看看。")
+            st.success(f"已觸發雲端重跑（三清單 + 國際總經），幾分鐘後重新整理頁面看看。"
+                       f"想看執行進度可以開 [GitHub Actions]({actions_url})。")
         else:
             ok_labels = [label for label, ok, _err in results if ok]
             if ok_labels:
                 st.warning(f"「{'／'.join(ok_labels)}」觸發成功；"
-                           + "、".join(f"「{label}」失敗（{err}）" for label, err in failed))
+                           + "、".join(f"「{label}」失敗（{err}）" for label, err in failed)
+                           + f" [GitHub Actions]({actions_url})")
             else:
                 st.error("觸發失敗：" + "、".join(f"「{label}」{err}" for label, err in failed))
 
@@ -2266,6 +2319,7 @@ def _macro_compass_page() -> None:
         tw_data[ticker] = {"market": market, "card": market_card(close), "chg": latest_change(close)}
 
     stale_map = global_macro.load_stale_map()
+    snap_meta = global_macro.load_snapshot_meta()
 
     intl_idx_data, intl_idx_missing = {}, []
     for symbol, name in _INTL_INDICES:
@@ -2357,6 +2411,16 @@ def _macro_compass_page() -> None:
         st.info("還沒有族群動向產出——`build_factors.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
+    _snap_lag = snap_meta.get("snapshot_lag_days")
+    if _snap_lag is not None and _snap_lag > 2:
+        # 個別卡片的 ⚠️ 只抓得到「這批裡面某幾檔比其他檔舊」，抓不到「整批一起
+        # 卡住不動」（連續好幾天沒跑成功，彼此之間沒有落差）——這裡另外用整批
+        # 的 reference_date 跟今天比，才是使用者真正在意的「這批資料是不是新的」
+        # （2026-09-22 Opus 審出的缺口，見 load_snapshot_meta 檔頭）。
+        st.warning(f"⚠️ 國際指數／波動度／美股個股整批快照落後 {_snap_lag} 個營業日"
+                   f"（最新只到 {snap_meta.get('reference_date', '—')}）——"
+                   "`global_macro.yml` 這條排程可能連續沒跑成功，總經導航頁尾按"
+                   "「立即重新整理資料」試試看。")
     st.subheader("國際指數")
     if intl_idx_data:
         cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",), stale=stale_map.get(s))

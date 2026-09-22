@@ -13,6 +13,15 @@ sys.path.insert(0, ".")
 import build_active_etf_flags as b  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _disable_min_sync_holdings(monkeypatch):
+    """這個檔案的 fixture 都用 1~3 檔的迷你 DataFrame 測個股差分邏輯，跟
+    MIN_SYNC_HOLDINGS（2026-09-22 加的「holdings 筆數異常少當沒同步」防守，
+    見 build_flags 檔頭）測的是完全不同的東西——關掉它，該門檻自己的測試
+    見 test_holdings筆數異常少當沒同步。"""
+    monkeypatch.setattr(b, "MIN_SYNC_HOLDINGS", 0)
+
+
 def _df(rows: list[tuple], nav=1_000_000.0, units=100_000.0, date="2026-09-09") -> pd.DataFrame:
     """rows: (code, name, shares, weight[, price]).  nav 預設大到權重當量門檻好過。"""
     recs = []
@@ -226,3 +235,23 @@ def test_舊快照沒有收盤日欄位_不給折溢價():
     snaps = {"00981A": [("2026-09-08", d_p), ("2026-09-09", d_t)]}
     fd = b.build_flags(snaps)["_meta"]["funds"]["00981A"]
     assert fd["premium_pct"] is None and fd["premium_skipped"] is True
+
+
+def test_holdings筆數異常少當沒同步(monkeypatch):
+    """MIN_SYNC_HOLDINGS 防守——今天筆數掉到前一份一半以下（且 < 門檻）當沒
+    同步，不算差分（2026-09-22 Opus 審出：投信網站改版/回空陣列但沒丟例外時，
+    不擋的話會把「holdings 幾乎全空」誤判成「幾乎全部出清」，產出假的全體
+    consensus_sell）。這條測試自己把門檻設回真實值，不吃 autouse fixture 那個 0。"""
+    monkeypatch.setattr(b, "MIN_SYNC_HOLDINGS", 5)
+    prev = [(str(1000 + i), f"n{i}", 1000, 1.0) for i in range(10)]
+    today_ok = [(str(1000 + i), f"n{i}", 1000, 1.0) for i in range(8)]   # 掉 20%，正常
+    today_bad = [(str(1000 + i), f"n{i}", 1000, 1.0) for i in range(2)]  # 掉到 2 檔，可疑
+
+    snaps_ok = {"00981A": _snap(prev=prev, today=today_ok)}
+    fd_ok = b.build_flags(snaps_ok)["_meta"]["funds"]["00981A"]
+    assert fd_ok["synced"] is True
+
+    snaps_bad = {"00981A": _snap(prev=prev, today=today_bad)}
+    fd_bad = b.build_flags(snaps_bad)["_meta"]["funds"]["00981A"]
+    assert fd_bad["synced"] is False
+    assert fd_bad["moved_n"] == 0

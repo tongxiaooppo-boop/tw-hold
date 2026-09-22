@@ -73,3 +73,19 @@ def test_load_stale_map沒有stale清單回空dict(monkeypatch, tmp_path):
     meta.write_text('{"fetched_at": "x", "reference_date": "2026-09-22"}', encoding="utf-8")
     monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", meta)
     assert global_macro.load_stale_map() == {}
+
+
+def test_load_snapshot_meta讀整批新鮮度(monkeypatch, tmp_path):
+    meta = tmp_path / "global_macro_meta.json"
+    meta.write_text(
+        '{"fetched_at": "2026-09-22T00:50:36+00:00", "reference_date": "2026-09-18", '
+        '"snapshot_lag_days": 3, "stale": []}', encoding="utf-8")
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", meta)
+    out = global_macro.load_snapshot_meta()
+    assert out["reference_date"] == "2026-09-18"
+    assert out["snapshot_lag_days"] == 3
+
+
+def test_load_snapshot_meta檔案不存在回空dict(monkeypatch, tmp_path):
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", tmp_path / "nope.json")
+    assert global_macro.load_snapshot_meta() == {}

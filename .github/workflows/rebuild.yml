@@ -170,13 +170,31 @@ jobs:
           fi
           git commit -m "rebuild: 三清單 $(date -u +%F) (${{ github.event_name }})"
           # 跟 global_macro.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕
-          # 一次觸發兩條時常常撞在一起——push 被拒就 rebase 後重試（2026-09-22
-          # 加按鈕當天實測真的撞過一次）。
-          for i in 1 2 3; do
-            git push && break
-            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
-            git pull --rebase origin main
+          # 一次觸發兩條時常常撞在一起（2026-09-22 加按鈕當天實測真的撞過一次）。
+          # ⚠️ 這段 2026-09-22 Opus 審過抓到兩個坑：
+          #   1. 原本 `for ...; do git push && break; git pull --rebase; done` 迴圈跑完
+          #      最後一步若剛好是成功的 pull（push 其實還是沒成功），step exit code
+          #      會是 0——job 綠燈，notify-failure 不會觸發，但資料根本沒推上去，
+          #      是比「紅燈」更糟的靜默失敗。改成用 $pushed 旗標明確判斷，沒成功就 exit 1。
+          #   2. rebuild.yml 跟 pcf_retry.yml 常在同一天各自 commit
+          #      data/pcf/｜data/derived/active_etf_flags.json（後者含
+          #      fetched_at 時間戳，兩邊內容必然不同）→ pull --rebase 幾乎必衝突。
+          #      衝突時這批「產出檔」一律取自己這輪剛算出來的版本（rebase 過程中
+          #      HEAD 是要被疊上去的目標、這裡的新 commit 才是 --theirs）。
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            echo "push 被拒（第 $i 次），rebase 後重試"
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- data/derived/ data/pcf/ data/reference/ \
+                reference/corporate_actions_resolved.json 2>/dev/null || true
+              git add -A data/derived/ data/pcf/ data/reference/ \
+                reference/corporate_actions_resolved.json 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
           done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }
 
   # ⚠️ 這個 job 自己絕對不可以失敗（抄自 tw-swing daily.yml）。
   notify-failure:

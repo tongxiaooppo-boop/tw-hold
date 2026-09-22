@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from scripts.fetch_global_macro import _check_staleness, _retry_stale
+from scripts.fetch_global_macro import _business_days_since, _check_staleness, _retry_stale
 
 
 def _df(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
@@ -32,6 +32,34 @@ def test_落後超過門檻才算過期():
     assert len(stale) == 1
     assert stale[0]["symbol"] == "AAPL"
     assert stale[0]["lag_days"] == 4
+
+
+def test_亞股門檻放寬到7天_一般symbol還是3天():
+    # 恆生落後 6 天——一般 symbol（3 天門檻）會算過期，恆生（7 天門檻）不算
+    # （2026-09-22 Opus 審出：日經/恆生/KOSPI 遇國定連假用同一個 3 天門檻會
+    # 連續好幾天誤報）。
+    df = _df([
+        ("^DJI", "2026-09-16", 1.0),
+        ("^HSI", "2026-09-10", 2.0),   # 落後 6 天
+    ])
+    assert _check_staleness(df) == []
+
+    df2 = _df([
+        ("^DJI", "2026-09-16", 1.0),
+        ("^HSI", "2026-09-08", 2.0),   # 落後 8 天，超過 7 天門檻
+    ])
+    stale = _check_staleness(df2)
+    assert len(stale) == 1
+    assert stale[0]["symbol"] == "^HSI"
+
+
+def test_business_days_since跳過週末():
+    import datetime as _dt
+    # 週五到下週一，中間隔一個週末，只算 1 個營業日
+    fri = _dt.date(2026, 9, 18)
+    mon = _dt.date(2026, 9, 21)
+    assert _business_days_since(fri, mon) == 1
+    assert _business_days_since(fri, fri) == 0
 
 
 def test_retry_stale用重試資料蓋掉過期尾端(monkeypatch):

@@ -46,6 +46,22 @@ def load_stale_map() -> dict[str, dict]:
             for s in meta.get("stale", [])}
 
 
+def load_snapshot_meta() -> dict:
+    """整批快照的絕對新鮮度——`reference_date`／`fetched_at`／`snapshot_lag_days`。
+
+    `load_stale_map()` 只抓得到「這批裡面某幾檔比其他檔舊」，抓不到「整批
+    一起卡住不動」（例如這支 CI 連續好幾天沒跑成功，彼此之間沒有落差）。
+    這個回傳空 dict，讀取端一律用 `.get()`（2026-09-22 Opus 審出的絕對新鮮度
+    缺口；app 部署可能比資料先到，同 memory tw-hold-schema-rollout-gap 的教訓）。
+    """
+    if not GLOBAL_MACRO_META.exists():
+        return {}
+    try:
+        return json.loads(GLOBAL_MACRO_META.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def percentile_rank(close: pd.Series, window: int = 252) -> float | None:
     """最新一筆在近 `window` 個交易日（含自己）分佈中的分位（0~1）。
     資料不足 `window` 天就用現有全部資料——分位只是輔助標註，不是判斷依據，
