@@ -8,7 +8,7 @@
 | 證據來源 | `me` 驗屍、tw-swing `twswing.value.factors/screen`、被動式市值型 + 高股息低波動 ETF（0050／00713／00878）的指數建構規則 |
 | 撰寫視角 | **被動式指數團隊**（規則透明、定期換股、陷阱硬剔除、換手可控）＋ 高股息 ETF 分析師（殖利率永續性、填息率、總報酬） |
 | 授權調整 | 使用者授權「設計衝突時採建議值並說明理由」。據此拔掉 v1.0 的「forward EPS × 市況 PE → 目標價」估值機器（理由見 §6） |
-| 狀態 | 🟡 **未定案、未開工。凍結解除中**——範圍已改（砍長波段、定存重定位），且**兩條線都還沒有實證**。等 [`docs/BACKTEST_HANDOFF.md`](docs/BACKTEST_HANDOFF.md) 的實驗 B 有結果才定案 |
+| 狀態 | 🟢 **v1 已上線**（2026-09-08 起，M0b/M1/M2/M3/M4 全部完成）。下面這段 🟡 是 2026-09-07 寫的、当時還沒開工時的狀態，**保留供對照，不是現況**——四個回測實驗（A/C/D/B）都已跑完（結論見 `docs/BACKTEST_HANDOFF.md`），使用者裁決「tw-hold 照做」。目前是**上線後的維運強化期**：2026-09-16 補市場代理資料守門、2026-09-22 補資料管線的備援/自癒機制（六項改動 + Opus 審核出的 8 個追加修正，見 §10.2、§11 最新條目）。網頁表頭已從「tw-hold」改名「股市雷達」（`app/streamlit_app.py` `APP_NAME`，2026-09-11），repo 名稱仍是 `tw-hold` |
 
 > # 🟡 v3.0 未定案——先讀這裡
 >
@@ -140,6 +140,26 @@
 ---
 
 ## 3. 資料層：bundle 發佈與拉取
+
+> 🔴 **本節（§3 全節）描述的「獨立 `tw-data` 公開 repo、匿名零 token」架構沒有實作**
+> （跟 §8/§9 頂端的更正框是同一件事，這裡補一份放在讀者實際會先讀到的位置）。
+> **實際現況**（2026-09-22 對照 `fetch_bundle.py` / `.github/workflows/*.yml` 確認仍然成立）：
+>
+> - **沒有 `tw-data` repo。** bundle 由 **`tw-swing`（私有 repo）** 的
+>   `fundamentals.yml`（週更財報/PER）與 `publish_bundle.yml`（日更日線/月營收/籌碼等）
+>   打包，發佈到 **tw-swing 自己私有 repo 的 Release**（移動 tag `data-latest`）。
+> - **`tw-hold` 是公開 repo**（Actions 分鐘數不計帳號額度），`tw-swing` 維持私有。
+> - `fetch_bundle.py` 用 **fine-grained PAT**（環境變數 `TWSWING_BUNDLE_PAT`，
+>   權限只給 `tongxiaooppo-boop/tw-swing` 這一個 repo 的 `contents: read`）拉 Release
+>   資產——**不是匿名下載，需要 token**。本地讀 `.env`、CI 讀
+>   `secrets.TWSWING_BUNDLE_PAT`、Streamlit Cloud 讀 `st.secrets["TWSWING_BUNDLE_PAT"]`。
+> - `TWHOLD_DISPATCH_PAT`（tw-swing 那邊發 `repository_dispatch` 觸發 tw-hold 的
+>   `rebuild.yml` 用）是另一顆 PAT，兩顆到期日見 memory `tw-hold-bundle-pat-expiry`
+>   與 `reference/UPSTREAM.md`。
+> - 下面 §3.1/§3.1.1/§3.1.2/§3.2 保留原文供設計理由對照（U1a/U1b 兩條管線的拆分、
+>   schema 驗證、宇宙定義等**邏輯設計**仍然成立，只是「家」從假設中的 `tw-data`
+>   換成了 `tw-swing`），讀的時候把 `tw-data` 在腦中替換成「`tw-swing` 私有 Release」、
+>   把「匿名／零 token」替換成「fine-grained PAT」即可。§10.2 G6 是這兩顆 PAT 的守門員。
 
 ### 3.1 tw-data 發佈（公開 repo、公開 Release、匿名可下載）
 
@@ -292,6 +312,7 @@ tw-data 是新 repo，但**不是從零抓**——tw-swing 已經有的直接搬
 | 類別 | 圖 |
 | :--- | :--- |
 | 價格 | K 線 + 均線（周/季/年線）+ 量；相對大盤強弱（vs 0050） |
+| 籌碼 | 法人買賣超（`institutional_net`，2026-09-08 補：bundle 加 `chips.parquet` 之後才有這張，原始版此表沒列） |
 | 成長 | 月營收 YoY / MoM 柱狀；季度 EPS；年度 EPS |
 | 獲利品質 | 三率趨勢；ROE / ROA |
 | 財務結構 | 負債比 / 流動比；現金與約當現金 |
@@ -844,6 +865,22 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 | **G5** | **複製碼漂移**：`regime` / `indicators` / `finmind_client` 上游改了、這邊沒跟 | `reference/UPSTREAM.md` 記「檔案 / 來源路徑 / commit」＋ `check_upstream_drift.py` 比 hash（**只提醒，不自動同步**） |
 | **G6** | **PAT 過期**：fine-grained PAT 最長 1 年，過期後 bundle 拉不到 | 到期日寫進 `UPSTREAM.md` 與 `_meta.json` 的註記；G4 的告警會先叫 |
 
+> ⚠️ **以下 G7–G10 是 2026-09-22「一整天在補這類機制」新增的**（起因：使用者回報
+> 「hold 資料沒更新」，查出 `ALERT_WEBHOOK` 這個 repo 從沒設過——G1–G6 那套告警邏輯
+> 一直在命中 `[ -z "$WEBHOOK" ]` 分支、從沒真的通知到人。使用者裁決**要備援＋自癒，
+> 不要告警**（見 `docs/REVIEW_REQUEST_2026-09-22.md` §1）：下面的守門員因此多半是
+> 「自動重試/自己補跑」而不是「發通知叫人」。詳細脈絡、Opus 審核出的 8 個追加坑
+> （尤其 push 重試迴圈本身有靜默失敗 bug）見 `docs/REVIEW_REQUEST_2026-09-22.md` +
+> `docs/REVIEW_RESPONSE_2026-09-22.md`（自足，讀了就懂）。
+
+| # | 靜默失敗 | 守門員 |
+| :- | :--- | :--- |
+| **G7** | **`rebuild.yml` 觸發單點依賴**：原本只靠 tw-swing `publish_bundle.yml` 尾端的 `repository_dispatch`，dispatch 沒送到（PAT 過期、tw-swing 失敗、網路問題）rebuild 就不會失敗，只是不再跑 | `rebuild.yml` 加 `schedule` 備援（平日 UTC 08:00＝台北 16:00，早過大部分情況的正常落地時間）；bundle 沒變的日子 `git diff --cached --quiet` 擋掉，不洗出空 commit。**只解決「這次剛好沒送到」，系統性故障（PAT 真的過期）每天一樣會失敗**——認知記在 memory，不做連續失敗計數器，改走 G10 的絕對新鮮度顯示 |
+| **G8** | **PCF（主動式 ETF 申購買回清單）沒有歷史回補 API**：五檔投信官網任一家當天反爬擋/網路抖動沒抓到，**永久缺一格**，不像 bundle/yfinance 隔天重抓自動補；且「有沒有抓到」≠「抓對了沒」——holdings 筆數異常少但沒丟例外時照樣落地，下游差分會產出假的全體 consensus_sell/buy | 獨立輕量 `.github/workflows/pcf_retry.yml`：平日台北 17:00/19:00（排在 `rebuild.yml` 主排程之後），條件是 `_index.json.missing` 非空**或今天完全沒有任何一檔的日期**才補跑，避免對投信官網一天多打幾次。資料品質再加兩層：`snapshot_pcf.py` 的 `MIN_HOLDINGS=10`（異常少當抓失敗、記進 `missing`，順帶讓補跑機制自動接住）＋ `build_active_etf_flags.py` 的 `MIN_SYNC_HOLDINGS=5`（今天筆數掉到前一份一半以下就當沒同步、不算差分） |
+| **G9** | **多條 workflow 同天各自 `git push` 回 `main` 會撞車**：`rebuild.yml`／`global_macro.yml`／`pcf_retry.yml` 三條獨立 `concurrency.group`（不互斥，刻意不共用一組——GitHub 的 concurrency group 第三個 run 進來時會直接取消 pending 那個，不是排隊，共用反而可能靜默丟掉 PCF 這種不可回復的資料）；三條都會 commit 到 `main`，同時觸發時 push 互相拒絕 | 三份 workflow 的 push 步驟都是「push 失敗 → `git pull --rebase` → 重試，最多 5 次；衝突時該批『產出檔』一律取自己這輪的版本（`git checkout --theirs`）」。🔴 這段本身曾經有 bug：`for...; do git push && break; git pull --rebase; done` 這種寫法，三次 push 全失敗但最後一次 `pull` 成功時，迴圈 exit code 是那個成功的 `pull`——job 綠燈但資料沒推上 `main`，是這一輪最想解決的「靜默失敗」的翻版。已改用 `$pushed` 旗標明確判斷、5 次都不成功就 `exit 1` 讓 `notify-failure`（G4 那套）真的接住 |
+| **G10** | **`_check_staleness()`（原本的過期偵測）只比「這批自己最大日期」**：如果整批連續好幾天一起卡住沒跑成功，批內彼此沒有落差，偵測不到，app 上不會有任何 ⚠️ | `scripts/fetch_global_macro.py` 新增**絕對新鮮度** `snapshot_lag_days`（跟營業日比、跳過週末），寫進 `global_macro_meta.json`；`app/streamlit_app.py` 在國際指數/波動度/美股個股整段前面加警示（落後 > 2 個營業日才顯示）。日經/恆生/KOSPI 因為當地連假較長另放寬到 7 天門檻（`_ASIA_STALE_THRESHOLD_DAYS`），避免連續誤報。這是使用者裁決「警報掛在程式註明新鮮度」而不是外部告警的具體做法——PAT 真的過期時，app 上會直接表現成「資料日卡住不動」，不需要額外的連續失敗計數器 |
+| **G11** | **總經導航頁的手動重整按鈕**（`_macro_refresh_button`，打 GitHub `workflow_dispatch` REST API 觸發 `rebuild.yml`/`global_macro.yml`）**沒有身份驗證**——app 是公開連結，任何拿到連結的人都能按，原本只用 `st.session_state` 做 60 秒冷卻（per-browser-session，換瀏覽器/無痕模式形同虛設） | 改用 `st.cache_resource` 的**行程級**冷卻（15 分鐘，跨訪客共用、繞不過）＋ 觸發前先查 GitHub Actions runs API 確認上一輪真的跑完，兩層都比原本的 session 冷卻更權威。判定為「真隱患但中等」（Opus 審核 2026-09-22）：爆炸半徑有限（公開 repo Actions 分鐘數不計費、workflow 冪等、無意義 commit 會被 diff 擋掉），不是最優先項，但仍需修 |
+
 ### 10.3 `prices_raw_close` 的資料來源（M2 之前必須定，否則填息率做不出來）
 
 🔴 **這條現在完全沒有人在抓，而且它是定存兩道新硬門檻之一的原料。**
@@ -878,6 +915,30 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 ---
 
 ## 11. 變更記錄
+
+- **2026-09-22 資料管線備援/自癒機制 + Opus 審核追加修正（實作校正，非設計變更）**——
+  起因：使用者回報「hold 資料沒更新」，查出 `fetch_global_macro.py` 對過期 symbol
+  重試時單檔 `yf.download` 回傳 MultiIndex 欄位沒拉平就 concat 整批炸掉，順帶查出
+  `ALERT_WEBHOOK` 這個 repo 從沒設過、G1–G6 告警邏輯這段時間全部靜默。使用者裁決
+  「要備援＋自癒，不要告警」。當天六個改動（修 `fetch_global_macro.py` 崩潰、
+  總經卡片加「資料落後 N 天」標記、`global_macro.yml` 補 `notify-failure`、
+  `rebuild.yml` 加排程備援、總經導航加手動重整按鈕 + 新增 `pcf_retry.yml`、
+  三條 push-to-main workflow 加 rebase 重試）提交簽呈給 Opus 全檢
+  （`docs/REVIEW_REQUEST_2026-09-22.md`），抓出 8 個簽呈自己沒發現的坑，其中最優先
+  的一個是**簽呈自己新寫的 push 重試迴圈邏輯本身會靜默掉資料**（迴圈最後一步若剛好
+  是成功的 `pull`，exit code 會是 0）。8 個坑全部修完，`pytest -q` 234 passed。
+  完整清單、裁決理由收進 §10.2 G7–G11。詳見 `docs/REVIEW_REQUEST_2026-09-22.md` +
+  `docs/REVIEW_RESPONSE_2026-09-22.md`（自足，讀了就懂）。
+
+- **2026-09-17 長波段停損進場緩衝門檻（bug fix + 模擬單重開）**——`screener/swing_stops.py`
+  出場觀察表加進場緩衝門檻（≥ 1×ATR14），模擬單（`swing_paper.py`）配合歸零重開。
+  只動出場觀察表這一個檔案，PRD 凍結範圍沒有變更。詳見 `docs/HANDOFF_2026-09-17.md`。
+
+- **2026-09-16 市場代理資料守門補齊（純資料正確性/運維層）**——市場代理資料
+  （0050/006201 等指數代理序列）驗證流程補強：先 sanitize 再 validate、比對日報酬
+  而非直接比價格，避免面額變更/分割造成的假跳空誤判成資料異常或反過來放過真異常。
+  沒有動選股規則、因子公式、verdict 邏輯。詳見 `docs/HANDOFF_2026-09-16.md`
+  （對應審核 `docs/REVIEW_REQUEST_2026-09-16.md` / `docs/REVIEW_RESPONSE_2026-09-16.md`）。
 
 - **2026-09-14（再續）修正長波段進場口徑（bug fix）**——使用者關機前問「模擬單
   依據策略買的到原則嗎」查出來的：`screener/swing_stops.py` 的進場價一直是
