@@ -1,0 +1,67 @@
+name: 主動式 ETF PCF 補跑
+
+# PCF（五檔主動式 ETF 的申購買回清單）官方只給「當天」、沒有歷史查詢 API——
+# 跟 bundle／yfinance 那種「整段全量覆寫、明天重抓自動補上」不同，這個資料源
+# 一旦當天沒抓到就永久缺一格（見 scripts/snapshot_pcf.py 檔頭）。
+#
+# rebuild.yml 每天已經跑一次 snapshot_pcf.py（隨 bundle-published dispatch 或
+# 那條的排程備援），這支只在「那次沒抓齊」時再補打一次——單一投信官網偶爾
+# 反爬擋/網路抖動，同一天晚一點再試一次常常就過了。平日 10:00／12:00 台北各
+# 一次，是「多給幾次機會」而非跟主排程搶快，不需要每次都空跑全部（`_index.json`
+# 的 `missing` 欄位若是空的就直接跳過，不會平白多打投信官網）。
+#
+# 只做 PCF 這一段（snapshot_pcf.py + build_active_etf_flags.py + commit），
+# 不重跑整條 rebuild.yml（不必要再拉一次 bundle、重算三清單）。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1-5"   # 台北 10:00
+    - cron: "0 4 * * 1-5"   # 台北 12:00
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pcf-retry
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 今天還有沒抓到的投信才要補
+        id: check
+        run: |
+          MISSING=$(python -c "import json; idx=json.load(open('data/pcf/_index.json')); print('1' if idx.get('missing') else '0')" 2>/dev/null || echo 1)
+          echo "need_retry=$MISSING" >> "$GITHUB_OUTPUT"
+          [ "$MISSING" = "1" ] && echo "有缺，補跑" || echo "五檔都齊了，不用補"
+
+      - run: pip install -r requirements.txt
+        if: steps.check.outputs.need_retry == '1'
+
+      - name: 補抓 PCF
+        if: steps.check.outputs.need_retry == '1'
+        run: python scripts/snapshot_pcf.py
+
+      - name: 重算主動式 ETF 認養旗標
+        if: steps.check.outputs.need_retry == '1'
+        run: python build_active_etf_flags.py
+
+      - name: commit（有補到才 commit）
+        if: steps.check.outputs.need_retry == '1'
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/pcf/ data/derived/active_etf_flags.json
+          git diff --cached --quiet -- data/pcf/ data/derived/active_etf_flags.json && {
+            echo "補跑後內容還是沒變（投信那邊還是沒有）——跳過 commit"; exit 0; }
+          git commit -m "PCF 補跑 $(date -u +%F)"
+          git push
