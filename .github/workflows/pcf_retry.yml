@@ -64,4 +64,10 @@ jobs:
           git diff --cached --quiet -- data/pcf/ data/derived/active_etf_flags.json && {
             echo "補跑後內容還是沒變（投信那邊還是沒有）——跳過 commit"; exit 0; }
           git commit -m "PCF 補跑 $(date -u +%F)"
-          git push
+          # 跟 rebuild.yml／global_macro.yml 都會 commit 回 main，撞期時 push
+          # 被拒就 rebase 後重試。
+          for i in 1 2 3; do
+            git push && break
+            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
+            git pull --rebase origin main
+          done
