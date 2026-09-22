@@ -1,0 +1,496 @@
+<title>買得到帳本</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#eef0e8;
+  --surface:#ffffff;
+  --surface-2:#f4f5ee;
+  --ink:#1c2116;
+  --muted:#5d6353;
+  --accent:#8a5a2b;
+  --accent-ink:#6e4720;
+  --rule:#d9dccb;
+  --pos:#1f7a52;
+  --neg:#a4322a;
+  --chip-bg:#e6e8da;
+  --shadow:0 1px 2px rgba(28,33,22,.06),0 8px 24px -16px rgba(28,33,22,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14160f;
+    --surface:#1b1f16;
+    --surface-2:#20241a;
+    --ink:#eae9db;
+    --muted:#9aa08b;
+    --accent:#d3a561;
+    --accent-ink:#e5bd82;
+    --rule:#343a2b;
+    --pos:#57b98a;
+    --neg:#e07b70;
+    --chip-bg:#252a1c;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14160f;
+  --surface:#1b1f16;
+  --surface-2:#20241a;
+  --ink:#eae9db;
+  --muted:#9aa08b;
+  --accent:#d3a561;
+  --accent-ink:#e5bd82;
+  --rule:#343a2b;
+  --pos:#57b98a;
+  --neg:#e07b70;
+  --chip-bg:#252a1c;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Noto Sans",system-ui,sans-serif;
+  padding:0 16px;
+  padding-block:28px 64px;
+}
+.page{max-width:960px;margin:0 auto;}
+h1,h2,h3{font-family:"Noto Serif TC","Noto Serif",serif;font-weight:700;text-wrap:balance;margin:0;}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.pos{color:var(--pos);}
+.neg{color:var(--neg);}
+.muted{color:var(--muted);}
+a{color:var(--accent-ink);}
+
+/* ---- hero ---- */
+.hero{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:14px;
+  padding:28px 28px 24px;
+  box-shadow:var(--shadow);
+  margin-bottom:20px;
+}
+.hero .eyebrow{
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-ink);font-weight:700;margin-bottom:8px;
+}
+.hero h1{font-size:clamp(26px,4vw,34px);}
+.hero p.lead{color:var(--muted);margin-top:10px;max-width:60ch;line-height:1.6;}
+.stat-row{
+  display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;
+}
+.stat{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:10px;
+  padding:10px 14px;min-width:120px;flex:1 1 140px;
+}
+.stat .k{font-size:11px;color:var(--muted);letter-spacing:.04em;}
+.stat .v{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:16px;margin-top:2px;}
+
+/* ---- toc ---- */
+.toc{
+  display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;
+}
+.toc a{
+  font-size:13px;padding:6px 12px;border-radius:999px;
+  background:var(--chip-bg);border:1px solid var(--rule);color:var(--ink);
+  text-decoration:none;white-space:nowrap;
+}
+.toc a:hover{border-color:var(--accent);color:var(--accent-ink);}
+
+/* ---- sections ---- */
+section{margin-bottom:34px;}
+.section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;}
+.section-head .no{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);font-weight:600;font-size:14px;}
+.section-head h2{font-size:21px;}
+.section-note{color:var(--muted);font-size:13.5px;line-height:1.65;margin:6px 0 14px;max-width:70ch;}
+
+/* ---- card / table ---- */
+.card{
+  background:var(--surface);border:1px solid var(--rule);border-radius:12px;
+  padding:18px 20px;box-shadow:var(--shadow);
+}
+.metric-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.metric{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;
+  padding:6px 10px;font-size:12.5px;color:var(--muted);
+}
+.metric b{font-family:"IBM Plex Mono",monospace;color:var(--ink);font-weight:600;}
+.tbl-wrap{overflow-x:auto;}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px;}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap;}
+th:first-child,td:first-child{text-align:left;}
+thead th{
+  font-family:"Noto Sans TC",sans-serif;font-weight:700;font-size:11.5px;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.03em;
+  border-bottom:1px solid var(--ink);
+}
+tbody tr:last-child td{border-bottom:none;}
+.subhead{font-size:12px;color:var(--muted);margin:16px 0 6px;font-weight:700;letter-spacing:.02em;}
+
+/* ---- accordion ---- */
+details.rule{
+  background:var(--surface);border:1px solid var(--rule);border-radius:12px;
+  box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;
+}
+details.rule summary{
+  list-style:none;cursor:pointer;padding:14px 18px;
+  display:flex;align-items:center;gap:12px;
+}
+details.rule summary::-webkit-details-marker{display:none;}
+details.rule summary .chev{
+  margin-left:auto;color:var(--muted);transition:transform .15s ease;flex:0 0 auto;
+}
+details.rule[open] summary .chev{transform:rotate(90deg);}
+.rule-code{
+  font-family:"IBM Plex Mono",monospace;font-weight:600;color:var(--accent-ink);
+  background:var(--chip-bg);border-radius:6px;padding:3px 8px;font-size:12.5px;flex:0 0 auto;
+}
+.rule-name{font-weight:500;flex:1 1 auto;min-width:0;}
+.rule-ann{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:14px;flex:0 0 auto;}
+.rule-body{padding:0 18px 18px;border-top:1px solid var(--rule);}
+.rule-desc{color:var(--muted);font-size:13px;line-height:1.6;margin:12px 0 14px;}
+
+/* ---- overview chart ---- */
+.chart-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;}
+.chart-legend .sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+.bar-row{display:grid;grid-template-columns:110px 1fr 128px;align-items:center;gap:10px;padding:5px 0;}
+.bar-row .lbl{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-row .lbl b{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);margin-right:5px;}
+.track{position:relative;height:16px;background:var(--surface-2);border-radius:4px;}
+.track .mdd-bar{position:absolute;top:0;left:0;bottom:0;background:var(--neg);opacity:.22;border-radius:4px;}
+.track .ret-bar{position:absolute;top:0;left:0;bottom:0;border-radius:4px;}
+.track .ret-bar.pos{background:var(--pos);}
+.track .ret-bar.neg{background:var(--neg);}
+.bar-row .figs{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted);text-align:right;}
+.chart-scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin:2px 0 12px;padding-left:120px;}
+
+/* ---- callouts ---- */
+.callout{
+  border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--surface-2);border-radius:0 10px 10px 0;padding:14px 18px;
+  font-size:13.5px;line-height:1.7;color:var(--ink);
+}
+.callout.warn{border-left-color:var(--neg);}
+.callout h3{font-size:14px;margin-bottom:6px;font-family:"Noto Sans TC",sans-serif;font-weight:700;}
+ul.limits{margin:0;padding-left:1.2em;color:var(--ink);font-size:13.5px;line-height:1.75;}
+ul.limits li{margin-bottom:8px;}
+ul.limits li::marker{color:var(--accent-ink);}
+
+/* ---- appendix table ---- */
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--chip-bg);color:var(--muted);margin-left:6px;}
+
+footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:12px;line-height:1.7;}
+
+@media (max-width:560px){
+  .bar-row{grid-template-columns:78px 1fr 96px;}
+  .chart-scale{padding-left:88px;}
+  table{font-size:12px;}
+}
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <div class="eyebrow">tw-hold × tw-swing 跨庫回測交接 · 2026-09-22</div>
+    <h1>買得到帳本</h1>
+    <p class="lead">17 條規則湊到 16 條，全部改用「訊號/換股日次一交易日開盤才成交」的買得到口徑重新回測，逐年拆解與逐市況拆解各看一次，跟 0050 同期對照。</p>
+    <div class="stat-row">
+      <div class="stat"><div class="k">回測期間</div><div class="v">2016-01 → 2026-08</div></div>
+      <div class="stat"><div class="k">股票池</div><div class="v">609 檔（前500大∪成交值前500）</div></div>
+      <div class="stat"><div class="k">交易成本</div><div class="v">0.585%（來回）</div></div>
+      <div class="stat"><div class="k">規則到位</div><div class="v">16 / 17（誠實記錄，未硬湊）</div></div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#overview">總覽對比</a>
+    <a href="#longswing">長波段候選池</a>
+    <a href="#value">價值因子指數</a>
+    <a href="#tw-swing">tw-swing 14 條</a>
+    <a href="#appendix">附錄：篩選記錄</a>
+    <a href="#method">方法論</a>
+    <a href="#limits">已知限制</a>
+  </nav>
+
+  <main>
+
+    <section id="overview">
+      <div class="section-head"><span class="no">00</span><h2>tw-swing 14 條總覽</h2></div>
+      <p class="section-note">同一張圖看報酬跟代價：實心色條是 tw-hold 口徑下的全期年化報酬，底下淡色條是同一條規則的最大回撤（取絕對值），兩者共用同一把尺（0–70%）。條越長代表數字越大——年化條蓋不過回撤條的規則，代表這條規則賺得少、跌得深。</p>
+      <div class="card">
+        <div class="chart-legend">
+          <span><span class="sw" style="background:var(--pos)"></span>年化報酬（正）</span>
+          <span><span class="sw" style="background:var(--neg);opacity:.22"></span>最大回撤（絕對值）</span>
+        </div>
+        <div id="chart"></div>
+        <div class="chart-scale"><span>0%</span><span>35%</span><span>70%</span></div>
+      </div>
+    </section>
+
+    <section id="longswing">
+      <div class="section-head"><span class="no">01</span><h2>長波段候選池</h2></div>
+      <p class="section-note">CANSLIM ∩ 趨勢模板 ∩ 市況門檻，訊號全買、動態等權（權重＝1/當天實際持倉數）。沿用 <span class="num">backtest_longswing.py</span> 既有 next_open + notbear 市況閘門 + 移動 ATR 停損那一格，與 production 口徑一致。完成交易 492 筆（另有 7 筆回測結束仍持有、4 筆訊號成交時已跌破停損位放棄），共 550 週。未算出單一「全期年化」數字（見下方逐年拆解）。</p>
+      <div class="card" id="tbl-longswing"></div>
+    </section>
+
+    <section id="value">
+      <div class="section-head"><span class="no">02</span><h2>價值因子指數</h2></div>
+      <p class="section-note"><span class="num">screen_value</span> 過硬門檻、不排序、訊號全買（N=∞）。季中換股（3/6/9/12 月 15 日起最近交易日），41 期，每期候選中位數 217 檔，空白期 0%。買進與換手都改用次一交易日開盤價，對稱處理（不只買進端買得到，賣出／換手端也一致）。</p>
+      <div class="card" id="tbl-value"></div>
+    </section>
+
+    <section id="tw-swing">
+      <div class="section-head"><span class="no">03</span><h2>tw-swing 精選規則（14 條）</h2></div>
+      <p class="section-note">目標湊 15 條，家族去重＋絕對年化 &gt;10% 篩選後只湊到 <b>14 條</b>——沒有硬湊第 15 條，也沒有放寬門檻（見附錄與已知限制）。每條規則用 tw-swing 自己算好的事件表，改套 tw-hold universe / 2016–2026-08 / 次日開盤買得到口徑重新過濾回測，跟原始「全市場」數字不會一樣，僅供橫向比較用。</p>
+      <div id="rules-list"></div>
+    </section>
+
+    <section id="appendix">
+      <div class="section-head"><span class="no">04</span><h2>附錄：15 條規則篩選記錄</h2></div>
+      <p class="section-note">來源：<span class="num">tw-swing/data/scan/backtest_all_nextopen.md</span> 的組合模擬表（部位上限 8、entry_at=next_open，涵蓋 rules.yaml 全部 110 條已實作規則）。篩選規則：年化 &gt;10%，同家族（依代號字首／entry_from 委派關係判斷，不是 yaml 的 family 分類欄）只取最佳版本。這裡列的年化是 tw-swing 原始全市場數字，只用來排序候選，不是最終報告採用的數字。</p>
+      <div class="card">
+        <div class="subhead">採用（14 條）</div>
+        <div class="tbl-wrap" id="tbl-appendix"></div>
+        <div class="subhead">同家族但未採用</div>
+        <ul class="limits">
+          <li><b class="num">H2-trailatr2</b>　+16.88%　H2 家族，H2 本尊更高（+20.96%）</li>
+          <li><b class="num">P4</b>　+10.93%　P3 家族，P3 本尊更高（+13.02%）</li>
+          <li><b class="num">Y4-plow10</b>　+10.72%　Y4 家族，最佳版是 Y4-plow20（+11.03%）</li>
+          <li><b class="num">Y4 本尊</b>　+9.00%　未達 10% 門檻，且非家族最佳版</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="method">
+      <div class="section-head"><span class="no">05</span><h2>方法論</h2></div>
+      <div class="card">
+        <p class="callout">
+          <b>買得到口徑</b>：訊號/換股日次一交易日開盤才成交，不是當天收盤。長波段/價值線沿用 <span class="num">swing_stops.py</span> / <span class="num">backtest_longswing.py</span> 既有 next_open 實作；tw-swing 14 條用 <span class="num">simulate_trades(entry_at="next_open")</span>。<br><br>
+          <b>持倉建構</b>：三條線一律「訊號全買、動態等權」——過門檻的候選/觸發的訊號全數買進，權重＝1/當天實際持倉數，不排名、不設部位上限。tw-swing 14 條原本沒有「訊號全買」這個要求，是這份報告為求方法一致所做的延伸決定。<br><br>
+          <b>市況分類</b>：<span class="num">ma_verdict(close, window=60)</span>，乖離 ±2% 分多/空/盤整，對 0050 收盤序列逐日算——只用在本報告的呈現層，跟 production 長波段市況閘門用的 <span class="num">regime.py</span> 是不同用途，刻意不混用。
+        </p>
+      </div>
+      <div style="height:12px"></div>
+      <div class="callout warn">
+        <h3>執行透明度：一個算錯又修好的 bug</h3>
+        第一版曾用 tw-swing 引擎的 <span class="num">portfolio_sim(sizing="equal", max_positions=99999)</span> 想模擬「不設上限」，但該引擎權重公式是 1/max_positions（固定上限）——塞一個超大數字會把每筆權重除到趨近於 0，14 條規則年化因此全部算成約 0%。發現後改寫成獨立的動態等權函式（權重＝1/當天實際持倉數，跟長波段同一套算法）重跑，數字才回到本頁看到的合理量級。
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head"><span class="no">06</span><h2>已知限制</h2></div>
+      <div class="card">
+        <ul class="limits">
+          <li><b>生存者偏差</b>：universe 用今天的 in_universe 回溯 2016，等於已知誰活到今天，所有數字都是上界，真實結果會更差。</li>
+          <li><b>跨庫口徑不可比</b>：tw-swing 14 條的資料源／universe 定義原本跟 tw-hold 不同（tw-swing 原生全市場流動性分層，這裡重新在 tw-hold universe/期間下用同一批事件重跑）；長波段/價值線是 tw-hold 自己的規則邏輯。三組數字刻意不放進同一張表比較。</li>
+          <li>tw-swing 14 條的「訊號全買、無部位上限」是本報告的延伸決定，不是 tw-swing 自己的線上配置（線上實際用部位上限 8、依風險％配置）——數字因此會比 tw-swing 自己的組合模擬報告更激進（沒有部位排擠）。</li>
+          <li>家族去重＋&gt;10% 篩選只湊到 14 條，不硬湊第 15 條。</li>
+          <li>部分規則（尤其依賴籌碼/估值資料的 W5/W6/P3/P1/Y4-plow20）過濾到 tw-hold universe 後樣本可能明顯縮水，年切/市況切的某些格樣本可能極小，解讀時要看樣本數不能只看報酬%。</li>
+          <li>價值線/長波段的換股頻率（季頻/週頻）與 tw-swing 規則（事件驅動、不定期觸發）本質不同，「訊號全買」在兩邊的實際持股數與換手率差異很大，這是策略設計差異，不是 bug。</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    產出：2026-09-22 12:10 · 報告原檔 <span class="num">tw-hold/docs/reports/backtest_top17_buyable_2026-09-22.md</span> · 新增分析腳本 <span class="num">tw-hold/research/backtest_top17_buyable.py</span> · pytest 開工前後皆 234 passed，未動 app/streamlit_app.py 或任何 workflow。
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var MARKET = [
+    {y:2016, idx:22.1, bull:56, bear:14, chop:31},
+    {y:2017, idx:18.0, bull:59, bear:6,  chop:35},
+    {y:2018, idx:-5.5, bull:28, bear:31, chop:41},
+    {y:2019, idx:36.1, bull:65, bear:6,  chop:29},
+    {y:2020, idx:30.2, bull:62, bear:18, chop:20},
+    {y:2021, idx:19.9, bull:48, bear:9,  chop:43},
+    {y:2022, idx:-21.7,bull:24, bear:55, chop:21},
+    {y:2023, idx:26.9, bull:60, bear:10, chop:31},
+    {y:2024, idx:49.3, bull:74, bear:6,  chop:19},
+    {y:2025, idx:38.1, bull:68, bear:19, chop:13},
+    {y:2026, idx:60.9, bull:81, bear:2,  chop:17}
+  ];
+
+  var HOLD_RULES = [
+    {
+      id:"longswing",
+      desc:"完成交易 492 筆（另有 7 筆回測結束仍持有、4 筆訊號成交時已跌破停損位放棄），550 週。",
+      years:[0.0,0.0,0.0,-10.5,6.7,101.1,-15.3,81.4,50.9,70.0,2.7],
+      regime:{bull:{ret:487.7,days:1450}, bear:{ret:-13.3,days:426}, chop:{ret:52.6,days:714}}
+    },
+    {
+      id:"value",
+      desc:"季中換股 41 期，每期候選中位數 217 檔，空白期 0%。",
+      years:[9.6,39.9,3.4,30.4,30.8,47.5,-15.0,46.2,31.9,24.6,57.8],
+      regime:{bull:{ret:1228.5,days:1436}, bear:{ret:-37.2,days:408}, chop:{ret:54.2,days:702}}
+    }
+  ];
+
+  var SWING_RULES = [
+    {code:"W4", name:"月營收動能突破半年高", original:21.62, signals:2578, filled:2334, fillRate:91,
+      annualized:20.48, mdd:-37.4, mar:0.55,
+      years:[-1.9,36.0,-7.2,40.8,-15.5,54.1,-23.5,78.0,28.9,12.6,95.6],
+      regime:{bull:{ret:2489.1,days:1450}, bear:{ret:-77.8,days:426}, chop:{ret:52.8,days:714}}},
+    {code:"H2", name:"三日兩缺口", original:20.96, signals:2903, filled:2343, fillRate:81,
+      annualized:-0.37, mdd:-66.8, mar:-0.01,
+      years:[2.7,22.1,-11.2,0.1,13.9,-29.1,-0.7,-3.4,-27.6,4.4,48.1],
+      regime:{bull:{ret:661.8,days:1450}, bear:{ret:-57.6,days:426}, chop:{ret:-70.1,days:714}}},
+    {code:"W5", name:"法人籌碼波段＋估值未過熱", original:20.13, signals:14567, filled:7387, fillRate:51,
+      annualized:14.81, mdd:-36.6, mar:0.40,
+      years:[11.0,43.2,-17.5,24.3,6.7,36.8,-24.4,30.0,12.2,27.6,48.6],
+      regime:{bull:{ret:1621.5,days:1450}, bear:{ret:-71.8,days:426}, chop:{ret:2.5,days:714}}},
+    {code:"V4", name:"上升三角形突破", original:17.49, signals:3824, filled:2909, fillRate:76,
+      annualized:15.80, mdd:-33.0, mar:0.48,
+      years:[8.5,39.5,-4.6,9.5,16.7,18.5,-8.3,25.4,29.3,6.1,58.7],
+      regime:{bull:{ret:1770.5,days:1450}, bear:{ret:-68.8,days:426}, chop:{ret:-6.3,days:714}}},
+    {code:"G3", name:"海龜 55 日突破", original:13.89, signals:19821, filled:8061, fillRate:41,
+      annualized:15.14, mdd:-39.4, mar:0.38,
+      years:[9.7,36.5,-4.5,28.9,-12.8,40.2,-23.2,47.4,31.0,-0.5,55.8],
+      regime:{bull:{ret:2638.5,days:1450}, bear:{ret:-84.9,days:426}, chop:{ret:25.7,days:714}}},
+    {code:"W6", name:"月營收創年高＋估值便宜", original:13.66, signals:776, filled:726, fillRate:94,
+      annualized:27.05, mdd:-36.2, mar:0.75,
+      years:[15.9,38.9,-28.6,20.0,40.4,70.4,-16.8,36.0,28.1,47.1,129.1],
+      regime:{bull:{ret:3808.9,days:1450}, bear:{ret:-69.5,days:426}, chop:{ret:35.3,days:714}}},
+    {code:"P1", name:"營收成長加速循環", original:13.11, signals:3770, filled:2673, fillRate:71,
+      annualized:26.64, mdd:-40.1, mar:0.66,
+      years:[23.8,41.1,-18.2,45.6,13.7,51.0,-7.4,61.1,21.0,40.1,73.2],
+      regime:{bull:{ret:3326.6,days:1450}, bear:{ret:-76.0,days:426}, chop:{ret:90.8,days:714}}},
+    {code:"P3", name:"GARP 估值修復", original:13.02, signals:776, filled:630, fillRate:81,
+      annualized:17.64, mdd:-52.7, mar:0.33,
+      years:[6.5,28.9,-24.0,12.8,16.8,52.2,-48.7,46.8,39.2,56.8,91.5],
+      regime:{bull:{ret:3280.6,days:1450}, bear:{ret:-86.1,days:426}, chop:{ret:39.6,days:714}}},
+    {code:"W3", name:"三日兩缺口＋估值未過熱確認", original:11.73, signals:1322, filled:1097, fillRate:83,
+      annualized:11.86, mdd:-40.8, mar:0.29,
+      years:[13.4,9.2,-26.5,19.6,4.4,12.0,7.8,-17.1,89.7,1.4,80.8],
+      regime:{bull:{ret:1127.0,days:1450}, bear:{ret:-48.3,days:426}, chop:{ret:-37.5,days:714}}},
+    {code:"J1", name:"雙重底（W底）頸線突破", original:11.35, signals:7391, filled:5046, fillRate:68,
+      annualized:12.51, mdd:-35.2, mar:0.36,
+      years:[11.4,34.6,-16.9,14.1,12.2,12.1,-4.3,37.8,9.1,-0.8,54.6],
+      regime:{bull:{ret:1441.7,days:1450}, bear:{ret:-73.0,days:426}, chop:{ret:-5.2,days:714}}},
+    {code:"D7", name:"極度量縮後成交量梯形遞增", original:11.26, signals:3885, filled:2591, fillRate:67,
+      annualized:15.19, mdd:-32.8, mar:0.46,
+      years:[4.1,45.8,-13.1,24.3,-1.1,51.8,-24.3,37.5,24.1,12.9,44.1],
+      regime:{bull:{ret:2423.3,days:1450}, bear:{ret:-79.5,days:426}, chop:{ret:-0.1,days:714}}},
+    {code:"Y4-plow20", name:"Y4 出場變體·收盤跌破前20日低", original:11.03, signals:1182, filled:745, fillRate:63,
+      annualized:21.46, mdd:-60.3, mar:0.36,
+      years:[3.5,77.6,-37.2,5.9,75.0,64.0,-25.1,39.0,32.3,29.4,50.6],
+      regime:{bull:{ret:8775.2,days:1450}, bear:{ret:-85.9,days:426}, chop:{ret:-24.9,days:714}}},
+    {code:"B2", name:"投信連續買超", original:10.96, signals:29402, filled:5211, fillRate:18,
+      annualized:14.03, mdd:-31.0, mar:0.45,
+      years:[5.2,35.7,0.6,29.2,-11.8,29.9,-21.5,49.7,8.7,6.8,58.2],
+      regime:{bull:{ret:1692.7,days:1450}, bear:{ret:-74.1,days:426}, chop:{ret:-1.1,days:714}}},
+    {code:"Y1", name:"上升軌道突破＋月營收年增加速確認", original:10.88, signals:3464, filled:2449, fillRate:71,
+      annualized:12.74, mdd:-46.9, mar:0.27,
+      years:[-24.7,103.0,10.3,12.3,36.2,-8.1,-20.6,52.5,-6.4,24.0,18.8],
+      regime:{bull:{ret:1401.9,days:1450}, bear:{ret:-59.1,days:426}, chop:{ret:-35.6,days:714}}}
+  ];
+
+  function pct(v, digits){
+    digits = digits === undefined ? 1 : digits;
+    var s = v.toFixed(digits) + "%";
+    return (v > 0 ? "+" + s : s);
+  }
+  function signClass(v){ return v > 0 ? "pos" : (v < 0 ? "neg" : "muted"); }
+  function td(v, digits){
+    return '<td class="num ' + signClass(v) + '">' + pct(v, digits) + "</td>";
+  }
+
+  function yearTable(years){
+    var rows = MARKET.map(function(m, i){
+      return "<tr><td>" + m.y + "</td>" +
+        td(years[i]) +
+        td(m.idx) +
+        '<td class="num muted">' + m.bull + "%</td>" +
+        '<td class="num muted">' + m.bear + "%</td>" +
+        '<td class="num muted">' + m.chop + "%</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead><tr>' +
+      "<th>年</th><th>策略</th><th>0050</th><th>多頭天數</th><th>空頭天數</th><th>盤整天數</th>" +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+  }
+
+  function regimeTable(regime){
+    var order = [["多頭","bull"],["空頭","bear"],["盤整","chop"]];
+    var rows = order.map(function(pair){
+      var r = regime[pair[1]];
+      return "<tr><td>" + pair[0] + "</td>" + td(r.ret) +
+        '<td class="num muted">' + r.days.toLocaleString() + "</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead><tr>' +
+      "<th>市況</th><th>累積報酬</th><th>交易日數</th>" +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+  }
+
+  // -- tw-hold 兩條 --
+  HOLD_RULES.forEach(function(r){
+    var el = document.getElementById("tbl-" + r.id);
+    el.innerHTML =
+      '<div class="subhead">按年切</div>' + yearTable(r.years) +
+      '<div class="subhead">按市況切（不分年，全期）</div>' + regimeTable(r.regime);
+  });
+
+  // -- tw-swing 14 條 accordion --
+  var list = document.getElementById("rules-list");
+  SWING_RULES.forEach(function(r, i){
+    var d = document.createElement("details");
+    d.className = "rule";
+    if (i === 0) d.open = true;
+    d.innerHTML =
+      "<summary>" +
+        '<span class="rule-code">' + r.code + "</span>" +
+        '<span class="rule-name">' + r.name + "</span>" +
+        '<span class="rule-ann ' + signClass(r.annualized) + '">' + pct(r.annualized, 2) + "</span>" +
+        '<span class="chev">&#9656;</span>' +
+      "</summary>" +
+      '<div class="rule-body">' +
+        '<div class="rule-desc">tw-swing 原始（全市場/全歷史/next_open）年化 <b class="num">' + pct(r.original, 2) +
+          "</b>，僅供篩選排序參考。tw-hold universe / 2016-01–2026-08 範圍內：" +
+          r.signals.toLocaleString() + " 個訊號、" + r.filled.toLocaleString() + " 筆實際成交（" + r.fillRate + "%）。</div>" +
+        '<div class="metric-row">' +
+          '<div class="metric">全期年化 <b class="num ' + signClass(r.annualized) + '">' + pct(r.annualized, 2) + "</b></div>" +
+          '<div class="metric">最大回撤 <b class="num neg">' + r.mdd.toFixed(1) + "%</b></div>" +
+          '<div class="metric">MAR <b class="num">' + r.mar.toFixed(2) + "</b></div>" +
+        "</div>" +
+        '<div class="subhead">按年切</div>' + yearTable(r.years) +
+        '<div class="subhead">按市況切（不分年，全期）</div>' + regimeTable(r.regime) +
+      "</div>";
+    list.appendChild(d);
+  });
+
+  // -- 附錄表 --
+  (function(){
+    var rows = SWING_RULES.map(function(r){
+      return "<tr><td class=\"num\">" + r.code + "</td><td>" + r.name + '</td><td class="num pos">' + pct(r.original, 2) + "</td></tr>";
+    }).join("");
+    document.getElementById("tbl-appendix").innerHTML =
+      "<table><thead><tr><th>規則</th><th>名稱</th><th>絕對年化（原始/next_open/上限8）</th></tr></thead><tbody>" +
+      rows + "</tbody></table>";
+  })();
+
+  // -- 總覽長條圖：年化報酬 vs |最大回撤|，共用尺度 0-70% --
+  (function(){
+    var scaleMax = 70;
+    var sorted = SWING_RULES.slice().sort(function(a,b){ return b.annualized - a.annualized; });
+    var chart = document.getElementById("chart");
+    chart.innerHTML = sorted.map(function(r){
+      var retW = Math.min(100, Math.abs(r.annualized) / scaleMax * 100);
+      var mddW = Math.min(100, Math.abs(r.mdd) / scaleMax * 100);
+      return '<div class="bar-row">' +
+        '<div class="lbl"><b>' + r.code + "</b>" + r.name + "</div>" +
+        '<div class="track">' +
+          '<div class="mdd-bar" style="width:' + mddW.toFixed(1) + '%"></div>' +
+          '<div class="ret-bar ' + signClass(r.annualized) + '" style="width:' + retW.toFixed(1) + '%"></div>' +
+        "</div>" +
+        '<div class="figs">' + pct(r.annualized, 1) + " / " + r.mdd.toFixed(0) + "% · MAR " + r.mar.toFixed(2) + "</div>" +
+      "</div>";
+    }).join("");
+  })();
+
+})();
+</script>
