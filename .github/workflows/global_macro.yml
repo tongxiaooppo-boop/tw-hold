@@ -111,3 +111,35 @@ jobs:
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
           exit 0
+
+  # 2026-09-22 補的缺口：上面三個告警步驟都要 fetch 這步先跑到能寫出 meta.json
+  # 才有東西可比對，`fetch_global_macro.py` 直接 crash（那天是 MultiIndex 欄位
+  # concat 出 NaN、sorted() 比 float/str 炸掉）時，舊 meta.json 還在、`N` 算出來
+  # 可能是 0 → 上面「部分過期才告警」直接判定沒事、整條全靜默，只有 GitHub 自己
+  # 的紅叉沒人天天盯。獨立開一個 job 專門對「fetch 這個 job 本身失敗」告警，
+  # 不管是哪一步炸的都會响，跟 rebuild.yml::notify-failure 同一個模式。
+  notify-failure:
+    needs: fetch
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 送出失敗通知
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="🔴 tw-hold 國際總經快照整條失敗（跟下面「部分過期」告警不同——這次是
+          job 本身炸掉，可能整批資料都沒更新到）
+          ${RUN_URL}
+          先看是抓資料那步（yfinance）還是 commit 那步紅的。"
+          echo "$MSG"
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::沒設 ALERT_WEBHOOK Secret，這次失敗只留在 Actions 紀錄裡"
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            --max-time 20 \
+            -d "$(jq -n --arg m "$MSG" '{content: $m, text: $m}')" \
+            || echo "::warning::告警送不出去，但失敗這件事仍記在 Actions 紀錄裡"
+          exit 0
