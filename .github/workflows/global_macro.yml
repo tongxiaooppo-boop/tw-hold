@@ -66,7 +66,13 @@ jobs:
                   data/reference/put_call_ratio.parquet && {
             echo "無實質變更——跳過 commit"; exit 0; }
           git commit -m "國際總經快照 $(date -u +%F)"
-          git push
+          # 跟 rebuild.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕一次
+          # 觸發兩條時常常撞在一起——push 被拒就 rebase 後重試。
+          for i in 1 2 3; do
+            git push && break
+            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
+            git pull --rebase origin main
+          done
 
       # 部分過期（某幾檔比同批其他檔舊超過 3 天，見 fetch_global_macro.py::_check_staleness）
       # 不擋 commit——資料照樣是「這批抓到最新的」，只是有落後的幾檔，先讓 app 有得用。

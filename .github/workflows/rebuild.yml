@@ -169,7 +169,14 @@ jobs:
             echo "三清單 + resolved.json + PCF 快照 皆無實質變更——跳過 commit"; exit 0
           fi
           git commit -m "rebuild: 三清單 $(date -u +%F) (${{ github.event_name }})"
-          git push
+          # 跟 global_macro.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕
+          # 一次觸發兩條時常常撞在一起——push 被拒就 rebase 後重試（2026-09-22
+          # 加按鈕當天實測真的撞過一次）。
+          for i in 1 2 3; do
+            git push && break
+            echo "push 被拒（可能跟其他排程撞了），pull --rebase 後重試（第 $i 次）"
+            git pull --rebase origin main
+          done
 
   # ⚠️ 這個 job 自己絕對不可以失敗（抄自 tw-swing daily.yml）。
   notify-failure:
