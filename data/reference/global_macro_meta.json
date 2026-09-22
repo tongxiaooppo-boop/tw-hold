@@ -1,61 +1,7 @@
 {
-  "fetched_at": "2026-09-22T00:50:36+00:00",
+  "fetched_at": "2026-09-22T02:37:29+00:00",
   "reference_date": "2026-09-22",
   "stale": [
-    {
-      "symbol": "AAPL",
-      "name": "Apple",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "AMZN",
-      "name": "Amazon",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "GOOGL",
-      "name": "Alphabet",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "META",
-      "name": "Meta",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "MSFT",
-      "name": "Microsoft",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "MU",
-      "name": "美光",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "NVDA",
-      "name": "NVIDIA",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "TSLA",
-      "name": "Tesla",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
-    {
-      "symbol": "^HSI",
-      "name": "恆生指數",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    },
     {
       "symbol": "^N225",
       "name": "日經225",
