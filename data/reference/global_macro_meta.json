@@ -1,12 +1,6 @@
 {
-  "fetched_at": "2026-09-22T02:37:29+00:00",
+  "fetched_at": "2026-09-22T23:56:05+00:00",
   "reference_date": "2026-09-22",
-  "stale": [
-    {
-      "symbol": "^N225",
-      "name": "日經225",
-      "latest": "2026-09-18",
-      "lag_days": 4
-    }
-  ]
+  "snapshot_lag_days": 0,
+  "stale": []
 }
