@@ -117,6 +117,11 @@ def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
         try:
             raw = yf.download(sym, period="10d", interval="1d",
                                progress=False, auto_adjust=True)
+            if isinstance(raw.columns, pd.MultiIndex):
+                # 單檔 yf.download 仍回傳 MultiIndex 欄位（Price, Ticker）；
+                # 不拉平的話 concat 時跟其他 frame 的單層 "symbol" 欄位對不上，
+                # 整批 NaN 掉（2026-09-22 炸過：sorted() float/str 混列 TypeError）。
+                raw.columns = raw.columns.get_level_values(0)
             sub = raw[["Close"]].dropna().rename(columns={"Close": "close"})
             if sub.empty:
                 continue
