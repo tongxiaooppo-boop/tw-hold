@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -2123,6 +2124,85 @@ def _industry_rotation_table(rows: list[dict], mode: str = "漲跌幅") -> str:
         '</tr></thead><tbody>' + "".join(_row(r) for r in rows) + '</tbody></table>')
 
 
+_GH_REPO = "tongxiaooppo-boop/tw-hold"
+#: 這頁的資料源分兩條獨立排程——手動重整按鈕兩條都觸發，使用者不用自己判斷
+#: 卡片過期是哪一條的責任（見 [[tw-hold-macro-staleness-badge]]）。
+_REFRESH_WORKFLOWS = [("rebuild.yml", "三清單/台股/族群動向"), ("global_macro.yml", "國際總經")]
+
+
+def _trigger_workflow(workflow_file: str, token: str) -> tuple[bool, str]:
+    """打 GitHub REST API 的 workflow_dispatch，觸發雲端重跑（不在這裡本地抓資料——
+    app 一律不即時抓資料的原則沒變，這裡只是「叫 CI 現在跑」，資料還是 CI 產生、
+    commit 回 repo，app 純讀檔的路徑完全沒變）。
+
+    刻意用 `urllib.request`（標準庫）不加 `requests`——跟 fetch_bundle.py／
+    pcf_fetchers.py 同慣例，requirements.txt 檔頭寫明「刻意控依賴」。
+    回傳 (成功與否, 錯誤訊息)。
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = f"https://api.github.com/repos/{_GH_REPO}/actions/workflows/{workflow_file}/dispatches"
+    req = urllib.request.Request(
+        url, method="POST",
+        data=_json.dumps({"ref": "main"}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {token}",
+                 "Accept": "application/vnd.github+json",
+                 "X-GitHub-Api-Version": "2022-11-28",
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status == 204, ""
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}：{e.read().decode('utf-8', errors='replace')[:200]}"
+    except Exception as e:
+        return False, str(e)
+
+
+def _macro_refresh_button() -> None:
+    """頁尾手動重整——使用者發現卡片過期時按下去，觸發 rebuild.yml +
+    global_macro.yml 雲端重跑，不用等排程時間到或自己去 GitHub Actions 點按鈕
+    （2026-09-22 使用者要求）。
+
+    需要 `st.secrets["GH_DISPATCH_PAT"]`：一顆只給 `actions: write` 權限的
+    fine-grained PAT（範圍鎖 tw-hold 這個 repo 就好，不要給 contents write，
+    這裡只需要觸發 workflow，不寫檔）。沒設就不顯示按鈕（本地開發環境本來就
+    沒有，不用因為缺這個擋掉整頁）。
+    """
+    try:
+        token = st.secrets.get("GH_DISPATCH_PAT")
+    except Exception:
+        token = None
+    if not token:
+        return
+
+    st.subheader("手動重整")
+    st.caption("發現上面卡片有 ⚠️ 過期標記時可以按這個——觸發雲端重跑，通常幾分鐘後"
+               "資料就會更新，但這頁本身**不會自動跳新**，要手動重新整理瀏覽器再看一次。")
+
+    cooldown_until = st.session_state.get("_macro_refresh_cooldown", 0)
+    now = time.time()
+    if now < cooldown_until:
+        st.button(f"🔄 立即重新整理資料（{int(cooldown_until - now)}s 後可再按）",
+                  disabled=True, key="macro_refresh_btn")
+        return
+
+    if st.button("🔄 立即重新整理資料", key="macro_refresh_btn"):
+        results = [(label, *_trigger_workflow(wf, token)) for wf, label in _REFRESH_WORKFLOWS]
+        st.session_state["_macro_refresh_cooldown"] = time.time() + 60
+        failed = [(label, err) for label, ok, err in results if not ok]
+        if not failed:
+            st.success("已觸發雲端重跑（三清單 + 國際總經），幾分鐘後重新整理頁面看看。")
+        else:
+            ok_labels = [label for label, ok, _err in results if ok]
+            if ok_labels:
+                st.warning(f"「{'／'.join(ok_labels)}」觸發成功；"
+                           + "、".join(f"「{label}」失敗（{err}）" for label, err in failed))
+            else:
+                st.error("觸發失敗：" + "、".join(f"「{label}」{err}" for label, err in failed))
+
+
 def _macro_compass_page() -> None:
     """總經導航——台股上市/上櫃的 MA60/MA200 多空卡 + 國際指數/個股/總經數字卡
     （2026-09-13 起）。頁首放「市場情緒摘要」（固定句型代入數字，見
@@ -2398,6 +2478,9 @@ def _macro_compass_page() -> None:
             "所以這頁的台股卡兩條都列；美股／國際比較則以 MA200 為準——所以國際指數只列 MA200。"
             "實測資料來源 FinMind，僅供技術分析參考，不是這頁實際採用的規則。"
         )
+
+    st.divider()
+    _macro_refresh_button()
     _disclaimer()
 
 
