@@ -5,22 +5,25 @@ name: 每日重算三清單
 #
 # M0b：已接線——fetch_bundle → build_lists → commit data/derived/。
 #
-# ## 自動觸發（M3——目前刻意手動，PLAN §M3「先手動跑幾天再開排程」）
+# ## 自動觸發＋備援（2026-09-22 補）
 #
-# 兩條路，擇一，等使用者觀察幾天後決定：
-#  (a) 【建議】tw-swing `publish_bundle.yml` 末尾加 curl 發 repository_dispatch
-#      `bundle-published` → 本檔。需 tw-hold 給一顆 PAT、設成 tw-swing 的
-#      secret `TWHOLD_DISPATCH_PAT`（contents:write 或 actions:write）。
-#      好處：只有真的有新 bundle 才重算，不會空跑。
-#  (b) 直接在下面 `on:` 加 cron（平日 UTC 07:30，publish_bundle 06:00 之後）：
-#        schedule:
-#          - cron: "30 7 * * 1-5"
-#      壞處：bundle 沒更新的日子也會冷啟 + 產生只有 rebuilt_at 變的 commit。
+# 主路徑是 (a) tw-swing `publish_bundle.yml` 末尾發 repository_dispatch
+# `bundle-published` → 本檔，只有真的有新 bundle 才重算，不會空跑。
+#
+# 但這條路是單點依賴：dispatch 沒送到（tw-swing 那邊失敗、PAT 過期、網路問題）
+# 的話，rebuild **不會失敗、只是不再跑**，heartbeat.yml 會抓到「資料還是舊的」
+# 但只會告警——沒設 ALERT_WEBHOOK 的話等於沒人知道（2026-09-22 查證：這個
+# repo 從沒設過這個 secret）。跟其等人看告警去手動重跑，加 (b) 排程備援自己
+# 主動重試：平日 UTC 08:00（台北 16:00，早過 tw-swing 平常落地時間、也過了
+# 開盤，純粹補漏用）。bundle 沒變的日子這裡會是空 commit 被 diff --cached
+# --quiet 那段自動跳過，不會洗出一堆沒意義的 commit。
 
 on:
   workflow_dispatch:
   repository_dispatch:
     types: [bundle-published]
+  schedule:
+    - cron: "0 8 * * 1-5"
 
 permissions:
   contents: write
