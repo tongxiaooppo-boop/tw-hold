@@ -1,0 +1,475 @@
+<title>資金天花板</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#eef1ee;
+  --surface:#ffffff;
+  --surface-2:#f2f5f1;
+  --ink:#161e1c;
+  --muted:#5a655f;
+  --accent:#2f6f6a;
+  --accent-ink:#255954;
+  --rule:#d6ddd6;
+  --pos:#1f7a52;
+  --neg:#a4322a;
+  --chip-bg:#e2e9e2;
+  --shadow:0 1px 2px rgba(20,30,26,.06),0 8px 24px -16px rgba(20,30,26,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101715;
+    --surface:#171f1c;
+    --surface-2:#1b2420;
+    --ink:#e6ece7;
+    --muted:#93a196;
+    --accent:#5fb3ab;
+    --accent-ink:#7fc9c1;
+    --rule:#2b352f;
+    --pos:#57b98a;
+    --neg:#e07b70;
+    --chip-bg:#212b25;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101715;
+  --surface:#171f1c;
+  --surface-2:#1b2420;
+  --ink:#e6ece7;
+  --muted:#93a196;
+  --accent:#5fb3ab;
+  --accent-ink:#7fc9c1;
+  --rule:#2b352f;
+  --pos:#57b98a;
+  --neg:#e07b70;
+  --chip-bg:#212b25;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Noto Sans",system-ui,sans-serif;
+  padding:0 16px;
+  padding-block:28px 64px;
+}
+.page{max-width:960px;margin:0 auto;}
+h1,h2,h3{font-family:"Noto Serif TC","Noto Serif",serif;font-weight:700;text-wrap:balance;margin:0;}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.pos{color:var(--pos);}
+.neg{color:var(--neg);}
+.muted{color:var(--muted);}
+
+.hero{
+  background:var(--surface);border:1px solid var(--rule);border-radius:14px;
+  padding:28px 28px 24px;box-shadow:var(--shadow);margin-bottom:20px;
+}
+.hero .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;margin-bottom:8px;}
+.hero h1{font-size:clamp(26px,4vw,34px);}
+.hero p.lead{color:var(--muted);margin-top:10px;max-width:62ch;line-height:1.6;}
+.stat-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+.stat{background:var(--surface-2);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;min-width:120px;flex:1 1 140px;}
+.stat .k{font-size:11px;color:var(--muted);letter-spacing:.04em;}
+.stat .v{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:16px;margin-top:2px;}
+
+.spec-list{margin:0;padding-left:1.2em;font-size:13.5px;line-height:1.75;color:var(--ink);}
+.spec-list li{margin-bottom:6px;}
+.spec-list li::marker{color:var(--accent-ink);}
+
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;}
+.toc a{font-size:13px;padding:6px 12px;border-radius:999px;background:var(--chip-bg);border:1px solid var(--rule);color:var(--ink);text-decoration:none;white-space:nowrap;}
+.toc a:hover{border-color:var(--accent);color:var(--accent-ink);}
+
+section{margin-bottom:34px;}
+.section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;}
+.section-head .no{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);font-weight:600;font-size:14px;}
+.section-head h2{font-size:21px;}
+.section-note{color:var(--muted);font-size:13.5px;line-height:1.65;margin:6px 0 14px;max-width:72ch;}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);}
+
+.tbl-wrap{overflow-x:auto;}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:720px;}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap;}
+th:first-child,td:first-child{text-align:left;}
+thead th{font-weight:700;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--ink);}
+thead tr.grp th{border-bottom:none;color:var(--accent-ink);font-size:10.5px;}
+tbody tr:last-child td{border-bottom:none;}
+.subhead{font-size:12px;color:var(--muted);margin:16px 0 6px;font-weight:700;letter-spacing:.02em;}
+
+/* overview bars */
+.bar-row{display:grid;grid-template-columns:130px 1fr 150px;align-items:center;gap:10px;padding:5px 0;}
+.bar-row .lbl{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-row .lbl b{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);margin-right:5px;}
+.track{position:relative;height:20px;background:var(--surface-2);border-radius:4px;}
+.track .seg{position:absolute;top:0;bottom:0;border-radius:4px;}
+.track .n5{background:var(--accent);opacity:.9;height:8px;top:1px;}
+.track .n10{background:var(--accent-ink);opacity:.55;height:8px;bottom:1px;top:auto;}
+.bar-row .figs{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);text-align:right;line-height:1.4;}
+.chart-scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin:2px 0 12px;padding-left:140px;}
+.chart-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;}
+.chart-legend .sw{display:inline-block;width:11px;height:8px;border-radius:2px;margin-right:5px;vertical-align:1px;}
+
+/* fill composition bars */
+.fill-row{display:grid;grid-template-columns:130px 1fr 90px;align-items:center;gap:10px;padding:5px 0;}
+.fill-track{display:flex;height:18px;border-radius:4px;overflow:hidden;background:var(--surface-2);}
+.fill-track div{height:100%;}
+.fill-track .accepted{background:var(--pos);}
+.fill-track .rej-cash{background:var(--neg);opacity:.55;}
+.fill-track .rej-ncap{background:var(--muted);opacity:.4;}
+
+/* rule cards */
+details.rule{background:var(--surface);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;}
+details.rule summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;align-items:center;gap:12px;}
+details.rule summary::-webkit-details-marker{display:none;}
+details.rule summary .chev{margin-left:auto;color:var(--muted);transition:transform .15s ease;flex:0 0 auto;}
+details.rule[open] summary .chev{transform:rotate(90deg);}
+.rule-code{font-family:"IBM Plex Mono",monospace;font-weight:600;color:var(--accent-ink);background:var(--chip-bg);border-radius:6px;padding:3px 8px;font-size:12.5px;flex:0 0 auto;}
+.rule-name{font-weight:500;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rule-cagrs{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:13px;flex:0 0 auto;white-space:nowrap;}
+.rule-body{padding:0 18px 18px;border-top:1px solid var(--rule);}
+
+.toggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--rule);border-radius:999px;padding:3px;margin:14px 0 12px;}
+.toggle button{border:none;background:transparent;padding:6px 16px;border-radius:999px;font-size:13px;font-family:"IBM Plex Mono",monospace;font-weight:600;cursor:pointer;color:var(--muted);}
+.toggle button.active{background:var(--accent);color:#fff;}
+
+.metric-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.metric{background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--muted);}
+.metric b{font-family:"IBM Plex Mono",monospace;color:var(--ink);font-weight:600;}
+
+.callout{border:1px solid var(--rule);border-left:3px solid var(--accent);background:var(--surface-2);border-radius:0 10px 10px 0;padding:14px 18px;font-size:13.5px;line-height:1.7;color:var(--ink);}
+.callout.warn{border-left-color:var(--neg);}
+ul.limits{margin:0;padding-left:1.2em;color:var(--ink);font-size:13.5px;line-height:1.75;}
+ul.limits li{margin-bottom:8px;}
+ul.limits li::marker{color:var(--accent-ink);}
+
+footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:12px;line-height:1.7;}
+
+@media (max-width:560px){
+  .bar-row{grid-template-columns:88px 1fr 108px;}
+  .fill-row{grid-template-columns:88px 1fr 70px;}
+  .chart-scale{padding-left:98px;}
+  table{font-size:12px;}
+}
+</style>
+
+<div class="page">
+
+  <header class="hero">
+    <div class="eyebrow">tw-hold · 情境 B · 2026-09-22</div>
+    <h1>資金天花板</h1>
+    <p class="lead">14 條規則各自獨立準備 100 萬，資金不足就放棄、同一天多檔訊號用市值取前 N（N=5 / N=10 兩個都跑）——測的是「規則在真實資金限制下能不能用」，不是規則本身有沒有方向性。</p>
+    <div class="stat-row">
+      <div class="stat"><div class="k">每規則本金</div><div class="v">100 萬（各自獨立）</div></div>
+      <div class="stat"><div class="k">回測期間</div><div class="v">2016-01 → 2026-08</div></div>
+      <div class="stat"><div class="k">股票池</div><div class="v">609 檔</div></div>
+      <div class="stat"><div class="k">排序依據</div><div class="v">市值，由大到小</div></div>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc"></nav>
+
+  <main>
+
+    <section id="spec">
+      <div class="section-head"><span class="no">00</span><h2>規格全文</h2></div>
+      <div class="card">
+        <ol class="spec-list">
+          <li><b>每個規則各自獨立 100 萬</b>——14 條規則＝14 個平行世界，互不共用、互不搶錢。</li>
+          <li><b>資金不足就放棄，不排隊</b>——訊號當天可用現金為 0 就直接跳過，不等資金回籠後延遲買進（排隊等於把訊號延後幾天才買，會偷偷違反買得到口徑本身）。</li>
+          <li><b>同一天多檔訊號，市值由大到小取前 N 檔</b>（N=5、N=10 本頁兩個都有）。市值＝進場日（次日開盤）價格 × 「財報公告日 ≤ 進場日」的最近一期已公告股本，防止用到當時還沒公告的股本造成前視偏誤。查不到已公告股本的股票排在最後面。</li>
+          <li><b>資金分配：可用現金平分給入選的候選</b>——每次進場都把當下所有現金全部部署完畢，不是固定金額、不是依訊號強度加權。</li>
+          <li><b>資金回籠：賣出當下即可再部署</b>——不模擬 T+2 交割延遲（簡化假設，見下方已知限制）。</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="exit">
+      <div class="section-head"><span class="no">01</span><h2>出場邏輯（原封不動沿用 tw-swing 規則庫）</h2></div>
+      <p class="section-note">情境 B 只改「要不要真的進場」（資金約束）跟「進場時機」（次日開盤），出場邏輯完全沒動——跟 tw-swing 官方報告用同一套 <span class="num">bt.ExitPlan</span> / <span class="num">bt.simulate_trades(exits=plans)</span>。14 條規則分四種出場風格。</p>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>規則</th><th>出場風格</th><th>停損（初始/是否移動）</th><th>主要出場條件</th></tr></thead>
+            <tbody id="exit-tbl"></tbody>
+          </table>
+        </div>
+        <div class="callout" style="margin-top:14px">
+          <b>風格分布</b>：9 條是「固定 ATR 停損 + 時間到期」——停損設定後不移動，出場只看有沒有觸價、或有沒有撐到最大持有天數，不判斷型態/訊號是否真的走完；2 條有結構性出場（跌破前 20 日低點才出場）；2 條用基本面轉壞當主要出場理由（月營收年增轉弱 / PE 不再便宜）；1 條（Y1）用移動停損 + 保本機制。
+        </div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head"><span class="no">02</span><h2>已知限制</h2></div>
+      <div class="card">
+        <div class="callout warn" style="margin-bottom:10px">
+          <b>T+2 簡化</b>：真實台股交割是 T+2，賣出後現金要 2 個交易日後才真的入帳（信用/當沖交易例外）。本頁假設賣出當下現金立即可用，會讓資金週轉速度比真實帳戶快，可能高估報酬。
+        </div>
+        <ul class="limits">
+          <li><b>市值排序是設計選擇，不是規則本身的邏輯</b>——同一天多檔訊號時優先買大型股，這個排序本身會系統性偏向大型股的報酬特徵。</li>
+          <li><b>「查不到已公告股本排最後」可能誤傷新掛牌或資料缺漏的股票</b>——這類股票會系統性地更容易被 N 名額擠掉，不是因為市值小，是因為資料缺漏。</li>
+          <li>生存者偏差、跨規則資料範疇差異等限制與買得到無邊際版本報告相同。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="overview">
+      <div class="section-head"><span class="no">03</span><h2>N=5 vs N=10：年化報酬對照</h2></div>
+      <p class="section-note">深色條＝N=5、淺色條＝N=10，兩者共用同一把尺。多數規則兩個 N 值差異不大——代表真正卡住的是「現金夠不夠」，不是「同時能接幾檔」。</p>
+      <div class="card">
+        <div class="chart-legend">
+          <span><span class="sw" style="background:var(--accent);opacity:.9"></span>N=5 年化</span>
+          <span><span class="sw" style="background:var(--accent-ink);opacity:.55"></span>N=10 年化</span>
+        </div>
+        <div id="chart-cagr"></div>
+        <div class="chart-scale"><span>-5%</span><span>17%</span><span>40%</span></div>
+      </div>
+    </section>
+
+    <section id="fillrate">
+      <div class="section-head"><span class="no">04</span><h2>訊號流向：接受 / 因缺錢放棄 / 因排名放棄</h2></div>
+      <p class="section-note">以 N=10 為例，看每條規則的訊號實際去了哪裡。灰色段（因排名放棄）通常很短——代表 100 萬對大多數規則來說是真的緊，卡關的是現金，不是名額。</p>
+      <div class="card">
+        <div class="chart-legend">
+          <span><span class="sw" style="background:var(--pos)"></span>實際成交</span>
+          <span><span class="sw" style="background:var(--neg);opacity:.55"></span>因現金為 0 放棄</span>
+          <span><span class="sw" style="background:var(--muted);opacity:.4"></span>因排在前 N 外放棄</span>
+        </div>
+        <div id="chart-fill"></div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <div class="section-head"><span class="no">05</span><h2>逐規則：年切 + 市況切</h2></div>
+      <p class="section-note">點開規則看完整表格，可切換 N=5 / N=10。標「實際上線」的 H2-trailatr2、Y4 是 tw-swing 模擬單真正在跑的版本（跟前面 14 條裡的 H2、Y4-plow20 不同——那兩個是「同家族裡表現最好的版本」，不是實際部署的版本），2026-09-22 補測，跟原始14條並列比較。</p>
+      <div id="rules-list"></div>
+    </section>
+
+    <section id="lsval">
+      <div class="section-head"><span class="no">06</span><h2>長波段 / 價值線（各自獨立 200 萬）</h2></div>
+      <p class="section-note">跟上面 14 條不同本金（各自 200 萬，不是 100 萬）。長波段沿用同一套事件驅動＋市值取前N的模型；價值線<b>維持季度整批換股節奏</b>（不拆成逐日搶資金）——換股日上一期全部賣出、資金 100% 回籠，依市值取前 N 檔平分。⚠️ 價值線原本設計是「全買、追求分散」（每期候選中位數 217 檔），被迫縮到只買前 5 或 10 檔，等於把分散型策略硬改成集中型策略，數字差異主要來自「集中在最大型股」，不是「資金不夠」。</p>
+      <div id="lsval-list"></div>
+    </section>
+
+  </main>
+
+  <footer>
+    產出：2026-09-22 · 報告原檔 <span class="num">tw-hold/docs/reports/backtest_scenario_b_2026-09-22.md</span> · 規格討論記錄 <span class="num">tw-hold/docs/DESIGN_capital_scenarios_2026-09-22.md</span> · 模擬腳本 <span class="num">tw-hold/research/backtest_scenario_b.py</span>
+  </footer>
+
+</div>
+
+<script id="extra-data" type="application/json">{"longswing":{"n5":{"years":[{"y":2016,"strat":null,"end_val":null,"bench":22.1,"bench_end_val":168.3,"bull":56,"bear":14,"chop":31,"reset_ret":0.0,"reset_end":200.0},{"y":2017,"strat":null,"end_val":null,"bench":18.0,"bench_end_val":198.8,"bull":59,"bear":6,"chop":35,"reset_ret":0.0,"reset_end":200.0},{"y":2018,"strat":null,"end_val":null,"bench":-5.5,"bench_end_val":189.0,"bull":28,"bear":31,"chop":41,"reset_ret":0.0,"reset_end":200.0},{"y":2019,"strat":-1.5,"end_val":196.9,"bench":36.1,"bench_end_val":252.3,"bull":65,"bear":6,"chop":29,"reset_ret":-1.5,"reset_end":196.9},{"y":2020,"strat":2.7,"end_val":202.2,"bench":30.2,"bench_end_val":330.9,"bull":62,"bear":18,"chop":20,"reset_ret":2.9,"reset_end":205.9},{"y":2021,"strat":157.7,"end_val":521.1,"bench":19.9,"bench_end_val":403.4,"bull":48,"bear":9,"chop":43,"reset_ret":186.1,"reset_end":572.3},{"y":2022,"strat":-3.8,"end_val":501.4,"bench":-21.7,"bench_end_val":317.8,"bull":24,"bear":55,"chop":21,"reset_ret":-5.0,"reset_end":190.1},{"y":2023,"strat":80.9,"end_val":907.1,"bench":26.9,"bench_end_val":405.3,"bull":60,"bear":10,"chop":31,"reset_ret":80.9,"reset_end":361.9},{"y":2024,"strat":65.5,"end_val":1501.3,"bench":49.3,"bench_end_val":602.4,"bull":74,"bear":6,"chop":19,"reset_ret":70.5,"reset_end":341.0},{"y":2025,"strat":45.4,"end_val":2183.2,"bench":38.1,"bench_end_val":824.5,"bull":68,"bear":19,"chop":13,"reset_ret":51.0,"reset_end":302.0},{"y":2026,"strat":5.8,"end_val":2309.8,"bench":60.9,"bench_end_val":1354.2,"bull":81,"bear":2,"chop":17,"reset_ret":5.8,"reset_end":211.6}],"regime":{"bull":{"ret":454.8,"days":1091},"bear":{"ret":10.7,"days":299},"chop":{"ret":88.3,"days":437}},"cagr":38.49,"mdd":-27.4,"mar":1.41,"final":2309.8},"n10":{"years":[{"y":2016,"strat":null,"end_val":null,"bench":22.1,"bench_end_val":168.3,"bull":56,"bear":14,"chop":31,"reset_ret":0.0,"reset_end":200.0},{"y":2017,"strat":null,"end_val":null,"bench":18.0,"bench_end_val":198.8,"bull":59,"bear":6,"chop":35,"reset_ret":0.0,"reset_end":200.0},{"y":2018,"strat":null,"end_val":null,"bench":-5.5,"bench_end_val":189.0,"bull":28,"bear":31,"chop":41,"reset_ret":0.0,"reset_end":200.0},{"y":2019,"strat":-0.1,"end_val":199.8,"bench":36.1,"bench_end_val":252.3,"bull":65,"bear":6,"chop":29,"reset_ret":-0.1,"reset_end":199.8},{"y":2020,"strat":2.8,"end_val":205.3,"bench":30.2,"bench_end_val":330.9,"bull":62,"bear":18,"chop":20,"reset_ret":3.0,"reset_end":206.1},{"y":2021,"strat":158.2,"end_val":530.2,"bench":19.9,"bench_end_val":403.4,"bull":48,"bear":9,"chop":43,"reset_ret":186.6,"reset_end":573.3},{"y":2022,"strat":-5.8,"end_val":499.5,"bench":-21.7,"bench_end_val":317.8,"bull":24,"bear":55,"chop":21,"reset_ret":-6.9,"reset_end":186.2},{"y":2023,"strat":80.9,"end_val":903.8,"bench":26.9,"bench_end_val":405.3,"bull":60,"bear":10,"chop":31,"reset_ret":80.9,"reset_end":361.9},{"y":2024,"strat":68.6,"end_val":1524.3,"bench":49.3,"bench_end_val":602.4,"bull":74,"bear":6,"chop":19,"reset_ret":73.7,"reset_end":347.5},{"y":2025,"strat":45.2,"end_val":2213.5,"bench":38.1,"bench_end_val":824.5,"bull":68,"bear":19,"chop":13,"reset_ret":51.0,"reset_end":302.0},{"y":2026,"strat":6.1,"end_val":2348.6,"bench":60.9,"bench_end_val":1354.2,"bull":81,"bear":2,"chop":17,"reset_ret":6.1,"reset_end":212.2}],"regime":{"bull":{"ret":465.4,"days":1091},"bear":{"ret":8.8,"days":299},"chop":{"ret":91.4,"days":437}},"cagr":38.8,"mdd":-27.4,"mar":1.42,"final":2348.6}},"value":{"n5":{"years":[{"y":2016,"strat":14.0,"end_val":228.1,"bench":22.1,"bench_end_val":228.6,"bull":56,"bear":14,"chop":31,"reset_ret":13.0,"reset_end":226.0},{"y":2017,"strat":7.9,"end_val":246.0,"bench":18.0,"bench_end_val":270.0,"bull":59,"bear":6,"chop":35,"reset_ret":8.0,"reset_end":216.1},{"y":2018,"strat":-2.4,"end_val":240.1,"bench":-5.5,"bench_end_val":256.7,"bull":28,"bear":31,"chop":41,"reset_ret":-6.4,"reset_end":187.3},{"y":2019,"strat":2.5,"end_val":246.1,"bench":36.1,"bench_end_val":342.7,"bull":65,"bear":6,"chop":29,"reset_ret":-2.0,"reset_end":196.0},{"y":2020,"strat":20.4,"end_val":296.3,"bench":30.2,"bench_end_val":449.5,"bull":62,"bear":18,"chop":20,"reset_ret":69.1,"reset_end":338.2},{"y":2021,"strat":32.7,"end_val":393.4,"bench":19.9,"bench_end_val":548.0,"bull":48,"bear":9,"chop":43,"reset_ret":12.6,"reset_end":225.1},{"y":2022,"strat":-24.9,"end_val":295.5,"bench":-21.7,"bench_end_val":431.7,"bull":24,"bear":55,"chop":21,"reset_ret":-23.0,"reset_end":154.0},{"y":2023,"strat":17.0,"end_val":345.7,"bench":26.9,"bench_end_val":550.5,"bull":60,"bear":10,"chop":31,"reset_ret":10.8,"reset_end":221.6},{"y":2024,"strat":31.6,"end_val":454.8,"bench":49.3,"bench_end_val":818.3,"bull":74,"bear":6,"chop":19,"reset_ret":21.3,"reset_end":242.6},{"y":2025,"strat":30.4,"end_val":592.9,"bench":38.1,"bench_end_val":1119.9,"bull":68,"bear":19,"chop":13,"reset_ret":43.5,"reset_end":287.1},{"y":2026,"strat":81.8,"end_val":1078.1,"bench":60.9,"bench_end_val":1839.5,"bull":81,"bear":2,"chop":17,"reset_ret":39.6,"reset_end":279.2}],"regime":{"bull":{"ret":969.7,"days":1436},"bear":{"ret":-61.4,"days":408},"chop":{"ret":30.6,"days":702}},"cagr":17.86,"mdd":-34.0,"mar":0.52,"final":1078.1},"n10":{"years":[{"y":2016,"strat":19.3,"end_val":238.6,"bench":22.1,"bench_end_val":228.6,"bull":56,"bear":14,"chop":31,"reset_ret":18.4,"reset_end":236.9},{"y":2017,"strat":9.5,"end_val":261.3,"bench":18.0,"bench_end_val":270.0,"bull":59,"bear":6,"chop":35,"reset_ret":7.9,"reset_end":215.8},{"y":2018,"strat":5.5,"end_val":275.6,"bench":-5.5,"bench_end_val":256.7,"bull":28,"bear":31,"chop":41,"reset_ret":-0.1,"reset_end":199.9},{"y":2019,"strat":15.4,"end_val":318.1,"bench":36.1,"bench_end_val":342.7,"bull":65,"bear":6,"chop":29,"reset_ret":5.8,"reset_end":211.6},{"y":2020,"strat":20.0,"end_val":381.6,"bench":30.2,"bench_end_val":449.5,"bull":62,"bear":18,"chop":20,"reset_ret":73.1,"reset_end":346.2},{"y":2021,"strat":23.9,"end_val":472.7,"bench":19.9,"bench_end_val":548.0,"bull":48,"bear":9,"chop":43,"reset_ret":9.0,"reset_end":218.0},{"y":2022,"strat":-21.2,"end_val":372.3,"bench":-21.7,"bench_end_val":431.7,"bull":24,"bear":55,"chop":21,"reset_ret":-22.4,"reset_end":155.2},{"y":2023,"strat":20.0,"end_val":446.8,"bench":26.9,"bench_end_val":550.5,"bull":60,"bear":10,"chop":31,"reset_ret":16.8,"reset_end":233.6},{"y":2024,"strat":22.0,"end_val":544.9,"bench":49.3,"bench_end_val":818.3,"bull":74,"bear":6,"chop":19,"reset_ret":13.9,"reset_end":227.8},{"y":2025,"strat":33.2,"end_val":725.6,"bench":38.1,"bench_end_val":1119.9,"bull":68,"bear":19,"chop":13,"reset_ret":38.6,"reset_end":277.3},{"y":2026,"strat":84.5,"end_val":1338.4,"bench":60.9,"bench_end_val":1839.5,"bull":81,"bear":2,"chop":17,"reset_ret":42.3,"reset_end":284.6}],"regime":{"bull":{"ret":887.9,"days":1436},"bear":{"ret":-55.3,"days":408},"chop":{"ret":51.6,"days":702}},"cagr":20.38,"mdd":-25.6,"mar":0.8,"final":1338.4}}}</script>
+<script id="data" type="application/json">[{"id":"W4","name":"月營收動能突破半年高","n5":{"years":[{"y":2016,"strat":-28.2,"end_val":71.8,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31,"reset_ret":-28.2,"reset_end":71.8},{"y":2017,"strat":-16.5,"end_val":59.9,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35,"reset_ret":-10.2,"reset_end":89.8},{"y":2018,"strat":3.0,"end_val":61.7,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41,"reset_ret":3.1,"reset_end":103.1},{"y":2019,"strat":14.8,"end_val":70.9,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29,"reset_ret":14.8,"reset_end":114.8},{"y":2020,"strat":-16.6,"end_val":59.1,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20,"reset_ret":-13.4,"reset_end":86.6},{"y":2021,"strat":18.3,"end_val":70.0,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43,"reset_ret":-38.0,"reset_end":62.0},{"y":2022,"strat":-13.4,"end_val":60.6,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21,"reset_ret":-30.8,"reset_end":69.2},{"y":2023,"strat":34.7,"end_val":81.6,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31,"reset_ret":63.3,"reset_end":163.3},{"y":2024,"strat":17.2,"end_val":95.7,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19,"reset_ret":24.5,"reset_end":124.5},{"y":2025,"strat":-6.7,"end_val":89.3,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13,"reset_ret":-5.4,"reset_end":94.6},{"y":2026,"strat":47.1,"end_val":131.3,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17,"reset_ret":85.9,"reset_end":185.9}],"regime":{"bull":{"ret":284.1,"days":1450},"bear":{"ret":-46.1,"days":408},"chop":{"ret":-39.6,"days":704}},"n_events":2578,"n_signals":2334,"n_filled":639,"fill_rate":27,"n_rej_cash":1603,"n_rej_ncap":89,"cagr":2.62,"mdd":-60.8,"mar":0.04,"final_10k":131.3},"n10":{"years":[{"y":2016,"strat":-28.2,"end_val":71.8,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31,"reset_ret":-28.2,"reset_end":71.8},{"y":2017,"strat":-12.8,"end_val":62.5,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35,"reset_ret":-6.3,"reset_end":93.7},{"y":2018,"strat":-10.1,"end_val":56.2,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41,"reset_ret":-10.6,"reset_end":89.4},{"y":2019,"strat":14.8,"end_val":64.6,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29,"reset_ret":14.8,"reset_end":114.8},{"y":2020,"strat":-16.6,"end_val":53.9,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20,"reset_ret":-13.4,"reset_end":86.6},{"y":2021,"strat":25.1,"end_val":67.4,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43,"reset_ret":-34.5,"reset_end":65.5},{"y":2022,"strat":-13.4,"end_val":58.4,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21,"reset_ret":-30.8,"reset_end":69.2},{"y":2023,"strat":34.7,"end_val":78.7,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31,"reset_ret":63.3,"reset_end":163.3},{"y":2024,"strat":7.0,"end_val":84.2,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19,"reset_ret":13.5,"reset_end":113.5},{"y":2025,"strat":-6.5,"end_val":78.7,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13,"reset_ret":-5.4,"reset_end":94.6},{"y":2026,"strat":50.9,"end_val":118.8,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17,"reset_ret":92.5,"reset_end":192.5}],"regime":{"bull":{"ret":261.9,"days":1450},"bear":{"ret":-47.5,"days":408},"chop":{"ret":-40.6,"days":704}},"n_events":2578,"n_signals":2334,"n_filled":720,"fill_rate":31,"n_rej_cash":1563,"n_rej_ncap":48,"cagr":1.65,"mdd":-64.3,"mar":0.03,"final_10k":118.8}},{"id":"H2","name":"三日兩缺口","n5":{"years":[{"y":2016,"strat":0.4,"end_val":100.4,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":0.4,"reset_end":100.4},{"y":2017,"strat":32.5,"end_val":133.1,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":32.5,"reset_end":132.5},{"y":2018,"strat":12.4,"end_val":149.6,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":12.4,"reset_end":112.4},{"y":2019,"strat":38.0,"end_val":206.5,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":38.0,"reset_end":138.0},{"y":2020,"strat":14.4,"end_val":236.3,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":37.8,"reset_end":137.8},{"y":2021,"strat":-10.2,"end_val":212.1,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":17.3,"reset_end":117.3},{"y":2022,"strat":20.6,"end_val":255.9,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":23.3,"reset_end":123.3},{"y":2023,"strat":34.1,"end_val":343.0,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":34.1,"reset_end":134.1},{"y":2024,"strat":-64.6,"end_val":121.5,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-63.7,"reset_end":36.3},{"y":2025,"strat":-23.1,"end_val":93.5,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":-17.8,"reset_end":82.2},{"y":2026,"strat":207.1,"end_val":287.0,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":163.4,"reset_end":263.4}],"regime":{"bull":{"ret":2106.2,"days":1450},"bear":{"ret":-36.5,"days":408},"chop":{"ret":-79.6,"days":707}},"n_events":2903,"n_signals":2343,"n_filled":997,"fill_rate":43,"n_rej_cash":1133,"n_rej_ncap":213,"cagr":10.53,"mdd":-83.3,"mar":0.13,"final_10k":287.0},"n10":{"years":[{"y":2016,"strat":-0.4,"end_val":99.6,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-0.4,"reset_end":99.6},{"y":2017,"strat":32.5,"end_val":132.0,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":32.5,"reset_end":132.5},{"y":2018,"strat":12.4,"end_val":148.3,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":12.4,"reset_end":112.4},{"y":2019,"strat":38.0,"end_val":204.8,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":38.0,"reset_end":138.0},{"y":2020,"strat":13.4,"end_val":232.2,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":36.6,"reset_end":136.6},{"y":2021,"strat":-1.4,"end_val":229.0,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":28.9,"reset_end":128.9},{"y":2022,"strat":21.5,"end_val":278.1,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":24.1,"reset_end":124.1},{"y":2023,"strat":31.9,"end_val":366.9,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":31.9,"reset_end":131.9},{"y":2024,"strat":-64.6,"end_val":130.0,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-63.7,"reset_end":36.3},{"y":2025,"strat":-27.3,"end_val":94.5,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":-22.3,"reset_end":77.7},{"y":2026,"strat":223.4,"end_val":305.6,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":175.9,"reset_end":275.9}],"regime":{"bull":{"ret":2093.8,"days":1450},"bear":{"ret":-36.3,"days":408},"chop":{"ret":-78.2,"days":707}},"n_events":2903,"n_signals":2343,"n_filled":1165,"fill_rate":50,"n_rej_cash":1048,"n_rej_ncap":130,"cagr":11.18,"mdd":-84.1,"mar":0.13,"final_10k":305.6}},{"id":"W5","name":"法人籌碼波段 + 估值未過熱","n5":{"years":[{"y":2016,"strat":-17.4,"end_val":82.6,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-17.4,"reset_end":82.6},{"y":2017,"strat":38.7,"end_val":114.6,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":41.3,"reset_end":141.3},{"y":2018,"strat":-5.1,"end_val":108.7,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":3.6,"reset_end":103.6},{"y":2019,"strat":46.0,"end_val":158.8,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":46.0,"reset_end":146.0},{"y":2020,"strat":21.7,"end_val":193.3,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":10.5,"reset_end":110.5},{"y":2021,"strat":4.6,"end_val":202.2,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":6.5,"reset_end":106.5},{"y":2022,"strat":-5.1,"end_val":191.8,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-17.4,"reset_end":82.6},{"y":2023,"strat":16.1,"end_val":222.7,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":2.8,"reset_end":102.8},{"y":2024,"strat":13.3,"end_val":252.2,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":20.3,"reset_end":120.3},{"y":2025,"strat":64.5,"end_val":415.0,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":53.2,"reset_end":153.2},{"y":2026,"strat":64.5,"end_val":682.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":48.2,"reset_end":148.2}],"regime":{"bull":{"ret":3113.5,"days":1450},"bear":{"ret":-50.9,"days":408},"chop":{"ret":-56.7,"days":707}},"n_events":14567,"n_signals":7387,"n_filled":3840,"fill_rate":52,"n_rej_cash":2369,"n_rej_ncap":1178,"cagr":20.0,"mdd":-34.2,"mar":0.58,"final_10k":682.5},"n10":{"years":[{"y":2016,"strat":-17.4,"end_val":82.6,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-17.4,"reset_end":82.6},{"y":2017,"strat":38.8,"end_val":114.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":54.7,"reset_end":154.7},{"y":2018,"strat":-5.7,"end_val":108.1,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":1.5,"reset_end":101.5},{"y":2019,"strat":33.7,"end_val":144.5,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":33.7,"reset_end":133.7},{"y":2020,"strat":15.8,"end_val":167.4,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":6.5,"reset_end":106.5},{"y":2021,"strat":3.7,"end_val":173.7,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":4.0,"reset_end":104.0},{"y":2022,"strat":-3.4,"end_val":167.7,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-14.5,"reset_end":85.5},{"y":2023,"strat":17.5,"end_val":197.1,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":4.3,"reset_end":104.3},{"y":2024,"strat":7.4,"end_val":211.6,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":17.1,"reset_end":117.1},{"y":2025,"strat":49.8,"end_val":316.8,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":41.6,"reset_end":141.6},{"y":2026,"strat":68.7,"end_val":534.4,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":39.2,"reset_end":139.2}],"regime":{"bull":{"ret":2490.8,"days":1450},"bear":{"ret":-54.4,"days":408},"chop":{"ret":-54.7,"days":707}},"n_events":14567,"n_signals":7387,"n_filled":5293,"fill_rate":72,"n_rej_cash":1772,"n_rej_ncap":322,"cagr":17.24,"mdd":-34.2,"mar":0.5,"final_10k":534.4}},{"id":"V4","name":"上升三角形突破（水平壓力 + 墊高低點）","n5":{"years":[{"y":2016,"strat":-13.3,"end_val":86.7,"bench":22.1,"bench_end_val":119.5,"bull":56,"bear":14,"chop":31,"reset_ret":-13.3,"reset_end":86.7},{"y":2017,"strat":47.6,"end_val":128.1,"bench":18.0,"bench_end_val":141.1,"bull":59,"bear":6,"chop":35,"reset_ret":-2.5,"reset_end":97.5},{"y":2018,"strat":0.6,"end_val":128.9,"bench":-5.5,"bench_end_val":134.1,"bull":28,"bear":31,"chop":41,"reset_ret":-0.9,"reset_end":99.1},{"y":2019,"strat":-2.4,"end_val":125.8,"bench":36.1,"bench_end_val":179.1,"bull":65,"bear":6,"chop":29,"reset_ret":-2.4,"reset_end":97.6},{"y":2020,"strat":36.8,"end_val":172.0,"bench":30.2,"bench_end_val":234.9,"bull":62,"bear":18,"chop":20,"reset_ret":35.2,"reset_end":135.2},{"y":2021,"strat":0.0,"end_val":172.0,"bench":19.9,"bench_end_val":286.4,"bull":48,"bear":9,"chop":43,"reset_ret":14.7,"reset_end":114.7},{"y":2022,"strat":-24.5,"end_val":129.8,"bench":-21.7,"bench_end_val":225.6,"bull":24,"bear":55,"chop":21,"reset_ret":-12.7,"reset_end":87.3},{"y":2023,"strat":27.1,"end_val":165.0,"bench":26.9,"bench_end_val":287.7,"bull":60,"bear":10,"chop":31,"reset_ret":152.8,"reset_end":252.8},{"y":2024,"strat":34.1,"end_val":221.3,"bench":49.3,"bench_end_val":427.6,"bull":74,"bear":6,"chop":19,"reset_ret":37.0,"reset_end":137.0},{"y":2025,"strat":22.7,"end_val":271.5,"bench":38.1,"bench_end_val":585.3,"bull":68,"bear":19,"chop":13,"reset_ret":29.1,"reset_end":129.1},{"y":2026,"strat":96.7,"end_val":534.0,"bench":60.9,"bench_end_val":961.3,"bull":81,"bear":2,"chop":17,"reset_ret":31.8,"reset_end":131.8}],"regime":{"bull":{"ret":3573.5,"days":1450},"bear":{"ret":-65.6,"days":408},"chop":{"ret":-57.7,"days":705}},"n_events":3824,"n_signals":2909,"n_filled":812,"fill_rate":28,"n_rej_cash":2079,"n_rej_ncap":17,"cagr":17.24,"mdd":-50.9,"mar":0.34,"final_10k":534.0},"n10":{"years":[{"y":2016,"strat":-13.3,"end_val":86.7,"bench":22.1,"bench_end_val":119.5,"bull":56,"bear":14,"chop":31,"reset_ret":-13.3,"reset_end":86.7},{"y":2017,"strat":47.6,"end_val":128.1,"bench":18.0,"bench_end_val":141.1,"bull":59,"bear":6,"chop":35,"reset_ret":-2.5,"reset_end":97.5},{"y":2018,"strat":0.8,"end_val":129.1,"bench":-5.5,"bench_end_val":134.1,"bull":28,"bear":31,"chop":41,"reset_ret":-0.7,"reset_end":99.3},{"y":2019,"strat":-3.3,"end_val":124.8,"bench":36.1,"bench_end_val":179.1,"bull":65,"bear":6,"chop":29,"reset_ret":-3.3,"reset_end":96.7},{"y":2020,"strat":31.0,"end_val":163.5,"bench":30.2,"bench_end_val":234.9,"bull":62,"bear":18,"chop":20,"reset_ret":30.0,"reset_end":130.0},{"y":2021,"strat":-0.9,"end_val":162.0,"bench":19.9,"bench_end_val":286.4,"bull":48,"bear":9,"chop":43,"reset_ret":14.7,"reset_end":114.7},{"y":2022,"strat":-24.5,"end_val":122.3,"bench":-21.7,"bench_end_val":225.6,"bull":24,"bear":55,"chop":21,"reset_ret":-12.7,"reset_end":87.3},{"y":2023,"strat":27.1,"end_val":155.4,"bench":26.9,"bench_end_val":287.7,"bull":60,"bear":10,"chop":31,"reset_ret":152.8,"reset_end":252.8},{"y":2024,"strat":34.1,"end_val":208.4,"bench":49.3,"bench_end_val":427.6,"bull":74,"bear":6,"chop":19,"reset_ret":37.0,"reset_end":137.0},{"y":2025,"strat":20.9,"end_val":252.0,"bench":38.1,"bench_end_val":585.3,"bull":68,"bear":19,"chop":13,"reset_ret":27.2,"reset_end":127.2},{"y":2026,"strat":100.3,"end_val":504.7,"bench":60.9,"bench_end_val":961.3,"bull":81,"bear":2,"chop":17,"reset_ret":31.8,"reset_end":131.8}],"regime":{"bull":{"ret":3337.4,"days":1450},"bear":{"ret":-65.3,"days":408},"chop":{"ret":-57.6,"days":705}},"n_events":3824,"n_signals":2909,"n_filled":869,"fill_rate":30,"n_rej_cash":2039,"n_rej_ncap":0,"cagr":16.62,"mdd":-50.9,"mar":0.33,"final_10k":504.7}},{"id":"G3","name":"海龜 55 日突破","n5":{"years":[{"y":2016,"strat":0.3,"end_val":100.3,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":0.3,"reset_end":100.3},{"y":2017,"strat":7.3,"end_val":107.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":3.3,"reset_end":103.3},{"y":2018,"strat":-7.5,"end_val":99.6,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-5.9,"reset_end":94.1},{"y":2019,"strat":46.2,"end_val":145.7,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":46.2,"reset_end":146.2},{"y":2020,"strat":15.3,"end_val":167.9,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":12.5,"reset_end":112.5},{"y":2021,"strat":112.8,"end_val":357.3,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":75.7,"reset_end":175.7},{"y":2022,"strat":-20.5,"end_val":284.0,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-27.2,"reset_end":72.8},{"y":2023,"strat":43.7,"end_val":408.1,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":74.2,"reset_end":174.2},{"y":2024,"strat":6.4,"end_val":434.4,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-3.1,"reset_end":96.9},{"y":2025,"strat":83.8,"end_val":798.4,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":81.8,"reset_end":181.8},{"y":2026,"strat":54.6,"end_val":1234.6,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":-22.2,"reset_end":77.8}],"regime":{"bull":{"ret":5088.0,"days":1450},"bear":{"ret":-66.3,"days":408},"chop":{"ret":-27.9,"days":707}},"n_events":19821,"n_signals":8061,"n_filled":2876,"fill_rate":36,"n_rej_cash":4349,"n_rej_ncap":831,"cagr":26.94,"mdd":-36.4,"mar":0.74,"final_10k":1234.6},"n10":{"years":[{"y":2016,"strat":-3.3,"end_val":96.7,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-3.3,"reset_end":96.7},{"y":2017,"strat":36.6,"end_val":132.2,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":44.7,"reset_end":144.7},{"y":2018,"strat":-8.5,"end_val":121.0,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-8.2,"reset_end":91.8},{"y":2019,"strat":53.8,"end_val":186.1,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":53.8,"reset_end":153.8},{"y":2020,"strat":17.5,"end_val":218.7,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":17.9,"reset_end":117.9},{"y":2021,"strat":124.5,"end_val":490.9,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":80.2,"reset_end":180.2},{"y":2022,"strat":-22.6,"end_val":379.9,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-28.3,"reset_end":71.7},{"y":2023,"strat":47.8,"end_val":561.7,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":63.5,"reset_end":163.5},{"y":2024,"strat":12.3,"end_val":630.8,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":3.7,"reset_end":103.7},{"y":2025,"strat":90.8,"end_val":1203.7,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":81.0,"reset_end":181.0},{"y":2026,"strat":50.8,"end_val":1814.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":-19.9,"reset_end":80.1}],"regime":{"bull":{"ret":7306.7,"days":1450},"bear":{"ret":-68.6,"days":408},"chop":{"ret":-20.7,"days":707}},"n_events":19821,"n_signals":8061,"n_filled":4234,"fill_rate":53,"n_rej_cash":3641,"n_rej_ncap":181,"cagr":31.67,"mdd":-36.4,"mar":0.87,"final_10k":1814.5}},{"id":"W6","name":"月營收創年高 + 估值便宜","n5":{"years":[{"y":2016,"strat":23.5,"end_val":123.5,"bench":22.1,"bench_end_val":116.0,"bull":56,"bear":14,"chop":31,"reset_ret":23.5,"reset_end":123.5},{"y":2017,"strat":19.3,"end_val":147.4,"bench":18.0,"bench_end_val":137.1,"bull":59,"bear":6,"chop":35,"reset_ret":19.3,"reset_end":119.3},{"y":2018,"strat":-41.4,"end_val":86.3,"bench":-5.5,"bench_end_val":130.3,"bull":28,"bear":31,"chop":41,"reset_ret":-41.4,"reset_end":58.6},{"y":2019,"strat":-13.5,"end_val":74.7,"bench":36.1,"bench_end_val":174.0,"bull":65,"bear":6,"chop":29,"reset_ret":-13.5,"reset_end":86.5},{"y":2020,"strat":-32.2,"end_val":50.6,"bench":30.2,"bench_end_val":228.1,"bull":62,"bear":18,"chop":20,"reset_ret":-26.7,"reset_end":73.3},{"y":2021,"strat":69.7,"end_val":85.9,"bench":19.9,"bench_end_val":278.2,"bull":48,"bear":9,"chop":43,"reset_ret":60.7,"reset_end":160.7},{"y":2022,"strat":-17.7,"end_val":70.7,"bench":-21.7,"bench_end_val":219.1,"bull":24,"bear":55,"chop":21,"reset_ret":-16.8,"reset_end":83.2},{"y":2023,"strat":40.4,"end_val":99.2,"bench":26.9,"bench_end_val":279.4,"bull":60,"bear":10,"chop":31,"reset_ret":1.8,"reset_end":101.8},{"y":2024,"strat":99.7,"end_val":198.2,"bench":49.3,"bench_end_val":415.4,"bull":74,"bear":6,"chop":19,"reset_ret":98.1,"reset_end":198.1},{"y":2025,"strat":53.9,"end_val":305.0,"bench":38.1,"bench_end_val":568.5,"bull":68,"bear":19,"chop":13,"reset_ret":60.2,"reset_end":160.2},{"y":2026,"strat":-25.8,"end_val":226.4,"bench":60.9,"bench_end_val":933.7,"bull":81,"bear":2,"chop":17,"reset_ret":82.4,"reset_end":182.4}],"regime":{"bull":{"ret":1400.6,"days":1414},"bear":{"ret":-41.2,"days":408},"chop":{"ret":-74.2,"days":701}},"n_events":776,"n_signals":726,"n_filled":161,"fill_rate":22,"n_rej_cash":565,"n_rej_ncap":0,"cagr":8.21,"mdd":-72.1,"mar":0.11,"final_10k":226.4},"n10":{"years":[{"y":2016,"strat":23.5,"end_val":123.5,"bench":22.1,"bench_end_val":116.0,"bull":56,"bear":14,"chop":31,"reset_ret":23.5,"reset_end":123.5},{"y":2017,"strat":19.3,"end_val":147.4,"bench":18.0,"bench_end_val":137.1,"bull":59,"bear":6,"chop":35,"reset_ret":19.3,"reset_end":119.3},{"y":2018,"strat":-41.4,"end_val":86.3,"bench":-5.5,"bench_end_val":130.3,"bull":28,"bear":31,"chop":41,"reset_ret":-41.4,"reset_end":58.6},{"y":2019,"strat":-13.5,"end_val":74.7,"bench":36.1,"bench_end_val":174.0,"bull":65,"bear":6,"chop":29,"reset_ret":-13.5,"reset_end":86.5},{"y":2020,"strat":-32.2,"end_val":50.6,"bench":30.2,"bench_end_val":228.1,"bull":62,"bear":18,"chop":20,"reset_ret":-26.7,"reset_end":73.3},{"y":2021,"strat":69.7,"end_val":85.9,"bench":19.9,"bench_end_val":278.2,"bull":48,"bear":9,"chop":43,"reset_ret":60.7,"reset_end":160.7},{"y":2022,"strat":-17.7,"end_val":70.7,"bench":-21.7,"bench_end_val":219.1,"bull":24,"bear":55,"chop":21,"reset_ret":-16.8,"reset_end":83.2},{"y":2023,"strat":40.4,"end_val":99.2,"bench":26.9,"bench_end_val":279.4,"bull":60,"bear":10,"chop":31,"reset_ret":1.8,"reset_end":101.8},{"y":2024,"strat":99.7,"end_val":198.2,"bench":49.3,"bench_end_val":415.4,"bull":74,"bear":6,"chop":19,"reset_ret":98.1,"reset_end":198.1},{"y":2025,"strat":53.9,"end_val":305.0,"bench":38.1,"bench_end_val":568.5,"bull":68,"bear":19,"chop":13,"reset_ret":60.2,"reset_end":160.2},{"y":2026,"strat":-25.8,"end_val":226.4,"bench":60.9,"bench_end_val":933.7,"bull":81,"bear":2,"chop":17,"reset_ret":82.4,"reset_end":182.4}],"regime":{"bull":{"ret":1400.6,"days":1414},"bear":{"ret":-41.2,"days":408},"chop":{"ret":-74.2,"days":701}},"n_events":776,"n_signals":726,"n_filled":161,"fill_rate":22,"n_rej_cash":565,"n_rej_ncap":0,"cagr":8.21,"mdd":-72.1,"mar":0.11,"final_10k":226.4}},{"id":"P1","name":"營收成長加速循環","n5":{"years":[{"y":2016,"strat":0.5,"end_val":100.5,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31,"reset_ret":0.5,"reset_end":100.5},{"y":2017,"strat":10.5,"end_val":111.1,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35,"reset_ret":35.6,"reset_end":135.6},{"y":2018,"strat":4.8,"end_val":116.5,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41,"reset_ret":-18.5,"reset_end":81.5},{"y":2019,"strat":24.3,"end_val":144.8,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29,"reset_ret":25.1,"reset_end":125.1},{"y":2020,"strat":6.4,"end_val":154.1,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20,"reset_ret":21.5,"reset_end":121.5},{"y":2021,"strat":30.2,"end_val":200.7,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43,"reset_ret":119.7,"reset_end":219.7},{"y":2022,"strat":-14.9,"end_val":170.7,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21,"reset_ret":-24.2,"reset_end":75.8},{"y":2023,"strat":-7.5,"end_val":158.0,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31,"reset_ret":42.8,"reset_end":142.8},{"y":2024,"strat":108.8,"end_val":329.9,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19,"reset_ret":99.8,"reset_end":199.8},{"y":2025,"strat":18.1,"end_val":389.5,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13,"reset_ret":-3.4,"reset_end":96.6},{"y":2026,"strat":140.2,"end_val":935.5,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17,"reset_ret":110.3,"reset_end":210.3}],"regime":{"bull":{"ret":2540.2,"days":1450},"bear":{"ret":-66.7,"days":408},"chop":{"ret":2.2,"days":704}},"n_events":3770,"n_signals":2673,"n_filled":401,"fill_rate":15,"n_rej_cash":2179,"n_rej_ncap":91,"cagr":23.68,"mdd":-36.9,"mar":0.64,"final_10k":935.5},"n10":{"years":[{"y":2016,"strat":0.5,"end_val":100.5,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31,"reset_ret":0.5,"reset_end":100.5},{"y":2017,"strat":10.5,"end_val":111.1,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35,"reset_ret":35.6,"reset_end":135.6},{"y":2018,"strat":6.6,"end_val":118.5,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41,"reset_ret":-17.3,"reset_end":82.7},{"y":2019,"strat":24.7,"end_val":147.7,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29,"reset_ret":25.1,"reset_end":125.1},{"y":2020,"strat":-0.9,"end_val":146.4,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20,"reset_ret":13.0,"reset_end":113.0},{"y":2021,"strat":26.4,"end_val":185.1,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43,"reset_ret":106.8,"reset_end":206.8},{"y":2022,"strat":-12.8,"end_val":161.5,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21,"reset_ret":-24.3,"reset_end":75.7},{"y":2023,"strat":-7.5,"end_val":149.4,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31,"reset_ret":42.8,"reset_end":142.8},{"y":2024,"strat":123.7,"end_val":334.1,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19,"reset_ret":113.5,"reset_end":213.5},{"y":2025,"strat":25.8,"end_val":420.5,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13,"reset_ret":-3.4,"reset_end":96.6},{"y":2026,"strat":132.3,"end_val":976.7,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17,"reset_ret":102.8,"reset_end":202.8}],"regime":{"bull":{"ret":2512.4,"days":1450},"bear":{"ret":-66.4,"days":408},"chop":{"ret":7.0,"days":704}},"n_events":3770,"n_signals":2673,"n_filled":509,"fill_rate":19,"n_rej_cash":2125,"n_rej_ncap":37,"cagr":24.19,"mdd":-32.3,"mar":0.75,"final_10k":976.7}},{"id":"P3","name":"GARP 估值修復","n5":{"years":[{"y":2016,"strat":14.9,"end_val":114.9,"bench":22.1,"bench_end_val":116.0,"bull":56,"bear":14,"chop":31,"reset_ret":14.9,"reset_end":114.9},{"y":2017,"strat":35.9,"end_val":156.1,"bench":18.0,"bench_end_val":137.1,"bull":59,"bear":6,"chop":35,"reset_ret":5.1,"reset_end":105.1},{"y":2018,"strat":-10.0,"end_val":140.5,"bench":-5.5,"bench_end_val":130.3,"bull":28,"bear":31,"chop":41,"reset_ret":-10.0,"reset_end":90.0},{"y":2019,"strat":0.3,"end_val":140.9,"bench":36.1,"bench_end_val":174.0,"bull":65,"bear":6,"chop":29,"reset_ret":0.3,"reset_end":100.3},{"y":2020,"strat":-5.4,"end_val":133.3,"bench":30.2,"bench_end_val":228.1,"bull":62,"bear":18,"chop":20,"reset_ret":-7.8,"reset_end":92.2},{"y":2021,"strat":30.2,"end_val":173.5,"bench":19.9,"bench_end_val":278.2,"bull":48,"bear":9,"chop":43,"reset_ret":10.0,"reset_end":110.0},{"y":2022,"strat":-13.7,"end_val":149.7,"bench":-21.7,"bench_end_val":219.1,"bull":24,"bear":55,"chop":21,"reset_ret":-27.6,"reset_end":72.4},{"y":2023,"strat":50.8,"end_val":225.8,"bench":26.9,"bench_end_val":279.4,"bull":60,"bear":10,"chop":31,"reset_ret":19.6,"reset_end":119.6},{"y":2024,"strat":42.4,"end_val":321.5,"bench":49.3,"bench_end_val":415.4,"bull":74,"bear":6,"chop":19,"reset_ret":90.1,"reset_end":190.1},{"y":2025,"strat":144.7,"end_val":786.6,"bench":38.1,"bench_end_val":568.5,"bull":68,"bear":19,"chop":13,"reset_ret":147.6,"reset_end":247.6},{"y":2026,"strat":261.0,"end_val":2839.5,"bench":60.9,"bench_end_val":933.7,"bull":81,"bear":2,"chop":17,"reset_ret":-11.6,"reset_end":88.4}],"regime":{"bull":{"ret":5421.0,"days":1414},"bear":{"ret":-45.3,"days":408},"chop":{"ret":-5.4,"days":701}},"n_events":776,"n_signals":630,"n_filled":63,"fill_rate":10,"n_rej_cash":567,"n_rej_ncap":0,"cagr":38.11,"mdd":-30.3,"mar":1.26,"final_10k":2839.5},"n10":{"years":[{"y":2016,"strat":14.9,"end_val":114.9,"bench":22.1,"bench_end_val":116.0,"bull":56,"bear":14,"chop":31,"reset_ret":14.9,"reset_end":114.9},{"y":2017,"strat":35.9,"end_val":156.1,"bench":18.0,"bench_end_val":137.1,"bull":59,"bear":6,"chop":35,"reset_ret":5.1,"reset_end":105.1},{"y":2018,"strat":-10.0,"end_val":140.5,"bench":-5.5,"bench_end_val":130.3,"bull":28,"bear":31,"chop":41,"reset_ret":-10.0,"reset_end":90.0},{"y":2019,"strat":0.3,"end_val":140.9,"bench":36.1,"bench_end_val":174.0,"bull":65,"bear":6,"chop":29,"reset_ret":0.3,"reset_end":100.3},{"y":2020,"strat":-5.4,"end_val":133.3,"bench":30.2,"bench_end_val":228.1,"bull":62,"bear":18,"chop":20,"reset_ret":-7.8,"reset_end":92.2},{"y":2021,"strat":30.2,"end_val":173.5,"bench":19.9,"bench_end_val":278.2,"bull":48,"bear":9,"chop":43,"reset_ret":10.0,"reset_end":110.0},{"y":2022,"strat":-13.7,"end_val":149.7,"bench":-21.7,"bench_end_val":219.1,"bull":24,"bear":55,"chop":21,"reset_ret":-27.6,"reset_end":72.4},{"y":2023,"strat":50.8,"end_val":225.8,"bench":26.9,"bench_end_val":279.4,"bull":60,"bear":10,"chop":31,"reset_ret":19.6,"reset_end":119.6},{"y":2024,"strat":42.4,"end_val":321.5,"bench":49.3,"bench_end_val":415.4,"bull":74,"bear":6,"chop":19,"reset_ret":90.1,"reset_end":190.1},{"y":2025,"strat":144.7,"end_val":786.6,"bench":38.1,"bench_end_val":568.5,"bull":68,"bear":19,"chop":13,"reset_ret":147.6,"reset_end":247.6},{"y":2026,"strat":261.0,"end_val":2839.5,"bench":60.9,"bench_end_val":933.7,"bull":81,"bear":2,"chop":17,"reset_ret":-11.6,"reset_end":88.4}],"regime":{"bull":{"ret":5421.0,"days":1414},"bear":{"ret":-45.3,"days":408},"chop":{"ret":-5.4,"days":701}},"n_events":776,"n_signals":630,"n_filled":63,"fill_rate":10,"n_rej_cash":567,"n_rej_ncap":0,"cagr":38.11,"mdd":-30.3,"mar":1.26,"final_10k":2839.5}},{"id":"W3","name":"三日兩缺口 + 估值未過熱確認","n5":{"years":[{"y":2016,"strat":35.3,"end_val":135.3,"bench":22.1,"bench_end_val":119.4,"bull":56,"bear":14,"chop":31,"reset_ret":35.3,"reset_end":135.3},{"y":2017,"strat":-15.5,"end_val":114.4,"bench":18.0,"bench_end_val":141.0,"bull":59,"bear":6,"chop":35,"reset_ret":-14.1,"reset_end":85.9},{"y":2018,"strat":-16.0,"end_val":96.1,"bench":-5.5,"bench_end_val":134.0,"bull":28,"bear":31,"chop":41,"reset_ret":-16.0,"reset_end":84.0},{"y":2019,"strat":49.6,"end_val":143.8,"bench":36.1,"bench_end_val":179.0,"bull":65,"bear":6,"chop":29,"reset_ret":49.6,"reset_end":149.6},{"y":2020,"strat":11.8,"end_val":160.8,"bench":30.2,"bench_end_val":234.7,"bull":62,"bear":18,"chop":20,"reset_ret":34.4,"reset_end":134.4},{"y":2021,"strat":-35.2,"end_val":104.3,"bench":19.9,"bench_end_val":286.2,"bull":48,"bear":9,"chop":43,"reset_ret":-30.8,"reset_end":69.2},{"y":2022,"strat":7.1,"end_val":111.6,"bench":-21.7,"bench_end_val":225.4,"bull":24,"bear":55,"chop":21,"reset_ret":9.0,"reset_end":109.0},{"y":2023,"strat":-14.6,"end_val":95.3,"bench":26.9,"bench_end_val":287.5,"bull":60,"bear":10,"chop":31,"reset_ret":-14.6,"reset_end":85.4},{"y":2024,"strat":6.3,"end_val":101.3,"bench":49.3,"bench_end_val":427.3,"bull":74,"bear":6,"chop":19,"reset_ret":6.3,"reset_end":106.3},{"y":2025,"strat":4.1,"end_val":105.4,"bench":38.1,"bench_end_val":584.8,"bull":68,"bear":19,"chop":13,"reset_ret":11.2,"reset_end":111.2},{"y":2026,"strat":187.1,"end_val":302.7,"bench":60.9,"bench_end_val":960.5,"bull":81,"bear":2,"chop":17,"reset_ret":112.0,"reset_end":212.0}],"regime":{"bull":{"ret":734.6,"days":1450},"bear":{"ret":-39.9,"days":408},"chop":{"ret":-40.4,"days":706}},"n_events":1322,"n_signals":1097,"n_filled":499,"fill_rate":45,"n_rej_cash":561,"n_rej_ncap":37,"cagr":11.09,"mdd":-63.8,"mar":0.17,"final_10k":302.7},"n10":{"years":[{"y":2016,"strat":35.3,"end_val":135.3,"bench":22.1,"bench_end_val":119.4,"bull":56,"bear":14,"chop":31,"reset_ret":35.3,"reset_end":135.3},{"y":2017,"strat":-15.5,"end_val":114.4,"bench":18.0,"bench_end_val":141.0,"bull":59,"bear":6,"chop":35,"reset_ret":-14.1,"reset_end":85.9},{"y":2018,"strat":-16.0,"end_val":96.1,"bench":-5.5,"bench_end_val":134.0,"bull":28,"bear":31,"chop":41,"reset_ret":-16.0,"reset_end":84.0},{"y":2019,"strat":49.6,"end_val":143.8,"bench":36.1,"bench_end_val":179.0,"bull":65,"bear":6,"chop":29,"reset_ret":49.6,"reset_end":149.6},{"y":2020,"strat":11.7,"end_val":160.6,"bench":30.2,"bench_end_val":234.7,"bull":62,"bear":18,"chop":20,"reset_ret":34.2,"reset_end":134.2},{"y":2021,"strat":-35.2,"end_val":104.1,"bench":19.9,"bench_end_val":286.2,"bull":48,"bear":9,"chop":43,"reset_ret":-30.8,"reset_end":69.2},{"y":2022,"strat":7.1,"end_val":111.5,"bench":-21.7,"bench_end_val":225.4,"bull":24,"bear":55,"chop":21,"reset_ret":9.0,"reset_end":109.0},{"y":2023,"strat":-14.6,"end_val":95.2,"bench":26.9,"bench_end_val":287.5,"bull":60,"bear":10,"chop":31,"reset_ret":-14.6,"reset_end":85.4},{"y":2024,"strat":6.3,"end_val":101.2,"bench":49.3,"bench_end_val":427.3,"bull":74,"bear":6,"chop":19,"reset_ret":6.3,"reset_end":106.3},{"y":2025,"strat":3.6,"end_val":104.9,"bench":38.1,"bench_end_val":584.8,"bull":68,"bear":19,"chop":13,"reset_ret":10.7,"reset_end":110.7},{"y":2026,"strat":217.9,"end_val":333.3,"bench":60.9,"bench_end_val":960.5,"bull":81,"bear":2,"chop":17,"reset_ret":134.0,"reset_end":234.0}],"regime":{"bull":{"ret":795.7,"days":1450},"bear":{"ret":-39.9,"days":408},"chop":{"ret":-38.8,"days":706}},"n_events":1322,"n_signals":1097,"n_filled":539,"fill_rate":49,"n_rej_cash":546,"n_rej_ncap":12,"cagr":12.11,"mdd":-63.8,"mar":0.19,"final_10k":333.3}},{"id":"J1","name":"雙重底（W底）頸線突破","n5":{"years":[{"y":2016,"strat":2.2,"end_val":102.2,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":2.2,"reset_end":102.2},{"y":2017,"strat":40.3,"end_val":143.4,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":37.3,"reset_end":137.3},{"y":2018,"strat":-13.7,"end_val":123.8,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-13.4,"reset_end":86.6},{"y":2019,"strat":34.9,"end_val":167.0,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":34.9,"reset_end":134.9},{"y":2020,"strat":35.2,"end_val":225.8,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":24.3,"reset_end":124.3},{"y":2021,"strat":-5.9,"end_val":212.5,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":-6.5,"reset_end":93.5},{"y":2022,"strat":-11.5,"end_val":188.0,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-21.0,"reset_end":79.0},{"y":2023,"strat":13.1,"end_val":212.6,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":33.9,"reset_end":133.9},{"y":2024,"strat":28.9,"end_val":274.2,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-15.7,"reset_end":84.3},{"y":2025,"strat":-2.6,"end_val":267.1,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":-13.3,"reset_end":86.7},{"y":2026,"strat":35.7,"end_val":362.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":22.0,"reset_end":122.0}],"regime":{"bull":{"ret":1705.0,"days":1450},"bear":{"ret":-58.4,"days":408},"chop":{"ret":-51.1,"days":707}},"n_events":7391,"n_signals":5046,"n_filled":2211,"fill_rate":44,"n_rej_cash":2502,"n_rej_ncap":332,"cagr":13.0,"mdd":-29.9,"mar":0.44,"final_10k":362.5},"n10":{"years":[{"y":2016,"strat":2.2,"end_val":102.2,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":2.2,"reset_end":102.2},{"y":2017,"strat":41.0,"end_val":144.1,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":37.3,"reset_end":137.3},{"y":2018,"strat":-16.1,"end_val":120.9,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-16.0,"reset_end":84.0},{"y":2019,"strat":34.7,"end_val":162.9,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":34.7,"reset_end":134.7},{"y":2020,"strat":36.6,"end_val":222.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":26.5,"reset_end":126.5},{"y":2021,"strat":-6.8,"end_val":207.5,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":-6.6,"reset_end":93.4},{"y":2022,"strat":-9.5,"end_val":187.8,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-19.5,"reset_end":80.5},{"y":2023,"strat":19.3,"end_val":224.0,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":33.9,"reset_end":133.9},{"y":2024,"strat":30.2,"end_val":291.6,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-13.6,"reset_end":86.4},{"y":2025,"strat":-7.2,"end_val":270.6,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":-17.4,"reset_end":82.6},{"y":2026,"strat":17.7,"end_val":318.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":13.1,"reset_end":113.1}],"regime":{"bull":{"ret":1564.2,"days":1450},"bear":{"ret":-59.9,"days":408},"chop":{"ret":-51.8,"days":707}},"n_events":7391,"n_signals":5046,"n_filled":2709,"fill_rate":54,"n_rej_cash":2297,"n_rej_ncap":39,"cagr":11.62,"mdd":-31.7,"mar":0.37,"final_10k":318.5}},{"id":"D7","name":"極度量縮後成交量梯形遞增","n5":{"years":[{"y":2016,"strat":35.5,"end_val":135.5,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":35.5,"reset_end":135.5},{"y":2017,"strat":62.1,"end_val":219.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":62.0,"reset_end":162.0},{"y":2018,"strat":-38.9,"end_val":134.3,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-40.5,"reset_end":59.5},{"y":2019,"strat":60.3,"end_val":215.2,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":60.3,"reset_end":160.3},{"y":2020,"strat":-4.0,"end_val":206.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-2.0,"reset_end":98.0},{"y":2021,"strat":26.5,"end_val":261.4,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":0.9,"reset_end":100.9},{"y":2022,"strat":-19.9,"end_val":209.3,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-22.7,"reset_end":77.3},{"y":2023,"strat":40.4,"end_val":293.9,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":11.3,"reset_end":111.3},{"y":2024,"strat":67.6,"end_val":492.7,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":62.7,"reset_end":162.7},{"y":2025,"strat":174.6,"end_val":1352.9,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":181.2,"reset_end":281.2},{"y":2026,"strat":87.9,"end_val":2541.8,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":45.7,"reset_end":145.7}],"regime":{"bull":{"ret":11073.8,"days":1450},"bear":{"ret":-63.9,"days":408},"chop":{"ret":-37.2,"days":707}},"n_events":3885,"n_signals":2591,"n_filled":344,"fill_rate":13,"n_rej_cash":2138,"n_rej_ncap":109,"cagr":35.95,"mdd":-47.9,"mar":0.75,"final_10k":2541.8},"n10":{"years":[{"y":2016,"strat":35.4,"end_val":135.4,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":35.4,"reset_end":135.4},{"y":2017,"strat":69.2,"end_val":229.1,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":69.1,"reset_end":169.1},{"y":2018,"strat":-31.3,"end_val":157.4,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-31.0,"reset_end":69.0},{"y":2019,"strat":60.3,"end_val":252.2,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":60.3,"reset_end":160.3},{"y":2020,"strat":-3.8,"end_val":242.7,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-1.7,"reset_end":98.3},{"y":2021,"strat":39.8,"end_val":339.4,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":11.1,"reset_end":111.1},{"y":2022,"strat":-18.4,"end_val":277.0,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-22.4,"reset_end":77.6},{"y":2023,"strat":45.7,"end_val":403.5,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":21.2,"reset_end":121.2},{"y":2024,"strat":67.8,"end_val":677.0,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":62.7,"reset_end":162.7},{"y":2025,"strat":174.6,"end_val":1858.9,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":181.2,"reset_end":281.2},{"y":2026,"strat":80.6,"end_val":3357.7,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":31.2,"reset_end":131.2}],"regime":{"bull":{"ret":12476.6,"days":1450},"bear":{"ret":-64.8,"days":408},"chop":{"ret":-24.6,"days":707}},"n_events":3885,"n_signals":2591,"n_filled":447,"fill_rate":17,"n_rej_cash":2089,"n_rej_ncap":55,"cagr":39.59,"mdd":-41.5,"mar":0.95,"final_10k":3357.7}},{"id":"Y4-plow20","name":"Y4 出場變體·收盤跌破前20日低（Y4 家族最佳版）","n5":{"years":[{"y":2016,"strat":-6.8,"end_val":93.2,"bench":22.1,"bench_end_val":116.6,"bull":56,"bear":14,"chop":31,"reset_ret":-6.8,"reset_end":93.2},{"y":2017,"strat":68.7,"end_val":157.2,"bench":18.0,"bench_end_val":137.7,"bull":59,"bear":6,"chop":35,"reset_ret":62.8,"reset_end":162.8},{"y":2018,"strat":-53.6,"end_val":73.0,"bench":-5.5,"bench_end_val":130.9,"bull":28,"bear":31,"chop":41,"reset_ret":-39.5,"reset_end":60.5},{"y":2019,"strat":-27.3,"end_val":53.1,"bench":36.1,"bench_end_val":174.8,"bull":65,"bear":6,"chop":29,"reset_ret":-27.3,"reset_end":72.7},{"y":2020,"strat":192.4,"end_val":155.2,"bench":30.2,"bench_end_val":229.2,"bull":62,"bear":18,"chop":20,"reset_ret":205.2,"reset_end":305.2},{"y":2021,"strat":15.1,"end_val":178.7,"bench":19.9,"bench_end_val":279.5,"bull":48,"bear":9,"chop":43,"reset_ret":21.7,"reset_end":121.7},{"y":2022,"strat":2.6,"end_val":183.3,"bench":-21.7,"bench_end_val":220.2,"bull":24,"bear":55,"chop":21,"reset_ret":19.9,"reset_end":119.9},{"y":2023,"strat":42.1,"end_val":260.5,"bench":26.9,"bench_end_val":280.8,"bull":60,"bear":10,"chop":31,"reset_ret":39.5,"reset_end":139.5},{"y":2024,"strat":84.1,"end_val":479.6,"bench":49.3,"bench_end_val":417.4,"bull":74,"bear":6,"chop":19,"reset_ret":84.1,"reset_end":184.1},{"y":2025,"strat":-0.7,"end_val":476.3,"bench":38.1,"bench_end_val":571.2,"bull":68,"bear":19,"chop":13,"reset_ret":3.6,"reset_end":103.6},{"y":2026,"strat":8.6,"end_val":517.5,"bench":60.9,"bench_end_val":938.2,"bull":81,"bear":2,"chop":17,"reset_ret":-38.0,"reset_end":62.0}],"regime":{"bull":{"ret":2244.3,"days":1446},"bear":{"ret":-62.0,"days":408},"chop":{"ret":-40.0,"days":702}},"n_events":1182,"n_signals":745,"n_filled":133,"fill_rate":18,"n_rej_cash":612,"n_rej_ncap":0,"cagr":16.95,"mdd":-75.4,"mar":0.22,"final_10k":517.5},"n10":{"years":[{"y":2016,"strat":-6.8,"end_val":93.2,"bench":22.1,"bench_end_val":116.6,"bull":56,"bear":14,"chop":31,"reset_ret":-6.8,"reset_end":93.2},{"y":2017,"strat":68.7,"end_val":157.2,"bench":18.0,"bench_end_val":137.7,"bull":59,"bear":6,"chop":35,"reset_ret":62.8,"reset_end":162.8},{"y":2018,"strat":-53.6,"end_val":73.0,"bench":-5.5,"bench_end_val":130.9,"bull":28,"bear":31,"chop":41,"reset_ret":-39.5,"reset_end":60.5},{"y":2019,"strat":-27.3,"end_val":53.1,"bench":36.1,"bench_end_val":174.8,"bull":65,"bear":6,"chop":29,"reset_ret":-27.3,"reset_end":72.7},{"y":2020,"strat":192.4,"end_val":155.2,"bench":30.2,"bench_end_val":229.2,"bull":62,"bear":18,"chop":20,"reset_ret":205.2,"reset_end":305.2},{"y":2021,"strat":15.1,"end_val":178.7,"bench":19.9,"bench_end_val":279.5,"bull":48,"bear":9,"chop":43,"reset_ret":21.7,"reset_end":121.7},{"y":2022,"strat":2.6,"end_val":183.3,"bench":-21.7,"bench_end_val":220.2,"bull":24,"bear":55,"chop":21,"reset_ret":19.9,"reset_end":119.9},{"y":2023,"strat":42.1,"end_val":260.5,"bench":26.9,"bench_end_val":280.8,"bull":60,"bear":10,"chop":31,"reset_ret":39.5,"reset_end":139.5},{"y":2024,"strat":84.1,"end_val":479.6,"bench":49.3,"bench_end_val":417.4,"bull":74,"bear":6,"chop":19,"reset_ret":84.1,"reset_end":184.1},{"y":2025,"strat":-0.7,"end_val":476.3,"bench":38.1,"bench_end_val":571.2,"bull":68,"bear":19,"chop":13,"reset_ret":3.6,"reset_end":103.6},{"y":2026,"strat":8.6,"end_val":517.5,"bench":60.9,"bench_end_val":938.2,"bull":81,"bear":2,"chop":17,"reset_ret":-38.0,"reset_end":62.0}],"regime":{"bull":{"ret":2244.3,"days":1446},"bear":{"ret":-62.0,"days":408},"chop":{"ret":-40.0,"days":702}},"n_events":1182,"n_signals":745,"n_filled":133,"fill_rate":18,"n_rej_cash":612,"n_rej_ncap":0,"cagr":16.95,"mdd":-75.4,"mar":0.22,"final_10k":517.5}},{"id":"B2","name":"投信連續買超","n5":{"years":[{"y":2016,"strat":33.7,"end_val":133.7,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":33.7,"reset_end":133.7},{"y":2017,"strat":14.3,"end_val":152.8,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":22.6,"reset_end":122.6},{"y":2018,"strat":-17.0,"end_val":126.8,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-12.3,"reset_end":87.7},{"y":2019,"strat":21.6,"end_val":154.2,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":21.6,"reset_end":121.6},{"y":2020,"strat":-24.6,"end_val":116.3,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-27.9,"reset_end":72.1},{"y":2021,"strat":14.6,"end_val":133.2,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":-2.9,"reset_end":97.1},{"y":2022,"strat":-11.9,"end_val":117.3,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-24.3,"reset_end":75.7},{"y":2023,"strat":24.5,"end_val":146.0,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":46.4,"reset_end":146.4},{"y":2024,"strat":12.2,"end_val":163.9,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":13.4,"reset_end":113.4},{"y":2025,"strat":8.7,"end_val":178.1,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":7.3,"reset_end":107.3},{"y":2026,"strat":23.7,"end_val":220.4,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":183.8,"reset_end":283.8}],"regime":{"bull":{"ret":1242.6,"days":1450},"bear":{"ret":-66.6,"days":408},"chop":{"ret":-50.1,"days":707}},"n_events":29402,"n_signals":5211,"n_filled":1602,"fill_rate":31,"n_rej_cash":3001,"n_rej_ncap":604,"cagr":7.79,"mdd":-39.5,"mar":0.2,"final_10k":220.4},"n10":{"years":[{"y":2016,"strat":36.9,"end_val":136.9,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":36.9,"reset_end":136.9},{"y":2017,"strat":15.2,"end_val":157.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":22.5,"reset_end":122.5},{"y":2018,"strat":-17.8,"end_val":129.7,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-14.6,"reset_end":85.4},{"y":2019,"strat":17.9,"end_val":152.8,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":17.9,"reset_end":117.9},{"y":2020,"strat":-17.4,"end_val":126.2,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-20.6,"reset_end":79.4},{"y":2021,"strat":20.5,"end_val":152.0,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":2.3,"reset_end":102.3},{"y":2022,"strat":-14.4,"end_val":130.1,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-27.6,"reset_end":72.4},{"y":2023,"strat":44.1,"end_val":187.6,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":54.5,"reset_end":154.5},{"y":2024,"strat":9.0,"end_val":204.4,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":11.5,"reset_end":111.5},{"y":2025,"strat":16.3,"end_val":237.7,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":14.7,"reset_end":114.7},{"y":2026,"strat":22.3,"end_val":290.8,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":183.9,"reset_end":283.9}],"regime":{"bull":{"ret":1575.1,"days":1450},"bear":{"ret":-67.3,"days":408},"chop":{"ret":-46.5,"days":707}},"n_events":29402,"n_signals":5211,"n_filled":2150,"fill_rate":41,"n_rej_cash":2730,"n_rej_ncap":327,"cagr":10.66,"mdd":-33.4,"mar":0.32,"final_10k":290.8}},{"id":"Y1","name":"上升軌道突破 + 月營收年增加速確認（移動停損出場）","n5":{"years":[{"y":2016,"strat":-41.2,"end_val":58.8,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-41.2,"reset_end":58.8},{"y":2017,"strat":32.2,"end_val":77.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":32.2,"reset_end":132.2},{"y":2018,"strat":14.6,"end_val":89.1,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":14.6,"reset_end":114.6},{"y":2019,"strat":29.7,"end_val":115.5,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":29.7,"reset_end":129.7},{"y":2020,"strat":-5.4,"end_val":109.3,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-3.2,"reset_end":96.8},{"y":2021,"strat":3.6,"end_val":113.2,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":-2.8,"reset_end":97.2},{"y":2022,"strat":-41.1,"end_val":66.7,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-37.1,"reset_end":62.9},{"y":2023,"strat":-20.2,"end_val":53.2,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":-20.2,"reset_end":79.8},{"y":2024,"strat":-10.3,"end_val":47.8,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-8.3,"reset_end":91.7},{"y":2025,"strat":14.4,"end_val":54.6,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":10.4,"reset_end":110.4},{"y":2026,"strat":30.5,"end_val":71.3,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":34.9,"reset_end":134.9}],"regime":{"bull":{"ret":276.3,"days":1450},"bear":{"ret":-45.1,"days":408},"chop":{"ret":-65.6,"days":707}},"n_events":3464,"n_signals":2449,"n_filled":1252,"fill_rate":51,"n_rej_cash":1115,"n_rej_ncap":79,"cagr":-3.16,"mdd":-72.1,"mar":-0.04,"final_10k":71.3},"n10":{"years":[{"y":2016,"strat":-41.2,"end_val":58.8,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-41.2,"reset_end":58.8},{"y":2017,"strat":32.2,"end_val":77.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":32.2,"reset_end":132.2},{"y":2018,"strat":12.3,"end_val":87.3,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":12.3,"reset_end":112.3},{"y":2019,"strat":29.7,"end_val":113.2,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":29.7,"reset_end":129.7},{"y":2020,"strat":-5.4,"end_val":107.1,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":-3.1,"reset_end":96.9},{"y":2021,"strat":3.3,"end_val":110.7,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":-2.6,"reset_end":97.4},{"y":2022,"strat":-41.1,"end_val":65.2,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":-37.1,"reset_end":62.9},{"y":2023,"strat":-20.1,"end_val":52.1,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":-20.1,"reset_end":79.9},{"y":2024,"strat":-9.3,"end_val":47.3,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-7.3,"reset_end":92.7},{"y":2025,"strat":12.8,"end_val":53.3,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":8.9,"reset_end":108.9},{"y":2026,"strat":44.9,"end_val":77.3,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":49.8,"reset_end":149.8}],"regime":{"bull":{"ret":321.6,"days":1450},"bear":{"ret":-45.1,"days":408},"chop":{"ret":-66.7,"days":707}},"n_events":3464,"n_signals":2449,"n_filled":1341,"fill_rate":55,"n_rej_cash":1103,"n_rej_ncap":2,"cagr":-2.42,"mdd":-71.9,"mar":-0.03,"final_10k":77.3}},{"id":"H2-trailatr2","name":"三日兩缺口（移動ATR停損版，實際上線）","n5":{"years":[{"y":2016,"strat":-0.9,"end_val":99.1,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-0.9280812801671923,"reset_end":99.07191871983281},{"y":2017,"strat":-25.0,"end_val":74.3,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":-25.038760577898145,"reset_end":74.96123942210185},{"y":2018,"strat":-10.7,"end_val":66.3,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-10.71707723478661,"reset_end":89.28292276521339},{"y":2019,"strat":46.2,"end_val":96.9,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":46.16082939615795,"reset_end":146.16082939615796},{"y":2020,"strat":28.1,"end_val":124.2,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":41.334783129965416,"reset_end":141.33478312996542},{"y":2021,"strat":27.3,"end_val":158.1,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":27.837752096101333,"reset_end":127.83775209610133},{"y":2022,"strat":22.8,"end_val":194.2,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":25.738294843293197,"reset_end":125.7382948432932},{"y":2023,"strat":0.6,"end_val":195.3,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":0.5624373412622896,"reset_end":100.5624373412623},{"y":2024,"strat":-63.1,"end_val":72.1,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-62.17637719381279,"reset_end":37.82362280618721},{"y":2025,"strat":9.1,"end_val":78.7,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":15.254300941458254,"reset_end":115.25430094145825},{"y":2026,"strat":148.7,"end_val":195.7,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":124.51544285541169,"reset_end":224.5154428554117}],"regime":{"bull":{"ret":1628.9,"days":1450},"bear":{"ret":-27.2,"days":408},"chop":{"ret":-84.5,"days":707}},"n_events":2903,"n_signals":2365,"n_filled":1171,"fill_rate":50,"n_rej_cash":932,"n_rej_ncap":262,"cagr":6.58,"mdd":-80.5,"mar":0.08,"final_10k":195.7},"n10":{"years":[{"y":2016,"strat":-1.7,"end_val":98.3,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31,"reset_ret":-1.6664552313537473,"reset_end":98.33354476864625},{"y":2017,"strat":-25.1,"end_val":73.6,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35,"reset_ret":-25.13036759331967,"reset_end":74.86963240668032},{"y":2018,"strat":-10.7,"end_val":65.7,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41,"reset_ret":-10.71707723478661,"reset_end":89.28292276521339},{"y":2019,"strat":46.7,"end_val":96.4,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29,"reset_ret":46.715645704843546,"reset_end":146.71564570484355},{"y":2020,"strat":28.7,"end_val":124.1,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20,"reset_ret":41.965463798172806,"reset_end":141.9654637981728},{"y":2021,"strat":26.5,"end_val":157.1,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43,"reset_ret":27.107978853098192,"reset_end":127.10797885309819},{"y":2022,"strat":23.5,"end_val":193.9,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21,"reset_ret":26.37190649029142,"reset_end":126.37190649029142},{"y":2023,"strat":-2.1,"end_val":189.9,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31,"reset_ret":-2.0698002845114916,"reset_end":97.93019971548851},{"y":2024,"strat":-63.1,"end_val":70.1,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19,"reset_ret":-62.15652175873261,"reset_end":37.84347824126739},{"y":2025,"strat":8.9,"end_val":76.4,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13,"reset_ret":15.16539870139859,"reset_end":115.16539870139859},{"y":2026,"strat":159.4,"end_val":198.1,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17,"reset_ret":134.23571172838865,"reset_end":234.23571172838865}],"regime":{"bull":{"ret":1685.0,"days":1450},"bear":{"ret":-27.1,"days":408},"chop":{"ret":-84.8,"days":707}},"n_events":2903,"n_signals":2365,"n_filled":1339,"fill_rate":57,"n_rej_cash":900,"n_rej_ncap":126,"cagr":6.7,"mdd":-81.0,"mar":0.08,"final_10k":198.1},"live":true},{"id":"Y4","name":"上升軌道突破＋月營收年增加速（CANSLIM，實際上線）","n5":{"years":[{"y":2016,"strat":92.8,"end_val":192.8,"bench":22.1,"bench_end_val":116.6,"bull":56,"bear":14,"chop":31,"reset_ret":92.77775350530403,"reset_end":192.77775350530405},{"y":2017,"strat":24.3,"end_val":239.6,"bench":18.0,"bench_end_val":137.7,"bull":59,"bear":6,"chop":35,"reset_ret":24.276134579698507,"reset_end":124.2761345796985},{"y":2018,"strat":79.9,"end_val":431.1,"bench":-5.5,"bench_end_val":130.9,"bull":28,"bear":31,"chop":41,"reset_ret":79.92417908684104,"reset_end":179.92417908684104},{"y":2019,"strat":-19.9,"end_val":345.1,"bench":36.1,"bench_end_val":174.8,"bull":65,"bear":6,"chop":29,"reset_ret":-19.932925234516762,"reset_end":80.06707476548324},{"y":2020,"strat":-15.0,"end_val":293.5,"bench":30.2,"bench_end_val":229.2,"bull":62,"bear":18,"chop":20,"reset_ret":-13.734280745636395,"reset_end":86.2657192543636},{"y":2021,"strat":39.4,"end_val":409.0,"bench":19.9,"bench_end_val":279.5,"bull":48,"bear":9,"chop":43,"reset_ret":47.99964661432337,"reset_end":147.99964661432335},{"y":2022,"strat":-20.3,"end_val":326.0,"bench":-21.7,"bench_end_val":220.2,"bull":24,"bear":55,"chop":21,"reset_ret":-20.275653557587347,"reset_end":79.72434644241265},{"y":2023,"strat":9.5,"end_val":357.2,"bench":26.9,"bench_end_val":280.8,"bull":60,"bear":10,"chop":31,"reset_ret":9.547575040046796,"reset_end":109.5475750400468},{"y":2024,"strat":25.2,"end_val":447.0,"bench":49.3,"bench_end_val":417.4,"bull":74,"bear":6,"chop":19,"reset_ret":25.158183158173998,"reset_end":125.158183158174},{"y":2025,"strat":-45.6,"end_val":243.4,"bench":38.1,"bench_end_val":571.2,"bull":68,"bear":19,"chop":13,"reset_ret":-45.56008438093345,"reset_end":54.43991561906655},{"y":2026,"strat":48.1,"end_val":360.3,"bench":60.9,"bench_end_val":938.2,"bull":81,"bear":2,"chop":17,"reset_ret":28.47378474515523,"reset_end":128.47378474515523}],"regime":{"bull":{"ret":385.7,"days":1446},"bear":{"ret":-22.1,"days":408},"chop":{"ret":-1.6,"days":702}},"n_events":1182,"n_signals":844,"n_filled":392,"fill_rate":46,"n_rej_cash":452,"n_rej_ncap":0,"cagr":12.99,"mdd":-63.6,"mar":0.2,"final_10k":360.3},"n10":{"years":[{"y":2016,"strat":92.8,"end_val":192.8,"bench":22.1,"bench_end_val":116.6,"bull":56,"bear":14,"chop":31,"reset_ret":92.77775350530403,"reset_end":192.77775350530405},{"y":2017,"strat":24.3,"end_val":239.6,"bench":18.0,"bench_end_val":137.7,"bull":59,"bear":6,"chop":35,"reset_ret":24.276134579698507,"reset_end":124.2761345796985},{"y":2018,"strat":79.9,"end_val":431.1,"bench":-5.5,"bench_end_val":130.9,"bull":28,"bear":31,"chop":41,"reset_ret":79.92417908684104,"reset_end":179.92417908684104},{"y":2019,"strat":-19.9,"end_val":345.1,"bench":36.1,"bench_end_val":174.8,"bull":65,"bear":6,"chop":29,"reset_ret":-19.932925234516762,"reset_end":80.06707476548324},{"y":2020,"strat":-15.0,"end_val":293.5,"bench":30.2,"bench_end_val":229.2,"bull":62,"bear":18,"chop":20,"reset_ret":-13.734280745636395,"reset_end":86.2657192543636},{"y":2021,"strat":39.4,"end_val":409.0,"bench":19.9,"bench_end_val":279.5,"bull":48,"bear":9,"chop":43,"reset_ret":47.99964661432337,"reset_end":147.99964661432335},{"y":2022,"strat":-20.3,"end_val":326.0,"bench":-21.7,"bench_end_val":220.2,"bull":24,"bear":55,"chop":21,"reset_ret":-20.275653557587347,"reset_end":79.72434644241265},{"y":2023,"strat":9.5,"end_val":357.2,"bench":26.9,"bench_end_val":280.8,"bull":60,"bear":10,"chop":31,"reset_ret":9.547575040046796,"reset_end":109.5475750400468},{"y":2024,"strat":25.2,"end_val":447.0,"bench":49.3,"bench_end_val":417.4,"bull":74,"bear":6,"chop":19,"reset_ret":25.158183158173998,"reset_end":125.158183158174},{"y":2025,"strat":-45.6,"end_val":243.4,"bench":38.1,"bench_end_val":571.2,"bull":68,"bear":19,"chop":13,"reset_ret":-45.56008438093345,"reset_end":54.43991561906655},{"y":2026,"strat":48.1,"end_val":360.3,"bench":60.9,"bench_end_val":938.2,"bull":81,"bear":2,"chop":17,"reset_ret":28.47378474515523,"reset_end":128.47378474515523}],"regime":{"bull":{"ret":385.7,"days":1446},"bear":{"ret":-22.1,"days":408},"chop":{"ret":-1.6,"days":702}},"n_events":1182,"n_signals":844,"n_filled":392,"fill_rate":46,"n_rej_cash":452,"n_rej_ncap":0,"cagr":12.99,"mdd":-63.6,"mar":0.2,"final_10k":360.3},"live":true}]</script>
+<script>
+(function(){
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+
+  function pct(v, d){ if(v===null||v===undefined) return "—"; d = d===undefined?1:d; var s = Math.abs(v).toFixed(d)+"%"; return (v>0?"+":v<0?"-":"") + s; }
+  function signClass(v){ return v>0?"pos":(v<0?"neg":"muted"); }
+  function td(v,d){ return '<td class="num '+signClass(v)+'">'+pct(v,d)+"</td>"; }
+
+  function money(v){ if(v===null||v===undefined) return "—"; return v.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1}); }
+  function yearTable(years){
+    var rows = years.map(function(r){
+      return "<tr><td>"+r.y+"</td>"+td(r.strat)+
+        '<td class="num">'+money(r.end_val)+"</td>"+
+        td(r.reset_ret)+
+        '<td class="num">'+money(r.reset_end)+"</td>"+
+        td(r.bench)+
+        '<td class="num muted">'+money(r.bench_end_val)+"</td>"+
+        '<td class="num muted">'+r.bull+"%</td>"+
+        '<td class="num muted">'+r.bear+"%</td>"+
+        '<td class="num muted">'+r.chop+"%</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead>'+
+      '<tr class="grp"><th></th><th colspan="2">連續複利</th><th colspan="2">每年歸零重置</th><th colspan="2">0050</th><th colspan="3"></th></tr>'+
+      "<tr><th>年</th><th>策略</th><th>年末值(萬)</th><th>策略</th><th>年末值(萬)</th><th>當年</th><th>年末值(萬)</th><th>多頭天數</th><th>空頭天數</th><th>盤整天數</th></tr>"+
+      "</thead><tbody>"+rows+"</tbody></table></div>";
+  }
+  function regimeTable(regime){
+    var order=[["多頭","bull"],["空頭","bear"],["盤整","chop"]];
+    var rows = order.map(function(p){
+      var r = regime[p[1]];
+      return "<tr><td>"+p[0]+"</td>"+td(r.ret)+'<td class="num muted">'+r.days.toLocaleString()+"</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead><tr><th>市況</th><th>累積報酬</th><th>交易日數</th></tr></thead><tbody>'+rows+"</tbody></table></div>";
+  }
+
+  var EXTRA = JSON.parse(document.getElementById("extra-data").textContent);
+
+  var EXIT_RULES = [
+    ["W4","固定ATR停損+到期","進場當根最低價 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["H2","固定ATR停損+到期","第二個缺口當根最低價 − 0.5×ATR14（不移動）","A線 10 個交易日"],
+    ["W5","固定ATR停損+到期","進場當根最低價 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["V4","固定ATR停損+到期","今日最低 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["G3","結構性出場+到期","進場價 − 2×ATR14（初始）","跌破前 20 日低點，或撐滿 120 個交易日"],
+    ["W6","固定ATR停損+到期","進場當根最低價 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["P1","基本面轉壞出場+到期","進場當根最低價 − 2×ATR14（初始，只當保險）","月營收年增率跌破 5%，或撐滿 120 個交易日"],
+    ["P3","基本面轉壞出場+到期","進場當根最低價 − 2×ATR14（初始，只當保險）","PE 百分位重新爬回 65 以上，或撐滿 120 個交易日"],
+    ["W3","固定ATR停損+到期","同 H2：第二個缺口當根最低價 − 0.5×ATR14（不移動）","A線 10 個交易日"],
+    ["J1","固定ATR停損+到期","今日最低 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["D7","固定ATR停損+到期","凹洞量當日最低 − 0.5×ATR14（不移動）","B線 60 個交易日"],
+    ["Y4-plow20","結構性出場+到期","同 Y4：突破K棒最低價 − 0.5×ATR14（初始）","跌破前 20 日低點，或撐滿 60 個交易日"],
+    ["B2","固定ATR停損+到期","進場價 − 2×ATR14（不移動；籌碼跟隨無結構性價位可用）","B線 60 個交易日"],
+    ["Y1","移動停損","突破K棒最低價 − 0.5×ATR14（初始）；2×ATR 移動停損，獲利1R後移到成本價保本","撐滿 60 個交易日"]
+  ];
+  document.getElementById("exit-tbl").innerHTML = EXIT_RULES.map(function(r){
+    return "<tr><td><b class=\"rule-code\" style=\"padding:2px 6px\">"+r[0]+"</b></td><td>"+r[1]+"</td><td>"+r[2]+"</td><td>"+r[3]+"</td></tr>";
+  }).join("");
+
+  // TOC
+  document.getElementById("toc").innerHTML =
+    ['<a href="#spec">規格</a>','<a href="#exit">出場邏輯</a>','<a href="#limits">限制</a>',
+     '<a href="#overview">年化對照</a>','<a href="#fillrate">訊號流向</a>',
+     '<a href="#rules">逐規則</a>','<a href="#lsval">長波段/價值線</a>'].join("");
+
+  // overview CAGR chart（含長波段/價值線，標註不同本金）
+  (function(){
+    var lo=-5, hi=40, span=hi-lo;
+    var chart = document.getElementById("chart-cagr");
+    var all = DATA.map(function(r){ return {id:r.id, name:r.name, n5:r.n5.cagr, n10:r.n10.cagr, cap:"100萬"}; })
+      .concat([
+        {id:"長波段", name:"CANSLIM候選池", n5:EXTRA.longswing.n5.cagr, n10:EXTRA.longswing.n10.cagr, cap:"200萬"},
+        {id:"價值線", name:"screen_value", n5:EXTRA.value.n5.cagr, n10:EXTRA.value.n10.cagr, cap:"200萬"}
+      ]);
+    var sorted = all.sort(function(a,b){ return b.n5 - a.n5; });
+    chart.innerHTML = sorted.map(function(r){
+      var w5 = Math.max(0, Math.min(100, (r.n5-lo)/span*100));
+      var w10 = Math.max(0, Math.min(100, (r.n10-lo)/span*100));
+      return '<div class="bar-row">'+
+        '<div class="lbl"><b>'+r.id+"</b>"+r.name+"</div>"+
+        '<div class="track">'+
+          '<div class="seg n5" style="width:'+w5.toFixed(1)+'%"></div>'+
+          '<div class="seg n10" style="width:'+w10.toFixed(1)+'%"></div>'+
+        "</div>"+
+        '<div class="figs">N5 '+pct(r.n5)+' / N10 '+pct(r.n10)+' <span class="muted">('+r.cap+')</span></div>'+
+      "</div>";
+    }).join("");
+  })();
+
+  // fill composition chart (N=10)
+  (function(){
+    var chart = document.getElementById("chart-fill");
+    chart.innerHTML = DATA.map(function(r){
+      var d = r.n10;
+      var total = d.n_filled + d.n_rej_cash + d.n_rej_ncap;
+      var wA = total? d.n_filled/total*100 : 0;
+      var wC = total? d.n_rej_cash/total*100 : 0;
+      var wN = total? d.n_rej_ncap/total*100 : 0;
+      return '<div class="fill-row">'+
+        '<div class="lbl"><b>'+r.id+"</b></div>"+
+        '<div class="fill-track">'+
+          '<div class="accepted" style="width:'+wA.toFixed(1)+'%"></div>'+
+          '<div class="rej-cash" style="width:'+wC.toFixed(1)+'%"></div>'+
+          '<div class="rej-ncap" style="width:'+wN.toFixed(1)+'%"></div>'+
+        "</div>"+
+        '<div class="figs num muted">'+d.fill_rate+"%</div>"+
+      "</div>";
+    }).join("");
+  })();
+
+  // rule accordions
+  var list = document.getElementById("rules-list");
+  DATA.forEach(function(r, i){
+    var d = document.createElement("details");
+    d.className = "rule";
+    if (i===0) d.open = true;
+    var uid = "r"+i;
+    d.innerHTML =
+      "<summary>"+
+        '<span class="rule-code">'+r.id+"</span>"+
+        '<span class="rule-name">'+r.name+(r.live?' <span class="cap-badge" style="background:var(--chip-bg);border-radius:999px;padding:1px 7px;font-size:10.5px;color:var(--accent-ink);margin-left:4px">實際上線</span>':'')+"</span>"+
+        '<span class="rule-cagrs '+signClass(r.n5.cagr)+'">N5 '+pct(r.n5.cagr)+"</span>"+
+        '<span class="chev">&#9656;</span>'+
+      "</summary>"+
+      '<div class="rule-body">'+
+        '<div class="toggle" data-uid="'+uid+'">'+
+          '<button class="active" data-n="5">N=5</button>'+
+          '<button data-n="10">N=10</button>'+
+        "</div>"+
+        '<div class="rule-content" id="content-'+uid+'"></div>'+
+      "</div>";
+    list.appendChild(d);
+
+    function render(n){
+      var v = n===5? r.n5 : r.n10;
+      var html =
+        '<div class="metric-row">'+
+          '<div class="metric">實際成交 <b>'+v.n_filled.toLocaleString()+' 筆（'+v.fill_rate+'%）</b></div>'+
+          '<div class="metric">因缺錢放棄 <b>'+v.n_rej_cash.toLocaleString()+'</b></div>'+
+          '<div class="metric">因排名放棄 <b>'+v.n_rej_ncap.toLocaleString()+'</b></div>'+
+          '<div class="metric">全期年化 <b class="'+signClass(v.cagr)+'">'+pct(v.cagr,2)+'</b></div>'+
+          '<div class="metric">最大回撤 <b class="neg">'+v.mdd.toFixed(1)+'%</b></div>'+
+          '<div class="metric">MAR <b>'+v.mar.toFixed(2)+'</b></div>'+
+          '<div class="metric">終值 <b>'+v.final_10k.toFixed(1)+' 萬</b></div>'+
+        "</div>"+
+        '<div class="subhead">按年切</div>'+yearTable(v.years)+
+        '<div class="subhead">按市況切（不分年，全期）</div>'+regimeTable(v.regime);
+      document.getElementById("content-"+uid).innerHTML = html;
+    }
+    render(5);
+    d.querySelectorAll(".toggle button").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        d.querySelectorAll(".toggle button").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        render(parseInt(btn.dataset.n, 10));
+      });
+    });
+  });
+
+  // 長波段 / 價值線 accordions（各自 200 萬，沒有 n_filled/n_rej 統計結構跟14條不同）
+  var lsvalList = document.getElementById("lsval-list");
+  var LSVAL = [
+    {id:"長波段", name:"CANSLIM候選池 · 事件驅動", n5:EXTRA.longswing.n5, n10:EXTRA.longswing.n10},
+    {id:"價值線", name:"screen_value · 季度整批換股", n5:EXTRA.value.n5, n10:EXTRA.value.n10}
+  ];
+  LSVAL.forEach(function(r, i){
+    var d = document.createElement("details");
+    d.className = "rule";
+    if (i===0) d.open = true;
+    var uid = "lv"+i;
+    d.innerHTML =
+      "<summary>"+
+        '<span class="rule-code">'+r.id+"</span>"+
+        '<span class="rule-name">'+r.name+' · 200萬</span>'+
+        '<span class="rule-cagrs '+signClass(r.n5.cagr)+'">N5 '+pct(r.n5.cagr)+"</span>"+
+        '<span class="chev">&#9656;</span>'+
+      "</summary>"+
+      '<div class="rule-body">'+
+        '<div class="toggle" data-uid="'+uid+'">'+
+          '<button class="active" data-n="5">N=5</button>'+
+          '<button data-n="10">N=10</button>'+
+        "</div>"+
+        '<div class="rule-content" id="content-'+uid+'"></div>'+
+      "</div>";
+    lsvalList.appendChild(d);
+
+    function render(n){
+      var v = n===5? r.n5 : r.n10;
+      var html =
+        '<div class="metric-row">'+
+          '<div class="metric">全期年化 <b class="'+signClass(v.cagr)+'">'+pct(v.cagr,2)+'</b></div>'+
+          '<div class="metric">最大回撤 <b class="neg">'+v.mdd.toFixed(1)+'%</b></div>'+
+          '<div class="metric">MAR <b>'+v.mar.toFixed(2)+'</b></div>'+
+          '<div class="metric">終值 <b>'+v.final.toFixed(1)+' 萬</b></div>'+
+        "</div>"+
+        '<div class="subhead">按年切</div>'+yearTable(v.years)+
+        '<div class="subhead">按市況切（不分年，全期）</div>'+regimeTable(v.regime);
+      document.getElementById("content-"+uid).innerHTML = html;
+    }
+    render(5);
+    d.querySelectorAll(".toggle button").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        d.querySelectorAll(".toggle button").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        render(parseInt(btn.dataset.n, 10));
+      });
+    });
+  });
+})();
+</script>

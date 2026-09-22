@@ -1,0 +1,254 @@
+<title>翻案候選</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#f1eeee;
+  --surface:#ffffff;
+  --surface-2:#f5f1f1;
+  --ink:#201a1b;
+  --muted:#665a5b;
+  --accent:#7a3b46;
+  --accent-ink:#5f2d36;
+  --rule:#ddd4d4;
+  --pos:#1f7a52;
+  --neg:#a4322a;
+  --chip-bg:#ece2e2;
+  --shadow:0 1px 2px rgba(32,26,27,.06),0 8px 24px -16px rgba(32,26,27,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171213;--surface:#1f1819;--surface-2:#241c1d;--ink:#ece4e4;--muted:#a3908f;
+    --accent:#d98da0;--accent-ink:#e9a8b8;--rule:#382b2c;--pos:#57b98a;--neg:#e07b70;
+    --chip-bg:#2a2021;--shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171213;--surface:#1f1819;--surface-2:#241c1d;--ink:#ece4e4;--muted:#a3908f;
+  --accent:#d98da0;--accent-ink:#e9a8b8;--rule:#382b2c;--pos:#57b98a;--neg:#e07b70;
+  --chip-bg:#2a2021;--shadow:0 1px 2px rgba(0,0,0,.3),0 12px 28px -18px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","Noto Sans",system-ui,sans-serif;padding:0 16px;padding-block:28px 64px;}
+.page{max-width:960px;margin:0 auto;}
+h1,h2,h3{font-family:"Noto Serif TC","Noto Serif",serif;font-weight:700;text-wrap:balance;margin:0;}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.pos{color:var(--pos);} .neg{color:var(--neg);} .muted{color:var(--muted);}
+.hero{background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:28px 28px 24px;box-shadow:var(--shadow);margin-bottom:20px;}
+.hero .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;margin-bottom:8px;}
+.hero h1{font-size:clamp(26px,4vw,34px);}
+.hero p.lead{color:var(--muted);margin-top:10px;max-width:64ch;line-height:1.6;}
+.stat-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+.stat{background:var(--surface-2);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;min-width:120px;flex:1 1 140px;}
+.stat .k{font-size:11px;color:var(--muted);letter-spacing:.04em;} .stat .v{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:15px;margin-top:2px;}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;}
+.toc a{font-size:13px;padding:6px 12px;border-radius:999px;background:var(--chip-bg);border:1px solid var(--rule);color:var(--ink);text-decoration:none;white-space:nowrap;}
+.toc a:hover{border-color:var(--accent);color:var(--accent-ink);}
+section{margin-bottom:34px;}
+.section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;}
+.section-head .no{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);font-weight:600;font-size:14px;}
+.section-head h2{font-size:21px;}
+.section-note{color:var(--muted);font-size:13.5px;line-height:1.65;margin:6px 0 14px;max-width:72ch;}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);}
+.tbl-wrap{overflow-x:auto;}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:520px;}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap;}
+th:first-child,td:first-child{text-align:left;}
+thead th{font-weight:700;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid var(--ink);}
+tbody tr:last-child td{border-bottom:none;}
+.subhead{font-size:12px;color:var(--muted);margin:16px 0 6px;font-weight:700;letter-spacing:.02em;}
+.bar-row{display:grid;grid-template-columns:110px 1fr 150px;align-items:center;gap:10px;padding:5px 0;}
+.bar-row .lbl{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-row .lbl b{font-family:"IBM Plex Mono",monospace;color:var(--accent-ink);margin-right:5px;}
+.track{position:relative;height:20px;background:var(--surface-2);border-radius:4px;}
+.track .seg{position:absolute;top:0;bottom:0;border-radius:4px;}
+.track .n5{background:var(--accent);opacity:.9;height:8px;top:1px;}
+.track .n10{background:var(--accent-ink);opacity:.55;height:8px;bottom:1px;top:auto;}
+.bar-row .figs{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);text-align:right;}
+.chart-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;}
+.chart-legend .sw{display:inline-block;width:11px;height:8px;border-radius:2px;margin-right:5px;vertical-align:1px;}
+details.rule{background:var(--surface);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;}
+details.rule summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;align-items:center;gap:12px;}
+details.rule summary::-webkit-details-marker{display:none;}
+details.rule summary .chev{margin-left:auto;color:var(--muted);transition:transform .15s ease;flex:0 0 auto;}
+details.rule[open] summary .chev{transform:rotate(90deg);}
+.rule-code{font-family:"IBM Plex Mono",monospace;font-weight:600;color:var(--accent-ink);background:var(--chip-bg);border-radius:6px;padding:3px 8px;font-size:12.5px;flex:0 0 auto;}
+.rule-name{font-weight:500;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rule-cagrs{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:13px;flex:0 0 auto;white-space:nowrap;}
+.rule-body{padding:0 18px 18px;border-top:1px solid var(--rule);}
+.rule-reason{color:var(--muted);font-size:13px;line-height:1.6;margin:12px 0 14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;border-left:3px solid var(--accent);}
+.toggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--rule);border-radius:999px;padding:3px;margin:0 0 12px;}
+.toggle button{border:none;background:transparent;padding:6px 16px;border-radius:999px;font-size:13px;font-family:"IBM Plex Mono",monospace;font-weight:600;cursor:pointer;color:var(--muted);}
+.toggle button.active{background:var(--accent);color:#fff;}
+.metric-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.metric{background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--muted);}
+.metric b{font-family:"IBM Plex Mono",monospace;color:var(--ink);font-weight:600;}
+.callout{border:1px solid var(--rule);border-left:3px solid var(--accent);background:var(--surface-2);border-radius:0 10px 10px 0;padding:14px 18px;font-size:13.5px;line-height:1.7;color:var(--ink);}
+ul.limits{margin:0;padding-left:1.2em;color:var(--ink);font-size:13.5px;line-height:1.75;}
+ul.limits li{margin-bottom:8px;} ul.limits li::marker{color:var(--accent-ink);}
+footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);color:var(--muted);font-size:12px;line-height:1.7;}
+@media (max-width:560px){.bar-row{grid-template-columns:78px 1fr 108px;} table{font-size:12px;}}
+</style>
+
+<div class="page">
+  <header class="hero">
+    <div class="eyebrow">tw-swing × tw-hold · 情境 B 延伸 · 2026-09-22</div>
+    <h1>翻案候選</h1>
+    <p class="lead">6 條當初在 tw-swing 組合層（部位上限8、依風險%配置）被排擠效應否決的規則——診斷跟 H2 是同一種死法（訊號齊發/稀疏日過度集中 → 拖累而非放大獲利）。改用真實資金約束模型（各自獨立100萬、市值排序取前N）重測，看有沒有翻案。</p>
+    <div class="stat-row">
+      <div class="stat"><div class="k">篩選來源</div><div class="v">RULE_LEDGER.md 逐條核對</div></div>
+      <div class="stat"><div class="k">本金</div><div class="v">各自獨立 100 萬</div></div>
+      <div class="stat"><div class="k">回測期間</div><div class="v">2016-01 → 2026-08</div></div>
+      <div class="stat"><div class="k">結論</div><div class="v">6/6 轉正，僅2條體質健康</div></div>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc"></nav>
+
+  <main>
+    <section id="verdict">
+      <div class="section-head"><span class="no">00</span><h2>翻案結果總覽</h2></div>
+      <p class="section-note">深色條＝N=5、淺色條＝N=10年化，共用同一把尺。6條全部由負轉正或維持正值，但只有 H1、T7 的 MAR 明顯健康（>0.19），其餘4條回撤深達76%~83%、MAR普遍低於0.1——方向對了，體質仍虛弱。</p>
+      <div class="card">
+        <div class="chart-legend">
+          <span><span class="sw" style="background:var(--accent);opacity:.9"></span>N=5 年化</span>
+          <span><span class="sw" style="background:var(--accent-ink);opacity:.55"></span>N=10 年化</span>
+        </div>
+        <div id="chart-cagr"></div>
+      </div>
+    </section>
+
+    <section id="reasons">
+      <div class="section-head"><span class="no">01</span><h2>原始否決理由（來源：RULE_LEDGER.md）</h2></div>
+      <div class="card">
+        <div class="tbl-wrap"><table><thead><tr><th>規則</th><th>名稱</th><th>否決理由摘要</th></tr></thead><tbody id="reason-tbl"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head"><span class="no">02</span><h2>已知限制</h2></div>
+      <div class="card">
+        <ul class="limits">
+          <li>這 6 條沒有原始 tw-swing「全市場/全歷史/次日開盤/部位上限8」的可比年化數字——當初否決用的是規則層每筆超額報酬跟樣本外訓練/驗證段，不是像原始14條那樣有現成的組合模擬年化可對照，這裡只呈現資金約束模型下的結果，不做「原始 vs 資金約束」直接對照。</li>
+          <li>E5 是混合案例（機制跟A3重疊 + 組合層排擠A3機會）——資金約束模型只能處理「排擠」那一半，E5 這裡轉正不代表「跟A3重疊」的問題也解決了。</li>
+          <li>生存者偏差、市值排序是設計選擇、跨repo口徑不可比等限制跟原始14條報告相同。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="rules">
+      <div class="section-head"><span class="no">03</span><h2>逐規則：年切 + 市況切</h2></div>
+      <p class="section-note">點開規則看完整表格，可切換 N=5 / N=10。</p>
+      <div id="rules-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    產出：2026-09-22 · 報告原檔 <span class="num">tw-hold/docs/reports/backtest_scenario_b_rescued_2026-09-22.md</span> · 篩選依據 <span class="num">tw-swing/docs/RULE_LEDGER.md</span> · 模擬腳本 <span class="num">tw-hold/research/backtest_scenario_b_rescued.py</span> · 這份報告刻意跟上午測的原始14條規則（<a href="https://claude.ai/artifact/EL95RW5wHHmmrZTwEXCZr5">資金天花板</a>）分開，不合併。
+  </footer>
+</div>
+
+<script id="data" type="application/json">[{"id":"H1","name":"多頭排列中的向上跳空續攻","reason":"規則層全過，組合層跟H2一起進default後回撤-9.1%→-32.0%，單日峰值13.79%全庫最高","n5":{"years":[{"y":2016,"strat":-26.3,"end_val":73.7,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":16.4,"end_val":85.8,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-15.8,"end_val":72.3,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":3.5,"end_val":74.8,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":-9.6,"end_val":67.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":25.8,"end_val":85.1,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":4.0,"end_val":88.5,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":49.9,"end_val":132.6,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":4.2,"end_val":138.2,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":56.9,"end_val":216.8,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":66.3,"end_val":360.6,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":2070.1,"days":1450},"bear":{"ret":-40.1,"days":408},"chop":{"ret":-72.2,"days":707}},"n_events":7280,"n_signals":5668,"n_filled":3188,"fill_rate":56,"n_rej_cash":1662,"n_rej_ncap":817,"cagr":12.95,"mdd":-53.9,"mar":0.24,"final_10k":360.6},"n10":{"years":[{"y":2016,"strat":-24.1,"end_val":75.9,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":17.0,"end_val":88.8,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-16.2,"end_val":74.4,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":5.3,"end_val":78.3,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":-9.9,"end_val":70.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":22.6,"end_val":86.5,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":2.4,"end_val":88.6,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":48.3,"end_val":131.4,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":10.0,"end_val":144.6,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":56.5,"end_val":226.3,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":56.1,"end_val":353.2,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":2050.0,"days":1450},"bear":{"ret":-42.6,"days":408},"chop":{"ret":-71.3,"days":707}},"n_events":7280,"n_signals":5668,"n_filled":3999,"fill_rate":71,"n_rej_cash":1452,"n_rej_ncap":216,"cagr":12.73,"mdd":-51.0,"mar":0.25,"final_10k":353.2}},{"id":"V6","name":"缺口之上見長紅K強勢整理","reason":"規則層過，只卡MAR 0.47，文件原話：MAR失敗純粹是回撤驅動","n5":{"years":[{"y":2016,"strat":-30.1,"end_val":69.9,"bench":22.1,"bench_end_val":119.5,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":-20.6,"end_val":55.4,"bench":18.0,"bench_end_val":141.1,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-25.5,"end_val":41.3,"bench":-5.5,"bench_end_val":134.1,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":17.1,"end_val":48.4,"bench":36.1,"bench_end_val":179.1,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":69.1,"end_val":81.8,"bench":30.2,"bench_end_val":234.9,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":72.3,"end_val":141.0,"bench":19.9,"bench_end_val":286.4,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-8.3,"end_val":129.3,"bench":-21.7,"bench_end_val":225.6,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":-40.9,"end_val":76.4,"bench":26.9,"bench_end_val":287.7,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":0.1,"end_val":76.5,"bench":49.3,"bench_end_val":427.6,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":-3.1,"end_val":74.2,"bench":38.1,"bench_end_val":585.3,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":80.8,"end_val":134.1,"bench":60.9,"bench_end_val":961.3,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":2600.0,"days":1450},"bear":{"ret":-48.4,"days":408},"chop":{"ret":-90.7,"days":705}},"n_events":2462,"n_signals":2174,"n_filled":772,"fill_rate":36,"n_rej_cash":1288,"n_rej_ncap":113,"cagr":2.83,"mdd":-82.5,"mar":0.03,"final_10k":134.1},"n10":{"years":[{"y":2016,"strat":-30.1,"end_val":69.9,"bench":22.1,"bench_end_val":119.5,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":-20.6,"end_val":55.4,"bench":18.0,"bench_end_val":141.1,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-23.4,"end_val":42.5,"bench":-5.5,"bench_end_val":134.1,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":17.1,"end_val":49.8,"bench":36.1,"bench_end_val":179.1,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":69.1,"end_val":84.1,"bench":30.2,"bench_end_val":234.9,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":79.0,"end_val":150.6,"bench":19.9,"bench_end_val":286.4,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-7.2,"end_val":139.7,"bench":-21.7,"bench_end_val":225.6,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":-42.1,"end_val":80.8,"bench":26.9,"bench_end_val":287.7,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":7.4,"end_val":86.8,"bench":49.3,"bench_end_val":427.6,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":-3.5,"end_val":83.8,"bench":38.1,"bench_end_val":585.3,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":85.4,"end_val":155.4,"bench":60.9,"bench_end_val":961.3,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":2935.2,"days":1450},"bear":{"ret":-48.0,"days":408},"chop":{"ret":-90.5,"days":705}},"n_events":2462,"n_signals":2174,"n_filled":864,"fill_rate":40,"n_rej_cash":1274,"n_rej_ncap":35,"cagr":4.27,"mdd":-80.7,"mar":0.05,"final_10k":155.4}},{"id":"Y8","name":"跳空記憶＋均線通道突破","reason":"樣本18787筆、樣本外一致性最好，只卡回撤-30%，非進場邏輯問題","n5":{"years":[{"y":2016,"strat":36.7,"end_val":136.7,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":-26.4,"end_val":100.6,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-28.0,"end_val":72.4,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":9.2,"end_val":79.1,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":-0.7,"end_val":78.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-49.1,"end_val":40.0,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-28.8,"end_val":28.5,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":63.4,"end_val":46.5,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":25.0,"end_val":58.1,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":24.9,"end_val":72.6,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":68.6,"end_val":122.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":2046.2,"days":1450},"bear":{"ret":-47.3,"days":408},"chop":{"ret":-89.0,"days":707}},"n_events":40569,"n_signals":10113,"n_filled":4997,"fill_rate":49,"n_rej_cash":1835,"n_rej_ncap":3272,"cagr":1.94,"mdd":-82.3,"mar":0.02,"final_10k":122.5},"n10":{"years":[{"y":2016,"strat":45.0,"end_val":145.0,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":-28.2,"end_val":104.1,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-12.9,"end_val":90.6,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":3.5,"end_val":93.8,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":0.8,"end_val":94.5,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-38.1,"end_val":58.6,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-31.8,"end_val":39.9,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":54.8,"end_val":61.8,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":33.5,"end_val":82.5,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":13.8,"end_val":93.9,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":78.9,"end_val":167.9,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":1770.6,"days":1450},"bear":{"ret":-45.2,"days":408},"chop":{"ret":-83.4,"days":707}},"n_events":40569,"n_signals":10113,"n_filled":7388,"fill_rate":73,"n_rej_cash":1072,"n_rej_ncap":1644,"cagr":5.04,"mdd":-76.3,"mar":0.07,"final_10k":167.9}},{"id":"T7","name":"一星二陽（續勢）","reason":"規則層過、樣本外撐住，只卡MAR 0.35","n5":{"years":[{"y":2016,"strat":61.6,"end_val":161.6,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":63.1,"end_val":263.6,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-43.0,"end_val":150.2,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-29.9,"end_val":105.3,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":2.2,"end_val":107.6,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":21.2,"end_val":130.4,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-15.4,"end_val":110.4,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":61.6,"end_val":178.4,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":12.3,"end_val":200.3,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":15.4,"end_val":231.1,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":75.1,"end_val":404.6,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":3885.1,"days":1450},"bear":{"ret":-53.3,"days":408},"chop":{"ret":-78.0,"days":704}},"n_events":2274,"n_signals":1964,"n_filled":854,"fill_rate":43,"n_rej_cash":1018,"n_rej_ncap":83,"cagr":14.21,"mdd":-74.4,"mar":0.19,"final_10k":404.6},"n10":{"years":[{"y":2016,"strat":61.6,"end_val":161.6,"bench":22.1,"bench_end_val":119.6,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":63.1,"end_val":263.6,"bench":18.0,"bench_end_val":141.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-43.0,"end_val":150.2,"bench":-5.5,"bench_end_val":134.3,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-24.5,"end_val":113.4,"bench":36.1,"bench_end_val":179.3,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":2.2,"end_val":115.9,"bench":30.2,"bench_end_val":235.1,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":25.4,"end_val":145.3,"bench":19.9,"bench_end_val":286.6,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-15.4,"end_val":123.0,"bench":-21.7,"bench_end_val":225.8,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":68.8,"end_val":207.6,"bench":26.9,"bench_end_val":287.9,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":16.5,"end_val":241.7,"bench":49.3,"bench_end_val":428.0,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":19.4,"end_val":288.7,"bench":38.1,"bench_end_val":585.7,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":83.5,"end_val":529.7,"bench":60.9,"bench_end_val":962.1,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":4385.9,"days":1450},"bear":{"ret":-53.4,"days":408},"chop":{"ret":-74.4,"days":704}},"n_events":2274,"n_signals":1964,"n_filled":937,"fill_rate":48,"n_rej_cash":1005,"n_rej_ncap":13,"cagr":17.17,"mdd":-72.4,"mar":0.24,"final_10k":529.7}},{"id":"E5","name":"帶量長紅突破前高（不限漲速）","reason":"規則層全過、樣本外正；死因混合(跟A3重疊+組合層排擠)，信心打折","n5":{"years":[{"y":2016,"strat":39.2,"end_val":139.2,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":104.5,"end_val":284.7,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-14.3,"end_val":243.9,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-13.5,"end_val":211.0,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":-18.9,"end_val":171.2,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-13.4,"end_val":148.2,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-7.5,"end_val":137.1,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":16.0,"end_val":159.1,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":-36.8,"end_val":100.6,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":30.1,"end_val":130.8,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":2.0,"end_val":133.5,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":882.9,"days":1450},"bear":{"ret":-54.6,"days":408},"chop":{"ret":-70.2,"days":707}},"n_events":7035,"n_signals":5264,"n_filled":2660,"fill_rate":51,"n_rej_cash":2278,"n_rej_ncap":323,"cagr":2.78,"mdd":-76.9,"mar":0.04,"final_10k":133.5},"n10":{"years":[{"y":2016,"strat":39.2,"end_val":139.2,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":112.1,"end_val":295.3,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":-7.7,"end_val":272.4,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-13.9,"end_val":234.6,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":-20.2,"end_val":187.1,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-14.1,"end_val":160.8,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-3.1,"end_val":155.8,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":14.1,"end_val":177.7,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":-34.0,"end_val":117.3,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":31.9,"end_val":154.7,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":11.1,"end_val":171.9,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":921.8,"days":1450},"bear":{"ret":-53.3,"days":408},"chop":{"ret":-64.1,"days":707}},"n_events":7035,"n_signals":5264,"n_filled":3101,"fill_rate":59,"n_rej_cash":2142,"n_rej_ncap":18,"cagr":5.28,"mdd":-76.7,"mar":0.07,"final_10k":171.9}},{"id":"V2","name":"MA通道乖離上緣帶量突破","reason":"規則層過，MAR 0.61差一點卡門檻","n5":{"years":[{"y":2016,"strat":-10.1,"end_val":89.9,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":41.2,"end_val":126.9,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":7.5,"end_val":136.4,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-27.9,"end_val":98.4,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":10.4,"end_val":108.6,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-26.0,"end_val":80.3,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-18.0,"end_val":65.8,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":21.5,"end_val":80.0,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":15.7,"end_val":92.6,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":32.0,"end_val":122.2,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":32.7,"end_val":162.2,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":712.4,"days":1450},"bear":{"ret":-56.5,"days":408},"chop":{"ret":-53.8,"days":707}},"n_events":7737,"n_signals":6384,"n_filled":3063,"fill_rate":48,"n_rej_cash":2455,"n_rej_ncap":857,"cagr":4.7,"mdd":-64.3,"mar":0.07,"final_10k":162.2},"n10":{"years":[{"y":2016,"strat":-9.2,"end_val":90.8,"bench":22.1,"bench_end_val":121.2,"bull":56,"bear":14,"chop":31},{"y":2017,"strat":50.5,"end_val":136.6,"bench":18.0,"bench_end_val":143.2,"bull":59,"bear":6,"chop":35},{"y":2018,"strat":12.5,"end_val":153.7,"bench":-5.5,"bench_end_val":136.2,"bull":28,"bear":31,"chop":41},{"y":2019,"strat":-27.0,"end_val":112.1,"bench":36.1,"bench_end_val":181.8,"bull":65,"bear":6,"chop":29},{"y":2020,"strat":9.6,"end_val":122.9,"bench":30.2,"bench_end_val":238.4,"bull":62,"bear":18,"chop":20},{"y":2021,"strat":-20.4,"end_val":97.8,"bench":19.9,"bench_end_val":290.7,"bull":48,"bear":9,"chop":43},{"y":2022,"strat":-18.7,"end_val":79.6,"bench":-21.7,"bench_end_val":229.0,"bull":24,"bear":55,"chop":21},{"y":2023,"strat":32.7,"end_val":105.6,"bench":26.9,"bench_end_val":292.0,"bull":60,"bear":10,"chop":31},{"y":2024,"strat":20.0,"end_val":126.7,"bench":49.3,"bench_end_val":434.1,"bull":74,"bear":6,"chop":19},{"y":2025,"strat":28.8,"end_val":163.2,"bench":38.1,"bench_end_val":594.1,"bull":68,"bear":19,"chop":13},{"y":2026,"strat":63.7,"end_val":267.1,"bench":60.9,"bench_end_val":975.7,"bull":81,"bear":2,"chop":17}],"regime":{"bull":{"ret":1102.1,"days":1450},"bear":{"ret":-57.0,"days":408},"chop":{"ret":-48.0,"days":707}},"n_events":7737,"n_signals":6384,"n_filled":3881,"fill_rate":61,"n_rej_cash":2315,"n_rej_ncap":179,"cagr":9.77,"mdd":-61.7,"mar":0.16,"final_10k":267.1}}]</script>
+<script>
+(function(){
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+
+  function pct(v,d){ d=d===undefined?1:d; var s=Math.abs(v).toFixed(d)+"%"; return (v>0?"+":v<0?"-":"")+s; }
+  function signClass(v){ return v>0?"pos":(v<0?"neg":"muted"); }
+  function td(v,d){ return '<td class="num '+signClass(v)+'">'+pct(v,d)+"</td>"; }
+  function money(v){ return v.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1}); }
+
+  function yearTable(years){
+    var rows = years.map(function(r){
+      return "<tr><td>"+r.y+"</td>"+td(r.strat)+'<td class="num">'+money(r.end_val)+"</td>"+
+        td(r.bench)+'<td class="num muted">'+money(r.bench_end_val)+"</td>"+
+        '<td class="num muted">'+r.bull+"%</td>"+'<td class="num muted">'+r.bear+"%</td>"+
+        '<td class="num muted">'+r.chop+"%</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead><tr>'+
+      "<th>年</th><th>策略</th><th>年末價值(萬)</th><th>0050</th><th>0050年末值(萬)</th><th>多頭天數</th><th>空頭天數</th><th>盤整天數</th>"+
+      "</tr></thead><tbody>"+rows+"</tbody></table></div>";
+  }
+  function regimeTable(regime){
+    var order=[["多頭","bull"],["空頭","bear"],["盤整","chop"]];
+    var rows = order.map(function(p){
+      var r = regime[p[1]];
+      return "<tr><td>"+p[0]+"</td>"+td(r.ret)+'<td class="num muted">'+r.days.toLocaleString()+"</td></tr>";
+    }).join("");
+    return '<div class="tbl-wrap"><table><thead><tr><th>市況</th><th>累積報酬</th><th>交易日數</th></tr></thead><tbody>'+rows+"</tbody></table></div>";
+  }
+
+  document.getElementById("toc").innerHTML =
+    ['<a href="#verdict">總覽</a>','<a href="#reasons">否決理由</a>','<a href="#limits">限制</a>','<a href="#rules">逐規則</a>'].join("");
+
+  document.getElementById("reason-tbl").innerHTML = DATA.map(function(r){
+    return "<tr><td><b class=\"rule-code\" style=\"padding:2px 6px\">"+r.id+"</b></td><td>"+r.name+"</td><td>"+r.reason+"</td></tr>";
+  }).join("");
+
+  (function(){
+    var lo=0, hi=20, span=hi-lo;
+    var chart = document.getElementById("chart-cagr");
+    var sorted = DATA.slice().sort(function(a,b){ return b.n5.cagr - a.n5.cagr; });
+    chart.innerHTML = sorted.map(function(r){
+      var w5 = Math.max(0, Math.min(100, (r.n5.cagr-lo)/span*100));
+      var w10 = Math.max(0, Math.min(100, (r.n10.cagr-lo)/span*100));
+      return '<div class="bar-row">'+
+        '<div class="lbl"><b>'+r.id+"</b>"+r.name+"</div>"+
+        '<div class="track"><div class="seg n5" style="width:'+w5.toFixed(1)+'%"></div>'+
+        '<div class="seg n10" style="width:'+w10.toFixed(1)+'%"></div></div>'+
+        '<div class="figs">N5 '+pct(r.n5.cagr)+' / N10 '+pct(r.n10.cagr)+"</div>"+
+      "</div>";
+    }).join("");
+  })();
+
+  var list = document.getElementById("rules-list");
+  DATA.forEach(function(r, i){
+    var d = document.createElement("details");
+    d.className = "rule";
+    if (i===0) d.open = true;
+    var uid = "r"+i;
+    d.innerHTML =
+      "<summary>"+
+        '<span class="rule-code">'+r.id+"</span>"+
+        '<span class="rule-name">'+r.name+"</span>"+
+        '<span class="rule-cagrs '+signClass(r.n5.cagr)+'">N5 '+pct(r.n5.cagr)+"</span>"+
+        '<span class="chev">&#9656;</span>'+
+      "</summary>"+
+      '<div class="rule-body">'+
+        '<div class="rule-reason">原始否決理由：'+r.reason+"</div>"+
+        '<div class="toggle" data-uid="'+uid+'">'+
+          '<button class="active" data-n="5">N=5</button>'+
+          '<button data-n="10">N=10</button>'+
+        "</div>"+
+        '<div class="rule-content" id="content-'+uid+'"></div>'+
+      "</div>";
+    list.appendChild(d);
+
+    function render(n){
+      var v = n===5? r.n5 : r.n10;
+      var html =
+        '<div class="metric-row">'+
+          '<div class="metric">實際成交 <b>'+v.n_filled.toLocaleString()+' 筆（'+v.fill_rate+'%）</b></div>'+
+          '<div class="metric">因缺錢放棄 <b>'+v.n_rej_cash.toLocaleString()+'</b></div>'+
+          '<div class="metric">因排名放棄 <b>'+v.n_rej_ncap.toLocaleString()+'</b></div>'+
+          '<div class="metric">全期年化 <b class="'+signClass(v.cagr)+'">'+pct(v.cagr,2)+'</b></div>'+
+          '<div class="metric">最大回撤 <b class="neg">'+v.mdd.toFixed(1)+'%</b></div>'+
+          '<div class="metric">MAR <b>'+v.mar.toFixed(2)+'</b></div>'+
+          '<div class="metric">終值 <b>'+v.final_10k.toFixed(1)+' 萬</b></div>'+
+        "</div>"+
+        '<div class="subhead">按年切</div>'+yearTable(v.years)+
+        '<div class="subhead">按市況切（不分年，全期）</div>'+regimeTable(v.regime);
+      document.getElementById("content-"+uid).innerHTML = html;
+    }
+    render(5);
+    d.querySelectorAll(".toggle button").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        d.querySelectorAll(".toggle button").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        render(parseInt(btn.dataset.n, 10));
+      });
+    });
+  });
+})();
+</script>
