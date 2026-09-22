@@ -1,19 +1,30 @@
-# tw-hold
+# tw-hold（app 內顯示為「股市雷達」）
 
 > 📘 [部署／使用說明書](guide.html)
 
-`me`（`taiwan-stock-analyzer-v3`）的升級版。長波段/價值/定存推薦 + 個股查詢。
+`me`（`taiwan-stock-analyzer-v3`）的升級版。**v1 已上線**（2026-09-08 起）：
+長波段候選池/價值/定存三清單 + 個股查詢，之後陸續加了短線清單（渲染 tw-swing 的
+分享級輸出）、主動式 ETF PCF 認養旗標、總經導航（國際指數/VIX/台指期/Put-Call
+Ratio）、多軌體檢（三清單通過條件檢核表）等分頁——目前 app 上的分頁是
+「總經導航／短線／長波段／價值／定存／個股查詢／多軌體檢／主動式 ETF」
+（見 `app/streamlit_app.py` 的 `NAV`）。
 **核心宇宙（前 500 大）資料上游 = tw-swing**：tw-swing 抓 FinMind 財報/日線/估值、
 整併成 data bundle 發佈到 **tw-swing 私有 repo 的 Release（tag `data-latest`）**；
 tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
 執行期對 `twswing` package 零依賴（共用碼複製，`loader.py` 是搬移）。
 
-- 產出：長波段（2–12 週+，**主動擇時**）/ 價值 / 定存（**規則化因子指數、季換股**）三清單
-- 每清單：買入建議價 或「不推薦」＋原因；每期揭露「新進/移除 + 移除原因」= 出場訊號
+- 產出：長波段候選池（**狀態型、不給 verdict、買賣由人決定**）/ 價值 / 定存
+  （**規則化因子指數、季換股**）三清單
+- 價值/定存：買入建議價 或「不推薦」＋原因；每期揭露「新進/移除 + 移除原因」= 出場訊號
 - 個股查詢：不打分，數據 + plotly 圖表；不在前 500 大的即時補 FinMind（僅本地）
-- 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）
+- 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）。公開連結：
+  https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/
 
-規格見 [PRD.md](PRD.md)（凍結）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜**最新交接 [docs/HANDOFF_2026-09-14e.md](docs/HANDOFF_2026-09-14e.md)**（修正長波段進場口徑：訊號日次一交易日開盤才進場，不是收盤買不到的價格）｜AI 解說層設計 [docs/AI_LAYER.md](docs/AI_LAYER.md)（未實作）｜介面草模 `scratchpad/tw-hold-mock.html`。
+規格見 [PRD.md](PRD.md)（v1 範圍凍結，見 `docs/PLAN.md` 凍結條件）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜
+**最新審核/交接 [docs/REVIEW_RESPONSE_2026-09-22.md](docs/REVIEW_RESPONSE_2026-09-22.md)**
+（資料管線備援/自癒機制：push 靜默失敗 bug、PCF 假訊號雙層防守、國際總經絕對新鮮度偵測、
+手動重整按鈕節流，對應 `docs/REVIEW_REQUEST_2026-09-22.md`）｜
+AI 解說層設計 [docs/AI_LAYER.md](docs/AI_LAYER.md)（未實作）｜介面草模 `scratchpad/tw-hold-mock.html`。
 
 > ⚠️ **PRD §8/§9〈已定〉區塊部分過時**（寫於 opus 審核前）：提到的「`tw-data` 公開 repo 唯一抓取者 / 匿名零 token / tw-hold 私有」已被 §10.1 取代——**現行：tw-hold public、bundle 走 tw-swing 私有 Release + fine-grained PAT、不建 `tw-data`**。以 §3.1.1 / §10.1 / `docs/M0_HANDOFF.md` 為準。
 
@@ -36,8 +47,7 @@ bundle PAT：`.env` 放 `TWSWING_BUNDLE_PAT=...`（雲端走 `st.secrets`）。
 | `data/` | `upstream/` 拉下來的 bundle（**不版控**）、`derived/` 重算產出（**版控**）、`cache/` 個股即時查快取（不版控） |
 | `factors/` | 因子計算（F-Score、normalized PE、存股安全分…）——移植自 tw-swing `twswing.value` |
 | `screener/` | 三清單的篩選邏輯 |
-| `charts/` | plotly 圖表 |
-| `app/` | Streamlit UI |
+| `app/` | Streamlit UI（`streamlit_app.py` 主程式、`stockcharts.py` plotly 圖表——沒有獨立 `charts/` 目錄，圖表函式就放在 `app/` 底下） |
 | `reference/` | 從 tw-swing / me 複製進來的參考程式碼（FinMind client、price_adjuster、指標） |
 | `tests/` | |
 
