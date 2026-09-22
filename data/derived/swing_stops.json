@@ -5,6 +5,24 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-09-21",
+      "risk_stop_ref": 46.49
+    },
+    "3711": {
+      "name": "日月光投控",
+      "status": "pending_entry",
+      "signal_date": "2026-09-21",
+      "risk_stop_ref": 611.14
+    },
+    "6196": {
+      "name": "帆宣",
+      "status": "pending_entry",
+      "signal_date": "2026-09-21",
+      "risk_stop_ref": 510.15
+    },
     "3044": {
       "name": "健鼎",
       "first_seen": "2026-09-18",
@@ -260,23 +278,11 @@
       "exit_date": null,
       "exit_price": null
     },
-    "2027": {
-      "name": "大成鋼",
+    "3037": {
+      "name": "欣興",
       "status": "pending_entry",
       "signal_date": "2026-09-21",
-      "risk_stop_ref": 46.49
-    },
-    "3711": {
-      "name": "日月光投控",
-      "status": "pending_entry",
-      "signal_date": "2026-09-21",
-      "risk_stop_ref": 611.14
-    },
-    "6196": {
-      "name": "帆宣",
-      "status": "pending_entry",
-      "signal_date": "2026-09-21",
-      "risk_stop_ref": 510.15
+      "risk_stop_ref": 957.88
     }
   }
 }
