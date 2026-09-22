@@ -633,6 +633,11 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .mc-verdict.neutral{color:var(--thc-neutral);}
 .mc-stat{font-family:var(--thc-mono);font-size:.76rem;color:var(--thc-soft);
   text-align:right;font-variant-numeric:tabular-nums;}
+/* 部分過期標記——卡片本身有數字（不是缺資料的 missing 狀態），只是比同批次
+   其他 symbol 舊（見 reference/global_macro.py::load_stale_map）。用 --thc-warn
+   跟 mc-verdict.warn 同色系但字級小、獨立一行，不跟漲跌/多空判斷搶視覺。 */
+.mc-stale{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--thc-line);
+  font-size:.72rem;color:var(--thc-warn);}
 /* 總經導航——美股數字卡（VIX/殖利率/美元指數/個股）。這些不是「市場多空」，
    不套 good/warn/neutral 判斷色；漲跌用台股慣例的 --thc-up/--thc-down
    （紅漲綠跌，真價格變動才用這組色，不跟判斷色混）。 */
@@ -652,6 +657,8 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .gz-chg.down{color:var(--thc-down);}
 .gz-chg.flat{color:var(--thc-faint);}
 .gz-pct{display:block;font-family:var(--thc-mono);font-size:.7rem;color:var(--thc-faint);margin-top:.15rem;}
+.gz-stale{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--thc-line);
+  font-size:.7rem;color:var(--thc-warn);}
 /* 總經導航——族群動向。刻意不用紅綠燈：排行順序本身就是訊號（上面領漲、
    下面落後），量條只用單一中性色階＋透明度表大小，不分正負色；逆風是純
    文字標籤，不是判斷色的燈號（跟 industry_headwind 那個既有旗標同語意）。 */
@@ -1984,16 +1991,18 @@ def _mc_price_line(chg: dict | None) -> str:
 
 
 def _mc_card(ticker: str, market: str, card: dict, chg: dict | None = None,
-             windows: tuple[str, ...] = ("ma60", "ma200")) -> str:
+             windows: tuple[str, ...] = ("ma60", "ma200"), stale: dict | None = None) -> str:
     # 卡片左側細條：顯示的窗口全一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
     states = {card[w]["state"] for w in windows if card.get(w)}
     sev = _MC_VERDICT[next(iter(states))][1] if len(states) == 1 else "neutral"
     ma_rows = "".join(_mc_row(_MC_LABEL[w], card.get(w)) for w in windows)
+    stale_line = (f'<div class="mc-stale">⚠️ 資料落後 {stale["lag_days"]} 天'
+                  f'（最新只到 {stale["latest"]}）</div>' if stale else "")
     return (
         f'<div class="mc-card {sev}"><div class="stripe"></div><div class="mc-body">'
         f'<div class="mc-head"><span class="mc-market">{market}</span>'
         f'<span class="mc-ticker">{ticker}</span></div>'
-        + _mc_price_line(chg) + ma_rows
+        + _mc_price_line(chg) + ma_rows + stale_line
         + '</div></div>'
     )
 
@@ -2017,7 +2026,7 @@ _US_GAUGES = [("^VIX", "VIX", ""), ("DX-Y.NYB", "美元指數", ""),
 
 
 def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
-             show_pct: bool = True) -> str:
+             show_pct: bool = True, stale: dict | None = None) -> str:
     from reference.global_macro import latest_change, percentile_rank
     ch = latest_change(close)
     if ch is None:
@@ -2041,8 +2050,10 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
         body = (f'<div class="gz-value">{ch["value"]:,.2f}{suffix}</div>'
                 f'<div class="gz-chg {sign}">{arrow} {ch["chg"]:+,.2f}{suffix}'
                 f'　({ch["chg_pct"]:+.2%})</div>' + pct_line)
+    stale_line = (f'<div class="gz-stale">⚠️ 資料落後 {stale["lag_days"]} 天'
+                  f'（最新只到 {stale["latest"]}）</div>' if stale else "")
     return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">{name}</span>'
-            f'<span class="gz-ticker">{symbol}</span></div>{body}</div>')
+            f'<span class="gz-ticker">{symbol}</span></div>{body}{stale_line}</div>')
 
 
 def _industry_rotation_summary(rows: list[dict]) -> str:
@@ -2174,6 +2185,8 @@ def _macro_compass_page() -> None:
             continue
         tw_data[ticker] = {"market": market, "card": market_card(close), "chg": latest_change(close)}
 
+    stale_map = global_macro.load_stale_map()
+
     intl_idx_data, intl_idx_missing = {}, []
     for symbol, name in _INTL_INDICES:
         close = global_macro.load_close(symbol)
@@ -2266,19 +2279,19 @@ def _macro_compass_page() -> None:
     st.divider()
     st.subheader("國際指數")
     if intl_idx_data:
-        cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",))
+        cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",), stale=stale_map.get(s))
                  for s, d in intl_idx_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
     st.subheader("波動度／殖利率／匯率")
-    gauge_cards = [_gz_card(sym, name, gauge_close[sym], suffix=suf)
+    gauge_cards = [_gz_card(sym, name, gauge_close[sym], suffix=suf, stale=stale_map.get(sym))
                    for sym, name, suf in _US_GAUGES]
     st.markdown(f'<div class="gz-grid">{"".join(gauge_cards)}</div>', unsafe_allow_html=True)
 
     st.divider()
     st.subheader("美股個股（七巨頭＋美光）")
-    stock_cards = [_gz_card(sym, name, global_macro.load_close(sym), show_pct=False)
+    stock_cards = [_gz_card(sym, name, global_macro.load_close(sym), show_pct=False, stale=stale_map.get(sym))
                    for sym, name in _US_STOCKS]
     st.markdown(f'<div class="gz-grid">{"".join(stock_cards)}</div>', unsafe_allow_html=True)
 
@@ -2304,6 +2317,10 @@ def _macro_compass_page() -> None:
             "- **資料源**：yfinance，每日一次抓「已完成的常規盤收盤」，**絕不即時**——"
             "24 小時盤外交易讓收盤價更快過期，不是讓它失效。排程跟台股那條 `rebuild.yml` "
             "無關（獨立的 `.github/workflows/global_macro.yml`，美股收盤後才跑）。\n"
+            "- **⚠️ 資料落後 N 天**：這批 symbol 有抓到資料（不是缺資料的「沒拿到」），"
+            "只是比同一批次其他 symbol 舊——通常是 Yahoo 那批對特定 symbol 還沒補齊，"
+            "不是這裡的程式壞了。台股清單跟總經快照是兩條獨立排程，其中一條更新了"
+            "不代表另一條也是新的，這個標記就是在補這個落差。\n"
             "- **頁首摘要是規則模板，不是 AI**——固定句型代入數字，只講事實、不做評論，"
             "**不做跨指標推論**（例如不會因為「偏多」加「VIX偏低」就合成「風險偏好回升」"
             "這種需要判斷的話），台股／國際情勢兩段各自獨立、不接成一段話"

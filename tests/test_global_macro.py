@@ -51,3 +51,25 @@ def test_percentile_rank最新值是最大值時回1(_snapshot):
 
 def test_percentile_rank空序列回None():
     assert global_macro.percentile_rank(pd.Series(dtype="float64")) is None
+
+
+def test_load_stale_map讀meta的stale清單(monkeypatch, tmp_path):
+    meta = tmp_path / "global_macro_meta.json"
+    meta.write_text(
+        '{"fetched_at": "2026-09-22T00:50:36+00:00", "reference_date": "2026-09-22", '
+        '"stale": [{"symbol": "AAPL", "name": "Apple", "latest": "2026-09-18", "lag_days": 4}]}',
+        encoding="utf-8")
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", meta)
+    assert global_macro.load_stale_map() == {"AAPL": {"latest": "2026-09-18", "lag_days": 4}}
+
+
+def test_load_stale_map檔案不存在回空dict(monkeypatch, tmp_path):
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", tmp_path / "nope.json")
+    assert global_macro.load_stale_map() == {}
+
+
+def test_load_stale_map沒有stale清單回空dict(monkeypatch, tmp_path):
+    meta = tmp_path / "global_macro_meta.json"
+    meta.write_text('{"fetched_at": "x", "reference_date": "2026-09-22"}', encoding="utf-8")
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", meta)
+    assert global_macro.load_stale_map() == {}
