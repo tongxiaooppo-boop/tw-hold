@@ -1116,6 +1116,33 @@ def _swing_paper_section() -> None:
                    f"成本假設 {meta.get('cost', 0):.3%} 往返")
 
 
+def _swing_risk_explainer() -> None:
+    """「可買上限」是候選池卡片上最常被問的一個數字（2026-09-22 使用者說
+    「有些人會問我」）——不是估值，是風控算術，容易被誤會成「合理價」或
+    「目標價」。獨立成一個頁尾 expander，講清楚公式跟它回答的問題，順便講
+    清楚它跟模擬單真正的進場判斷（swing_stops.py）是兩把不同的尺，不能
+    互推。"""
+    with st.expander("📖 「可買上限」是什麼（點開看）"):
+        st.markdown(
+            "- **停損參考位** ＝ `max(50MA, 20 週前低, 現價 − 2×ATR14)`——"
+            "取三者最高，是這個進場點合理的防守線。\n"
+            "- **可買上限** ＝ `停損參考位 ÷ (1 − 10%)`——照這個停損位反推："
+            "**如果買在可買上限，萬一真的跌到停損位，賠的正好是 10%**。\n"
+            "- **現價超過可買上限，代表照這條規則的風控標準，現在買下去、"
+            "萬一跌到停損位會賠超過 10%**——不是說這檔股票不好或太貴，是"
+            "「這個進場點的風險已經超過設計容忍度」，跟估值、合理價、"
+            "目標價都無關（這條線本來就不回答「會不會賺」，見上方警語）。\n"
+            "- **這個數字不是買賣建議、系統不會因為現價超過就把它從候選池踢掉**——"
+            "六個選股條件照樣可能持續成立，只是這個價位進場的風險划不來，"
+            "由你自己判斷要不要等回檔。\n"
+            "- **跟下面「模擬單」的進場判斷是兩把不同的尺，不能互推**：模擬單"
+            "（`swing_stops.py`）決定要不要真的進場，看的是「次一交易日開盤價"
+            "離停損位夠不夠留 1 倍 ATR14 的緩衝」，不是這裡的 10% 版本——"
+            "同一檔股票完全可能一邊「現價超過可買上限」、一邊模擬單那把尺"
+            "還是覺得緩衝夠而照樣進場，兩者算法不同、門檻不同，各自獨立看。"
+        )
+
+
 def _swing_page(payload: dict | None) -> None:
     st.header("長波段候選池")
     if payload is None or not payload.get("candidates_pool"):
@@ -1123,6 +1150,7 @@ def _swing_page(payload: dict | None) -> None:
         _swing_exit_table()
         _swing_paper_section()
         _strategy_backtest_expander("swing")
+        _swing_risk_explainer()
         _disclaimer(SWING_DISCLAIMER)
         return
 
@@ -1152,6 +1180,7 @@ def _swing_page(payload: dict | None) -> None:
     _swing_exit_table()
     _swing_paper_section()
     _strategy_backtest_expander("swing")
+    _swing_risk_explainer()
     if flags:
         st.caption(_active_legend(flags))
     _disclaimer(SWING_DISCLAIMER)
