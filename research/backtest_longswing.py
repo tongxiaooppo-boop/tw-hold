@@ -508,7 +508,15 @@ def main() -> int:
     KEY_ALIAS = {("none", "fixed"): "next_open", ("none", "trailing"): "next_open_trailing",
                 ("bull", "fixed"): "next_open_mgate_bull"}
 
-    RUNS = [("limit_at_close", "limit_at_close", False, cand_by_week, None)]
+    # 🔴 2026-09-23 使用者裁決：`limit_at_close`（訊號收盤掛限價、3日內沒成交放棄）
+    # 這個進場假設不再出現在任何主要回測矩陣裡——tw-swing 之前實測過類似的限價版本
+    # 已經打槍，本 repo 的買得到口徑唯一定義是 `next_open`（次日開盤）。這支腳本
+    # 2026-09-23 之前曾經把 `limit_at_close` 誤標成「買得到口徑」（跟
+    # `backtest_scenario_b.py`／`backtest_top17_buyable.py` 的定義矛盾），也曾經
+    # 額外測過兩格「limit_at_close + notbear + trailing/trailtight」當穩健性對照
+    # ——都已經移除，不要再加回來。往後如果真的需要限價假設的穩健性測試，另外開
+    # 一次性分析腳本跑，不要混進這支主矩陣。
+    RUNS = []
     for rkey, cbw in REGIME_FILTERS:
         for skey, trailing in (("fixed", False), ("trailing", True)):
             key = KEY_ALIAS.get((rkey, skey), f"next_open_{rkey}_{skey}")
@@ -517,18 +525,6 @@ def main() -> int:
     # 「排除空頭週 + 移動 ATR 停損」最佳解，緊縮變體要回答的問題是「同一個進場篩選下，
     # 停損倍數再依市況微調會不會更好」，跟其他進場篩選組合疊加緊縮不是這次的問題。
     RUNS.append(("next_open_notbear_trailtight", "next_open", True,
-                cand_by_week_notbear, trail_mult_tight))
-    # 2026-09-23 使用者追加，之後發現是我誤用了這支腳本自己的舊命名：這支腳本裡的
-    # `limit_at_close` 原本掛「買得到口徑」的標籤，但跟 `backtest_scenario_b.py`／
-    # `backtest_top17_buyable.py`（資金天花板／四本帳整套用的定義）不一致——那邊
-    # 「買得到口徑」= 次一交易日開盤（`next_open`），對照組才是「當天收盤」；這支
-    # 腳本卻拿 `limit_at_close`（訊號收盤掛限價、3日內沒成交放棄）當「買得到」，
-    # 兩邊同一個詞指不同東西。下面 RUN_LABELS 已經改名，不再稱 `limit_at_close` 為
-    # 「買得到口徑」——這兩格是額外的穩健性測試（更保守的限價進場假設），不是
-    # 使用者原本要的「用買得到原則重跑」（那個其實就是現行規格本身，next_open）。
-    RUNS.append(("limit_at_close_notbear_trailing", "limit_at_close", True,
-                cand_by_week_notbear, None))
-    RUNS.append(("limit_at_close_notbear_trailtight", "limit_at_close", True,
                 cand_by_week_notbear, trail_mult_tight))
 
     results = {}
@@ -585,12 +581,10 @@ def main() -> int:
     REGIME_LABEL = {"none": "不限市況", "bull": "只在多頭週新進場（M gate）",
                    "notbear": "排除空頭週新進場（多頭+震盪皆可）"}
     STOP_LABEL = {"fixed": "固定停損", "trailing": "移動 ATR 停損"}
-    RUN_LABELS = [("next_open", "次日開盤（PRD §5.2.3 字面規格：固定停損——這才是本"
-                  "repo其他報告`backtest_scenario_b.py`／`backtest_top17_buyable.py`"
-                  "定義的「買得到口徑」，2026-09-23 前這裡誤標成下面那格，已修正）"),
-                 ("limit_at_close", "限價於訊號收盤（訊號收盤掛限價、3日內沒成交就"
-                  "放棄，跳空開高直接不追——比 next_open 更保守的另一種進場假設，"
-                  "**不是**本repo慣用的「買得到口徑」，固定停損）"),
+    RUN_LABELS = [("next_open", "次日開盤（＝本repo買得到口徑，PRD §5.2.3 字面"
+                  "規格：固定停損。`limit_at_close`〔限價於訊號收盤〕這個更保守的"
+                  "進場假設 2026-09-23 起不再測——tw-swing 之前實測過類似版本已"
+                  "打槍，本 repo 買得到原則唯一定義是次日開盤）"),
                  ("next_open_trailing", "次日開盤 + 移動 ATR 停損（比照 tw-swing "
                   "H2-trailatr2 的做法，非 PRD 原規格，只為了回答「是規格保守還是"
                   "出場拖累」）"),
@@ -611,17 +605,6 @@ def main() -> int:
                       f"ATR14、空頭/震盪收緊到 {TRAIL_ATR_MULT_TIGHT}×ATR14——在目前最佳格"
                       "（排除空頭週+移動停損）上疊加，回答「同一個進場篩選下停損倍數依市況"
                       "微調會不會更好」，使用者 2026-09-14 拍板要測）"))
-    RUN_LABELS.append(("limit_at_close_notbear_trailing",
-                      "🆕 限價於訊號收盤（更保守的進場假設，非本repo「買得到口徑」）"
-                      " + 排除空頭週新進場 + 移動 ATR 停損（2026-09-23 使用者追加："
-                      "額外的穩健性測試，回答「如果訊號跳空開高就放棄，年化會縮水"
-                      "多少」——**不是**「用買得到原則重跑」，那個是上面「現行規格」"
-                      "本身，已經是 next_open）"))
-    RUN_LABELS.append(("limit_at_close_notbear_trailtight",
-                      "🆕 限價於訊號收盤（更保守的進場假設，非本repo「買得到口徑」）"
-                      " + 排除空頭週新進場 + 市況緊縮移動停損（同上，換成市況緊縮"
-                      "停損版本再測一次）"))
-
     bench_eval = eval_window_stats(idx_close_full)
 
     for mode, label in RUN_LABELS:
