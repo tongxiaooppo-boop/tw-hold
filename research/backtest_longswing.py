@@ -69,6 +69,16 @@ OUT = REPO / "docs" / "reports"
 OUT.mkdir(parents=True, exist_ok=True)
 
 START = pd.Timestamp("2016-01-01")
+# 🔴 2026-09-23 查證：候選池六條件之一 c_eps_3y_growth 需要12季前財報，但季度資料只從
+# 2015-Q1起算，第一個候選池非空的週落在2019-02-15——2016-01到2019-02這段是資料地基
+# 死區（候選池結構性恆空，不是策略沒機會）。`stats()`／`bench_stats()` 原本拿全部
+# 2016-2026（10.65年）的天數去annualize，把這段長達3年的0%死區也算進分母，會把CAGR
+# 拖低一大截（例："現行規格"從全窗算的21.4%其實應該是31.0%，比0050同期還高，結論
+# 從「打不過0050」翻案成「小贏0050」）。EVAL_START = 全部規則的候選池死區都結束後
+# 的整數年份起點，用來重新算「排除死區」版本的CAGR/回撤/分市況——回撤跟勝率本來就
+# 不受影響（死區沒有部位，對這兩個指標是中性的），只有CAGR這種「金額/年數」的比例
+# 指標會被死區污染分母。
+EVAL_START = pd.Timestamp("2019-01-01")
 COST_ACTUAL = 0.00585          # 來回成本（手續費 0.1425%×2 + 證交稅 0.3%），tw-swing 口徑
 LIMIT_WINDOW = 3                # limit_at_close：幾個交易日內沒成交就放棄
 REVENUE_LAG_DAYS = 9            # 月營收公告落後：涵蓋月次月 1 日 + 9 天 ≈ 次月 10 日法定期限
@@ -420,6 +430,21 @@ def stats(curve: pd.Series) -> dict:
     return {"cagr": cagr, "maxdd": dd, "final": curve.iloc[-1], "yr_ret": yr_ret}
 
 
+def eval_window_stats(curve: pd.Series, eval_start: pd.Timestamp = EVAL_START) -> dict:
+    """`stats()` 的死區修正版——只用 `eval_start` 之後的曲線重新正規化（除以該點的值）
+    再算年化/回撤，排除候選池死區把分母（年數）灌水的問題。回撤/期末淨值（相對值）
+    不受死區影響本來就跟 `stats()` 一樣，這裡重算是為了 CAGR 分母正確、且回傳的
+    `final` 是「以 eval_start 為 1.0」的相對倍數，不能跟 `stats()` 的 `final` 直接比。"""
+    c = curve.loc[curve.index >= eval_start]
+    if len(c) < 2:
+        return {"cagr": np.nan, "maxdd": np.nan, "final": np.nan}
+    c = c / c.iloc[0]
+    yrs = (c.index[-1] - c.index[0]).days / 365.25
+    cagr = c.iloc[-1] ** (1 / yrs) - 1 if yrs > 0 else np.nan
+    dd = (c / c.cummax() - 1).min()
+    return {"cagr": cagr, "maxdd": dd, "final": c.iloc[-1]}
+
+
 def bench_stats(close: pd.Series) -> dict:
     yrs = (close.index[-1] - close.index[0]).days / 365.25
     r = close / close.iloc[0]
@@ -509,9 +534,15 @@ def main() -> int:
 
     bench = bench_stats(idx_close_full)
     reg = regime_at(pd.Series(td), idx_close_full)
+    reg.index = td   # `regime_at` 回傳的 index 是輸入 Series 的 index（0..N-1），
+                     # 不是日期——這裡換成日期索引，才能用 `.reindex(日期)` 對齊
 
-    md = ["# 實驗 E · 長波段候選池事件驅動回測", "",
-         f"- 產出：{pd.Timestamp.now():%Y-%m-%d %H:%M}",
+    counts_eval = counts[counts.index >= EVAL_START]
+    md = ["# 實驗 E · 長波段候選池事件驅動回測（2026-09-23 修正版：排除候選池資料死區）",
+         "",
+         f"- 產出：{pd.Timestamp.now():%Y-%m-%d %H:%M}（修正原 2026-09-14 版本，"
+         "見下方🔴說明；原始版本保留在 `backtest_longswing_20260914.md` 當歷史紀錄，"
+         "已加註超連結指到這份）",
          f"- 規格：tw-hold/PRD.md §5.2（進場六條件）／§5.3（停損＝max(50MA,20週前低,"
          "現價−2×ATR14)）／§5.2.3（失效條件）——見 HANDOFF_2026-09-11d.md §1.5",
          f"- 期間：{weeks[0].date()} → {weeks[-1].date()}（{len(weeks)} 週）",
@@ -520,8 +551,24 @@ def main() -> int:
          f"- 成本：{COST_ACTUAL:.3%}（來回，出場當天一次扣）",
          "- 部位：等權（1/N 當日持倉數）——**不做 §5.3「單筆風險%÷停損距離」的部位公式**，"
          "因為「單筆風險%」全 repo 沒有定義成數字，虛構一個門檻等於拿理論假設修正結論",
-         f"- 候選池：中位數 {counts.median():.0f} 檔/週｜空白週 {(counts == 0).mean():.0%}"
-         "（跟實驗 D 2026-09-11 的普查數字一致，見 candidate_pool_survey.md）", ""]
+         f"- 候選池（全窗 {len(weeks)} 週）：中位數 {counts.median():.0f} 檔/週｜"
+         f"空白週 {(counts == 0).mean():.0%}；**排除死區、只看 {EVAL_START.date()} 起"
+         f"（{len(counts_eval)} 週）：中位數 {counts_eval.median():.0f} 檔/週｜"
+         f"空白週 {(counts_eval == 0).mean():.0%}**（跟實驗 D 2026-09-11 的普查數字"
+         "一致，見 candidate_pool_survey.md）",
+         "",
+         f"🔴 **2026-09-23 查證：{EVAL_START.date()} 前候選池結構性恆空，是資料地基"
+         "問題**——候選池六條件之一「近3年TTM EPS要成長」（`c_eps_3y_growth`）要拿"
+         "12季前的財報比較，但季度財報資料只從2015-Q1開始，往回推第一次算得出來要到"
+         "2019附近，實測第一個候選池非空的週是 **2019-02-15**。這不是策略評估過"
+         "2016-2018那三年、市場剛好沒有標的——是資料根本不足以判定。原本 `stats()` "
+         f"annualize 用全窗（2016-01→2026-09，{(weeks[-1]-weeks[0]).days/365.25:.1f}年）"
+         "當分母，把這段近3年的0%死區也算進去，會把CAGR拖低一大截；下面每個口徑都"
+         f"多列一欄「{EVAL_START.date()}起」的正確年化，**判斷打不打得過0050要看"
+         "這一欄**。「現行規格」（排除空頭週+移動ATR停損）原本全窗算出 +21.4% 輸給"
+         "0050同期 +24.0%，修正後是 **+31.0% 小贏 0050 修正後的 +29.7%**——"
+         "結論從「打不過大盤」翻案成「小贏大盤」，不是排版問題，是實質性數字錯誤"
+         "的修正。", ""]
 
     REGIME_LABEL = {"none": "不限市況", "bull": "只在多頭週新進場（M gate）",
                    "notbear": "排除空頭週新進場（多頭+震盪皆可）"}
@@ -549,31 +596,43 @@ def main() -> int:
                       "（排除空頭週+移動停損）上疊加，回答「同一個進場篩選下停損倍數依市況"
                       "微調會不會更好」，使用者 2026-09-14 拍板要測）"))
 
+    bench_eval = eval_window_stats(idx_close_full)
+
     for mode, label in RUN_LABELS:
         trades, curve = results[mode]
         st = stats(curve)
+        st_eval = eval_window_stats(curve)
         completed = [t for t in trades if not t["still_open"]]
         wins = [t for t in completed if t["exit_price"] > t["entry_price"]]
         win_rate = len(wins) / len(completed) if completed else np.nan
         reason_cnt = pd.Series([t["exit_reason"] for t in completed]).value_counts()
 
         md += [f"## {label}", "",
-              "| | 年化 | 最大回撤 | 期末淨值 | 完成交易 | 勝率 |",
+              f"🔴 **候選池 {EVAL_START.date()} 前結構性恆空**（CANSLIM `c_eps_3y_growth` "
+              "需要12季前財報，資料只從2015-Q1起算，第一個非空候選池的週落在"
+              "2019-02-15）——「全窗年化」把這段死區也算進annualize的年數分母，"
+              f"會把年化拖低；「{EVAL_START.date()}起」是排除死區、正確的年化，"
+              "**判斷這條規則打不打得過0050要看這一欄，不要看全窗年化**。回撤/勝率"
+              "不受死區影響，兩欄一樣。", "",
+              "| | 年化（全窗，被死區拖低🔴） | 年化（"
+              f"{EVAL_START.date()}起，正確） | 最大回撤 | 完成交易 | 勝率 |",
               "| :-- | --: | --: | --: | --: | --: |",
-              f"| **策略** | {st['cagr']:+.2%} | {st['maxdd']:.1%} | {st['final']:.2f} | "
-              f"{len(completed)} | {win_rate:.0%} |",
+              f"| **策略** | {st['cagr']:+.2%} | **{st_eval['cagr']:+.2%}** | "
+              f"{st['maxdd']:.1%} | {len(completed)} | {win_rate:.0%} |",
               f"| 0050（同期，`daily_full` 還原序列） | {bench['cagr']:+.2%} | "
-              f"{bench['maxdd']:.1%} | — | — | — |", "",
+              f"**{bench_eval['cagr']:+.2%}** | {bench['maxdd']:.1%} | — | — |", "",
               f"另有 {abandoned[mode]} 筆訊號在成交當下價格已經跌破當初算的停損位而放棄"
               "（訊號週收盤到實際成交之間拉回過深，尤其限價口徑本來就買在拉回，"
               "拉回可能已經拉破停損——這種進場不合理，不計入樣本）。", "",
               "出場原因分布：" + "、".join(f"{k} {v}" for k, v in reason_cnt.items()), "",
-              "分年報酬：" + "、".join(f"{y} {v:+.0%}" for y, v in st["yr_ret"].dropna().items()), ""]
+              "分年報酬（2016-2018 是候選池死區，顯示 +0% 不是策略沒機會）：" +
+              "、".join(f"{y} {v:+.0%}" for y, v in st["yr_ret"].dropna().items()), ""]
 
-        # 分市況
-        md += ["分市況（0050 代理，`reference.regime`）：", ""]
-        curve_ret = curve.pct_change().fillna(curve.iloc[0] - 1)
-        reg_str = reg.astype(str)
+        # 分市況（只算死區結束後的天數，避免死區把某個市況的累積報酬稀釋掉）
+        md += [f"分市況（0050 代理，`reference.regime`，只算 {EVAL_START.date()} 起）：", ""]
+        curve_eval_win = curve.loc[curve.index >= EVAL_START]
+        curve_ret = curve_eval_win.pct_change().fillna(0.0)
+        reg_str = reg.reindex(curve_eval_win.index).astype(str)
         for k in REGIME_ORDER:
             mask = (reg_str.values == k)
             sub = curve_ret[mask]
@@ -608,7 +667,7 @@ def main() -> int:
           "沒有套用 tw-hold `reference/corporate_actions.py` 那份手動面額變更/分割對照表——"
           "兩邊上游各自的還原品質可能不完全一致，跟 v1 產品頁看到的價格未必逐檔一致。", ""]
 
-    out_md = OUT / "backtest_longswing_20260914.md"
+    out_md = OUT / "backtest_longswing_20260923.md"
     out_md.write_text("\n".join(md), encoding="utf-8")
     for mode, _, _, _, _ in RUNS:
         trades, _ = results[mode]
