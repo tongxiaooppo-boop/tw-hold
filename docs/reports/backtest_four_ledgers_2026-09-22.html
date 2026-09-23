@@ -496,6 +496,7 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);color:v
     <section id="buyable-longswing">
       <div class="section-head"><span class="no">01</span><h2>長波段候選池</h2></div>
       <p class="section-note">CANSLIM ∩ 趨勢模板 ∩ 市況門檻，訊號全買、動態等權（權重＝1/當天實際持倉數）。沿用 <span class="num">backtest_longswing.py</span> 既有 next_open + notbear 市況閘門 + 移動 ATR 停損那一格，與 production 口徑一致。完成交易 492 筆（另有 7 筆回測結束仍持有、4 筆訊號成交時已跌破停損位放棄），共 550 週。未算出單一「全期年化」數字（見下方逐年拆解）。</p>
+      <p class="section-note" style="color:#c0392b">🔴 2026-09-23 查證補充：下方逐年拆解 2016-2018 顯示 +0.0%，是候選池六條件之一「近3年TTM EPS要成長」需要12季前財報、但季度財報只從2015-Q1開始，第一次算得出來要到2019附近——這三年是資料地基問題、候選池結構性恆空，不是策略那三年真的沒有訊號，解讀時 2016-2018 不算數，只看2019起。</p>
       <div class="card" id="buyable-tbl-longswing"></div>
     </section>
 
@@ -665,6 +666,7 @@ footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);color:v
     <section id="capital-lsval">
       <div class="section-head"><span class="no">06</span><h2>長波段 / 價值線（各自獨立 200 萬）</h2></div>
       <p class="section-note">跟上面 14 條不同本金（各自 200 萬，不是 100 萬）。長波段沿用同一套事件驅動＋市值取前N的模型；價值線<b>維持季度整批換股節奏</b>（不拆成逐日搶資金）——換股日上一期全部賣出、資金 100% 回籠，依市值取前 N 檔平分。⚠️ 價值線原本設計是「全買、追求分散」（每期候選中位數 217 檔），被迫縮到只買前 5 或 10 檔，等於把分散型策略硬改成集中型策略，數字差異主要來自「集中在最大型股」，不是「資金不夠」。</p>
+      <p class="section-note" style="color:#c0392b">🔴 2026-09-23 查證補充：下方長波段的年切表 2016-2018 顯示「當年無訊號」，是候選池六條件之一「近3年TTM EPS要成長」需要12季前財報、但季度財報只從2015-Q1開始，第一次算得出來要到2019附近——這三年是資料地基問題、候選池結構性恆空，不是策略評估過那三年剛好沒找到標的。全期年化/回撤/MAR 用的 NAV 曲線是從第一筆真實交易（約2019）才開始算，不受影響；但「每年歸零重跑」的贏0050年數如果照全部11年算會失真，只算2019起8年才對。</p>
       <div id="capital-lsval-list"></div>
     </section>
 
