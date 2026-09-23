@@ -174,6 +174,13 @@ def simulate_capital_constrained(trades: pd.DataFrame, close_pivot: pd.DataFrame
 
 # ─────────────────────────── 長波段 / 價值線（各自 200 萬，respond 使用者 2026-09-22 追加指示） ───────────────────────────
 
+# 🔴 2026-09-23 查證：長波段候選池 2016-01～2019-02 恆空，是資料地基問題不是策略
+# 問題——CANSLIM 的 `c_eps_3y_growth`（見 screener/candidate_pool.py）要拿 12 季前
+# 的 TTM EPS 比較，但 `load_quarterly()` 只從 2015-Q1 起算，往回推第一個非空候選池
+# 的週落在 2019-02-15。`simulate_capital_constrained()` 的 NAV 曲線本身是從第一筆
+# 真實交易才開始記（不含這段死區，CAGR/MAR 不受影響），但下面「按年切」表格會把
+# 2016-2018 顯示成「當年無訊號」——那是資料限制，不是策略評估過那三年剛好沒找到
+# 標的，寫報告/UI 引用這幾年數字時要講清楚，不要跟其後真正有評估到的年份混談。
 LONGSWING_VALUE_CAPITAL = 2_000_000.0
 
 
