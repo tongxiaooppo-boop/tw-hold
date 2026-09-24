@@ -46,6 +46,16 @@ _LAYOUT = dict(
 )
 
 
+def _right_pad(dates: pd.Series) -> pd.Timedelta:
+    """柱狀/K棒圖右側留白——2026-09-26 使用者發現最右邊那根柱子常常「變細」：
+    `update_xaxes(range=[..., d["date"].max()])` 把畫布右邊界設在最後一根
+    的中心點，等於只畫得出它的左半邊。留半個資料間距（月營收留半個月、
+    日線/籌碼留半天）當緩衝，讓最後一根完整畫出來。"""
+    diffs = pd.to_datetime(dates).sort_values().diff().dropna()
+    gap = diffs.median() if len(diffs) else pd.Timedelta(days=1)
+    return gap / 2
+
+
 def _style(fig: go.Figure, title: str, height: int) -> go.Figure:
     fig.update_layout(
         title=dict(text=title, x=0.01, xanchor="left", font=dict(size=14)),
@@ -79,7 +89,7 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
         # 掛牌才 3 個月），直接用選到的 start 設 x 軸範圍會在左側留一大塊空白。
         # 夾到資料實際最早那天，不要求資料生不出來的日期。
         eff_start = max(pd.Timestamp(start), d["date"].min())
-        fig.update_xaxes(range=[eff_start, d["date"].max()])
+        fig.update_xaxes(range=[eff_start, d["date"].max() + _right_pad(d["date"])])
         vis = close[d["date"] >= eff_start]
         if len(vis):
             pad = (vis.max() - vis.min()) * 0.06 or 1
@@ -107,7 +117,7 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
                     zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
     if start is not None:
         eff_start = max(pd.Timestamp(start), d["month"].min())     # 同 kline，夾到實際資料起點
-        fig.update_xaxes(range=[eff_start, d["month"].max()])
+        fig.update_xaxes(range=[eff_start, d["month"].max() + _right_pad(d["month"])])
     return _style(fig, f"{name} 月營收 + YoY", 360)
 
 
@@ -129,7 +139,7 @@ def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
                                   zeroline=True, zerolinecolor="rgba(43,51,59,.25)"))
     if start is not None:
         eff_start = max(pd.Timestamp(start), d["date"].min())      # 同 kline，夾到實際資料起點
-        fig.update_xaxes(range=[eff_start, d["date"].max()])
+        fig.update_xaxes(range=[eff_start, d["date"].max() + _right_pad(d["date"])])
     return _style(fig, f"{name} 法人買賣超（張）", 360)
 
 
