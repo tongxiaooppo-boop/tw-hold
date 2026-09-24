@@ -549,9 +549,9 @@
           <span class="verdict none">🔴🔴 不給訊號／不給買賣點</span>
         </div>
         <div class="page-card">
-          <h4>長波段 <span class="freq">週更</span></h4>
-          <p>CANSLIM + Minervini 趨勢模板組成的「主動選股候選池」，狀態型條件全過才進池，不排名次不配權重。只給風控推導的可買上限與失效條件。</p>
-          <span class="verdict none">🔴 無 verdict／無回測</span>
+          <h4>長波段 <span class="freq">每日重算</span></h4>
+          <p>CANSLIM + Minervini 趨勢模板組成的「主動選股候選池」，狀態型條件全過才進池，不排名次不配權重。篩選規則本身已有回測驗證，但風控推導的可買上限與失效條件不是。</p>
+          <span class="verdict none">🟡 無 verdict／候選池已回測</span>
         </div>
         <div class="page-card">
           <h4>價值 <span class="freq">季換</span></h4>
@@ -582,7 +582,7 @@
       <div class="callout warn">
         <span class="lbl">每頁都有的警語</span>
         全站共用一句免責聲明：「這不是投資建議，買賣由你決定，真金下單前自己再查一次」。
-        長波段與短線頁另外各疊一層更強的警語（分別標 🔴 與 🔴🔴），因為這兩條完全沒有回測支撐。
+        長波段頁另外疊一層警語（標 🟡）：候選池篩選規則本身已有回測驗證，但停損位／可買上限的風控算術沒有。短線頁疊更強的警語（標 🔴🔴），因為那條完全沒有回測支撐。
         表頭只留「資料日期／重算時間 + 投資警語」，方法論說明搬到頁尾，但「資料異常的即時警報」（CI 沒跑、schema 錯、快照過期）刻意留在原位，不搬——這是設計選擇，不是漏改。
       </div>
     </section>

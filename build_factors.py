@@ -311,6 +311,13 @@ def screen_all() -> dict:
     for df in (val, dep):
         df["industry"] = df["ticker"].astype(str).map(ind)
         df["name"] = df["ticker"].astype(str).map(names)
+        # screen_value/screen_deposit 已經自己算過一份市值（股本×收盤，缺股本
+        # 就退回 universe）——這裡拿 universe 的市值補值，不整欄覆蓋掉既有備援值
+        # （2026-09-24 Opus 審核抓到：原本寫法會讓不在 universe 裡的股票丟市值）。
+        if "market_cap" in df.columns:
+            df["market_cap"] = df["ticker"].astype(str).map(fin_mktcap).fillna(df["market_cap"])
+        else:
+            df["market_cap"] = df["ticker"].astype(str).map(fin_mktcap)
 
     # ③ 產業逆風旗標（只顯示、不進 verdict——比照循環高峰旗標，PRD §9 待定）
     from screener.industry import add_industry_headwind, industry_money_flow, industry_rotation
@@ -345,6 +352,8 @@ def screen_all() -> dict:
         for rec in pool:
             rec["name"] = names.get(rec["ticker"], "")
             rec["industry"] = ind.get(rec["ticker"], "")
+            mc = fin_mktcap.get(rec["ticker"])
+            rec["market_cap"] = float(mc) if pd.notna(mc) else None
         pool_note = f"候選池 {len(pool)} 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）"
     else:
         pool_note = "候選池缺料（需 prices_adj / index_0050 / chips / revenue）"

@@ -12,9 +12,10 @@
 `swing_stops.py` docstring），再算勝率/期望值，跟回測基準對照。
 
 **plus 的兩件事**：
-1. 跟回測基準（`docs/reports/backtest_longswing_20260914.md` 採用格：排除空頭
-   週 + 移動ATR停損，491 筆完成交易、勝率 43%）對照——差太多要講出來，不是
-   只丟數字。
+1. 跟回測基準（`docs/reports/backtest_longswing_20260923.md` 採用格：排除空頭
+   週 + 移動ATR停損，492 筆完成交易、勝率 43%——0914 版是 491 筆，數字幾乎
+   沒變，2026-09-23 那輪只是換了資料窗/修了年化 bug，這裡的口徑本身沒改，
+   見 PRD §5.2.4）對照——差太多要講出來，不是只丟數字。
 2. 月度分解（出場月）——使用者說要看 2 個月，月度表比單一累積數字更看得出
    「這兩個月到底在幹嘛」。
 
@@ -37,14 +38,14 @@ import pandas as pd
 DEFAULT_COST = 0.00585
 N_MIN = 10          # 樣本 < 此值 → 勝率/期望值一律顯示「—」（待驗），不給假象
 
-#: 回測基準（採用格，見 docs/reports/backtest_longswing_20260914.md 最後一格
+#: 回測基準（採用格，見 docs/reports/backtest_longswing_20260923.md 最後一格
 #: 「排除空頭週 + 移動ATR停損」）——只有一組規則，寫死在這裡不是脫節風險，
 #: 回測報告改了要記得一起改（跟 tw-swing 讀 rules.yaml 結構化欄位不同，
 #: 這裡沒有等價的結構化來源，用註解自己盯）。
 BACKTEST_BASELINE = {
     "win_rate": 0.43,
-    "n_trades": 491,
-    "source": "docs/reports/backtest_longswing_20260914.md（排除空頭週+移動ATR停損，2026-09-14）",
+    "n_trades": 492,
+    "source": "docs/reports/backtest_longswing_20260923.md（排除空頭週+移動ATR停損，2026-09-23 取代 0914 版）",
 }
 #: 勝率跟基準差超過這個百分點才示警——單一規則、樣本小的時候本來就會抖動，
 #: 抖動 5pp 以內不值得每天喊一次「背離」。

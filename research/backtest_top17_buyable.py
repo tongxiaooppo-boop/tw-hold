@@ -109,10 +109,19 @@ def regime_day_counts(mkt_state: pd.Series, y0: pd.Timestamp, y1: pd.Timestamp) 
 
 
 def period_return(close_like: pd.Series, y0: pd.Timestamp, y1: pd.Timestamp) -> float | None:
+    """年度報酬，基準＝**去年最後一筆收盤**（跟 `year_rows()` 的 `strat_ret` 同一套
+    基準邏輯），不是「今年第一筆」——2026-09-24 Opus 審核抓到：舊版策略欄跟
+    0050 欄用了不同基準日，同一格表格裡兩欄不能比。沒有去年資料（序列第一年）
+    才退回「今年第一筆」當基準，跟 `strat_ret` 用 `1.0` 代表真正起始本金的
+    邏輯對應——0050 沒有「本金」概念，用它自己最早的價格頂替。"""
     seg = close_like.loc[(close_like.index >= y0) & (close_like.index <= y1)].dropna()
-    if len(seg) < 2:
+    if len(seg) == 0:
         return None
-    return float(seg.iloc[-1] / seg.iloc[0] - 1.0)
+    prior = close_like.loc[close_like.index < y0].dropna()
+    base = float(prior.iloc[-1]) if len(prior) else float(seg.iloc[0])
+    if base == 0:
+        return None
+    return float(seg.iloc[-1] / base - 1.0)
 
 
 def curve_to_dense(curve: pd.Series, calendar: pd.DatetimeIndex) -> pd.Series:
