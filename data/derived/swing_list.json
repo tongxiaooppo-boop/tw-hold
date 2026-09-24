@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-23",
-    "rebuilt_at": "2026-09-24T00:17:07+00:00",
+    "rebuilt_at": "2026-09-24T03:37:49+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：611 檔",
@@ -12,7 +12,7 @@
     "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2015-07-16：raw -3.4%；1216 2015-08-06：raw -6.8%；2884 2015-07-30：raw -7.1%；2892 2015-07-31：raw -10.3%",
     "split_warning": "6550 2026-09-09 還原收盤 ×1.94——疑似未還原的面額變更/分割/減資，`scripts/resolve_splits.py` 會試著自動解析",
     "pool_note": "候選池 19 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）",
-    "disclaimer": "🔴 這個區間沒有回測支撐——這是風控算術不是驗證過的買點。只回答「這個進場點承擔多少風險」，不回答「會不會賺」。候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，不給 verdict、不給買價、不排名次，買賣由你決定。每日重算。"
+    "disclaimer": "🟡 候選池篩選規則本身已有回測驗證（次日開盤買得到口徑、資金天花板約束）——這裡顯示的停損位/可買上限是風控算術，不是驗證過的買點，不回答「這個進場點會不會賺」。候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，不給 verdict、不給總分排名，買賣由你決定。每日重算。"
   },
   "holdings": [],
   "candidates_pool": [
@@ -104,7 +104,10 @@
         }
       ],
       "name": "中砂",
-      "industry": "電機機械"
+      "industry": "電機機械",
+      "market_cap": 143526472500.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "2006",
@@ -192,7 +195,10 @@
         }
       ],
       "name": "東和鋼鐵",
-      "industry": "鋼鐵工業"
+      "industry": "鋼鐵工業",
+      "market_cap": 62652346268.43567,
+      "first_seen": "2026-09-17",
+      "streak_days": 5
     },
     {
       "ticker": "2303",
@@ -282,7 +288,10 @@
         }
       ],
       "name": "聯電",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 2012317584000.0,
+      "first_seen": "2026-09-11",
+      "streak_days": 9
     },
     {
       "ticker": "2404",
@@ -371,7 +380,10 @@
         }
       ],
       "name": "漢唐",
-      "industry": "其他電子業"
+      "industry": "其他電子業",
+      "market_cap": 238233375000.0,
+      "first_seen": "2026-09-23",
+      "streak_days": 1
     },
     {
       "ticker": "2455",
@@ -462,7 +474,10 @@
         }
       ],
       "name": "全新",
-      "industry": "通信網路業"
+      "industry": "通信網路業",
+      "market_cap": 103214836800.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "3017",
@@ -552,7 +567,10 @@
         }
       ],
       "name": "奇鋐",
-      "industry": "電腦及週邊設備業"
+      "industry": "電腦及週邊設備業",
+      "market_cap": 1364440088000.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "3037",
@@ -643,7 +661,10 @@
         }
       ],
       "name": "欣興",
-      "industry": "電子零組件業"
+      "industry": "電子零組件業",
+      "market_cap": 1845934216000.0,
+      "first_seen": "2026-09-18",
+      "streak_days": 4
     },
     {
       "ticker": "3044",
@@ -731,7 +752,10 @@
         }
       ],
       "name": "健鼎",
-      "industry": "電子零組件業"
+      "industry": "電子零組件業",
+      "market_cap": 285404003700.0,
+      "first_seen": "2026-09-18",
+      "streak_days": 4
     },
     {
       "ticker": "3264",
@@ -820,7 +844,10 @@
         }
       ],
       "name": "欣銓",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 123522865200.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "3265",
@@ -910,7 +937,10 @@
         }
       ],
       "name": "台星科",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 24527106000.0,
+      "first_seen": "2026-09-18",
+      "streak_days": 4
     },
     {
       "ticker": "3406",
@@ -1001,7 +1031,10 @@
         }
       ],
       "name": "玉晶光",
-      "industry": "光電業"
+      "industry": "光電業",
+      "market_cap": 102032505500.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "3617",
@@ -1090,7 +1123,10 @@
         }
       ],
       "name": "碩天",
-      "industry": "其他電子業"
+      "industry": "其他電子業",
+      "market_cap": 23027166000.0,
+      "first_seen": "2026-09-18",
+      "streak_days": 4
     },
     {
       "ticker": "3653",
@@ -1182,7 +1218,10 @@
         }
       ],
       "name": "健策",
-      "industry": "電子零組件業"
+      "industry": "電子零組件業",
+      "market_cap": 940557248000.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "3711",
@@ -1271,7 +1310,10 @@
         }
       ],
       "name": "日月光投控",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 3098106603900.0,
+      "first_seen": "2026-09-17",
+      "streak_days": 5
     },
     {
       "ticker": "5274",
@@ -1363,7 +1405,10 @@
         }
       ],
       "name": "信驊",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 843303240000.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     },
     {
       "ticker": "6196",
@@ -1452,7 +1497,10 @@
         }
       ],
       "name": "帆宣",
-      "industry": "其他電子業"
+      "industry": "其他電子業",
+      "market_cap": 120960895500.0,
+      "first_seen": "2026-09-14",
+      "streak_days": 8
     },
     {
       "ticker": "6206",
@@ -1542,7 +1590,10 @@
         }
       ],
       "name": "飛捷",
-      "industry": "電腦及週邊設備業"
+      "industry": "電腦及週邊設備業",
+      "market_cap": 19885659700.0,
+      "first_seen": "2026-09-17",
+      "streak_days": 5
     },
     {
       "ticker": "6257",
@@ -1631,7 +1682,10 @@
         }
       ],
       "name": "矽格",
-      "industry": "半導體業"
+      "industry": "半導體業",
+      "market_cap": 119526338100.0,
+      "first_seen": "2026-09-18",
+      "streak_days": 4
     },
     {
       "ticker": "6491",
@@ -1719,13 +1773,14 @@
         }
       ],
       "name": "晶碩",
-      "industry": "化學生技醫療"
+      "industry": "化學生技醫療",
+      "market_cap": 31785000000.0,
+      "first_seen": "2026-09-07",
+      "streak_days": 13
     }
   ],
   "changes": {
-    "added": [
-      "2404"
-    ],
+    "added": [],
     "removed": []
   }
 }
