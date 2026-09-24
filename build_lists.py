@@ -38,14 +38,14 @@ INDUSTRY_CAP = 0.40                            # 單一產業上限（PRD §6.1 
 REBALANCE_MD = [(3, 31), (5, 15), (8, 14), (11, 14)]   # 換股日（PRD §6.1）
 
 #: 每個清單在 holdings / candidates 裡揭露的欄位（存在才帶）。
-VALUE_COLS = ["name", "close", "verdict", "value_score", "f_score", "roe", "norm_pe",
+VALUE_COLS = ["name", "close", "market_cap", "verdict", "value_score", "f_score", "roe", "norm_pe",
               "norm_ey", "fcf_yield", "ev_ebit", "net_cash_to_mktcap", "gross_margin",
               "industry", "cheap_threshold", "valuation_ceiling", "upside_pct",
               "cyclical_peak_flag", "eps_basis_suspect", "industry_headwind",
               "industry_ret_6m", "pe_p30", "pe_p70", "pe_market",
               "peer_metric_median", "peer_rank", "peer_n",
               "buy_low", "buy_high", "buy_note", "reject_reason"]
-DEPOSIT_COLS = ["name", "close", "verdict", "safety_score", "cur_yield", "yield_floor",
+DEPOSIT_COLS = ["name", "close", "market_cap", "verdict", "safety_score", "cur_yield", "yield_floor",
                 "est_buy_price", "buy_low", "buy_high", "buy_note", "industry",
                 "fill_rate", "ret3y_incl", "avg_yield_3y", "avg_yield_5y",
                 "yield_pctile_5y", "div_years", "last_cash_dividend", "fcf_yield",
@@ -175,6 +175,88 @@ def _load_prev(name: str) -> dict:
         return {}
 
 
+def _update_swing_history(pool: list[dict], asof: date, pool_note: str | None) -> None:
+    """維護 `data/derived/swing_history.json`（首次進榜日／目前連續入選天數）。
+
+    2026-09-24 上線當天 Opus 審核抓到三個邏輯漏洞，這版是修正後的設計：
+
+    1. **不倒退**：檔案存一個 `_asof`，新的 `asof` 早於它就整個跳過（不寫檔、
+       也不更新卡片欄位，直接把現有紀錄原樣帶出去）——本機用舊 bundle 重跑
+       一次就會把連續天數污染掉，這是實際發生過的事故。
+    2. **連續性只看檔案自己存的『上一個交易日的池子＋連續天數快照』
+       （`_prev_pool`/`_prev_tickers`）**，不是呼叫端傳進來的 `pool_prev`
+       （那個其實是「上一次重算」，可能跟「上一個交易日」不同步）。同一天
+       重跑一律拿 `_prev_pool`/`_prev_tickers` 當基準重算，**不是拿上次同一天
+       重跑寫出來的 `tickers`**——這兩者不一樣：如果第一次跑漏了某檔（比如
+       候選池暫時性抓不到某檔資料），`tickers` 那次就不會有它，第二次重跑
+       補回來時如果去查 `tickers` 會查不到、streak 被腰斬成 1；查
+       `_prev_tickers`（前一個交易日的快照，同一天不管重跑幾次都不變）就不會
+       有這個問題。`_prev_pool`/`_prev_tickers` 只在**真的前進到新的一天**
+       時才更新（見下面 `carry_*` 那段），同一天重跑不會覆寫它們。
+    3. **候選池因缺資料回空時整段跳過**（`pool_note` 開頭是「候選池缺料」）——
+       資料問題不該讓所有連續紀錄歸零；大盤空頭週真的回空（`pool_note` 正常
+       開頭「候選池 0 檔」）則正常处理（歸零合理，那是策略判斷不是資料問題）。
+
+    只保留目前還在候選池的 ticker，退出的不留（重新進榜語意 = 這一輪的連續
+    天數，不是「史上第幾次入選」）。歷史起點 2026-09-07 由
+    `scripts/backfill_swing_history.py` 一次性回填，這裡只做逐日累加。"""
+    if (pool_note or "").startswith("候選池缺料"):
+        return  # 資料缺，不動連續紀錄（卡片這次就不顯示徽章，见 app 端 .get 防呆）
+
+    hist_p = DERIVED / "swing_history.json"
+    state: dict = {}
+    if hist_p.exists():
+        try:
+            state = json.loads(hist_p.read_text(encoding="utf-8"))
+        except Exception:
+            state = {}
+
+    asof_s = asof.isoformat()
+    prev_asof = state.get("_asof")
+    prev_pool = set(state.get("_pool", []))
+    prev_tickers = state.get("tickers", {})
+    prev_prev_pool = set(state.get("_prev_pool", []))
+    prev_prev_tickers = state.get("_prev_tickers", {})
+
+    if prev_asof is not None and asof_s < prev_asof:
+        for c in pool:                              # 倒退：不更新，原樣帶出舊紀錄
+            h = prev_tickers.get(c["ticker"], {"first_seen": asof_s, "streak_days": 1})
+            c["first_seen"] = h["first_seen"]
+            c["streak_days"] = h["streak_days"]
+        print(f"  ⚠ swing_history 略過更新（asof {asof_s} 早於已記錄的 {prev_asof}）")
+        return
+
+    same_day = prev_asof == asof_s
+    base_pool = prev_prev_pool if same_day else prev_pool
+    base_tickers = prev_prev_tickers if same_day else prev_tickers
+    # 只有真的前進到新的一天，「今天」才變成下次要用的「昨天基準」——同一天
+    # 重跑要一直沿用同一組基準，不能被這次重跑的（可能不完整的）結果覆蓋。
+    carry_prev_pool = prev_prev_pool if same_day else prev_pool
+    carry_prev_tickers = prev_prev_tickers if same_day else prev_tickers
+
+    new_tickers = {}
+    for c in pool:
+        tk = c["ticker"]
+        ph = base_tickers.get(tk)
+        if tk in base_pool and ph:
+            streak = int(ph["streak_days"]) + 1
+            first_seen = ph["first_seen"]
+        else:
+            streak, first_seen = 1, asof_s
+        new_tickers[tk] = {"first_seen": first_seen, "streak_days": streak}
+        c["first_seen"] = first_seen
+        c["streak_days"] = streak
+
+    new_state = {
+        "_asof": asof_s,
+        "_pool": sorted(new_tickers),
+        "_prev_pool": sorted(carry_prev_pool),
+        "_prev_tickers": carry_prev_tickers,
+        "tickers": new_tickers,
+    }
+    hist_p.write_text(json.dumps(new_state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _write(name: str, payload: dict) -> None:
     (DERIVED / f"{name}_list.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -264,12 +346,14 @@ def main() -> int:
     pool = r.get("pool", [])
     pool_prev = {c["ticker"] for c in _load_prev("swing").get("candidates_pool", [])}
     pool_cur = {c["ticker"] for c in pool}
+    _update_swing_history(pool, asof, ctx.get("pool_note"))
     _write("swing", {
         "_meta": {**meta, "pool_note": ctx.get("pool_note"),
-                  "disclaimer": "🔴 這個區間沒有回測支撐——這是風控算術不是驗證過的買點。"
-                                "只回答「這個進場點承擔多少風險」，不回答「會不會賺」。"
+                  "disclaimer": "🟡 候選池篩選規則本身已有回測驗證（次日開盤買得到口徑、"
+                                "資金天花板約束）——這裡顯示的停損位/可買上限是風控算術，"
+                                "不是驗證過的買點，不回答「這個進場點會不會賺」。"
                                 "候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，"
-                                "不給 verdict、不給買價、不排名次，買賣由你決定。每日重算。"},
+                                "不給 verdict、不給總分排名，買賣由你決定。每日重算。"},
         "holdings": [],
         "candidates_pool": pool,
         "changes": {"added": sorted(pool_cur - pool_prev),
