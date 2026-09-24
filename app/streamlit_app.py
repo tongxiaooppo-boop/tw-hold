@@ -823,6 +823,12 @@ div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]
 .sw-cols li b{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;color:var(--thc-ink);}
 @media (min-width:560px){.sw-cols{grid-template-columns:1fr 1fr;}}
 .thc-details table{width:100%;border-collapse:collapse;margin-top:.45rem;}
+/* 純 markdown 表格（回測報告的逐年數字表都是 st.markdown 直接吐 pipe table，
+   不是 thc-card 那套自訂 HTML）——桌面版欄位撐得下沒問題，手機版欄位一多
+   就會撐爆版面橫向溢出（2026-09-26 使用者手機實測抓到）。改成表格本身可以
+   左右捲動，不擠壓版面，桌面版因為本來就沒超出寬度所以視覺不受影響。 */
+div[data-testid="stMarkdownContainer"] table{display:block;overflow-x:auto;
+  white-space:nowrap;-webkit-overflow-scrolling:touch;}
 .thc-details td{padding:.22rem .1rem;border-bottom:.5px solid var(--thc-line);}
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
