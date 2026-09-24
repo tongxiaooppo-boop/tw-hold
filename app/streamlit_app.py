@@ -1983,24 +1983,27 @@ def _checklist_page() -> None:
         if chp is not None and not chp.empty:
             _chart(ch.institutional_net, chp, nm, _ago(_short_days))
     with t1:
-        # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼。
-        # 同上，籌碼圖窗口是易讀性選擇，不強行對齊「法人20交易日淨買超」這條
-        # 判準本身的計算長度（那是吃全部歷史算的），改回原本的 4 個月。
+        # 波段是週~數月尺度。籌碼圖窗口是易讀性選擇，不強行對齊「法人20交易日
+        # 淨買超」這條判準本身的計算長度（那是吃全部歷史算的），維持 4 個月。
+        # 2026-09-26 K線加使用者可選區間（12W/24W/Y），月營收窗口跟著等比率
+        # 縮放（沿用原本 K線:月營收=1:2 的比例，換算下來剛好是 0.5Y/Y/2Y）。
         _render_checks(_safe_checks(cl.swing_checks, d, active_etf=_aef),
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
                                 if px_fin_empty else None),
                        disclaimer=CHECKLIST_SWING_DISCLAIMER)
-        st.caption("——對應圖表（波段尺度：近 1 年）——")
+        _swing_rng = st.segmented_control("圖表顯示區間", ["12W", "24W", "Y"],
+                                          default="Y", key="_checklist_swing_range") or "Y"
+        _swing_days = {"12W": 84, "24W": 168, "Y": 365}[_swing_rng]
         if not px.empty:
-            _chart(ch.kline, px, nm, _ago(365), ch._MA_SHORT)
+            _chart(ch.kline, px, nm, _ago(_swing_days), ch._MA_SHORT)
         if rev is not None and len(rev) >= 13:
-            _chart(ch.monthly_revenue, rev, nm, _ago(730))
+            _chart(ch.monthly_revenue, rev, nm, _ago(_swing_days * 2))
         if chp is not None and not chp.empty:
             _chart(ch.institutional_net, chp, nm, _ago(120))
     with t2:
-        # 價值是年度尺度→逐季圖窗口見 stockcharts.QUARTERS_LOOKBACK（目前 5
-        # 年，2026-09-24 Opus 審核推翻了「篩選邏輯最長只用5年」這個前提，
-        # 數字待使用者重新裁決，見該常數上方的完整說明，這裡不寫死年數）。
+        # 價值是年度尺度→逐季圖窗口見 stockcharts.QUARTERS_LOOKBACK（目前 24
+        # 季/6年，2026-09-24 使用者裁決改回原本的數字，「篩選邏輯最長只用
+        # 5年」那個前提已被 Opus 審核推翻，這裡不寫死年數，直接引用常數）。
         # PE 河流圖的 `_ago(1825)` 只是請求的上限，實際顯示範圍會被 clamp
         # 到 px⋈per 實際重疊的資料長度（可能遠短於5年）——caption 不寫死
         # 年數，避免跟股票實際狀況兜不起來。

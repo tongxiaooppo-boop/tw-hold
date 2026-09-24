@@ -96,6 +96,16 @@ def test_kline_新股區間夾到實際資料起點():
     assert fig.layout.xaxis.range[0] == pd.to_datetime(px["date"]).min()
 
 
+def test_kline_右側留白不切掉最後一根():
+    """2026-09-26 使用者發現最右邊那根柱子/K棒常被切一半——range 右界剛好卡在
+    最後一筆日期上，畫布只畫得出它的左半邊。修法是右界留半個資料間距的緩衝。"""
+    px = _px(n=60)
+    end = pd.to_datetime(px["date"]).max()
+    start = end - pd.Timedelta(days=10)
+    fig = ch.kline(px, "測試", start, ch._MA_SHORT)
+    assert fig.layout.xaxis.range[1] > end
+
+
 def test_dividends_chart_涵蓋定存判準需要的年數():
     """2026-09-24 修的 bug：股利圖窗口一度改成 5 年，畫不出定存軌「連續配息
     ≥7年」判準需要的資料。回歸測試釘住至少 7 年。"""
