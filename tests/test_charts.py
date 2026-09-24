@@ -20,6 +20,7 @@ def _qf(n: int = 20):
     return pd.DataFrame({
         "period_end": pe, "eps": np.linspace(1, 3, n), "ttm_eps": np.linspace(4, 10, n),
         "revenue": 1000.0, "op_income": 200.0, "net_income": 150.0,
+        "gross_profit": 350.0,       # 單季毛利，margins() 2026-09-24 起改吃這欄算單季毛利率
         "gross_margin": np.linspace(0.3, 0.4, n), "ocf": 250.0, "ocf_net": 250.0,
         "capex": 80.0,
         **{k: 1 for k in ch.F_LABELS}, "f_turnover": 0,
@@ -73,6 +74,32 @@ def test_fscore_table_9項_不加總():
 def test_margins_三率():
     fig = ch.margins(_qf(), "測試")
     assert {t.name for t in fig.data} == {"毛利率", "營益率", "稅後淨利率"}
+
+
+def test_margins_毛利率跟其他兩率同口徑():
+    """2026-09-24 Opus 審核抓到的既有 bug：原本毛利率吃 TTM 欄位、營益率/淨利率
+    吃單季，三條線同張圖口徑不一致。改成三條都用單季，這裡用會製造出明顯落差
+    的資料驗證不會再混用。"""
+    qf = _qf()
+    qf["gross_profit"] = qf["revenue"] * 0.9          # 單季毛利率應該 ≈ 90%
+    fig = ch.margins(qf, "測試")
+    gm = next(t for t in fig.data if t.name == "毛利率")
+    assert all(abs(y - 90) < 1e-6 for y in gm.y)       # 不是 _qf() 裡那組 30~40% 的 TTM 值
+
+
+def test_kline_新股區間夾到實際資料起點():
+    """2026-09-24 修的 bug：選的顯示區間比股票實際歷史還長時，x 軸不該留白。"""
+    px = _px(n=60)                                     # 只有 60 個交易日的「新股」
+    end = pd.to_datetime(px["date"]).max()
+    start = end - pd.Timedelta(days=365)                # 選「1年」但資料沒那麼長
+    fig = ch.kline(px, "新股", start, ch._MA_SHORT)
+    assert fig.layout.xaxis.range[0] == pd.to_datetime(px["date"]).min()
+
+
+def test_dividends_chart_涵蓋定存判準需要的年數():
+    """2026-09-24 修的 bug：股利圖窗口一度改成 5 年，畫不出定存軌「連續配息
+    ≥7年」判準需要的資料。回歸測試釘住至少 7 年。"""
+    assert ch.DIVIDEND_YEARS_LOOKBACK >= 7
 
 
 def test_institutional_net_三法人柱加累計線():
