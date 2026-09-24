@@ -15,6 +15,23 @@ import plotly.graph_objects as go
 _MA_SHORT = [("MA5", 5), ("MA20", 20), ("季線", 60)]
 _MA_LONG = [("MA20", 20), ("季線", 60), ("年線", 240)]
 
+#: 季度圖固定回溯視窗——2026-09-24 統一成同一個數字（之前 quarterly_eps 用
+#: 20、其餘用 24，沒有理由不一致，使用者說看起來很怪）。這幾張圖不跟「顯示
+#: 區間」選擇器連動（季度資料本身粒度低，不需要像日線圖那樣可調），改用固定
+#: 視窗。
+#:
+#: 一度改成 5 年，理由是「長波段/價值/定存篩選邏輯最長只用到5年」——這個
+#: 前提被 Opus 審核推翻：定存軌「連續配息 ≥ 7 年」（`app/checklist.py`）、
+#: `div_cut_5y` 實際要 6 年、`normalized_eps`（價值軌便宜門檻用的「5年均
+#: EPS」）實際吃 22 季，都超過 5 年。使用者 2026-09-24 確認改回原本的
+#: 24 季（6 年）。
+QUARTERS_LOOKBACK = 24
+#: 股利圖固定回溯年數（逐年資料，不是逐季）。2026-09-24 Opus 審核抓到：改成
+#: 5 年會讓「連續配息≥7年」判準看不到完整佐證資料，且 `div_cut_5y` 本身要
+#: 6 年、bundle 股利歷史實測最長剛好 13 年（`div_years` 分佈 max=13）——
+#: 改回 13 年，這是修正一個真的退步，不是設計選擇。
+DIVIDEND_YEARS_LOOKBACK = 13
+
 #: 固定淺色（app 主題「北歐靜謐」，2026-09-11 改）。圖例橫排放在**圖下方**——
 #: 放上方會跟標題重疊、手機放右邊會吃掉半個繪圖區。
 _LAYOUT = dict(
@@ -58,8 +75,12 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
                 line=dict(width=1 if i == 0 else 1.4)))
     fig.update_layout(xaxis_rangeslider_visible=False)
     if start is not None:
-        fig.update_xaxes(range=[pd.Timestamp(start), d["date"].max()])
-        vis = close[d["date"] >= pd.Timestamp(start)]
+        # 2026-09-24 修：新上市股票的價量歷史可能比選的區間短（比如選「1年」但
+        # 掛牌才 3 個月），直接用選到的 start 設 x 軸範圍會在左側留一大塊空白。
+        # 夾到資料實際最早那天，不要求資料生不出來的日期。
+        eff_start = max(pd.Timestamp(start), d["date"].min())
+        fig.update_xaxes(range=[eff_start, d["date"].max()])
+        vis = close[d["date"] >= eff_start]
         if len(vis):
             pad = (vis.max() - vis.min()) * 0.06 or 1
             fig.update_yaxes(range=[vis.min() - pad, vis.max() + pad])
@@ -85,7 +106,8 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
         yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
                     zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
     if start is not None:
-        fig.update_xaxes(range=[pd.Timestamp(start), d["month"].max()])
+        eff_start = max(pd.Timestamp(start), d["month"].min())     # 同 kline，夾到實際資料起點
+        fig.update_xaxes(range=[eff_start, d["month"].max()])
     return _style(fig, f"{name} 月營收 + YoY", 360)
 
 
@@ -106,34 +128,51 @@ def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
                       yaxis2=dict(overlaying="y", side="right", showgrid=False,
                                   zeroline=True, zerolinecolor="rgba(43,51,59,.25)"))
     if start is not None:
-        fig.update_xaxes(range=[pd.Timestamp(start), d["date"].max()])
+        eff_start = max(pd.Timestamp(start), d["date"].min())      # 同 kline，夾到實際資料起點
+        fig.update_xaxes(range=[eff_start, d["date"].max()])
     return _style(fig, f"{name} 法人買賣超（張）", 360)
 
 
+def _span_years(dates: pd.Series) -> str:
+    """實際資料涵蓋的年數（不是請求視窗的上限）——2026-09-24 使用者要求：
+    新股資料不夠長時，標題不該還照樣寫「近N年」誤導人。用最早跟最新日期
+    的實際差距算，不是「筆數/4」（財報中間缺季的話，筆數/4 會低估實際
+    橫跨的年數；反過來拿全部歷史時筆數也不等於請求視窗長度）。"""
+    if dates.empty:
+        return "0"
+    span = (pd.Timestamp(dates.max()) - pd.Timestamp(dates.min())).days / 365.25
+    return f"{span:.0f}" if abs(span - round(span)) < 0.1 else f"{span:.1f}"
+
+
 def quarterly_eps(qf: pd.DataFrame, name: str) -> go.Figure:
-    d = qf.tail(20)
+    d = qf.tail(QUARTERS_LOOKBACK)
     fig = go.Figure([
         go.Bar(x=d["period_end"], y=d["eps"], name="單季 EPS"),
         go.Scatter(x=d["period_end"], y=d["ttm_eps"], name="TTM EPS", yaxis="y2",
                    line=dict(width=2)),
     ])
     fig.update_layout(yaxis2=dict(overlaying="y", side="right", showgrid=False))
-    return _style(fig, f"{name} 季 EPS", 360)
+    return _style(fig, f"{name} 季 EPS（近{_span_years(d['period_end'])}年）", 360)
 
 
 def margins(qf: pd.DataFrame, name: str) -> go.Figure:
-    d = qf.tail(24).copy()
+    """三率（毛利率/營益率/稅後淨利率）——2026-09-24 Opus 審核抓到既有 bug：
+    `qf["gross_margin"]` 其實是 TTM（`factors.py` 算的 `ttm_gross_profit/ttm_revenue`），
+    但 `op_margin`／`net_margin` 這裡是單季算的，三條線口徑不一致、同張圖上會
+    誤導（實測單季/TTM 毛利率最大可以差 13.5pp）。改成三條都用單季，口徑一致。"""
+    d = qf.tail(QUARTERS_LOOKBACK).copy()
+    d["gross_margin_q"] = d["gross_profit"] / d["revenue"]
     d["op_margin"] = d["op_income"] / d["revenue"]
     d["net_margin"] = d["net_income"] / d["revenue"]
     fig = go.Figure()
-    for col, label in [("gross_margin", "毛利率"), ("op_margin", "營益率"),
+    for col, label in [("gross_margin_q", "毛利率"), ("op_margin", "營益率"),
                        ("net_margin", "稅後淨利率")]:
         fig.add_trace(go.Scatter(x=d["period_end"], y=d[col] * 100, name=label))
-    return _style(fig, f"{name} 三率（%）", 360)
+    return _style(fig, f"{name} 三率（%，近{_span_years(d['period_end'])}年）", 360)
 
 
 def cashflow(qf: pd.DataFrame, name: str) -> go.Figure:
-    d = qf.tail(24).copy()
+    d = qf.tail(QUARTERS_LOOKBACK).copy()
     d["fcf"] = d["ocf_net"].fillna(d["ocf"]) - d["capex"].abs()
     fig = go.Figure([
         go.Bar(x=d["period_end"], y=d["ocf_net"].fillna(d["ocf"]) / 1e8, name="營運現金流"),
@@ -141,11 +180,12 @@ def cashflow(qf: pd.DataFrame, name: str) -> go.Figure:
         go.Scatter(x=d["period_end"], y=d["fcf"] / 1e8, name="自由現金流", line=dict(width=2)),
     ])
     fig.update_layout(barmode="relative")
-    return _style(fig, f"{name} 現金流（億元）", 360)
+    return _style(fig, f"{name} 現金流（億元，近{_span_years(d['period_end'])}年）", 360)
 
 
 def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
-    d = div[div["year"] >= div["year"].max() - 12] if not div.empty else div
+    d = (div[div["year"] >= div["year"].max() - (DIVIDEND_YEARS_LOOKBACK - 1)]
+         if not div.empty else div)
     # 一年多次配息（季配／半年配）→ 每筆各自一段疊在同一年的柱子上。給每段描邊，
     # 段跟段之間才看得出「今年配了幾次、各配多少」。按實際配息日排序讓疊放依時序。
     if "pay_date" in d.columns:
@@ -156,7 +196,10 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
         go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利", **edge),
     ])
     fig.update_layout(barmode="stack")
-    return _style(fig, f"{name} 逐年股利（元/股，同年多段＝分次配息）", 340)
+    # 標實際涵蓋的年份數（可能有缺年），不是請求視窗的上限（2026-09-24）
+    n_years = int(d["year"].nunique()) if not d.empty else 0
+    return _style(fig, f"{name} 逐年股利（元/股，近{n_years}年，"
+                       "同年多段＝分次配息）", 340)
 
 
 def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.Figure:
@@ -183,8 +226,9 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
                              line=dict(color="#2B333B", width=1.6)))
     if start is not None:
-        fig.update_xaxes(range=[pd.Timestamp(start), m["date"].max()])
-        vis = m.loc[m["date"] >= pd.Timestamp(start)]
+        eff_start = max(pd.Timestamp(start), m["date"].min())      # 同 kline，夾到實際資料起點
+        fig.update_xaxes(range=[eff_start, m["date"].max()])
+        vis = m.loc[m["date"] >= eff_start]
         if not vis.empty:
             lo = min(vis["close"].min(), (vis["ttm_eps"] * qs.iloc[0]).min())
             hi = max(vis["close"].max(), (vis["ttm_eps"] * qs.iloc[-1]).max())
@@ -193,7 +237,7 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     return _style(fig, f"{name} 本益比河流圖", 440)
 
 
-def roe_trend(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure:
+def roe_trend(qf: pd.DataFrame, name: str, quarters: int = QUARTERS_LOOKBACK) -> go.Figure:
     """ROE / ROA（TTM，%）逐季——價值軌「獲利品質」的走勢版（三率圖沒有 ROE）。"""
     d = qf.tail(quarters)
     fig = go.Figure()
@@ -202,10 +246,11 @@ def roe_trend(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure:
     if "roa" in d.columns:
         fig.add_trace(go.Scatter(x=d["period_end"], y=d["roa"] * 100, name="ROA(TTM)",
                                  line=dict(width=1.4)))
-    return _style(fig, f"{name} ROE / ROA（%，TTM）", 340)
+    return _style(fig, f"{name} ROE / ROA（%，TTM，近{_span_years(d['period_end'])}年）", 340)
 
 
-def balance_health(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure:
+def balance_health(qf: pd.DataFrame, name: str,
+                   quarters: int = QUARTERS_LOOKBACK) -> go.Figure:
     """負債比（左軸 %）+ 流動比（右軸，倍）逐季——價值/定存軌「財務安全」的走勢版。"""
     d = qf.tail(quarters)
     fig = go.Figure([
@@ -216,7 +261,7 @@ def balance_health(qf: pd.DataFrame, name: str, quarters: int = 24) -> go.Figure
     ])
     fig.update_layout(yaxis=dict(ticksuffix="%"),
                       yaxis2=dict(overlaying="y", side="right", showgrid=False))
-    return _style(fig, f"{name} 負債比 / 流動比", 340)
+    return _style(fig, f"{name} 負債比 / 流動比（近{_span_years(d['period_end'])}年）", 340)
 
 
 def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
@@ -229,7 +274,8 @@ def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
                                 line=dict(width=2, color="#5C7A72"))])
     fig.update_layout(yaxis=dict(ticksuffix="%"))
     if start is not None:
-        fig.update_xaxes(range=[pd.Timestamp(start), pd.to_datetime(d["date"]).max()])
+        eff_start = max(pd.Timestamp(start), pd.to_datetime(d["date"]).min())
+        fig.update_xaxes(range=[eff_start, pd.to_datetime(d["date"]).max()])
     return _style(fig, f"{name} 現金殖利率走勢（%）", 320)
 
 

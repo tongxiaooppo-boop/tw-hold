@@ -1755,18 +1755,8 @@ def _stock_page() -> None:
         if not d["per"].empty:
             _chart(ch.pe_river, d["px"], d["per"], name, start)
 
-    if not d["qf"].empty:
-        c1, c2 = st.columns(2)
-        _chart(ch.quarterly_eps, d["qf"], name, target=c1)
-        _chart(ch.margins, d["qf"], name, target=c2)
-        c3, c4 = st.columns(2)
-        _chart(ch.roe_trend, d["qf"], name, target=c3)
-        _chart(ch.balance_health, d["qf"], name, target=c4)
-        _chart(ch.cashflow, d["qf"], name)
-
-    if not d["div"].empty:
-        _chart(ch.dividends_chart, d["div"], name)
-
+    # 以下都跟著上面「顯示區間」走（同一個 start/xstart）——2026-09-24 使用者
+    # 要求把「會跟著變的」都排在「固定的」前面，不要混在一起。
     xstart = start if (not d["px"].empty and start is not None) else None
 
     if not d["per"].empty:
@@ -1784,6 +1774,25 @@ def _stock_page() -> None:
     chp = d.get("chips")
     if chp is not None and not chp.empty:
         _chart(ch.institutional_net, chp, name, xstart)
+
+    if not d["qf"].empty or not d["div"].empty:
+        st.divider()
+        st.caption(f"⬇️ 以下圖表**固定顯示一段歷史**，不跟著上面的「顯示區間」變動"
+                   f"（季度/年度資料，本來就沒那麼多細節可切換）——各自標了實際"
+                   f"年數：季度圖近 {ch.QUARTERS_LOOKBACK // 4} 年、股利圖近 "
+                   f"{ch.DIVIDEND_YEARS_LOOKBACK} 年。")
+
+    if not d["qf"].empty:
+        c1, c2 = st.columns(2)
+        _chart(ch.quarterly_eps, d["qf"], name, target=c1)
+        _chart(ch.margins, d["qf"], name, target=c2)
+        c3, c4 = st.columns(2)
+        _chart(ch.roe_trend, d["qf"], name, target=c3)
+        _chart(ch.balance_health, d["qf"], name, target=c4)
+        _chart(ch.cashflow, d["qf"], name)
+
+    if not d["div"].empty:
+        _chart(ch.dividends_chart, d["div"], name)
 
     if not d["qf"].empty:
         st.subheader("Piotroski F-Score 9 分項")
@@ -1958,18 +1967,25 @@ def _checklist_page() -> None:
 
     t0, t1, t2, t3 = st.tabs(["⚡ 短線", "🟠 波段", "🔵 價值", "🟢 定存"])
     with t0:
-        # 短線是日尺度 → 圖只看近 3 個月
+        # 短線是日尺度→圖表窗口是縮放/易讀性選擇，不對齊任何單一判準的計算
+        # 長度（2026-09-24 一度誤把「籌碼密集區」的 60 交易日計算窗當成顯示
+        # 窗口，使用者指正：CCP 吃全部歷史算、也沒畫在圖上，跟顯示範圍無關）。
+        # 2026-09-24 加使用者可選的「圖表顯示區間」（2週/1月/3月），預設 3 個月。
         _render_checks(_safe_checks(cl.short_checks, d, active_etf=_aef),
                        missing=("這檔在 bundle 沒有價量資料，無法體檢短線軌。"
                                 if px.empty else None),
                        disclaimer=SHORT_DISCLAIMER)
-        st.caption("——對應圖表（短線尺度：近 3 個月）——")
+        _short_rng = st.segmented_control("圖表顯示區間", ["2週", "1月", "3月"],
+                                          default="3月", key="_checklist_short_range") or "3月"
+        _short_days = {"2週": 14, "1月": 30, "3月": 95}[_short_rng]
         if not px.empty:
-            _chart(ch.kline, px, nm, _ago(95), ch._MA_SHORT)
+            _chart(ch.kline, px, nm, _ago(_short_days), ch._MA_SHORT)
         if chp is not None and not chp.empty:
-            _chart(ch.institutional_net, chp, nm, _ago(95))
+            _chart(ch.institutional_net, chp, nm, _ago(_short_days))
     with t1:
-        # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼
+        # 波段是週~數月尺度 → 圖只看近 1 年價量、近 2 年月營收、近 1 季籌碼。
+        # 同上，籌碼圖窗口是易讀性選擇，不強行對齊「法人20交易日淨買超」這條
+        # 判準本身的計算長度（那是吃全部歷史算的），改回原本的 4 個月。
         _render_checks(_safe_checks(cl.swing_checks, d, active_etf=_aef),
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
                                 if px_fin_empty else None),
@@ -1982,29 +1998,38 @@ def _checklist_page() -> None:
         if chp is not None and not chp.empty:
             _chart(ch.institutional_net, chp, nm, _ago(120))
     with t2:
-        # 價值是年度尺度 → 逐季圖看近 6 年、PE 河流看近 5 年
+        # 價值是年度尺度→逐季圖窗口見 stockcharts.QUARTERS_LOOKBACK（目前 5
+        # 年，2026-09-24 Opus 審核推翻了「篩選邏輯最長只用5年」這個前提，
+        # 數字待使用者重新裁決，見該常數上方的完整說明，這裡不寫死年數）。
+        # PE 河流圖的 `_ago(1825)` 只是請求的上限，實際顯示範圍會被 clamp
+        # 到 px⋈per 實際重疊的資料長度（可能遠短於5年）——caption 不寫死
+        # 年數，避免跟股票實際狀況兜不起來。
         _render_checks(_safe_checks(cl.value_checks, fv),
                        missing=(None if fv is not None
                                 else "這檔不在價值因子表（約 1000 檔），無法體檢價值軌。"))
-        st.caption("——對應圖表（價值尺度：近 5～6 年）——")
+        st.caption("——對應圖表（價值尺度：季度圖/本益比河流圖，實際顯示長度依"
+                   "資料而定，不一定到請求的年數）——")
         if not qf.empty:
             c1, c2 = st.columns(2)
-            _chart(ch.roe_trend, qf, nm, 24, target=c1)
+            _chart(ch.roe_trend, qf, nm, target=c1)
             _chart(ch.margins, qf, nm, target=c2)
         if not px.empty and not per.empty:
             _chart(ch.pe_river, px, per, nm, _ago(1825))
     with t3:
-        # 定存看長期：股利連續性 10+ 年、殖利率 5 年分位、負債結構近 6 年
+        # 定存看長期：股利圖固定 13 年（DIVIDEND_YEARS_LOOKBACK，2026-09-24
+        # Opus 審核抓到改 5 年是退步——定存軌「連續配息≥7年」判準需要更長
+        # 歷史佐證，已修正回 13 年）；殖利率走勢/負債結構窗口見對應常數。
         _render_checks(_safe_checks(cl.deposit_checks, fd),
                        missing=(None if fd is not None
                                 else "這檔不在定存因子表（約 1000 檔），無法體檢定存軌。"))
-        st.caption("——對應圖表（定存尺度：股利近 12 年、殖利率近 5 年）——")
+        st.caption(f"——對應圖表（定存尺度：股利近 {ch.DIVIDEND_YEARS_LOOKBACK} 年、"
+                   "殖利率/負債結構實際顯示長度依資料而定）——")
         if not div.empty:
             _chart(ch.dividends_chart, div, nm)
         if not per.empty:
             _chart(ch.yield_trend, per, nm, _ago(1825))
         if not qf.empty:
-            _chart(ch.balance_health, qf, nm, 24)
+            _chart(ch.balance_health, qf, nm)
     st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     st.divider()
     with st.expander("📖 四軌各自怎麼算的（點開看）"):
