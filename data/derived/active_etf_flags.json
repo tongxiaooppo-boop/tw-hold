@@ -3,7 +3,7 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-09-24",
   "market_date": "2026-09-24",
-  "fetched_at": "2026-09-24T13:00:33+00:00",
+  "fetched_at": "2026-09-24T13:59:44+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -72,17 +72,17 @@
    },
    "00992A": {
     "synced": true,
-    "date": "2026-09-23",
-    "prev_date": "2026-09-22",
+    "date": "2026-09-24",
+    "prev_date": "2026-09-23",
     "span_days": 1,
     "moved_n": 1,
-    "aum": 42146732702.0,
-    "aum_prev": 42416403995.0,
-    "navps": 18.78652912672641,
-    "navps_prev": 18.723128022847508,
-    "close": 18.69,
-    "close_date": "2026-09-23",
-    "premium_pct": -0.5138209728644517,
+    "aum": 42108860424.0,
+    "aum_prev": 42146732702.0,
+    "navps": 18.91296272504946,
+    "navps_prev": 18.78652912672641,
+    "close": 18.8,
+    "close_date": "2026-09-24",
+    "premium_pct": -0.5972767286208703,
     "premium_skipped": false
    }
   },
@@ -357,24 +357,21 @@
   "6223": {
    "name": "旺矽",
    "industry": null,
-   "net_shares": 1000,
-   "net_amount": 20992930,
-   "issuer_count": 3,
-   "consensus": -1,
-   "consensus_strong": false,
+   "net_shares": -75000,
+   "net_amount": -406125000,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
    "span_days": 1,
-   "buyers": [
-    "00992A"
-   ],
+   "buyers": [],
    "sellers": [
     "00981A",
     "00991A"
    ],
-   "kind": "buy",
+   "kind": "consensus_sell",
    "by_fund": {
     "00981A": -45000,
-    "00991A": -30000,
-    "00992A": 76000
+    "00991A": -30000
    },
    "exit_notes": {}
   },
@@ -443,19 +440,21 @@
   "1303": {
    "name": "南亞",
    "industry": null,
-   "net_shares": -3500000,
-   "net_amount": -833000000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
+   "net_shares": -5300000,
+   "net_amount": -1261387473,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [],
    "sellers": [
-    "00403A"
+    "00403A",
+    "00992A"
    ],
-   "kind": "sell",
+   "kind": "consensus_sell",
    "by_fund": {
-    "00403A": -3500000
+    "00403A": -3500000,
+    "00992A": -1800000
    },
    "exit_notes": {}
   },
