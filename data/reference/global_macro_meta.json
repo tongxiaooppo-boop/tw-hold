@@ -1,6 +1,6 @@
 {
-  "fetched_at": "2026-09-25T00:11:30+00:00",
-  "reference_date": "2026-09-24",
-  "snapshot_lag_days": 1,
+  "fetched_at": "2026-09-25T10:05:09+00:00",
+  "reference_date": "2026-09-25",
+  "snapshot_lag_days": 0,
   "stale": []
 }
