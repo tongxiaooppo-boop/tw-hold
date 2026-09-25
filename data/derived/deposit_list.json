@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-09-24",
-    "rebuilt_at": "2026-09-25T10:07:09+00:00",
+    "rebuilt_at": "2026-09-25T13:06:16+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
