@@ -5,6 +5,12 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "5274": {
+      "name": "信驊",
+      "status": "pending_entry",
+      "signal_date": "2026-09-30",
+      "risk_stop_ref": 16857.3
+    },
     "3617": {
       "name": "碩天",
       "first_seen": "2026-09-29",
@@ -305,12 +311,6 @@
       "exit_date": "2026-09-24",
       "exit_price": 565.0
     },
-    "5274": {
-      "name": "信驊",
-      "status": "pending_entry",
-      "signal_date": "2026-09-30",
-      "risk_stop_ref": 16857.3
-    },
     "6206": {
       "name": "飛捷",
       "first_seen": "2026-09-17",
@@ -340,6 +340,12 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
+    },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-09-30",
+      "risk_stop_ref": 47.14
     }
   }
 }
