@@ -3,30 +3,29 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-09-30",
   "market_date": "2026-09-30",
-  "fetched_at": "2026-09-30T14:22:52+00:00",
+  "fetched_at": "2026-10-01T01:08:49+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
-  "max_span_days": 3,
+  "max_span_days": 2,
   "multi_day_etfs": [
-   "00403A",
-   "00981A"
+   "00403A"
   ],
   "funds": {
    "00981A": {
     "synced": true,
-    "date": "2026-09-29",
-    "prev_date": "2026-09-24",
-    "span_days": 3,
-    "moved_n": 7,
+    "date": "2026-09-30",
+    "prev_date": "2026-09-29",
+    "span_days": 1,
+    "moved_n": 0,
     "aum": 285291826642.0,
-    "aum_prev": 290341568586.0,
+    "aum_prev": 285291826642.0,
     "navps": 30.57721714936932,
-    "navps_prev": 31.07348148213948,
+    "navps_prev": 30.57721714936932,
     "close": 30.54,
     "close_date": "2026-09-30",
-    "premium_pct": null,
-    "premium_skipped": true
+    "premium_pct": -0.12171529275380749,
+    "premium_skipped": false
    },
    "00403A": {
     "synced": true,
@@ -92,139 +91,6 @@
   "schema_ok": true
  },
  "flags": {
-  "2308": {
-   "name": "台達電",
-   "industry": null,
-   "net_shares": 69000,
-   "net_amount": 130410000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [
-    "00981A"
-   ],
-   "sellers": [],
-   "kind": "buy",
-   "by_fund": {
-    "00981A": 69000
-   },
-   "exit_notes": {}
-  },
-  "2368": {
-   "name": "金像電",
-   "industry": null,
-   "net_shares": 849000,
-   "net_amount": 950880000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [
-    "00981A"
-   ],
-   "sellers": [],
-   "kind": "buy",
-   "by_fund": {
-    "00981A": 849000
-   },
-   "exit_notes": {}
-  },
-  "3711": {
-   "name": "日月光投控",
-   "industry": null,
-   "net_shares": -1440000,
-   "net_amount": -1012320000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [],
-   "sellers": [
-    "00981A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00981A": -1440000
-   },
-   "exit_notes": {}
-  },
-  "6187": {
-   "name": "萬潤",
-   "industry": null,
-   "net_shares": 120000,
-   "net_amount": 157200000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [
-    "00981A"
-   ],
-   "sellers": [],
-   "kind": "buy",
-   "by_fund": {
-    "00981A": 120000
-   },
-   "exit_notes": {}
-  },
-  "6274": {
-   "name": "台燿",
-   "industry": null,
-   "net_shares": 265000,
-   "net_amount": 402800000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [
-    "00981A"
-   ],
-   "sellers": [],
-   "kind": "buy",
-   "by_fund": {
-    "00981A": 265000
-   },
-   "exit_notes": {}
-  },
-  "6278": {
-   "name": "台表科",
-   "industry": null,
-   "net_shares": -519000,
-   "net_amount": -113142000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [],
-   "sellers": [
-    "00981A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00981A": -519000
-   },
-   "exit_notes": {}
-  },
-  "6669": {
-   "name": "緯穎",
-   "industry": null,
-   "net_shares": -61000,
-   "net_amount": -127490000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 3,
-   "buyers": [],
-   "sellers": [
-    "00981A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00981A": -61000
-   },
-   "exit_notes": {}
-  },
   "2345": {
    "name": "智邦",
    "industry": null,
