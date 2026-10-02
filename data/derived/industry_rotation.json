@@ -1,131 +1,131 @@
 {
- "asof": "2026-09-30",
+ "asof": "2026-10-01",
  "industries": [
   {
    "industry": "金融業",
    "n": 9,
-   "ret_1w": 0.0024,
-   "ret_1m": 0.0516,
+   "ret_1w": 0.0,
+   "ret_1m": 0.0451,
    "headwind": false,
-   "net_1w": 2.04,
-   "net_1m": 6.54
-  },
-  {
-   "industry": "金融保險",
-   "n": 32,
-   "ret_1w": -0.0155,
-   "ret_1m": 0.0504,
-   "headwind": false,
-   "net_1w": -46.27,
-   "net_1m": 507.04
+   "net_1w": -0.4,
+   "net_1m": 4.66
   },
   {
    "industry": "資訊服務業",
    "n": 47,
-   "ret_1w": 0.0,
-   "ret_1m": 0.0332,
+   "ret_1w": -0.0033,
+   "ret_1m": 0.0393,
    "headwind": false,
-   "net_1w": 3.25,
-   "net_1m": 9.25
-  },
-  {
-   "industry": "創新板股票",
-   "n": 3,
-   "ret_1w": 0.0127,
-   "ret_1m": 0.0319,
-   "headwind": true,
-   "net_1w": 0.25,
-   "net_1m": 0.75
+   "net_1w": 2.21,
+   "net_1m": 7.29
   },
   {
    "industry": "半導體業",
    "n": 195,
-   "ret_1w": 0.014,
-   "ret_1m": 0.031,
+   "ret_1w": 0.019,
+   "ret_1m": 0.0227,
    "headwind": false,
-   "net_1w": 226.15,
-   "net_1m": 1174.64
+   "net_1w": -81.92,
+   "net_1m": 1652.67
   },
   {
-   "industry": "創新版股票",
-   "n": 13,
-   "ret_1w": 0.006,
-   "ret_1m": 0.0224,
-   "headwind": false,
-   "net_1w": 0.92,
-   "net_1m": -5.48
+   "industry": "創新板股票",
+   "n": 3,
+   "ret_1w": 0.0,
+   "ret_1m": 0.0206,
+   "headwind": true,
+   "net_1w": 0.21,
+   "net_1m": 0.95
   },
   {
-   "industry": "光電業",
-   "n": 127,
-   "ret_1w": 0.0331,
-   "ret_1m": 0.0166,
+   "industry": "金融保險",
+   "n": 32,
+   "ret_1w": -0.0136,
+   "ret_1m": 0.0193,
    "headwind": false,
-   "net_1w": -15.89,
-   "net_1m": 58.35
+   "net_1w": -58.35,
+   "net_1m": 400.63
   },
   {
    "industry": "其他電子類",
    "n": 47,
-   "ret_1w": 0.0141,
-   "ret_1m": 0.0161,
+   "ret_1w": 0.0105,
+   "ret_1m": 0.0164,
    "headwind": false,
-   "net_1w": -26.76,
-   "net_1m": 19.38
+   "net_1w": -40.88,
+   "net_1m": -42.27
   },
   {
-   "industry": "塑膠工業",
-   "n": 26,
-   "ret_1w": 0.007,
-   "ret_1m": 0.0113,
-   "headwind": false,
-   "net_1w": 90.46,
-   "net_1m": 162.28
-  },
-  {
-   "industry": "水泥工業",
-   "n": 7,
+   "industry": "創新版股票",
+   "n": 13,
    "ret_1w": 0.0,
-   "ret_1m": 0.0038,
+   "ret_1m": 0.0127,
    "headwind": false,
-   "net_1w": 27.43,
-   "net_1m": 25.31
+   "net_1w": 0.09,
+   "net_1m": -5.65
+  },
+  {
+   "industry": "光電業",
+   "n": 127,
+   "ret_1w": 0.0212,
+   "ret_1m": 0.012,
+   "headwind": false,
+   "net_1w": -171.73,
+   "net_1m": -25.06
+  },
+  {
+   "industry": "數位雲端",
+   "n": 12,
+   "ret_1w": 0.0031,
+   "ret_1m": 0.01,
+   "headwind": true,
+   "net_1w": -0.47,
+   "net_1m": -1.28
+  },
+  {
+   "industry": "通信網路業",
+   "n": 93,
+   "ret_1w": 0.0043,
+   "ret_1m": 0.0079,
+   "headwind": false,
+   "net_1w": -110.86,
+   "net_1m": -180.49
   },
   {
    "industry": "油電燃氣業",
    "n": 12,
-   "ret_1w": 0.0057,
-   "ret_1m": 0.0017,
+   "ret_1w": 0.0047,
+   "ret_1m": 0.0071,
    "headwind": false,
-   "net_1w": 27.75,
-   "net_1m": 26.09
+   "net_1w": 22.62,
+   "net_1m": 18.01
+  },
+  {
+   "industry": "電子零組件業",
+   "n": 220,
+   "ret_1w": 0.012,
+   "ret_1m": 0.0047,
+   "headwind": false,
+   "net_1w": 135.27,
+   "net_1m": -594.97
   },
   {
    "industry": "鋼鐵工業",
    "n": 48,
-   "ret_1w": 0.0224,
-   "ret_1m": 0.0015,
+   "ret_1w": 0.0147,
+   "ret_1m": 0.002,
    "headwind": false,
-   "net_1w": 14.43,
-   "net_1m": 7.47
+   "net_1w": 10.19,
+   "net_1m": 3.48
   },
   {
-   "industry": "其他電子業",
-   "n": 53,
-   "ret_1w": 0.0109,
-   "ret_1m": 0.0,
+   "industry": "電器電纜",
+   "n": 18,
+   "ret_1w": 0.0047,
+   "ret_1m": 0.0019,
    "headwind": false,
-   "net_1w": 39.96,
-   "net_1m": -12.89
-  },
-  {
-   "industry": "航運業",
-   "n": 33,
-   "ret_1w": 0.0,
-   "ret_1m": 0.0,
-   "headwind": false,
-   "net_1w": 11.67,
-   "net_1m": 106.56
+   "net_1w": 5.3,
+   "net_1m": 6.38
   },
   {
    "industry": "貿易百貨",
@@ -133,242 +133,242 @@
    "ret_1w": 0.0,
    "ret_1m": 0.0,
    "headwind": false,
-   "net_1w": -7.01,
-   "net_1m": -13.53
-  },
-  {
-   "industry": "通信網路業",
-   "n": 93,
-   "ret_1w": 0.0085,
-   "ret_1m": -0.001,
-   "headwind": false,
-   "net_1w": -143.22,
-   "net_1m": -158.99
+   "net_1w": -5.13,
+   "net_1m": -13.02
   },
   {
    "industry": "電子通路業",
    "n": 37,
-   "ret_1w": 0.0083,
-   "ret_1m": -0.0028,
+   "ret_1w": 0.0101,
+   "ret_1m": -0.002,
    "headwind": false,
-   "net_1w": -2.3,
-   "net_1m": -74.22
-  },
-  {
-   "industry": "化學生技醫療",
-   "n": 37,
-   "ret_1w": 0.0036,
-   "ret_1m": -0.0049,
-   "headwind": false,
-   "net_1w": 1.14,
-   "net_1m": -7.72
-  },
-  {
-   "industry": "電腦及週邊設備業",
-   "n": 114,
-   "ret_1w": 0.0071,
-   "ret_1m": -0.0075,
-   "headwind": false,
-   "net_1w": -209.23,
-   "net_1m": -605.1
-  },
-  {
-   "industry": "居家生活",
-   "n": 3,
-   "ret_1w": -0.002,
-   "ret_1m": -0.0084,
-   "headwind": false,
-   "net_1w": 0.0,
-   "net_1m": -0.07
+   "net_1w": 14.48,
+   "net_1m": -52.15
   },
   {
    "industry": "電子商務業",
    "n": 8,
-   "ret_1w": -0.0064,
+   "ret_1w": 0.0018,
+   "ret_1m": -0.0028,
+   "headwind": false,
+   "net_1w": -0.31,
+   "net_1m": -1.02
+  },
+  {
+   "industry": "居家生活",
+   "n": 3,
+   "ret_1w": -0.0024,
+   "ret_1m": -0.0048,
+   "headwind": false,
+   "net_1w": -0.0,
+   "net_1m": -0.07
+  },
+  {
+   "industry": "航運業",
+   "n": 33,
+   "ret_1w": -0.0025,
+   "ret_1m": -0.0049,
+   "headwind": false,
+   "net_1w": -4.14,
+   "net_1m": 99.71
+  },
+  {
+   "industry": "其他電子業",
+   "n": 53,
+   "ret_1w": 0.0051,
+   "ret_1m": -0.007,
+   "headwind": false,
+   "net_1w": 42.6,
+   "net_1m": -25.63
+  },
+  {
+   "industry": "化學生技醫療",
+   "n": 37,
+   "ret_1w": 0.0044,
+   "ret_1m": -0.007,
+   "headwind": false,
+   "net_1w": 0.08,
+   "net_1m": -9.74
+  },
+  {
+   "industry": "電腦及週邊設備業",
+   "n": 114,
+   "ret_1w": 0.0045,
    "ret_1m": -0.0086,
    "headwind": false,
-   "net_1w": -0.25,
-   "net_1m": -1.06
+   "net_1w": -70.52,
+   "net_1m": -590.57
+  },
+  {
+   "industry": "文化創意業",
+   "n": 27,
+   "ret_1w": 0.0041,
+   "ret_1m": -0.0091,
+   "headwind": false,
+   "net_1w": 78.84,
+   "net_1m": 61.69
+  },
+  {
+   "industry": "建材營造",
+   "n": 77,
+   "ret_1w": -0.0031,
+   "ret_1m": -0.0101,
+   "headwind": false,
+   "net_1w": -8.33,
+   "net_1m": -11.97
   },
   {
    "industry": "化學工業",
    "n": 42,
-   "ret_1w": 0.0111,
-   "ret_1m": -0.0091,
+   "ret_1w": 0.0113,
+   "ret_1m": -0.0104,
    "headwind": false,
-   "net_1w": -10.46,
-   "net_1m": -14.77
+   "net_1w": -8.81,
+   "net_1m": -31.41
   },
   {
-   "industry": "電子零組件業",
-   "n": 220,
-   "ret_1w": 0.0103,
-   "ret_1m": -0.0091,
+   "industry": "塑膠工業",
+   "n": 26,
+   "ret_1w": 0.0008,
+   "ret_1m": -0.0104,
    "headwind": false,
-   "net_1w": 73.88,
-   "net_1m": -884.72
+   "net_1w": 111.3,
+   "net_1m": 55.11
   },
   {
    "industry": "生技醫療業",
    "n": 118,
-   "ret_1w": 0.0,
-   "ret_1m": -0.0117,
+   "ret_1w": 0.0031,
+   "ret_1m": -0.0107,
    "headwind": false,
-   "net_1w": -9.29,
-   "net_1m": -117.43
+   "net_1w": -18.07,
+   "net_1m": -92.79
   },
   {
-   "industry": "數位雲端",
-   "n": 12,
-   "ret_1w": 0.0039,
-   "ret_1m": -0.0119,
+   "industry": "其他",
+   "n": 130,
+   "ret_1w": 0.0016,
+   "ret_1m": -0.0122,
    "headwind": false,
-   "net_1w": -0.0,
-   "net_1m": -0.88
+   "net_1w": -13.81,
+   "net_1m": -61.71
+  },
+  {
+   "industry": "食品工業",
+   "n": 32,
+   "ret_1w": 0.0,
+   "ret_1m": -0.0129,
+   "headwind": true,
+   "net_1w": -1.91,
+   "net_1m": 2.13
+  },
+  {
+   "industry": "電機機械",
+   "n": 106,
+   "ret_1w": 0.0045,
+   "ret_1m": -0.0143,
+   "headwind": false,
+   "net_1w": 8.6,
+   "net_1m": 20.99
+  },
+  {
+   "industry": "水泥工業",
+   "n": 7,
+   "ret_1w": 0.0019,
+   "ret_1m": -0.0148,
+   "headwind": false,
+   "net_1w": 14.24,
+   "net_1m": 18.38
+  },
+  {
+   "industry": "觀光餐旅",
+   "n": 7,
+   "ret_1w": -0.0067,
+   "ret_1m": -0.0152,
+   "headwind": true,
+   "net_1w": 0.01,
+   "net_1m": 0.04
+  },
+  {
+   "industry": "紡織纖維",
+   "n": 57,
+   "ret_1w": 0.0,
+   "ret_1m": -0.0173,
+   "headwind": false,
+   "net_1w": 2.4,
+   "net_1m": -19.19
+  },
+  {
+   "industry": "汽車工業",
+   "n": 34,
+   "ret_1w": 0.0049,
+   "ret_1m": -0.0175,
+   "headwind": false,
+   "net_1w": -2.55,
+   "net_1m": -8.2
+  },
+  {
+   "industry": "觀光事業",
+   "n": 43,
+   "ret_1w": 0.0,
+   "ret_1m": -0.0175,
+   "headwind": false,
+   "net_1w": 1.6,
+   "net_1m": -1.78
+  },
+  {
+   "industry": "玻璃陶瓷",
+   "n": 5,
+   "ret_1w": 0.0021,
+   "ret_1m": -0.0186,
+   "headwind": false,
+   "net_1w": -4.72,
+   "net_1m": -4.95
+  },
+  {
+   "industry": "綠能環保",
+   "n": 14,
+   "ret_1w": 0.0036,
+   "ret_1m": -0.0198,
+   "headwind": true,
+   "net_1w": 2.5,
+   "net_1m": -7.31
   },
   {
    "industry": "橡膠工業",
    "n": 11,
    "ret_1w": 0.0,
-   "ret_1m": -0.0119,
+   "ret_1m": -0.027,
    "headwind": false,
-   "net_1w": 1.9,
-   "net_1m": -5.36
-  },
-  {
-   "industry": "電器電纜",
-   "n": 18,
-   "ret_1w": 0.007,
-   "ret_1m": -0.0119,
-   "headwind": false,
-   "net_1w": 8.0,
-   "net_1m": 8.61
-  },
-  {
-   "industry": "紡織纖維",
-   "n": 57,
-   "ret_1w": 0.0036,
-   "ret_1m": -0.012,
-   "headwind": false,
-   "net_1w": 0.33,
-   "net_1m": -16.96
-  },
-  {
-   "industry": "文化創意業",
-   "n": 27,
-   "ret_1w": 0.0,
-   "ret_1m": -0.0132,
-   "headwind": false,
-   "net_1w": 48.78,
-   "net_1m": 23.23
-  },
-  {
-   "industry": "建材營造",
-   "n": 77,
-   "ret_1w": -0.005,
-   "ret_1m": -0.0143,
-   "headwind": false,
-   "net_1w": -7.94,
-   "net_1m": -12.37
-  },
-  {
-   "industry": "玻璃陶瓷",
-   "n": 5,
-   "ret_1w": 0.0252,
-   "ret_1m": -0.0148,
-   "headwind": false,
-   "net_1w": -2.65,
-   "net_1m": -3.23
-  },
-  {
-   "industry": "觀光餐旅",
-   "n": 7,
-   "ret_1w": 0.0022,
-   "ret_1m": -0.015,
-   "headwind": true,
-   "net_1w": 0.0,
-   "net_1m": 0.04
-  },
-  {
-   "industry": "食品工業",
-   "n": 32,
-   "ret_1w": -0.0014,
-   "ret_1m": -0.0192,
-   "headwind": true,
-   "net_1w": -3.09,
-   "net_1m": 3.35
-  },
-  {
-   "industry": "其他",
-   "n": 130,
-   "ret_1w": 0.0021,
-   "ret_1m": -0.0193,
-   "headwind": false,
-   "net_1w": -23.84,
-   "net_1m": -58.54
-  },
-  {
-   "industry": "汽車工業",
-   "n": 34,
-   "ret_1w": 0.0,
-   "ret_1m": -0.0209,
-   "headwind": false,
-   "net_1w": -3.2,
-   "net_1m": -8.03
+   "net_1w": 1.49,
+   "net_1m": -5.74
   },
   {
    "industry": "農業科技業",
    "n": 4,
-   "ret_1w": -0.0128,
-   "ret_1m": -0.022,
+   "ret_1w": -0.0109,
+   "ret_1m": -0.0294,
    "headwind": false,
-   "net_1w": 0.01,
+   "net_1w": -0.0,
    "net_1m": 0.04
-  },
-  {
-   "industry": "觀光事業",
-   "n": 43,
-   "ret_1w": -0.0016,
-   "ret_1m": -0.0223,
-   "headwind": false,
-   "net_1w": 1.27,
-   "net_1m": -2.46
-  },
-  {
-   "industry": "綠能環保",
-   "n": 14,
-   "ret_1w": 0.0064,
-   "ret_1m": -0.0231,
-   "headwind": true,
-   "net_1w": 2.13,
-   "net_1m": -9.43
-  },
-  {
-   "industry": "電機機械",
-   "n": 106,
-   "ret_1w": 0.0047,
-   "ret_1m": -0.0232,
-   "headwind": false,
-   "net_1w": -9.36,
-   "net_1m": -17.65
   },
   {
    "industry": "造紙工業",
    "n": 7,
-   "ret_1w": 0.0013,
-   "ret_1m": -0.0439,
+   "ret_1w": -0.0013,
+   "ret_1m": -0.0442,
    "headwind": false,
-   "net_1w": -0.08,
-   "net_1m": -0.39
+   "net_1w": -1.0,
+   "net_1m": -1.32
   },
   {
    "industry": "運動休閒",
    "n": 4,
-   "ret_1w": -0.0054,
-   "ret_1m": -0.0913,
+   "ret_1w": -0.0038,
+   "ret_1m": -0.0817,
    "headwind": true,
-   "net_1w": -0.19,
-   "net_1m": -2.36
+   "net_1w": -0.07,
+   "net_1m": -2.23
   }
  ]
 }
