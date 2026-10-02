@@ -3,7 +3,7 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-10-02",
   "market_date": "2026-10-02",
-  "fetched_at": "2026-10-02T15:18:58+00:00",
+  "fetched_at": "2026-10-02T18:28:29+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -30,11 +30,11 @@
     "date": "2026-10-02",
     "prev_date": "2026-10-01",
     "span_days": 1,
-    "moved_n": 5,
+    "moved_n": 0,
     "aum": 146289461692.0,
-    "aum_prev": 147515001868.0,
+    "aum_prev": 146289461692.0,
     "navps": 11.144149459370784,
-    "navps_prev": 11.001998271929656,
+    "navps_prev": 11.144149459370784,
     "close": 11.07,
     "close_date": "2026-10-02",
     "premium_pct": -0.6653666988325732,
@@ -89,104 +89,6 @@
   "schema_ok": true
  },
  "flags": {
-  "2360": {
-   "name": "致茂",
-   "industry": null,
-   "net_shares": -50000,
-   "net_amount": -109501166,
-   "issuer_count": 2,
-   "consensus": 0,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [
-    "00982A"
-   ],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00403A": -80000,
-    "00982A": 30000
-   },
-   "exit_notes": {}
-  },
-  "2481": {
-   "name": "強茂",
-   "industry": null,
-   "net_shares": -1000000,
-   "net_amount": -174500000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00403A": -1000000
-   },
-   "exit_notes": {}
-  },
-  "3017": {
-   "name": "奇鋐",
-   "industry": null,
-   "net_shares": -400000,
-   "net_amount": -1376000000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00403A": -400000
-   },
-   "exit_notes": {}
-  },
-  "6669": {
-   "name": "緯穎",
-   "industry": null,
-   "net_shares": -70000,
-   "net_amount": -145950000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00403A": -70000
-   },
-   "exit_notes": {}
-  },
-  "6805": {
-   "name": "富世達",
-   "industry": null,
-   "net_shares": -180000,
-   "net_amount": -415800000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00403A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00403A": -180000
-   },
-   "exit_notes": {}
-  },
   "3711": {
    "name": "日月光投",
    "industry": null,
@@ -203,6 +105,25 @@
    "kind": "sell",
    "by_fund": {
     "00991A": -330000
+   },
+   "exit_notes": {}
+  },
+  "2360": {
+   "name": "致茂",
+   "industry": null,
+   "net_shares": 30000,
+   "net_amount": 65698834,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00982A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00982A": 30000
    },
    "exit_notes": {}
   },
