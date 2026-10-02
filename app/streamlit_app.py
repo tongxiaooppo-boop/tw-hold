@@ -113,9 +113,11 @@ SORT_KEYS = {
               "現價": "close"},
     "deposit": {"市值": "market_cap", "存股安全分": "safety_score", "現價殖利率": "cur_yield",
                "現價": "close"},
-    "swing": {"市值": "market_cap", "現價": "close", "月營收 YoY": "revenue_yoy",
-             "季 EPS YoY": "eps_yoy_q"},
+    "swing": {"市值": "market_cap", "上榜天數": "streak_days", "現價": "close",
+             "月營收 YoY": "revenue_yoy", "季 EPS YoY": "eps_yoy_q"},
 }
+#: 預設由大到小；列在這裡的排序鍵改由小到大（上榜天數：剛進池的排前面）。
+SORT_ASC = {"streak_days"}
 
 
 def _load(name: str) -> dict | None:
@@ -1475,8 +1477,9 @@ def _swing_page(payload: dict | None) -> None:
     sort_label = st.segmented_control("排序依據", sort_opts, default=sort_opts[0],
                                       key="_sort_swing") or sort_opts[0]
     sk = SORT_KEYS["swing"][sort_label]
+    sign = 1 if sk in SORT_ASC else -1
     rows = sorted(payload["candidates_pool"],
-                  key=lambda c: (c.get(sk) is None, -(c.get(sk) or 0)))
+                  key=lambda c: (c.get(sk) is None, sign * (c.get(sk) or 0)))
 
     st.markdown(
         '<div class="thc-grid">'
