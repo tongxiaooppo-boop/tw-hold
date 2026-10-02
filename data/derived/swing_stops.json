@@ -5,6 +5,12 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "3026": {
+      "name": "禾伸堂",
+      "status": "pending_entry",
+      "signal_date": "2026-10-01",
+      "risk_stop_ref": 741.14
+    },
     "5274": {
       "name": "信驊",
       "first_seen": "2026-09-30",
@@ -350,11 +356,11 @@
       "exit_date": null,
       "exit_price": null
     },
-    "3026": {
-      "name": "禾伸堂",
+    "2027": {
+      "name": "大成鋼",
       "status": "pending_entry",
       "signal_date": "2026-10-01",
-      "risk_stop_ref": 741.14
+      "risk_stop_ref": 47.28
     }
   }
 }
