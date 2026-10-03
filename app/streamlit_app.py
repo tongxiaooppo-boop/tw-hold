@@ -2580,7 +2580,12 @@ def _foreign_short_card(df: pd.DataFrame) -> str:
     """外資臺股期貨**淨空單**（空方未平倉 − 多方未平倉，口）＋跟前一個交易日的增減；
     空單／多單總量放小字。淨部位翻成淨多時大字改標「淨多」。
     增減用**中性色**（`flat`）：淨空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
-    d = df.dropna(subset=["net_oi", "short_oi", "long_oi"]).sort_values("date")
+    cols = ["net_oi", "short_oi", "long_oi"]
+    if any(c not in df.columns for c in cols):
+        return ""
+    d = df.dropna(subset=cols).sort_values("date")
+    if d.empty:
+        return ""
     last = d.iloc[-1]
     net = int(last["net_oi"])
     big = f"{-net:,} 口" if net <= 0 else f"淨多 {net:,} 口"
@@ -2610,7 +2615,11 @@ def _foreign_short_card(df: pd.DataFrame) -> str:
 
 def _inst_flow_card(df: pd.DataFrame) -> str:
     """上市三大法人買賣超（億元）：大字＝合計，下面外資／投信／自營商各一行。"""
+    if "total" not in df.columns:
+        return ""
     d = df.dropna(subset=["total"]).sort_values("date")
+    if d.empty:
+        return ""
     last = d.iloc[-1]
 
     def _y(v) -> str:
@@ -2941,10 +2950,10 @@ def _macro_compass_page() -> None:
     if not tx_day.empty or not tx_night.empty:
         tx_cards += [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
                      _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)]
-    if not ff.empty:
-        tx_cards.append(_foreign_short_card(ff))
-    if not inst.empty:
-        tx_cards.append(_inst_flow_card(inst))
+    for _card in ((_foreign_short_card(ff) if not ff.empty else ""),
+                  (_inst_flow_card(inst) if not inst.empty else "")):
+        if _card:
+            tx_cards.append(_card)
     if tx_cards:
         st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
         st.caption("台指期近月合約日盤／夜盤（TAIFEX OpenAPI `DailyMarketReportFut`；夜盤沒有獨立結算價，"

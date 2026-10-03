@@ -114,3 +114,13 @@ def test_各卡資料日_一行列齊_缺的不列():
     assert "三大法人" not in line            # inst 空 → 不列
     assert sa._asof_line({}, pd.Series(dtype=float), pd.Series(dtype=float),
                          pd.DataFrame(), pd.DataFrame(), None) == ""
+
+
+def test_卡片_有列但全NaN或缺欄_回空字串不炸():
+    import streamlit_app as sa
+    nanrow = pd.DataFrame({"date": pd.to_datetime(["2026-10-02"]), "long_oi": [None], "short_oi": [100],
+                           "net_oi": [-100]})
+    assert sa._foreign_short_card(nanrow) == ""
+    assert sa._foreign_short_card(pd.DataFrame({"date": pd.to_datetime(["2026-10-02"])})) == ""
+    assert sa._inst_flow_card(pd.DataFrame({"date": pd.to_datetime(["2026-10-02"]), "total": [None],
+                                            "foreign": [0], "trust": [0], "dealer": [0]})) == ""
