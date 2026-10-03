@@ -2533,6 +2533,59 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
             f'<span class="gz-ticker">{symbol}</span></div>{body}{stale_line}</div>')
 
 
+def _flow_stale_line(latest: pd.Timestamp) -> str:
+    """籌碼流向卡的過期提示：資料日距今 > 4 天才標（週末／連假不誤報）。"""
+    try:
+        lag = (pd.Timestamp(_taipei_today()) - pd.Timestamp(latest).normalize()).days
+    except Exception:  # noqa: BLE001
+        return ""
+    return (f'<div class="gz-stale">⚠️ 資料落後 {lag} 天（最新只到 {pd.Timestamp(latest).date()}）</div>'
+            if lag > 4 else "")
+
+
+def _foreign_short_card(df: pd.DataFrame) -> str:
+    """外資臺股期貨空單（未平倉口數）＋跟前一個交易日的增減。
+    增減用**中性色**（`flat`）：空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
+    d = df.dropna(subset=["short_oi"]).sort_values("date")
+    last = d.iloc[-1]
+    chg = ""
+    if len(d) >= 2:
+        prev = d.iloc[-2]
+        dv = int(last["short_oi"] - prev["short_oi"])
+        pct = dv / prev["short_oi"] if prev["short_oi"] else None
+        arrow = "▲" if dv > 0 else ("▼" if dv < 0 else "—")
+        chg = (f'<div class="gz-chg flat">{arrow} {dv:+,} 口'
+               + (f'　({pct:+.2%})' if pct is not None else "")
+               + f'　vs {pd.Timestamp(prev["date"]).strftime("%m-%d")}</div>')
+    else:
+        chg = '<div class="gz-chg flat">尚無前一日可比</div>'
+    net = int(last["net_oi"])
+    net_txt = f"淨空單 {-net:,} 口" if net < 0 else f"淨多單 {net:,} 口"
+    body = (f'<div class="gz-value">{int(last["short_oi"]):,} 口</div>{chg}'
+            f'<span class="gz-pct">{net_txt}　·　資料日 {pd.Timestamp(last["date"]).strftime("%m-%d")}</span>')
+    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">外資空單</span>'
+            f'<span class="gz-ticker">TX 未平倉</span></div>{body}{_flow_stale_line(last["date"])}</div>')
+
+
+def _inst_flow_card(df: pd.DataFrame) -> str:
+    """上市三大法人買賣超（億元）：大字＝合計，下面外資／投信／自營商各一行。"""
+    d = df.dropna(subset=["total"]).sort_values("date")
+    last = d.iloc[-1]
+
+    def _y(v) -> str:
+        return f"{v / 1e8:+,.1f} 億"
+
+    sign = "up" if last["total"] > 0 else ("down" if last["total"] < 0 else "flat")
+    arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
+    body = (f'<div class="gz-value">{_y(last["total"])}</div>'
+            f'<div class="gz-chg {sign}">{arrow} {"買超" if sign == "up" else ("賣超" if sign == "down" else "持平")}'
+            f'　資料日 {pd.Timestamp(last["date"]).strftime("%m-%d")}</div>'
+            f'<span class="gz-pct">外資 {_y(last["foreign"])}　投信 {_y(last["trust"])}　'
+            f'自營 {_y(last["dealer"])}</span>')
+    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">三大法人買賣超</span>'
+            f'<span class="gz-ticker">上市</span></div>{body}{_flow_stale_line(last["date"])}</div>')
+
+
 def _industry_rotation_summary(rows: list[dict]) -> str:
     """族群動向頁首一句話——固定句型代入數字，跟頁首「市場情緒摘要」同精神：
     只講事實（誰領漲/誰落後/幾個逆風），不做推論、不下多空判斷。"""
@@ -2747,7 +2800,7 @@ def _macro_compass_page() -> None:
     AI 解說層（`docs/AI_LAYER.md`）2026-09-13 討論後暫緩到 10 月以後，這裡的摘要
     純粹是規則模板，不要看到「市場情緒」四個字就以為背後有 AI。
     """
-    from reference import global_macro, index_proxy, market_sentiment, put_call_ratio, tx_futures
+    from reference import chip_flow, global_macro, index_proxy, market_sentiment, tx_futures
     from reference.market_status import latest_change, market_card
 
     st.header("總經導航", anchor="top")
@@ -2837,25 +2890,25 @@ def _macro_compass_page() -> None:
     st.divider()
     st.subheader("台指期／選擇權")
     tx_day, tx_night = tx_futures.load_session("day"), tx_futures.load_session("night")
-    pcr_vol = put_call_ratio.load_series("put_call_volume_ratio")
-    pcr_oi = put_call_ratio.load_series("put_call_oi_ratio")
+    ff, inst = chip_flow.load_foreign_futures(), chip_flow.load_inst_flow()
     tx_cards = []
     if not tx_day.empty or not tx_night.empty:
         tx_cards += [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
                      _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)]
-    if not pcr_vol.empty or not pcr_oi.empty:
-        tx_cards += [_gz_card("TXO", "量比", pcr_vol, suffix="%", show_pct=False),
-                     _gz_card("TXO", "未平倉比", pcr_oi, suffix="%", show_pct=False)]
+    if not ff.empty:
+        tx_cards.append(_foreign_short_card(ff))
+    if not inst.empty:
+        tx_cards.append(_inst_flow_card(inst))
     if tx_cards:
         st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
-        st.caption("台指期近月合約 + 台指選擇權 Put/Call Ratio，資料源 TAIFEX OpenAPI"
-                   "（`DailyMarketReportFut`／`PutCallRatio`）。夜盤沒有獨立結算價，顯示的是"
-                   "夜盤最後成交價，跨夜到隔天 05:00。Put/Call 比＝Put 量(或未平倉)÷Call 量"
-                   "(或未平倉)×100，>100 偏防守、<100 偏樂觀，沒有官方多空分界線，看趨勢比"
-                   "看單點有意義。")
+        st.caption("台指期近月合約日盤／夜盤（TAIFEX OpenAPI `DailyMarketReportFut`；夜盤沒有獨立結算價，"
+                   "顯示夜盤最後成交價，跨夜到隔天 05:00）。**外資空單**＝外資及陸資在臺股期貨（大台）"
+                   "的空方未平倉口數，增減對照前一個交易日（TAIFEX 期貨三大法人，盤後公布，所以資料日"
+                   "通常比台指期收盤晚一個交易日）。**三大法人買賣超**＝上市現貨買賣金額差額（TWSE "
+                   "三大法人買賣金額統計表，不含上櫃）。這些是籌碼事實的攤開，不是多空訊號。")
     else:
-        st.info("還沒有台指期/Put-Call Ratio 資料——`fetch_tx_futures.py`／"
-                "`fetch_put_call_ratio.py` 應該還沒跑過或還沒重新部署。")
+        st.info("還沒有台指期／外資空單／三大法人資料——`fetch_tx_futures.py`／"
+                "`fetch_foreign_futures.py`／`fetch_inst_flow.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()
     st.subheader("族群動向")

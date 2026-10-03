@@ -280,3 +280,16 @@ def test_short_scan_card_單張():
                                 "checks": [{"項目": "融資餘額 10 日未增加", "現值": "100 張 · 10 日 -5.0%"}]})
     assert "1301" in html and "2 項成立" in html and "融資券：100 張" in html and "短線過熱" in html
     assert "verdict" not in html
+
+
+def test_總經導航_外資空單與三大法人卡出現_TXO已移除():
+    # 本機 data/reference/*.parquet 在才驗內容；沒有就只驗不炸、且不再有 TXO 量比卡。
+    from pathlib import Path
+    at = _run()
+    assert not at.exception
+    blob = " ".join(m.value for m in at.markdown)
+    assert "未平倉比" not in blob and "Put/Call" not in blob
+    if Path("data/reference/foreign_futures.parquet").exists():
+        assert "外資空單" in blob
+    if Path("data/reference/inst_flow.parquet").exists():
+        assert "三大法人買賣超" in blob
