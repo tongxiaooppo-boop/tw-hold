@@ -1,0 +1,66 @@
+name: 籌碼流向（傍晚）
+
+# 外資台指期空單（TAIFEX 期貨三大法人）＋ 上市三大法人買賣超（TWSE BFI82U）都是**盤後**
+# 才公布（下午就有）。只靠 global_macro.yml 台北 06:00 那班，頁面要到隔天早上才換成當日數字；
+# 這班排在 UTC 10:30＝台北 18:30，讓當天晚上就是當日資料。06:00 那班保留當補漏。
+#
+# 兩支腳本都是「每次補近 14 天缺的」、重複跑冪等，所以兩班各抓一次沒有問題。
+# tw-hold 是公開 repo → Actions 分鐘數無限。
+# 跟 global_macro 共用 concurrency group，兩條不會同時 commit 互相撞。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 10 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: global-macro
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install pandas pyarrow
+
+      # 任一支掛掉不該擋另一支（continue-on-error），commit 步驟只在有實質變更時才 commit。
+      - name: 外資台指期未平倉
+        continue-on-error: true
+        run: python scripts/fetch_foreign_futures.py
+
+      - name: 三大法人買賣超
+        continue-on-error: true
+        run: python scripts/fetch_inst_flow.py
+
+      - name: commit 籌碼流向小檔
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          FILES="data/reference/foreign_futures.parquet data/reference/inst_flow.parquet"
+          git add $FILES
+          git diff --cached --quiet -- $FILES && { echo "無實質變更——跳過 commit"; exit 0; }
+          git commit -m "籌碼流向（外資空單／三大法人） $(date -u +%F)"
+          # 同 global_macro.yml：push 被拒 → rebase；衝突時產出檔取自己這輪的版本；
+          # 用 $pushed 旗標判斷，不讓「最後一步剛好 pull 成功」變成靜默失敗。
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            echo "push 被拒（第 $i 次），rebase 後重試"
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- $FILES 2>/dev/null || true
+              git add -A $FILES 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
+          done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }

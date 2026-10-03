@@ -87,3 +87,18 @@ def test_三大法人卡_合計與三方():
                        "dealer": [2.03e9], "total": [1.042e10]})
     h = sa._inst_flow_card(df)
     assert "+104.2 億" in h and "外資 +26.2 億" in h and "投信 +57.7 億" in h and "gz-chg up" in h
+
+
+def test_各卡資料日_一行列齊_缺的不列():
+    import streamlit_app as sa
+    d = pd.Timestamp
+    line = sa._asof_line(
+        {"0050": d("2026-10-02"), "006201": d("2026-10-02"),
+         "idx:^DJI": d("2026-10-02"), "idx:^N225": d("2026-10-02")},
+        pd.Series([1.0], index=[d("2026-10-02")]), pd.Series([1.0], index=[d("2026-10-03")]),
+        pd.DataFrame({"date": [d("2026-10-02")]}), pd.DataFrame(), {"asof": "2026-10-02"})
+    assert "0050 10-02／006201 10-02" in line and "國際指數 10-02" in line
+    assert "日盤 10-02／夜盤 10-03" in line and "外資空單 10-02" in line and "族群動向 10-02" in line
+    assert "三大法人" not in line            # inst 空 → 不列
+    assert sa._asof_line({}, pd.Series(dtype=float), pd.Series(dtype=float),
+                         pd.DataFrame(), pd.DataFrame(), None) == ""

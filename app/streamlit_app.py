@@ -2543,6 +2543,36 @@ def _flow_stale_line(latest: pd.Timestamp) -> str:
             if lag > 4 else "")
 
 
+def _asof_line(asof: dict, tx_day: pd.Series, tx_night: pd.Series, ff: pd.DataFrame,
+               inst: pd.DataFrame, ir: dict | None) -> str:
+    """總經導航頁頂「各卡資料日」——這頁每張卡各有各的時鐘，表頭徽章只管清單日線。"""
+    def _d(x) -> str:
+        return pd.Timestamp(x).strftime("%m-%d")
+
+    parts = []
+    tw = [f"{t} {_d(asof[t])}" for t, _m in _MC_MARKETS if t in asof]
+    if tw:
+        parts.append("台股 " + "／".join(tw))
+    idx = [v for k, v in asof.items() if k.startswith("idx:")]
+    if idx:
+        lo, hi = min(idx), max(idx)
+        parts.append("國際指數 " + (_d(hi) if lo == hi else f"{_d(lo)}～{_d(hi)}（各市場收盤日不同）"))
+    tx = []
+    if not tx_day.empty:
+        tx.append(f"日盤 {_d(tx_day.index[-1])}")
+    if not tx_night.empty:
+        tx.append(f"夜盤 {_d(tx_night.index[-1])}")
+    if tx:
+        parts.append("台期指 " + "／".join(tx))
+    if ff is not None and not ff.empty:
+        parts.append(f"外資空單 {_d(ff['date'].max())}")
+    if inst is not None and not inst.empty:
+        parts.append(f"三大法人 {_d(inst['date'].max())}")
+    if (ir or {}).get("asof"):
+        parts.append(f"族群動向 {_d(ir['asof'])}")
+    return ("各卡資料日：" + "　·　".join(parts)) if parts else ""
+
+
 def _foreign_short_card(df: pd.DataFrame) -> str:
     """外資臺股期貨空單（未平倉口數）＋跟前一個交易日的增減。
     增減用**中性色**（`flat`）：空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
@@ -2840,12 +2870,14 @@ def _macro_compass_page() -> None:
     # 當備援，不會讓 0050 這張卡直接消失。
     _TW_LOADERS = {"0050": _load_0050, "006201": lambda _t: index_proxy.load_006201()}
     tw_data, tw_missing = {}, []
+    _asof: dict = {}      # 各卡最新資料日（頁頂「各卡資料日」用）
     for ticker, market in _MC_MARKETS:
         close = _TW_LOADERS[ticker](ticker)
         if close.empty:
             tw_missing.append(f"{market}（{ticker}）")
             continue
         tw_data[ticker] = {"market": market, "card": market_card(close), "chg": latest_change(close)}
+        _asof[f"{ticker}"] = close.dropna().index[-1]
 
     stale_map = global_macro.load_stale_map()
     snap_meta = global_macro.load_snapshot_meta()
@@ -2857,6 +2889,7 @@ def _macro_compass_page() -> None:
             intl_idx_missing.append(f"{name}（{symbol}）")
             continue
         intl_idx_data[symbol] = {"name": name, "card": market_card(close), "chg": latest_change(close)}
+        _asof[f"idx:{symbol}"] = close.dropna().index[-1]
 
     gauge_close = {sym: global_macro.load_close(sym) for sym, _n, _s in _US_GAUGES}
 
@@ -2872,6 +2905,7 @@ def _macro_compass_page() -> None:
         short_v["value"] if short_v else None, ten_v["value"] if ten_v else None)
     st.markdown(f"**台股：**{market_sentiment.tw_summary(tw_sents)}")
     st.markdown(f"**國際情勢：**{market_sentiment.intl_summary(intl_sents, vix_txt, curve_txt)}")
+    _asof_slot = st.empty()      # 「各卡資料日」——等下面台指期/外資/三大法人載完再填
 
     st.divider()
     st.subheader("台股")
@@ -2891,6 +2925,7 @@ def _macro_compass_page() -> None:
     st.subheader("台指期／選擇權")
     tx_day, tx_night = tx_futures.load_session("day"), tx_futures.load_session("night")
     ff, inst = chip_flow.load_foreign_futures(), chip_flow.load_inst_flow()
+    _asof_slot.caption(_asof_line(_asof, tx_day, tx_night, ff, inst, _load("industry_rotation.json")))
     tx_cards = []
     if not tx_day.empty or not tx_night.empty:
         tx_cards += [_gz_card("TX", "日盤收盤", tx_day, show_pct=False),
