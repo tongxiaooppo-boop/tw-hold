@@ -113,11 +113,32 @@ SORT_KEYS = {
               "現價": "close"},
     "deposit": {"市值": "market_cap", "存股安全分": "safety_score", "現價殖利率": "cur_yield",
                "現價": "close"},
-    "swing": {"市值": "market_cap", "上榜天數": "streak_days", "現價": "close",
+    "swing": {"市值": "market_cap", "進榜日期": "first_seen", "上榜天數": "streak_days",
+              "現價": "close",
              "月營收 YoY": "revenue_yoy", "季 EPS YoY": "eps_yoy_q"},
 }
 #: 預設由大到小；列在這裡的排序鍵改由小到大（上榜天數：剛進池的排前面）。
 SORT_ASC = {"streak_days"}
+#: 日期字串欄（ISO）：排序時轉成可比的數字，新→舊（由大到小）；同一天再按市值大→小。
+SORT_DATE = {"first_seen"}
+
+
+def _sort_rows(rows: list[dict], sk: str) -> list[dict]:
+    """依排序鍵排列卡片。缺值一律排最後（讀 CI 產出 `.get()` 防舊 schema）。"""
+    def _val(c):
+        v = c.get(sk)
+        if v is None:
+            return None
+        if sk in SORT_DATE:
+            try:
+                return pd.Timestamp(v).toordinal()
+            except Exception:  # noqa: BLE001
+                return None
+        return v
+
+    sign = 1 if sk in SORT_ASC else -1
+    return sorted(rows, key=lambda c: (_val(c) is None, sign * (_val(c) or 0),
+                                       -(c.get("market_cap") or 0)))
 
 
 def _load(name: str) -> dict | None:
@@ -1477,9 +1498,7 @@ def _swing_page(payload: dict | None) -> None:
     sort_label = st.segmented_control("排序依據", sort_opts, default=sort_opts[0],
                                       key="_sort_swing") or sort_opts[0]
     sk = SORT_KEYS["swing"][sort_label]
-    sign = 1 if sk in SORT_ASC else -1
-    rows = sorted(payload["candidates_pool"],
-                  key=lambda c: (c.get(sk) is None, sign * (c.get(sk) or 0)))
+    rows = _sort_rows(payload["candidates_pool"], sk)
 
     st.markdown(
         '<div class="thc-grid">'
@@ -1555,6 +1574,11 @@ def _short_scan_card(x: dict, flag: dict | None = None) -> str:
     code = str(x.get("ticker") or "")
     risk, pend = x.get("risk") or [], x.get("pending") or []
     bits = [f"收 {x['close']:,.2f}"] if isinstance(x.get("close"), (int, float)) else []
+    streak = x.get("streak_days")
+    if streak == 1 and not x.get("_first_day"):
+        bits.append("🆕 今日新進")
+    elif streak:
+        bits.append(f"連續 {streak} 天（首次 {x.get('first_seen', '—')}）")
     bits.append(f"{len(x.get('good') or [])} 項成立")
     if pend:
         bits.append(f"{len(pend)} 項待確認")
@@ -1589,18 +1613,37 @@ def _short_scan_section() -> None:
         "**沒有任何一項『未達』的就列出來**——**零回測、零驗證**，不排名、不打分、"
         "不給訊號、不給買賣點，列出來不代表值得買。")
     st.caption(f"資料日 {m.get('asof', '—')}　·　掃描 {m.get('scanned', '—')} 檔　·　"
-               f"全數條件無缺口 {len(stocks)} 檔（代號序，非排名）　·　"
+               f"全數條件無缺口 {len(stocks)} 檔（可切換排序，非排名）　·　"
                + ("含融資券餘額條件" if m.get("has_margin") else "⚠️ 這次沒有融資券資料，未納入該條件"))
     ad = m.get("asof")
     if ad and (pd.Timestamp(_taipei_today()) - pd.Timestamp(ad)).days >= 4:
         st.info(f"⚠️ 這份掃描是 **{ad}** 的資料，距今已超過 4 天。")
+    first_day = bool(m.get("tracking_since")) and m.get("tracking_since") == m.get("asof")
+    if first_day:
+        st.caption(f"進榜追蹤從 {m['tracking_since']} 開始記錄——這天全部都算「第 1 天」，"
+                   "不代表真的都是今天才符合。")
     if not stocks:
         st.info("今天沒有任何一檔通過全部條件。")
     else:
         flags = _active_flags()
+        opts = ["進榜日期（新→舊）", "代號", "連續天數（長→短）"]
+        pick = st.segmented_control("排序依據", opts, default=opts[0], key="_sort_short_scan") or opts[0]
+        if pick == opts[0]:
+            rows = _sort_rows(stocks, "first_seen")
+        elif pick == opts[2]:
+            rows = sorted(stocks, key=lambda x: (x.get("streak_days") is None,
+                                                 -(x.get("streak_days") or 0), x.get("ticker", "")))
+        else:
+            rows = sorted(stocks, key=lambda x: x.get("ticker", ""))
+        if first_day:
+            rows = [dict(x, _first_day=True) for x in rows]
         st.markdown('<div class="thc-grid">'
-                    + "".join(_short_scan_card(x, _active_of(x.get("ticker"), flags)) for x in stocks)
+                    + "".join(_short_scan_card(x, _active_of(x.get("ticker"), flags)) for x in rows)
                     + "</div>", unsafe_allow_html=True)
+    dropped = data.get("dropped") or []
+    if dropped:
+        st.markdown("**昨日在名單、今天掉出**：" + "、".join(
+            f"{d.get('ticker')} {d.get('name') or ''}".strip() for d in dropped))
     st.caption("判定口徑跟「多軌體檢 ⚡ 短線」分頁同一套；點代號進個股查詢可看每一項的現值。"
                "「待確認」＝資料不足、不算缺口；「風險揭露」是警示、不影響是否列出。")
 

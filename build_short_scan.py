@@ -81,6 +81,40 @@ def _active_flags() -> dict:
     return d
 
 
+def _track_entry(stocks: list[dict], asof: str, prev_file: dict | None) -> tuple[dict, list[dict]]:
+    """進榜日期／連續天數／昨日掉出。給每檔寫入 `first_seen`、`streak_days`。
+
+    基準 = 「上一個交易日的名單」，存在 `_prev`（`{ticker: {first_seen, streak_days, name}}`）：
+      - 新的 asof 晚於檔案裡的 asof → 前進一天：基準 = 檔案裡目前的 stocks，並把它存成新的 `_prev`；
+      - 同一天重跑 → 基準沿用檔案裡的 `_prev`（不被這次重跑的結果污染）；
+      - asof 早於檔案 → 不倒退，回 (None, [])，呼叫端保留原檔。
+    連續性：昨天在名單、今天也在 → streak+1；掉出再回來 → 重算為 1（同長波段 swing_history 語意）。
+    回傳 (新的 `_prev` 基準, 昨日掉出名單)。
+    """
+    base: dict = {}
+    prev_asof = (prev_file or {}).get("_meta", {}).get("asof")
+    if prev_file:
+        if prev_asof is not None and asof < prev_asof:
+            return None, []
+        if prev_asof == asof:
+            base = prev_file.get("_prev") or {}
+        else:
+            base = {x["ticker"]: {"first_seen": x.get("first_seen") or prev_asof,
+                                  "streak_days": x.get("streak_days") or 1,
+                                  "name": x.get("name")}
+                    for x in prev_file.get("stocks", [])}
+    for x in stocks:
+        h = base.get(x["ticker"])
+        if h:
+            x["first_seen"], x["streak_days"] = h["first_seen"], int(h["streak_days"]) + 1
+        else:
+            x["first_seen"], x["streak_days"] = asof, 1
+    today = {x["ticker"] for x in stocks}
+    dropped = [{"ticker": t, "name": h.get("name")} for t, h in sorted(base.items())
+               if t not in today]
+    return base, dropped
+
+
 def build() -> dict:
     from reference.corporate_actions import adjust_per_share
 
@@ -135,12 +169,27 @@ def build() -> dict:
         })
 
     passed.sort(key=lambda x: x["ticker"])    # 代號序——刻意不排名
+    prev_file = None
+    if OUT.exists():
+        try:
+            prev_file = json.loads(OUT.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            prev_file = None
+    base, dropped = _track_entry(passed, asof, prev_file)
+    if base is None:                           # asof 倒退（本機舊 bundle 重跑）：保留原檔
+        print(f"  ⚠ short_scan 略過更新（asof {asof} 早於已記錄的 {prev_file['_meta']['asof']}）")
+        return prev_file
     return {
         "_meta": {
             "schema": SCHEMA, "asof": asof, "scanned": scanned, "passed": len(passed),
             "has_margin": margin is not None,
             "has_chips": chips is not None,
+            "new_today": sum(1 for x in passed if x["streak_days"] == 1),
+            # 進榜追蹤從哪天開始記（第一天全部會是 streak 1，不代表真的都是新進）
+            "tracking_since": ((prev_file or {}).get("_meta") or {}).get("tracking_since") or asof,
         },
+        "dropped": dropped,
+        "_prev": base,
         "stocks": passed,
     }
 
