@@ -92,9 +92,9 @@ def main() -> None:
     today = date.today()
     start = today - timedelta(days=REFRESH_DAYS if old is not None else BACKFILL_DAYS)
     # ⚠️ 結束日超過 TAIFEX 最新資料日（例如今天還沒公布／週末）會回錯誤頁而不是空表，
-    #    所以從昨天起往前退幾天重試，第一個有資料的就用（2026-10-03 實測踩到）。
+    #    所以從今天起往前退幾天重試（傍晚班可能已有當日資料），第一個有資料的就用（2026-10-03 實測踩到）。
     recs, src = [], "API"
-    for back in (1, 2, 3, 4):
+    for back in (0, 1, 2, 3, 4):
         end = today - timedelta(days=back)
         try:
             recs = fetch_csv(start, end)
