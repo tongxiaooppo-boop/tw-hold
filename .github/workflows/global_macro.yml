@@ -48,11 +48,16 @@ jobs:
         continue-on-error: true
         run: python scripts/fetch_tx_futures.py
 
-      # Put/Call Ratio——這支 API 自帶 ~21 個交易日歷史，跟只給最新一天的
-      # DailyMarketReportFut 不同，一樣 continue-on-error 不擋主線。
-      - name: 台指選擇權 Put/Call Ratio
+      # 外資臺股期貨空單（TAIFEX CSV 下載，每次重抓近 14 天 upsert → 漏跑自癒、首次自動回補 90 天）。
+      # continue-on-error：不該擋掉上面美股/國際指數那筆真正的每日快照。
+      - name: 外資台指期未平倉
         continue-on-error: true
-        run: python scripts/fetch_put_call_ratio.py
+        run: python scripts/fetch_foreign_futures.py
+
+      # 上市三大法人買賣超（TWSE BFI82U，可帶日期；補近 14 天缺的平日）。
+      - name: 三大法人買賣超
+        continue-on-error: true
+        run: python scripts/fetch_inst_flow.py
 
       - name: commit data/reference/global_macro.parquet
         run: |
@@ -60,10 +65,10 @@ jobs:
           git config user.email "noreply@github.com"
           git add data/reference/global_macro.parquet data/reference/global_macro_meta.json \
                   data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                  data/reference/put_call_ratio.parquet
+                  data/reference/foreign_futures.parquet data/reference/inst_flow.parquet
           git diff --cached --quiet -- data/reference/global_macro.parquet data/reference/global_macro_meta.json \
                   data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                  data/reference/put_call_ratio.parquet && {
+                  data/reference/foreign_futures.parquet data/reference/inst_flow.parquet && {
             echo "無實質變更——跳過 commit"; exit 0; }
           git commit -m "國際總經快照 $(date -u +%F)"
           # 跟 rebuild.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕一次
@@ -79,10 +84,10 @@ jobs:
             if ! git pull --rebase origin main; then
               git checkout --theirs -- data/reference/global_macro.parquet \
                 data/reference/global_macro_meta.json data/reference/tx_futures.parquet \
-                data/reference/tx_futures_meta.json data/reference/put_call_ratio.parquet 2>/dev/null || true
+                data/reference/tx_futures_meta.json data/reference/foreign_futures.parquet data/reference/inst_flow.parquet 2>/dev/null || true
               git add -A data/reference/global_macro.parquet data/reference/global_macro_meta.json \
                 data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                data/reference/put_call_ratio.parquet 2>/dev/null || true
+                data/reference/foreign_futures.parquet data/reference/inst_flow.parquet 2>/dev/null || true
               GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
             fi
           done
