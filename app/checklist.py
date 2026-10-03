@@ -89,38 +89,52 @@ def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
           None, raw="⚠️ 命中")
     else:
         g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
-          f"狀態型：{win}主動式 ETF 買賣", f"{win}無主動式 ETF 買賣", None)
+          f"狀態型：{win}主動式 ETF 買賣", f"{win}無主動式 ETF 買賣", None, raw="—")
 
 
-def _margin_rows(g: "_G", m: pd.DataFrame | None) -> None:
+def _margin_rows(g: "_G", m: pd.DataFrame | None, dates=None) -> None:
     """融資融券餘額變化——籌碼群組。`m`：`bundle_data.margin()` 輸出（單位：張）。
 
-    `None` / 空 / 不足 11 個交易日 → **整列不出現**（bundle 舊 schema 沒有 margin 檔時照舊，
+    `None` / 空 / 不足 11 筆 → **整列不出現**（bundle 舊 schema 沒有 margin 檔時照舊，
     同利息保障倍數處理）。融資列有成立與否（10 日未增加）；融券列只攤狀態、不判斷。
+
+    `dates`：價格的交易日曆。**「N 日前」按交易日曆對齊、不是往回數 N 列**——上游上櫃融資券
+    曾缺 4 天，往回數列會把 10 日算成 14 日（2026-10-03 Opus 審查抓到）。margin 沒有最新交易日
+    或沒有 N 日前那一天 → 該數字顯示「—」、狀態待確認，**不拿別天補**。
     """
-    if m is None or m.empty or "margin_balance" not in m.columns:
+    if m is None or m.empty or "margin_balance" not in m.columns or len(m) < 11:
         return
-    m = m.sort_values("date").reset_index(drop=True)
-    if len(m) < 11:
-        return
+    mm = m.assign(date=pd.to_datetime(m["date"])).drop_duplicates("date", keep="last").set_index("date")
+    cal = (sorted(pd.to_datetime(pd.Series(dates)).dropna().unique())
+           if dates is not None else list(mm.index.sort_values()))
+    cal = [pd.Timestamp(x) for x in cal]
 
     def _chg(col: str, n: int):
-        if col not in m.columns or len(m) <= n:
+        if col not in mm.columns or len(cal) <= n:
             return None, None
-        now, then = m[col].iloc[-1], m[col].iloc[-1 - n]
+        last, base = cal[-1], cal[-1 - n]
+        if last not in mm.index or base not in mm.index:
+            return None, None
+        now, then = mm.at[last, col], mm.at[base, col]
         if pd.isna(now) or pd.isna(then):
-            return now, None
-        return now, (now / then - 1.0 if then else None)
+            return None, None
+        if then == 0:
+            return now, (float("inf") if now > 0 else 0.0)   # 從 0 增加 → 算增加
+        return now, now / then - 1.0
+
+    def _p(c):
+        return "新增" if c is not None and np.isinf(c) else _pct(c)
 
     now, c10 = _chg("margin_balance", 10)
     _, c20 = _chg("margin_balance", 20)
     g("融資餘額 10 日未增加", "融資餘額較 10 個交易日前 ≤ 0%",
-      f"{_f(now, 0)} 張 · 10 日 {_pct(c10)} · 20 日 {_pct(c20)}",
+      f"{_f(now, 0)} 張 · 10 日 {_p(c10)} · 20 日 {_p(c20)}" if now is not None
+      else "最新交易日或 10 日前缺融資資料",
       None if c10 is None else c10 <= 0)
-    if "short_balance" in m.columns:
+    if "short_balance" in mm.columns:
         snow, s10 = _chg("short_balance", 10)
         g("融券餘額變化（僅供參考）", "狀態型：不判斷成立與否",
-          f"{_f(snow, 0)} 張 · 10 日 {_pct(s10)}", None, raw="— 參考")
+          f"{_f(snow, 0)} 張 · 10 日 {_p(s10)}" if snow is not None else "—", None, raw="— 參考")
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -365,7 +379,7 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
         net20 = (c["foreign"] + c["trust"] + c["dealer"]).tail(20).sum()
         g("法人 20 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）",
           f"{_f(net20, 0)} 張", None if pd.isna(net20) else net20 > 0)
-    _margin_rows(g, d.get("margin"))
+    _margin_rows(g, d.get("margin"), None if px is None or px.empty else px["date"])
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "估值位置")
@@ -489,7 +503,7 @@ def short_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
         net5 = (cc["foreign"] + cc["trust"] + cc["dealer"]).tail(5).sum()
         g("法人 5 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）", f"{_f(net5, 0)} 張",
           None if pd.isna(net5) else net5 > 0)
-    _margin_rows(g, d.get("margin"))
+    _margin_rows(g, d.get("margin"), None if px is None or px.empty else px["date"])
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "籌碼密集區")
