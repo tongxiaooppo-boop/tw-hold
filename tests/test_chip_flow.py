@@ -76,9 +76,16 @@ def test_外資空單卡_增減中性色_有前一日():
                        "long_oi": [12373, 11893], "short_oi": [91927, 92197],
                        "net_oi": [-79554, -80304]})
     h = sa._foreign_short_card(df)
-    assert "92,197 口" in h and "+270 口" in h and "淨空單 80,304 口" in h and "gz-chg flat" in h
+    # 淨空單 80,304 口（前日 79,554）→ 增加 750；空單/多單總量在小字
+    assert "80,304 口" in h and "+750 口" in h and "空單 92,197　多單 11,893" in h and "gz-chg flat" in h
+    assert "外資淨空單" in h
     one = sa._foreign_short_card(df.iloc[-1:])
     assert "尚無前一日可比" in one
+    # 淨空單減少 → 負增減；翻成淨多 → 大字標「淨多」
+    down = pd.DataFrame({"date": pd.to_datetime(["2026-10-01", "2026-10-02"]), "long_oi": [100, 400],
+                         "short_oi": [300, 100], "net_oi": [-200, 300]})
+    h2 = sa._foreign_short_card(down)
+    assert "淨多 300 口" in h2 and "▼ -500 口" in h2
 
 
 def test_三大法人卡_合計與三方():
@@ -98,7 +105,7 @@ def test_各卡資料日_一行列齊_缺的不列():
         pd.Series([1.0], index=[d("2026-10-02")]), pd.Series([1.0], index=[d("2026-10-03")]),
         pd.DataFrame({"date": [d("2026-10-02")]}), pd.DataFrame(), {"asof": "2026-10-02"})
     assert "0050 10-02／006201 10-02" in line and "國際指數 10-02" in line
-    assert "日盤 10-02／夜盤 10-03" in line and "外資空單 10-02" in line and "族群動向 10-02" in line
+    assert "日盤 10-02／夜盤 10-03" in line and "外資淨空單 10-02" in line and "族群動向 10-02" in line
     assert "三大法人" not in line            # inst 空 → 不列
     assert sa._asof_line({}, pd.Series(dtype=float), pd.Series(dtype=float),
                          pd.DataFrame(), pd.DataFrame(), None) == ""
