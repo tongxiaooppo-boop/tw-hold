@@ -49,7 +49,7 @@ jobs:
           FILES="data/reference/foreign_futures.parquet data/reference/inst_flow.parquet"
           git add $FILES
           git diff --cached --quiet -- $FILES && { echo "無實質變更——跳過 commit"; exit 0; }
-          git commit -m "籌碼流向（外資空單／三大法人） $(date -u +%F)"
+          git commit -m "籌碼流向（外資淨空單／三大法人） $(date -u +%F)"
           # 同 global_macro.yml：push 被拒 → rebase；衝突時產出檔取自己這輪的版本；
           # 用 $pushed 旗標判斷，不讓「最後一步剛好 pull 成功」變成靜默失敗。
           pushed=0
