@@ -2565,7 +2565,7 @@ def _asof_line(asof: dict, tx_day: pd.Series, tx_night: pd.Series, ff: pd.DataFr
     if tx:
         parts.append("台期指 " + "／".join(tx))
     if ff is not None and not ff.empty:
-        parts.append(f"外資空單 {_d(ff['date'].max())}")
+        parts.append(f"外資淨空單 {_d(ff['date'].max())}")
     if inst is not None and not inst.empty:
         parts.append(f"三大法人 {_d(inst['date'].max())}")
     if (ir or {}).get("asof"):
@@ -2574,26 +2574,28 @@ def _asof_line(asof: dict, tx_day: pd.Series, tx_night: pd.Series, ff: pd.DataFr
 
 
 def _foreign_short_card(df: pd.DataFrame) -> str:
-    """外資臺股期貨空單（未平倉口數）＋跟前一個交易日的增減。
-    增減用**中性色**（`flat`）：空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
-    d = df.dropna(subset=["short_oi"]).sort_values("date")
+    """外資臺股期貨**淨空單**（空方未平倉 − 多方未平倉，口）＋跟前一個交易日的增減；
+    空單／多單總量放小字。淨部位翻成淨多時大字改標「淨多」。
+    增減用**中性色**（`flat`）：淨空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
+    d = df.dropna(subset=["net_oi"]).sort_values("date")
     last = d.iloc[-1]
-    chg = ""
+    net = int(last["net_oi"])
+    big = f"{-net:,} 口" if net <= 0 else f"淨多 {net:,} 口"
     if len(d) >= 2:
         prev = d.iloc[-2]
-        dv = int(last["short_oi"] - prev["short_oi"])
-        pct = dv / prev["short_oi"] if prev["short_oi"] else None
+        dv = int(prev["net_oi"] - last["net_oi"])           # 淨空單口數的增減（淨空增加為正）
+        base = -int(prev["net_oi"])
+        pct = dv / base if base > 0 else None
         arrow = "▲" if dv > 0 else ("▼" if dv < 0 else "—")
         chg = (f'<div class="gz-chg flat">{arrow} {dv:+,} 口'
                + (f'　({pct:+.2%})' if pct is not None else "")
                + f'　vs {pd.Timestamp(prev["date"]).strftime("%m-%d")}</div>')
     else:
         chg = '<div class="gz-chg flat">尚無前一日可比</div>'
-    net = int(last["net_oi"])
-    net_txt = f"淨空單 {-net:,} 口" if net < 0 else f"淨多單 {net:,} 口"
-    body = (f'<div class="gz-value">{int(last["short_oi"]):,} 口</div>{chg}'
-            f'<span class="gz-pct">{net_txt}　·　資料日 {pd.Timestamp(last["date"]).strftime("%m-%d")}</span>')
-    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">外資空單</span>'
+    body = (f'<div class="gz-value">{big}</div>{chg}'
+            f'<span class="gz-pct">空單 {int(last["short_oi"]):,}　多單 {int(last["long_oi"]):,}'
+            f'　·　資料日 {pd.Timestamp(last["date"]).strftime("%m-%d")}</span>')
+    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">外資淨空單</span>'
             f'<span class="gz-ticker">TX 未平倉</span></div>{body}{_flow_stale_line(last["date"])}</div>')
 
 
@@ -2937,12 +2939,12 @@ def _macro_compass_page() -> None:
     if tx_cards:
         st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
         st.caption("台指期近月合約日盤／夜盤（TAIFEX OpenAPI `DailyMarketReportFut`；夜盤沒有獨立結算價，"
-                   "顯示夜盤最後成交價，跨夜到隔天 05:00）。**外資空單**＝外資及陸資在臺股期貨（大台）"
-                   "的空方未平倉口數，增減對照前一個交易日（TAIFEX 期貨三大法人，盤後公布，所以資料日"
+                   "顯示夜盤最後成交價，跨夜到隔天 05:00）。**外資淨空單**＝外資及陸資在臺股期貨（大台）"
+                   "空方未平倉減多方未平倉的口數（空單、多單總量在小字），增減對照前一個交易日（TAIFEX 期貨三大法人，盤後公布，所以資料日"
                    "通常比台指期收盤晚一個交易日）。**三大法人買賣超**＝上市現貨買賣金額差額（TWSE "
                    "三大法人買賣金額統計表，不含上櫃）。這些是籌碼事實的攤開，不是多空訊號。")
     else:
-        st.info("還沒有台指期／外資空單／三大法人資料——`fetch_tx_futures.py`／"
+        st.info("還沒有台指期／外資淨空單／三大法人資料——`fetch_tx_futures.py`／"
                 "`fetch_foreign_futures.py`／`fetch_inst_flow.py` 應該還沒跑過或還沒重新部署。")
 
     st.divider()

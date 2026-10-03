@@ -290,6 +290,6 @@ def test_總經導航_外資空單與三大法人卡出現_TXO已移除():
     blob = " ".join(m.value for m in at.markdown)
     assert "未平倉比" not in blob and "Put/Call" not in blob
     if Path("data/reference/foreign_futures.parquet").exists():
-        assert "外資空單" in blob
+        assert "外資淨空單" in blob
     if Path("data/reference/inst_flow.parquet").exists():
         assert "三大法人買賣超" in blob
