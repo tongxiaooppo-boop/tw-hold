@@ -50,6 +50,7 @@ PIPELINE = {
     "revenue.parquet": "u1b",
     "index_0050.parquet": "u1b",
     "chips.parquet": "u1b",
+    "margin.parquet": "u1b",
 }
 
 
@@ -197,7 +198,7 @@ def fetch(check_only: bool = False) -> dict:
 
     u1b = all(
         (UPSTREAM / rel).exists()
-        for rel, p in PIPELINE.items() if p == "u1b" and rel != "chips.parquet"
+        for rel, p in PIPELINE.items() if p == "u1b" and rel not in ("chips.parquet", "margin.parquet")
     ) and not check_only
 
     result = {

@@ -40,7 +40,7 @@ SWING_DISCLAIMER = (
 SHORT_DISCLAIMER = (
     "🔴🔴 **短線不是 tw-hold 的守備範圍**——這裡只把日線技術面條件逐條攤開，"
     "**零回測、零驗證**，雜訊極高。tw-hold 是長期持有工具；短線交易請用 tw-swing。"
-    "融資融券變化 bundle 沒有 → 相關條件不出現。**不給訊號、不給買賣點。**"
+    "融資融券變化只攤餘額狀態（資料缺時該列不出現）。**不給訊號、不給買賣點。**"
 )
 #: 多軌體檢頁「波段」分頁專用——這裡逐項列出跟長波段候選池類似的檢查
 #: （月營收/季EPS/法人買超/趨勢模板，見 `app/checklist.py::swing_checks`），
@@ -1550,6 +1550,61 @@ def _short_b_html(c: dict, flag: dict | None = None) -> str:
         f'</div></div>')
 
 
+def _short_scan_card(x: dict, flag: dict | None = None) -> str:
+    """短線條件掃描的單檔卡——狀態型：沒有 verdict / 買價 / 排名（同 `_short_b_html` 視覺）。"""
+    code = str(x.get("ticker") or "")
+    risk, pend = x.get("risk") or [], x.get("pending") or []
+    bits = [f"收 {x['close']:,.2f}"] if isinstance(x.get("close"), (int, float)) else []
+    bits.append(f"{len(x.get('good') or [])} 項成立")
+    if pend:
+        bits.append(f"{len(pend)} 項待確認")
+    mg = next((c for c in x.get("checks") or [] if c.get("項目") == "融資餘額 10 日未增加"), None)
+    detail = f'<div class="thc-note">融資券：{_esc(mg["現值"])}</div>' if mg else ""
+    if risk:
+        detail += f'<div class="thc-note">⚠️ 風險揭露命中：{_esc("、".join(risk))}</div>'
+    if pend:
+        detail += f'<div class="thc-barcap">待確認：{_esc("、".join(pend))}</div>'
+    return (
+        f'<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
+        f'<div class="thc-head">'
+        f'<span class="thc-tk"><a href="?code={_esc(code)}" target="_self">{_esc(code)}</a></span>'
+        f'<span class="thc-cn">{_esc(x.get("name",""))}</span>{_active_chip(flag)}</div>'
+        f'<div class="thc-ctx">{_esc("　·　".join(bits))}</div>{detail}'
+        f'</div></div>')
+
+
+def _short_scan_section() -> None:
+    """短線頁第四個名單：tw-hold 自己用多軌體檢「⚡ 短線」檢核表掃 universe，全部項目都沒缺口的全列。
+    `short_scan.json` 沒有（舊部署／還沒跑）→ 整區不出現。讀 CI 產出一律 `.get()`。"""
+    data = _load("short_scan.json")
+    if not data:
+        return
+    m = data.get("_meta") or {}
+    stocks = data.get("stocks") or []
+    st.divider()
+    st.subheader(f"條件掃描（tw-hold 自己掃，{len(stocks)} 檔）")
+    st.warning(
+        "🔴 **這一區跟上面 tw-swing 的清單是不同來源、不同判準**：tw-swing 有回測、做過 "
+        "G1–G5 驗證；這一區只是把「多軌體檢 ⚡ 短線」檢核表對 universe 全部掃過一輪，"
+        "**沒有任何一項『未達』的就列出來**——**零回測、零驗證**，不排名、不打分、"
+        "不給訊號、不給買賣點，列出來不代表值得買。")
+    st.caption(f"資料日 {m.get('asof', '—')}　·　掃描 {m.get('scanned', '—')} 檔　·　"
+               f"全數條件無缺口 {len(stocks)} 檔（代號序，非排名）　·　"
+               + ("含融資券餘額條件" if m.get("has_margin") else "⚠️ 這次沒有融資券資料，未納入該條件"))
+    ad = m.get("asof")
+    if ad and (pd.Timestamp(_taipei_today()) - pd.Timestamp(ad)).days >= 4:
+        st.info(f"⚠️ 這份掃描是 **{ad}** 的資料，距今已超過 4 天。")
+    if not stocks:
+        st.info("今天沒有任何一檔通過全部條件。")
+    else:
+        flags = _active_flags()
+        st.markdown('<div class="thc-grid">'
+                    + "".join(_short_scan_card(x, _active_of(x.get("ticker"), flags)) for x in stocks)
+                    + "</div>", unsafe_allow_html=True)
+    st.caption("判定口徑跟「多軌體檢 ⚡ 短線」分頁同一套；點代號進個股查詢可看每一項的現值。"
+               "「待確認」＝資料不足、不算缺口；「風險揭露」是警示、不影響是否列出。")
+
+
 def _shortterm_page() -> None:
     st.header("短線清單（tw-swing）")
 
@@ -1557,6 +1612,7 @@ def _shortterm_page() -> None:
     if data is None:
         st.error("拉不到 tw-swing 每日清單（網路或來源暫時無法存取）。"
                  "可直接看 https://tw-swing.pages.dev/share-latest")
+        _short_scan_section()
         _strategy_backtest_expander("short")
         _disclaimer(SHORT_DISCLAIMER)
         return
@@ -1586,6 +1642,7 @@ def _shortterm_page() -> None:
                    "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
         for d in data.get("disclaimer", []):
             st.caption("· " + d)
+        _short_scan_section()
         _strategy_backtest_expander("short")
         _disclaimer(SHORT_DISCLAIMER)
         return
@@ -1610,6 +1667,7 @@ def _shortterm_page() -> None:
                "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
     for d in data.get("disclaimer", []):
         st.caption("· " + d)
+    _short_scan_section()
     _strategy_backtest_expander("short")
     if flags:
         st.caption(_active_legend(flags))
@@ -1654,9 +1712,10 @@ def _stock_data(code: str) -> dict:
 
     px, per, fin = _g(bd.prices, code), _g(bd.per_history, code), _g(bd.financials, code)
     div, rev, chp = _g(bd.dividends, code), _g(bd.revenue, code), _g(bd.chips, code)
+    mgn = _g(bd.margin, code)
     qf = _g(quarterly_factors, fin) if not fin.empty else fin
     return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf, "rev": rev,
-            "chips": chp, "_errs": errs}
+            "chips": chp, "margin": mgn, "_errs": errs}
 
 
 def _qf_display(df: pd.DataFrame):
@@ -2053,7 +2112,7 @@ def _checklist_page() -> None:
     st.caption("完整圖表（K 線可選區間、季 EPS、現金流、F-Score…）在「個股查詢」頁。")
     st.divider()
     with st.expander("📖 四軌各自怎麼算的（點開看）"):
-        st.markdown("**⚡ 短線**：純日線技術面條件逐條攤開。融資融券變化 bundle 沒有 → 不出現。")
+        st.markdown("**⚡ 短線**：日線技術面＋法人／融資融券餘額變化，條件逐條攤開（融資融券資料缺時該列不出現）。")
         st.markdown("**🟠 波段**：門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。"
                     "趨勢模板只做 7 條，不含相對強弱 RS（需全市場橫斷面）。")
         st.markdown("**🔵 價值**：F-Score + Magic Formula 精神；門檻與價值清單同一份因子。")

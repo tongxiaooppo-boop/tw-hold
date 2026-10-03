@@ -92,6 +92,37 @@ def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
           f"狀態型：{win}主動式 ETF 買賣", f"{win}無主動式 ETF 買賣", None)
 
 
+def _margin_rows(g: "_G", m: pd.DataFrame | None) -> None:
+    """融資融券餘額變化——籌碼群組。`m`：`bundle_data.margin()` 輸出（單位：張）。
+
+    `None` / 空 / 不足 11 個交易日 → **整列不出現**（bundle 舊 schema 沒有 margin 檔時照舊，
+    同利息保障倍數處理）。融資列有成立與否（10 日未增加）；融券列只攤狀態、不判斷。
+    """
+    if m is None or m.empty or "margin_balance" not in m.columns:
+        return
+    m = m.sort_values("date").reset_index(drop=True)
+    if len(m) < 11:
+        return
+
+    def _chg(col: str, n: int):
+        if col not in m.columns or len(m) <= n:
+            return None, None
+        now, then = m[col].iloc[-1], m[col].iloc[-1 - n]
+        if pd.isna(now) or pd.isna(then):
+            return now, None
+        return now, (now / then - 1.0 if then else None)
+
+    now, c10 = _chg("margin_balance", 10)
+    _, c20 = _chg("margin_balance", 20)
+    g("融資餘額 10 日未增加", "融資餘額較 10 個交易日前 ≤ 0%",
+      f"{_f(now, 0)} 張 · 10 日 {_pct(c10)} · 20 日 {_pct(c20)}",
+      None if c10 is None else c10 <= 0)
+    if "short_balance" in m.columns:
+        snow, s10 = _chg("short_balance", 10)
+        g("融券餘額變化（僅供參考）", "狀態型：不判斷成立與否",
+          f"{_f(snow, 0)} 張 · 10 日 {_pct(s10)}", None, raw="— 參考")
+
+
 def summarize(rows: list[dict]) -> dict:
     """檢核列 → 白話「亮點 / 缺口 / 待確認」。**不加總分、不給 verdict**——
     只是把成立/未達/無資料的項目名挑出來，讓人一眼看到卡在哪。"""
@@ -334,6 +365,7 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
         net20 = (c["foreign"] + c["trust"] + c["dealer"]).tail(20).sum()
         g("法人 20 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）",
           f"{_f(net20, 0)} 張", None if pd.isna(net20) else net20 > 0)
+    _margin_rows(g, d.get("margin"))
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "估值位置")
@@ -367,7 +399,7 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
 # ─────────────────────────────  短線軌  ─────────────────────────────
 # tw-hold 是長期持有工具，短線是 tw-swing 的守備範圍。這一軌只把「日線技術面
 # 條件」逐條攤開讓人自己看，**零回測支撐**，措辭要最保守（見 SHORT_DISCLAIMER）。
-# 融資融券變化：bundle 沒這份資料 → 相關條件直接不出現（同利息保障倍數處理）。
+# 融資融券變化：bundle 有 margin.parquet 才出現（`_margin_rows`）；舊 bundle 沒有 → 整列不出現。
 
 def _macd(close: pd.Series):
     ema12 = close.ewm(span=12, adjust=False).mean()
@@ -457,6 +489,7 @@ def short_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
         net5 = (cc["foreign"] + cc["trust"] + cc["dealer"]).tail(5).sum()
         g("法人 5 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）", f"{_f(net5, 0)} 張",
           None if pd.isna(net5) else net5 > 0)
+    _margin_rows(g, d.get("margin"))
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "籌碼密集區")

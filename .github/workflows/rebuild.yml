@@ -93,6 +93,12 @@ jobs:
         continue-on-error: true
         run: python build_active_etf_flags.py     # → data/derived/active_etf_flags.json
 
+      # 短線條件掃描（多軌體檢「⚡ 短線」檢核表掃 universe → 短線頁第四個名單）。
+      # 讀主動 ETF 旗標當 context，所以排在旗標之後；掛了不擋三清單（app 沒這支 JSON 就不顯示該區）。
+      - name: 短線條件掃描
+        continue-on-error: true
+        run: python build_short_scan.py           # → data/derived/short_scan.json
+
       # factors_*.parquet 刻意不進版控（每天一顆 blob）→ 推到 derived-latest release，
       # 讓 Streamlit Cloud 的「三軌體檢」頁執行期拉得到（tw-hold 是公開 repo，免 PAT）。
       - name: 因子表 → derived-latest release
@@ -163,6 +169,7 @@ jobs:
                data/derived/value_list.json \
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
+               data/derived/short_scan.json \
                data/pcf/ \
                data/reference/ \
                reference/corporate_actions_resolved.json; then
