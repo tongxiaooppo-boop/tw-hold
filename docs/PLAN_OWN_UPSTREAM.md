@@ -118,6 +118,16 @@ P1 約 1 段（4 支 collector＋1 個 workflow＋測試）；P2 約 2–3 段�
 ### 仍待決定
 - **FinMind 額度**：還原引擎要用除權息資料；現行 `dividend.parquet` 每週更新夠不夠、要不要加密一點（P2 開工前量一下）。
 
+## 6.5 附帶：本機同步腳本 `sync_local.py`（使用者 2026-10-03：「跟自建上游一起做，下週」）
+
+起因：`git pull` 帶不回 tw-swing `data/store/`（`.gitignore` 第 3 行，CI 也不 commit 它），本機沒有自動化，要靠手動 `update_data.py`（預設路徑已失效）。設計：
+- 位置 `tw-swing/scripts/sync_local.py`（母表屬 tw-swing）。流程：①兩 repo 追蹤檔有改動就**停下並列出**（不 stash、不丟棄）→ ②兩邊 `git pull --ff-only` → ③`update_data.py --skip-watchlist`（**必加**：不加會重抓處置股／月營收當日快照，弄髒 CI 已 commit 的 `data/revenue/`、`data/watchlist/` 當日檔）→ ④`--hold` 時再呼叫 tw-hold `refresh_local.py` → ⑤結尾驗證報告（母表三份、git 追蹤資料、bundle 的最新日；落後標紅）。
+- **資料來源做成參數**（`--source upstream|archive|selfhost`）：現在預設現有上游；封存／自建上線後可改指向 tw-swing 私有 Release 的封存檔或自建檔，不再綁死單一來源。順手修 `update_data.py` 失效的 `DEFAULT_PACK`（改可設定）。
+- 每週自動：Windows 工作排程器（沿用 `backup/backup.ps1` 做法），週日早上、`StartWhenAvailable`（沒開機則補跑），log 寫 `backup/logs`。**註冊排程器會改使用者機器設定，指令備好後由使用者同意再執行。**
+- 限制：每次約 220MB／2 分鐘，只適合每週。
+
+---
+
 ## 7. 動工前的第一步（下次開工）
 1. 實測 §3 P1 表格每個官方端點：**是否帶日期、回應日期是否可斷言、欄位對照 data_pack**（標 ✅／❌，更新 pitfalls 檔）。
 2. （§6-1 已決定：種子放 tw-swing 私有 Release；封存 job 可與 P1 並行先做，成本最低）
