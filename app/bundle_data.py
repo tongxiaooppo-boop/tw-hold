@@ -24,7 +24,7 @@ import fetch_bundle as fb   # noqa: E402  reuse _read_pat / _api / _release_asse
 UPSTREAM = _REPO / "data" / "upstream"
 
 _ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet", "revenue.parquet",
-           "chips.parquet",
+           "chips.parquet", "margin.parquet",
            "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"]
 _FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"}
 
@@ -129,6 +129,18 @@ def chips(code: str, lookback_days: int = 400) -> pd.DataFrame:
     cut = d["date"].max() - pd.Timedelta(days=lookback_days)
     return (d[d["date"] >= cut][["date", "foreign", "trust", "dealer"]]
             .sort_values("date").reset_index(drop=True))
+
+
+def margin(code: str, lookback_days: int = 120) -> pd.DataFrame:
+    """融資融券餘額 → `[date, margin_balance, short_balance]`（單位：張），近 `lookback_days` 天。
+    bundle 沒有這個檔（舊 schema）→ 空表，檢核表那列就不出現。"""
+    cols = ["date", "margin_balance", "short_balance"]
+    d = _read("margin.parquet", code, True, ["date", "ticker"] + cols[1:])
+    if d.empty:
+        return pd.DataFrame(columns=cols)
+    d["date"] = pd.to_datetime(d["date"])
+    cut = d["date"].max() - pd.Timedelta(days=lookback_days)
+    return d[d["date"] >= cut][cols].sort_values("date").reset_index(drop=True)
 
 
 def per_history(code: str) -> pd.DataFrame:

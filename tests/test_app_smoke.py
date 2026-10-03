@@ -251,3 +251,32 @@ def test_複製給AI_有verdict時保留():
                            [{"ticker": "2330", "name": "台積電", "verdict": "觀望（無安全邊際）",
                              "roe": 0.3}])
     assert "- 2330 台積電｜觀望（無安全邊際）" in out and "ROE: 30.0%" in out
+
+
+
+def test_短線分頁_第四個名單_有json才出現():
+    # data/derived/short_scan.json 由 CI 產出；本機沒有就整區不出現（舊部署照舊）。
+    import json
+    from pathlib import Path
+    has = Path("data/derived/short_scan.json").exists()
+    at = AppTest.from_file(REPO_APP, default_timeout=40)
+    at.session_state["_nav"] = "短線"
+    at.run()
+    assert not at.exception
+    subs = " ".join(h.value for h in at.subheader)
+    assert ("條件掃描" in subs) == has
+    if has:
+        n = len(json.loads(Path("data/derived/short_scan.json").read_text(encoding="utf-8"))["stocks"])
+        assert f"（tw-hold 自己掃，{n} 檔）" in subs
+        assert "不同來源、不同判準" in " ".join(w.value for w in at.warning)
+
+
+def test_short_scan_card_單張():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as sa
+    html = sa._short_scan_card({"ticker": "1301", "name": "台塑", "close": 50.5, "good": ["a", "b"],
+                                "pending": ["x"], "risk": ["短線過熱"],
+                                "checks": [{"項目": "融資餘額 10 日未增加", "現值": "100 張 · 10 日 -5.0%"}]})
+    assert "1301" in html and "2 項成立" in html and "融資券：100 張" in html and "短線過熱" in html
+    assert "verdict" not in html

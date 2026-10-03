@@ -5,7 +5,7 @@
 > ## 更新（2026-09-09 傍晚）
 > - 分頁改名 **「多軌體檢」**，加第 4 軌 **短線**（`checklist.short_checks`）——使用者決定
 >   「不評分不推薦、加進來 OK」。純日線技術面（趨勢/動能/量能/慣性/籌碼/密集區/風險），
->   MACD·CCP·ATR 現算。融資融券變化 bundle 沒有 → 不出現。帶最強警語 `SHORT_DISCLAIMER`
+>   MACD·CCP·ATR 現算。融資融券變化：2026-10-03 起 bundle 帶 margin.parquet，`_margin_rows` 攤開（缺檔時不出現）。帶最強警語 `SHORT_DISCLAIMER`
 >   （零回測、tw-hold 是長期工具、短線用 tw-swing）。圖：K線+法人近 3 個月。
 > - 估值軌主判準改「現價未過估值上緣」（`valuation_ceiling`），便宜門檻降為參考列
 >   （5 年均 EPS × PE P30，成長股常年摸不到，❌ 不進摘要）。

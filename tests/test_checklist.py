@@ -135,3 +135,48 @@ def test_swing_checks_基本流程():
     assert s["法人 20 日淨買超 > 0"] == cl._OK
     assert "Minervini 趨勢模板" in s
     assert any(r["項目"] == "PE 位於自身歷史低檔" for r in rows)
+
+
+# ── 融資融券（2026-10-03 起 bundle 帶 margin.parquet）──
+
+def _margin(n=25, start=1000, step=-10, short_start=100, short_step=5):
+    return pd.DataFrame({
+        "date": pd.bdate_range("2026-09-01", periods=n),
+        "margin_balance": [start + step * i for i in range(n)],
+        "short_balance": [short_start + short_step * i for i in range(n)],
+    })
+
+
+def _px(n=70):
+    c = np.linspace(50, 60, n)
+    return pd.DataFrame({"date": pd.bdate_range("2026-06-01", periods=n), "open": c, "high": c + 1,
+                         "low": c - 1, "close": c, "volume": np.full(n, 2e6)})
+
+
+def test_融資列_減少成立_增加未達():
+    s = _states(cl.short_checks({"px": _px(), "margin": _margin(step=-10)}))
+    assert s["融資餘額 10 日未增加"] == cl._OK
+    s = _states(cl.short_checks({"px": _px(), "margin": _margin(step=+10)}))
+    assert s["融資餘額 10 日未增加"] == cl._NG
+
+
+def test_融券列只攤狀態_不進缺口():
+    rows = cl.short_checks({"px": _px(), "margin": _margin()})
+    s = _states(rows)
+    assert s["融券餘額變化（僅供參考）"] == "— 參考"
+    assert "融券餘額變化（僅供參考）" not in cl.summarize(rows)["缺口"]
+    assert "融券餘額變化（僅供參考）" not in cl.summarize(rows)["待確認"]
+
+
+def test_融資列_缺資料或不足_整列不出現():
+    for m in (None, pd.DataFrame(), _margin(n=8)):
+        s = _states(cl.short_checks({"px": _px(), "margin": m}))
+        assert "融資餘額 10 日未增加" not in s
+    # 舊 schema：d 根本沒有 "margin" 鍵
+    assert "融資餘額 10 日未增加" not in _states(cl.short_checks({"px": _px()}))
+
+
+def test_波段檢核表也帶融資列_舊schema不炸():
+    d = {"px": _px(), "margin": _margin()}
+    assert "融資餘額 10 日未增加" in _states(cl.swing_checks(d))
+    assert "融資餘額 10 日未增加" not in _states(cl.swing_checks({"px": _px()}))
