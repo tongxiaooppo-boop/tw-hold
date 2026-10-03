@@ -5,6 +5,18 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "6197": {
+      "name": "佳必琪",
+      "status": "pending_entry",
+      "signal_date": "2026-10-02",
+      "risk_stop_ref": 322.36
+    },
+    "9933": {
+      "name": "中鼎",
+      "status": "pending_entry",
+      "signal_date": "2026-10-02",
+      "risk_stop_ref": 43.18
+    },
     "3026": {
       "name": "禾伸堂",
       "first_seen": "2026-10-01",
@@ -365,17 +377,11 @@
       "exit_date": null,
       "exit_price": null
     },
-    "6197": {
-      "name": "佳必琪",
+    "2027": {
+      "name": "大成鋼",
       "status": "pending_entry",
       "signal_date": "2026-10-02",
-      "risk_stop_ref": 322.36
-    },
-    "9933": {
-      "name": "中鼎",
-      "status": "pending_entry",
-      "signal_date": "2026-10-02",
-      "risk_stop_ref": 43.18
+      "risk_stop_ref": 47.37
     }
   }
 }
