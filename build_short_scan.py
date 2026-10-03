@@ -175,6 +175,15 @@ def build() -> dict:
             prev_file = json.loads(OUT.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             prev_file = None
+    # 🟡 缺料保護（同長波段 `_update_swing_history` 的「候選池缺料整段跳過」）：上一份有融資／法人資料、
+    # 這次 bundle 卻缺 → 融資／法人條件整列不出現 → 少一道過濾、名單暴增，會把進榜追蹤弄髒
+    # （那天一堆「今日新進」、隔天又全進「昨日掉出」）。保留原檔不前進，等資料回來。
+    pm = (prev_file or {}).get("_meta") or {}
+    if (pm.get("has_margin") and margin is None) or (pm.get("has_chips") and chips is None):
+        print("  ⚠ short_scan 略過更新：這次 bundle 缺 "
+              + ("margin" if pm.get("has_margin") and margin is None else "chips")
+              + "（上一份有），條件不完整，沿用上一份")
+        return prev_file
     base, dropped = _track_entry(passed, asof, prev_file)
     if base is None:                           # asof 倒退（本機舊 bundle 重跑）：保留原檔
         print(f"  ⚠ short_scan 略過更新（asof {asof} 早於已記錄的 {prev_file['_meta']['asof']}）")

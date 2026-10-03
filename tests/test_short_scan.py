@@ -72,3 +72,26 @@ def test_sort_rows_進榜日期新到舊_同日市值大到小_缺值最後():
     # 上榜天數仍由小到大
     r2 = [{"ticker": "a", "streak_days": 5}, {"ticker": "b", "streak_days": 1}]
     assert [r["ticker"] for r in sa._sort_rows(r2, "streak_days")] == ["b", "a"]
+
+
+def test_缺料保護_上一份有margin這次沒有_沿用原檔(tmp_path, monkeypatch):
+    """上一份 has_margin=True、這次 bundle 缺 margin → 不前進追蹤、回傳上一份原檔。"""
+    import json
+    import pandas as pd
+    prev = {"_meta": {"asof": "2026-10-02", "has_margin": True, "has_chips": True},
+            "stocks": [{"ticker": "A", "name": "NA", "streak_days": 1, "first_seen": "2026-10-02"}],
+            "_prev": {}, "dropped": []}
+    out = tmp_path / "short_scan.json"
+    out.write_text(json.dumps(prev), encoding="utf-8")
+    monkeypatch.setattr(bs, "OUT", out)
+    monkeypatch.setattr(bs, "UPSTREAM", tmp_path)            # 沒有任何 bundle 檔
+    px = pd.DataFrame({"date": pd.bdate_range("2026-06-01", periods=70), "ticker": "A.TW",
+                       "open": 50.0, "high": 51.0, "low": 49.0, "close": 50.0, "volume": 1e6})
+    uni = pd.DataFrame({"ticker": ["A"], "stock_name": ["NA"], "industry": ["x"], "in_universe": [True]})
+    (tmp_path / "fundamentals").mkdir()
+    uni.to_parquet(tmp_path / "fundamentals" / "universe.parquet")
+    px.to_parquet(tmp_path / "prices_adj.parquet")
+    monkeypatch.setattr(bs, "_active_flags", lambda: {})
+    res = bs.build()
+    assert res is not None and res["_meta"]["asof"] == "2026-10-02" and res["stocks"][0]["ticker"] == "A"
+    assert res["_meta"]["has_margin"] is True            # 原檔，沒被覆寫成 has_margin False

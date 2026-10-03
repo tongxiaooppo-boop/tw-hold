@@ -1642,7 +1642,7 @@ def _short_scan_section() -> None:
                     + "</div>", unsafe_allow_html=True)
     dropped = data.get("dropped") or []
     if dropped:
-        st.markdown("**昨日在名單、今天掉出**：" + "、".join(
+        st.markdown("**上一交易日在名單、今天掉出**：" + "、".join(
             f"{d.get('ticker')} {d.get('name') or ''}".strip() for d in dropped))
     st.caption("判定口徑跟「多軌體檢 ⚡ 短線」分頁同一套；點代號進個股查詢可看每一項的現值。"
                "「待確認」＝資料不足、不算缺口；「風險揭露」是警示、不影響是否列出。")
@@ -2563,13 +2563,16 @@ def _asof_line(asof: dict, tx_day: pd.Series, tx_night: pd.Series, ff: pd.DataFr
     if not tx_night.empty:
         tx.append(f"夜盤 {_d(tx_night.index[-1])}")
     if tx:
-        parts.append("台期指 " + "／".join(tx))
+        parts.append("台指期 " + "／".join(tx))
     if ff is not None and not ff.empty:
         parts.append(f"外資淨空單 {_d(ff['date'].max())}")
     if inst is not None and not inst.empty:
         parts.append(f"三大法人 {_d(inst['date'].max())}")
-    if (ir or {}).get("asof"):
-        parts.append(f"族群動向 {_d(ir['asof'])}")
+    try:
+        if (ir or {}).get("asof"):
+            parts.append(f"族群動向 {_d(ir['asof'])}")
+    except Exception:  # noqa: BLE001  asof 壞掉不該讓整頁炸
+        pass
     return ("各卡資料日：" + "　·　".join(parts)) if parts else ""
 
 
@@ -2577,19 +2580,25 @@ def _foreign_short_card(df: pd.DataFrame) -> str:
     """外資臺股期貨**淨空單**（空方未平倉 − 多方未平倉，口）＋跟前一個交易日的增減；
     空單／多單總量放小字。淨部位翻成淨多時大字改標「淨多」。
     增減用**中性色**（`flat`）：淨空單增加不等於「漲」，套用漲跌紅綠會誤導。"""
-    d = df.dropna(subset=["net_oi"]).sort_values("date")
+    d = df.dropna(subset=["net_oi", "short_oi", "long_oi"]).sort_values("date")
     last = d.iloc[-1]
     net = int(last["net_oi"])
     big = f"{-net:,} 口" if net <= 0 else f"淨多 {net:,} 口"
     if len(d) >= 2:
         prev = d.iloc[-2]
-        dv = int(prev["net_oi"] - last["net_oi"])           # 淨空單口數的增減（淨空增加為正）
-        base = -int(prev["net_oi"])
-        pct = dv / base if base > 0 else None
-        arrow = "▲" if dv > 0 else ("▼" if dv < 0 else "—")
-        chg = (f'<div class="gz-chg flat">{arrow} {dv:+,} 口'
-               + (f'　({pct:+.2%})' if pct is not None else "")
-               + f'　vs {pd.Timestamp(prev["date"]).strftime("%m-%d")}</div>')
+        pnet = int(prev["net_oi"])
+        vs = f'　vs {pd.Timestamp(prev["date"]).strftime("%m-%d")}'
+        if net <= 0 and pnet <= 0:
+            dv = pnet - net                                    # 淨空單口數的增減（淨空增加為正）
+            pct = dv / -pnet if pnet < 0 else None
+            arrow = "▲" if dv > 0 else ("▼" if dv < 0 else "—")
+            chg = (f'<div class="gz-chg flat">{arrow} {dv:+,} 口'
+                   + (f'　({pct:+.2%})' if pct is not None else "") + f'{vs}</div>')
+        else:
+            # 今天或前一天是淨多：「淨空單增減」語意混亂（且百分比會 >100%）→ 改看淨部位（多−空）變化，不給百分比
+            dn = net - pnet
+            arrow = "▲" if dn > 0 else ("▼" if dn < 0 else "—")
+            chg = f'<div class="gz-chg flat">{arrow} 淨部位（多−空）{dn:+,} 口{vs}</div>'
     else:
         chg = '<div class="gz-chg flat">尚無前一日可比</div>'
     body = (f'<div class="gz-value">{big}</div>{chg}'
@@ -2940,8 +2949,8 @@ def _macro_compass_page() -> None:
         st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
         st.caption("台指期近月合約日盤／夜盤（TAIFEX OpenAPI `DailyMarketReportFut`；夜盤沒有獨立結算價，"
                    "顯示夜盤最後成交價，跨夜到隔天 05:00）。**外資淨空單**＝外資及陸資在臺股期貨（大台）"
-                   "空方未平倉減多方未平倉的口數（空單、多單總量在小字），增減對照前一個交易日（TAIFEX 期貨三大法人，盤後公布，所以資料日"
-                   "通常比台指期收盤晚一個交易日）。**三大法人買賣超**＝上市現貨買賣金額差額（TWSE "
+                   "空方未平倉減多方未平倉的口數（空單、多單總量在小字），增減對照前一個交易日（TAIFEX 期貨三大法人，盤後約 15:00 公布，"
+                   "傍晚 18:30 更新，各卡資料日見頁頂）。**三大法人買賣超**＝上市現貨買賣金額差額（TWSE "
                    "三大法人買賣金額統計表，不含上櫃）。這些是籌碼事實的攤開，不是多空訊號。")
     else:
         st.info("還沒有台指期／外資淨空單／三大法人資料——`fetch_tx_futures.py`／"
