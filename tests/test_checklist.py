@@ -94,7 +94,7 @@ def test_active_etf_row_賣超_命中風險():
 def test_active_etf_row_無動作():
     rows = cl.swing_checks({"px": pd.DataFrame()}, active_etf={})
     row = next(r for r in rows if r["項目"] == _ITEM)
-    assert row["狀態"] == cl._NA and "無主動式 ETF" in row["現值"]
+    assert row["狀態"] == "—" and "無主動式 ETF" in row["現值"]   # 不進「待確認」（2026-10-03）
 
 
 def test_short_checks_基本流程():
@@ -141,7 +141,7 @@ def test_swing_checks_基本流程():
 
 def _margin(n=25, start=1000, step=-10, short_start=100, short_step=5):
     return pd.DataFrame({
-        "date": pd.bdate_range("2026-09-01", periods=n),
+        "date": _px(70)["date"].iloc[-n:].reset_index(drop=True),   # 對齊價格交易日曆
         "margin_balance": [start + step * i for i in range(n)],
         "short_balance": [short_start + short_step * i for i in range(n)],
     })
@@ -180,3 +180,39 @@ def test_波段檢核表也帶融資列_舊schema不炸():
     d = {"px": _px(), "margin": _margin()}
     assert "融資餘額 10 日未增加" in _states(cl.swing_checks(d))
     assert "融資餘額 10 日未增加" not in _states(cl.swing_checks({"px": _px()}))
+
+
+def test_融資列_按交易日曆對齊_不是往回數列():
+    # 價格有 25 個交易日；margin 中間缺 2 天（上櫃缺日情境）。
+    px = _px(70)
+    cal = px["date"].iloc[-25:].reset_index(drop=True)
+    m = pd.DataFrame({"date": cal, "margin_balance": np.arange(1000, 1000 - 25 * 10, -10),
+                      "short_balance": 100})
+    # 缺掉「10 個交易日前」的那一天 → 不能拿相鄰日補，要待確認
+    m_gap = m[m["date"] != cal.iloc[-11]]
+    s = _states(cl.short_checks({"px": px, "margin": m_gap}))
+    assert s["融資餘額 10 日未增加"] == cl._NA
+    # 缺的是別天 → 照算
+    m_ok = m[m["date"] != cal.iloc[3]]
+    assert _states(cl.short_checks({"px": px, "margin": m_ok}))["融資餘額 10 日未增加"] == cl._OK
+
+
+def test_融資列_最新交易日沒到_待確認不拿前一天頂():
+    px = _px(70)
+    cal = px["date"].iloc[-25:].reset_index(drop=True)
+    m = pd.DataFrame({"date": cal.iloc[:-1], "margin_balance": np.arange(1000, 1000 - 24 * 10, -10),
+                      "short_balance": 100})
+    assert _states(cl.short_checks({"px": px, "margin": m}))["融資餘額 10 日未增加"] == cl._NA
+
+
+def test_融資列_從0增加算未達():
+    px = _px(70)
+    cal = px["date"].iloc[-25:].reset_index(drop=True)
+    bal = [0] * 15 + [50] * 10
+    m = pd.DataFrame({"date": cal, "margin_balance": bal, "short_balance": 0})
+    assert _states(cl.short_checks({"px": px, "margin": m}))["融資餘額 10 日未增加"] == cl._NG
+
+
+def test_主動ETF_無買賣_不算待確認():
+    rows = cl.short_checks({"px": _px(70)}, active_etf={})
+    assert not any("主動式 ETF" in x for x in cl.summarize(rows)["待確認"])

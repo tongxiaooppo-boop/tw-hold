@@ -129,7 +129,7 @@ def build() -> dict:
         last = p.sort_values("date").iloc[-1]
         passed.append({
             "ticker": r.code, "name": r.stock_name, "industry": r.industry,
-            "close": float(last["close"]),
+            "close": round(float(last["close"]), 2),
             "good": s["亮點"], "pending": s["待確認"], "risk": s["風險命中"],
             "checks": [{k: row[k] for k in ("組", "項目", "現值", "狀態")} for row in rows],
         })

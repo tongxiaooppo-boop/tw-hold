@@ -1559,7 +1559,7 @@ def _short_scan_card(x: dict, flag: dict | None = None) -> str:
     if pend:
         bits.append(f"{len(pend)} 項待確認")
     mg = next((c for c in x.get("checks") or [] if c.get("項目") == "融資餘額 10 日未增加"), None)
-    detail = f'<div class="thc-note">融資券：{_esc(mg["現值"])}</div>' if mg else ""
+    detail = f'<div class="thc-note">融資券：{_esc(mg.get("現值", "—"))}</div>' if mg else ""
     if risk:
         detail += f'<div class="thc-note">⚠️ 風險揭露命中：{_esc("、".join(risk))}</div>'
     if pend:
