@@ -50,6 +50,23 @@ def _tail_days(df: pd.DataFrame, days: int) -> pd.DataFrame:
     return df[df["date"] >= df["date"].max() - pd.Timedelta(days=days)]
 
 
+def _thin_latest(df: pd.DataFrame | None, asof: str, window: int = 20, ratio: float = 0.9) -> bool:
+    """最新一天（asof）的檔數是否明顯偏少，或根本沒有 → True（當成缺料）。
+
+    檔在、但最新一天殘缺（上游實際發生過：margin 在 09-04／09-15～17 上櫃整批缺，檔數 1058／1859＝0.57；
+    正常日比值 ≥ 0.98）。判準＝asof 那天的檔數 < 前 `window` 個有資料日中位數的 `ratio`。
+    df 本身為 None（檔不存在）另外處理，這裡回 False。
+    """
+    if df is None:
+        return False
+    cnt = pd.to_datetime(df["date"]).value_counts().sort_index()
+    ts = pd.Timestamp(asof)
+    if ts not in cnt.index:
+        return True
+    prior = cnt[cnt.index < ts].tail(window)
+    return bool(len(prior) and cnt[ts] < ratio * prior.median())
+
+
 def _by_code(df: pd.DataFrame) -> dict:
     df = df.assign(_c=df["ticker"].map(_code))
     return {k: g.drop(columns="_c").reset_index(drop=True) for k, g in df.groupby("_c")}
@@ -82,14 +99,14 @@ def _active_flags() -> dict:
 
 
 def _track_entry(stocks: list[dict], asof: str, prev_file: dict | None) -> tuple[dict, list[dict]]:
-    """進榜日期／連續天數／昨日掉出。給每檔寫入 `first_seen`、`streak_days`。
+    """進榜日期／連續天數／上一交易日掉出。給每檔寫入 `first_seen`、`streak_days`。
 
     基準 = 「上一個交易日的名單」，存在 `_prev`（`{ticker: {first_seen, streak_days, name}}`）：
       - 新的 asof 晚於檔案裡的 asof → 前進一天：基準 = 檔案裡目前的 stocks，並把它存成新的 `_prev`；
       - 同一天重跑 → 基準沿用檔案裡的 `_prev`（不被這次重跑的結果污染）；
       - asof 早於檔案 → 不倒退，回 (None, [])，呼叫端保留原檔。
     連續性：昨天在名單、今天也在 → streak+1；掉出再回來 → 重算為 1（同長波段 swing_history 語意）。
-    回傳 (新的 `_prev` 基準, 昨日掉出名單)。
+    回傳 (新的 `_prev` 基準, 上一交易日掉出名單)。
     """
     base: dict = {}
     prev_asof = (prev_file or {}).get("_meta", {}).get("asof")
@@ -137,6 +154,8 @@ def build() -> dict:
 
     flags = _active_flags()
     asof = str(px["date"].max().date())
+    margin_ok = margin is not None and not _thin_latest(margin, asof)
+    chips_ok = chips is not None and not _thin_latest(chips, asof)
 
     passed, scanned = [], 0
     for r in uni.itertuples(index=False):
@@ -175,14 +194,18 @@ def build() -> dict:
             prev_file = json.loads(OUT.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             prev_file = None
-    # 🟡 缺料保護（同長波段 `_update_swing_history` 的「候選池缺料整段跳過」）：上一份有融資／法人資料、
-    # 這次 bundle 卻缺 → 融資／法人條件整列不出現 → 少一道過濾、名單暴增，會把進榜追蹤弄髒
-    # （那天一堆「今日新進」、隔天又全進「昨日掉出」）。保留原檔不前進，等資料回來。
+    # 缺料保護（同長波段 `_update_swing_history` 的「候選池缺料整段跳過」）：融資／法人條件缺料時整列變
+    # 待確認（不算缺口）→ 少一道過濾、名單暴增（實測 8→29 檔），會把進榜追蹤弄髒（那天一堆「今日新進」、
+    # 隔天又全進「上一交易日掉出」）。缺料＝檔不存在，或**檔在但 asof 那天殘缺**（`_thin_latest`）。
+    # 上一份有、這次缺 → 沿用原檔不前進，等資料回來。
+    # ⚠️ 若上游永久不再附 margin／chips，這裡會一直凍結（頁面只會跳「資料超過 4 天」）：
+    #    解法＝刪掉 data/derived/short_scan.json，或把 `_meta.has_margin`／`has_chips` 手動改 false。
     pm = (prev_file or {}).get("_meta") or {}
-    if (pm.get("has_margin") and margin is None) or (pm.get("has_chips") and chips is None):
-        print("  ⚠ short_scan 略過更新：這次 bundle 缺 "
-              + ("margin" if pm.get("has_margin") and margin is None else "chips")
-              + "（上一份有），條件不完整，沿用上一份")
+    lost = [name for name, ok, had in (("margin", margin_ok, pm.get("has_margin")),
+                                       ("chips", chips_ok, pm.get("has_chips"))) if had and not ok]
+    if lost:
+        print(f"::warning::short_scan 略過更新：這次 bundle 缺／殘缺 {'、'.join(lost)}"
+              "（上一份有），條件不完整，沿用上一份")
         return prev_file
     base, dropped = _track_entry(passed, asof, prev_file)
     if base is None:                           # asof 倒退（本機舊 bundle 重跑）：保留原檔
@@ -191,8 +214,8 @@ def build() -> dict:
     return {
         "_meta": {
             "schema": SCHEMA, "asof": asof, "scanned": scanned, "passed": len(passed),
-            "has_margin": margin is not None,
-            "has_chips": chips is not None,
+            "has_margin": margin_ok,
+            "has_chips": chips_ok,
             "new_today": sum(1 for x in passed if x["streak_days"] == 1),
             # 進榜追蹤從哪天開始記（第一天全部會是 streak 1，不代表真的都是新進）
             "tracking_since": ((prev_file or {}).get("_meta") or {}).get("tracking_since") or asof,
