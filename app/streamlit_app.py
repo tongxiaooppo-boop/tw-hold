@@ -2922,7 +2922,7 @@ def _macro_compass_page() -> None:
                    if st.session_state.get("_bundle_err") else ""))
 
     st.divider()
-    st.subheader("台指期／選擇權")
+    st.subheader("台指期／籌碼")
     tx_day, tx_night = tx_futures.load_session("day"), tx_futures.load_session("night")
     ff, inst = chip_flow.load_foreign_futures(), chip_flow.load_inst_flow()
     _asof_slot.caption(_asof_line(_asof, tx_day, tx_night, ff, inst, _load("industry_rotation.json")))
