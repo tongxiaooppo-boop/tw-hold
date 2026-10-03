@@ -167,6 +167,9 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 7. 🟡 **tw-swing 私有 repo 每月 2000 分鐘**（上次查 195/2000）；tw-hold 公開 repo 無限。
 8. 🟡 **本機沒有自動化**，`data/store/` 不進 git；本機備份只有「D→G 鏡像週跑＋memory→OneDrive 日跑」，`backup.ps1` 對 tw-swing 排除 `data\raw`、`data\store`、`data\cache`、`data\scan`（2026-10-03 重驗）——上游死了就**沒有第二份歷史**，除了 Release 上的 bundle 與 `books\claude\...\data_pack.zip`（09-03 舊版）。
 
+> 📌 **上游單點的長期解法已列入計畫（2026-10-03，使用者定調「hold 未來建立自己的上游」，**不是今天做**）：見 `docs/PLAN_OWN_UPSTREAM.md`。
+> 重點：**TPEx 日線端點只回最新一天**，所以「影子收集」要比還原引擎更早開始；現有上游當種子與對帳基準，不做鏡像轉載。
+
 ### 建議的補強順序（都還沒做）
 1. **把最新 `data_pack.zip` 定期留一份到 G 碟／另一處**（成本最低、直接堵 #1 的最壞情況：至少有 2015→某日的完整歷史可重建）。
 2. 修 `heartbeat.yml` 的 `|| true`，並讓它偵測過期時 `workflow_dispatch` 觸發 rebuild（自癒；使用者偏好）。
