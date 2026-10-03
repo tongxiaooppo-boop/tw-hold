@@ -165,7 +165,7 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 5. 🟡 **Actions 快取（220MB 資料包）會被 7 天未使用 evict**；快取沒了就重下載，上游死了就沒得下載。
 6. 🟡 **主動 ETF PCF 依賴非官方端點**（三家各自可能改版），有 `span_days` 容錯但沒有「改版偵測」。
 7. 🟡 **tw-swing 私有 repo 每月 2000 分鐘**（上次查 195/2000）；tw-hold 公開 repo 無限。
-8. 🟡 **本機沒有自動化**，`data/store/` 不進 git；本機備份只有「D→G 鏡像週跑＋memory→OneDrive 日跑」，`backup.ps1` 對 tw-swing 排除 `dataaw`、`data\store`、`data\cache`、`data\scan`（2026-10-03 重驗）——上游死了就**沒有第二份歷史**，除了 Release 上的 bundle 與 `books\claude\...\data_pack.zip`（09-03 舊版）。
+8. 🟡 **本機沒有自動化**，`data/store/` 不進 git；本機備份只有「D→G 鏡像週跑＋memory→OneDrive 日跑」，`backup.ps1` 對 tw-swing 排除 `data\raw`、`data\store`、`data\cache`、`data\scan`（2026-10-03 重驗）——上游死了就**沒有第二份歷史**，除了 Release 上的 bundle 與 `books\claude\...\data_pack.zip`（09-03 舊版）。
 
 ### 建議的補強順序（都還沒做）
 1. **把最新 `data_pack.zip` 定期留一份到 G 碟／另一處**（成本最低、直接堵 #1 的最壞情況：至少有 2015→某日的完整歷史可重建）。
