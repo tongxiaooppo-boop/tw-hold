@@ -17,6 +17,12 @@
       "signal_date": "2026-10-02",
       "risk_stop_ref": 43.18
     },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-10-02",
+      "risk_stop_ref": 47.37
+    },
     "3026": {
       "name": "禾伸堂",
       "first_seen": "2026-10-01",
@@ -376,12 +382,6 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-10-02",
-      "risk_stop_ref": 47.37
     }
   }
 }
