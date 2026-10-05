@@ -123,6 +123,8 @@ def collect_day(d: date) -> pd.DataFrame | None:
     """上市＋上櫃合併；任一邊失敗 → None（整天不寫）；兩邊都空 → 空表（休市）。"""
     a = fetch_twse(d)
     time.sleep(SLEEP)
+    if d.weekday() == 5 and a is not None and a.empty:
+        return pd.DataFrame(columns=COLS)       # 週六：上市空表＝非補班日，不再問上櫃（省請求）
     b = fetch_tpex(d)
     time.sleep(SLEEP)
     if a is None or b is None:
@@ -144,7 +146,8 @@ def main(argv=None) -> int:
     old = pd.read_parquet(OUT) if OUT.exists() else pd.DataFrame(columns=COLS)
     have = set(pd.to_datetime(old["date"]).dt.date) if len(old) else set()
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    todo = [d for d in days if d.weekday() < 5 and d not in have]
+    # 含週六：補行上班日（例：2016-01-30、2017-09-30、2018-03-31、2018-12-22）股市照常交易，上游母表漏了這些日子
+    todo = [d for d in days if d.weekday() < 6 and d not in have]
     print(f"範圍 {start}~{end}；檔案已有 {len(have)} 天；待抓平日 {len(todo)} 天")
 
     new, failed, closed = [], [], 0

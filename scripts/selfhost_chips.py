@@ -231,11 +231,13 @@ def run(dataset: str, start: date, end: date) -> int:
     unavail_f = SH / f"{dataset}_unavailable.csv"       # 官方該端點該日根本沒資料（目前已知情況：無；TPEx 法人 2018 前只是格式不同，不是沒資料）
     if unavail_f.exists():
         closed |= {(r.market, date.fromisoformat(r.date)) for r in pd.read_csv(unavail_f).itertuples()}
-    cal = _trading_calendar()
-    cal_max = max(cal) if cal else None
     empties: list[tuple[str, date]] = []
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    todo = [(m, d) for d in days if d.weekday() < 5 for m in fetchers if (m, d) not in have and (m, d) not in closed]
+    cal = _trading_calendar()
+    cal_max = max(cal) if cal else None
+    # 週六只在「官方實價日曆有該日」（＝補班日有交易）時才問；平日照舊
+    todo = [(m, d) for d in days if (d.weekday() < 5 or (d.weekday() == 5 and cal is not None and d in cal))
+            for m in fetchers if (m, d) not in have and (m, d) not in closed]
     print(f"[{dataset}] 範圍 {start}~{end}；待抓 {len(todo)} 個(市場,日)", flush=True)
     new: list[pd.DataFrame] = []
     failed, newly_closed = [], []

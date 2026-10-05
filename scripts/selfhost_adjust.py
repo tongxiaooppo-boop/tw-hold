@@ -46,7 +46,8 @@ LOG = SH / "adjust_log.csv"
 
 CLASS = {"ex_div": "div", "ex_rights": "div", "ex_both": "div",
          "par_change": "par", "split": "par", "reverse_split": "par", "cap_reduction": "red"}
-PRIORITY = {"twse_ex": 0, "tpex_ex": 0, "fm_split": 1, "fm_par": 2, "fm_reduction": 0}
+PRIORITY = {"twse_ex": 0, "tpex_ex": 0, "twse_red": 0, "tpex_red": 0, "twse_par": 0,   # 官方優先
+            "fm_split": 1, "fm_par": 2, "fm_reduction": 1}
 CONFLICT_TOL = 0.005
 
 

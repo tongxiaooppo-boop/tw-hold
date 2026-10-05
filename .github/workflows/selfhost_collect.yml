@@ -73,14 +73,23 @@ jobs:
           START=$(date -u -d "$(date -u +%Y-%m-01) -2 month" +%Y-%m-%d)
           python scripts/selfhost_events.py --official "$START" --finmind-split --build
 
-      # 減資必須逐檔查（FinMind 全市場查是付費層）→ 每週五輪詢 450 檔（從未查過／最久沒查的先查），約 5 週輪完全市場。
-      - name: 減資事件輪詢（週五）
+      # 官方減資／面額變更表（TWTAUU、revivt、TWTB8U）免逐檔、可日期區間，是事件表的**主來源**；
+      # 近兩年重抓一次（含已公告的新事件），冪等。
+      - name: 官方減資／面額變更
+        continue-on-error: true
+        run: |
+          START=$(date -u -d "-2 year" +%Y-01-01)
+          python scripts/selfhost_events.py --official-act "$START" --build
+
+      # FinMind 減資（逐檔）只當交叉驗證（2026-10-05 實測：FinMind 已查 345 件全部在官方表內、因子差中位數 0）；
+      # 每週五輪詢 150 檔，避免占用與 tw-swing 共用的 FinMind 額度。
+      - name: 減資事件輪詢（週五，交叉驗證）
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * 1-5'
         continue-on-error: true
         timeout-minutes: 15
         run: |
           if [ "$(date -u +%u)" = 5 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python scripts/selfhost_events.py --finmind-reduction --max-calls 450 --no-wait --build
+            python scripts/selfhost_events.py --finmind-reduction --max-calls 150 --no-wait --build
           fi
 
       - name: 閘門（不比舊版差才放行）
