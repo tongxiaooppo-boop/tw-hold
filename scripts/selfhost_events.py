@@ -8,6 +8,9 @@
 | :-- | :-- | :-- | :-- |
 | `twse_ex` | TWSE `exRight/TWT49U` 除權息計算結果（前收、參考價） | 上市，≥ 2015 | 月切段、免金鑰 |
 | `tpex_ex` | TPEx `bulletin/exDailyQ` 除權息計算結果（含現金增資欄） | 上櫃，≥ 2015 | 月切段、免金鑰 |
+| `twse_red` | TWSE `reducation/TWTAUU`（⚠️ 官方拼字如此）減資恢復買賣參考價（含「除權參考價」＝減資併現金增資時當天實際適用的價） | 上市，≥ 2011（實測 2015 有資料） | 年切段、免金鑰、**免逐檔** |
+| `tpex_red` | TPEx `bulletin/revivt` 減資（日期為民國 7 碼） | 上櫃，≥ ~2013 | 年切段、免金鑰 |
+| `twse_par` | TWSE `change/TWTB8U` 面額變更恢復買賣參考價 | 上市，實質 ≥ 2020-08 | 年切段、免金鑰 |
 | `fm_split` | FinMind `TaiwanStockSplitPrice`（面額變更／分割／反分割，含 ETF） | 全市場一次拿完 | 免費層可用 |
 | `fm_par` | FinMind `TaiwanStockParValueChange`（面額變更；與 fm_split 重疊，當交叉驗證） | 全市場 | 免費層可用 |
 | `fm_reduction` | FinMind `TaiwanStockCapitalReductionReferencePrice`（減資：最後交易日收盤 → 恢復買賣參考價） | **必須逐檔查**（全市場查是付費層） | 600 次/小時，續跑 |
@@ -19,6 +22,7 @@
 
 ## 用法
     python scripts/selfhost_events.py --official 2015-01-01          # 官方除權息（月切段，約 10 分鐘）
+    python scripts/selfhost_events.py --official-act 2011-01-01      # 官方減資／面額變更（年切段，約 1 分鐘）
     python scripts/selfhost_events.py --finmind-split                # 分割／面額變更（兩次請求）
     python scripts/selfhost_events.py --finmind-reduction            # 減資，逐檔、續跑（約 3.5 小時）
     python scripts/selfhost_events.py --build                        # 合併成 corp_actions.parquet
@@ -40,6 +44,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 SH = ROOT / "data" / "selfhost"
 OFFICIAL = SH / "ev_official.parquet"
+OFFICIAL_ACT = SH / "ev_official_actions.parquet"      # 官方減資／面額變更（TWTAUU、revivt、TWTB8U）
 FM_SPLIT = SH / "ev_fm_split.parquet"
 FM_RED = SH / "ev_fm_reduction.parquet"
 FM_RED_DONE = SH / "ev_fm_reduction_done.json"
@@ -76,6 +81,8 @@ class HTTPError(Exception):
 
 def _roc(s: str) -> pd.Timestamp:
     s = str(s).strip().replace("年", "/").replace("月", "/").replace("日", "")
+    if "/" not in s and len(s) == 7 and s.isdigit():        # 民國 7 碼緊湊格式（TPEx revivt：1140113）
+        s = f"{s[:3]}/{s[3:5]}/{s[5:]}"
     y, m, d = s.split("/")
     return pd.Timestamp(int(y) + 1911, int(m), int(d))
 
@@ -129,6 +136,71 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
                     "prev_close": pre, "ref_price": ref, "factor": ref / pre,
                     "source": det.pop("src"), "detail": json.dumps(det, ensure_ascii=False)})
     return pd.DataFrame(out, columns=COLS)
+
+
+# ───────────────────────── 官方減資／面額變更 ─────────────────────────
+_ACT_SOURCES = [
+    # (source, url 模板, 日期格式, 事件類型, 市場, 取價欄名（優先序）)
+    ("twse_red", "https://www.twse.com.tw/rwd/zh/reducation/TWTAUU?startDate={a}&endDate={b}&response=json",
+     "%Y%m%d", "cap_reduction", "TW", ("除權參考價", "恢復買賣參考價")),
+    ("tpex_red", "https://www.tpex.org.tw/www/zh-tw/bulletin/revivt?startDate={a}&endDate={b}&response=json",
+     "%Y/%m/%d", "cap_reduction", "TWO", ("除權參考價", "減資恢復買賣開始日參考價格")),
+    ("twse_par", "https://www.twse.com.tw/rwd/zh/change/TWTB8U?startDate={a}&endDate={b}&response=json",
+     "%Y%m%d", "par_change", "TW", ("恢復買賣參考價",)),
+]
+
+
+def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols: tuple[str, ...]) -> list[dict]:
+    """把官方減資／面額變更表轉成事件列。前收＝『停止買賣前收盤價格』或『最後交易日之收盤價格』；
+    參考價取 price_cols 第一個「有數字且 >0」的欄（減資併現金增資時『除權參考價』才是恢復買賣當天實際適用的價，
+    其餘為 `--`／`0.00`）。欄名找不到 → 整張表丟棄並警告（改版時明確失敗，不靜默錯位）。"""
+    f = t.get("fields") or []
+    try:
+        i_date = f.index("恢復買賣日期")
+        i_code = f.index("股票代號")
+        i_pre = next(i for i, n in enumerate(f) if n in ("停止買賣前收盤價格", "最後交易日之收盤價格"))
+    except (ValueError, StopIteration):
+        print(f"::warning::{source} 欄名對不上：{f}", file=sys.stderr)
+        return []
+    i_prices = [f.index(c) for c in price_cols if c in f]
+    if not i_prices:
+        print(f"::warning::{source} 找不到參考價欄 {price_cols}：{f}", file=sys.stderr)
+        return []
+    i_reason = f.index("減資原因") if "減資原因" in f else None
+    out = []
+    for r in t.get("data", []):
+        code = str(r[i_code]).strip()
+        pre = _f(r[i_pre])
+        ref = next((v for v in (_f(r[i]) for i in i_prices) if v), None)
+        if not (code.isdigit() and len(code) == 4) or pre is None or ref is None:
+            continue
+        out.append({"ticker": code, "market": market, "date": _roc(r[i_date]), "type": typ, "prev_close": pre,
+                    "ref_price": ref, "factor": ref / pre, "source": source,
+                    "detail": json.dumps({"reason": r[i_reason] if i_reason is not None else None,
+                                          "price_col": next(f[i] for i in i_prices if _f(r[i])),
+                                          "row": [str(x)[:60] for x in r[:10]]}, ensure_ascii=False)})
+    return out
+
+
+def fetch_official_actions(start: str, end: str) -> pd.DataFrame:
+    """官方減資／面額變更。年切段（單次區間過長的行為未驗，故保守）。"""
+    rows: list[dict] = []
+    for yr in range(int(start[:4]), int(end[:4]) + 1):
+        a, b = pd.Timestamp(yr, 1, 1), pd.Timestamp(yr, 12, 31)
+        for source, url, fmt, typ, market, price_cols in _ACT_SOURCES:
+            time.sleep(1.5)
+            try:
+                j = _http_json(url.format(a=a.strftime(fmt), b=b.strftime(fmt)))
+            except (HTTPError, RuntimeError) as e:
+                print(f"::warning::{source} {yr} 抓取失敗：{e}", file=sys.stderr)
+                continue
+            t = (j.get("tables") or [j])[0] if source == "tpex_red" else j
+            if source != "tpex_red" and j.get("stat") != "OK":
+                continue                                    # 該年無資料（非錯誤）
+            rows += _parse_action_table(t, source, typ, market, price_cols)
+        print(f"  {yr} 累計 {len(rows)} 件", flush=True)
+    df = pd.DataFrame(rows, columns=COLS)
+    return df.drop_duplicates(["ticker", "date", "type", "source"], keep="last") if len(df) else df
 
 
 # ───────────────────────── FinMind ─────────────────────────
@@ -236,7 +308,12 @@ def fetch_fm_reduction(tickers: list[str], max_calls: int | None = None, wait_on
         calls += 1
         rows = [r for r in rows if r["ticker"] != t]
         for r in data:
-            pre, ref = r.get("ClosingPriceonTheLastTradingDay"), r.get("PostReductionReferencePrice")
+            # 減資併現金增資時，恢復買賣當天實際適用的是 ExrightReferencePrice（與官方「除權參考價」同值）；
+            # 純減資時該欄為 -1，退回 PostReductionReferencePrice。
+            pre = r.get("ClosingPriceonTheLastTradingDay")
+            ref = r.get("ExrightReferencePrice")
+            if not ref or ref <= 0:
+                ref = r.get("PostReductionReferencePrice")
             if pre and ref and pre > 0 and ref > 0:
                 rows.append({"ticker": t, "market": None, "date": pd.Timestamp(r["date"]), "type": "cap_reduction",
                              "prev_close": float(pre), "ref_price": float(ref), "factor": float(ref) / float(pre),
@@ -260,7 +337,7 @@ def _save_red(rows: list[dict], done: dict[str, str]) -> None:
 def build() -> pd.DataFrame:
     """合併成 corp_actions.parquet。**以既有 corp_actions 為底、聯集各來源檔、同鍵取最新**——
     CI 只有近兩個月的官方除權息與 FinMind 分割，沒有歷史來源檔，若不以舊檔為底就會把事件表重建成殘缺版本。"""
-    srcs = [p for p in (OFFICIAL, FM_SPLIT) if p.exists()]      # FM_RED 不在這裡：下面「以最新查詢為準」才併入，避免重複
+    srcs = [p for p in (OFFICIAL, OFFICIAL_ACT, FM_SPLIT) if p.exists()]      # FM_RED 不在這裡：下面「以最新查詢為準」才併入，避免重複
     parts = ([pd.read_parquet(OUT)] if OUT.exists() else []) + [pd.read_parquet(p) for p in srcs]
     if not parts and not FM_RED.exists():
         raise SystemExit("沒有任何來源檔，先跑 --official / --finmind-split / --finmind-reduction")
@@ -287,6 +364,7 @@ def build() -> pd.DataFrame:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--official", metavar="START", help="官方除權息回補起日 YYYY-MM-DD（到今天）")
+    ap.add_argument("--official-act", metavar="START", help="官方減資／面額變更回補起日 YYYY-MM-DD（到今天）")
     ap.add_argument("--finmind-split", action="store_true")
     ap.add_argument("--finmind-reduction", action="store_true")
     ap.add_argument("--max-calls", type=int)
@@ -300,6 +378,11 @@ def main(argv=None) -> int:
         pd.concat([old, new]).drop_duplicates(["ticker", "date", "type", "source"], keep="last") \
             .to_parquet(OFFICIAL, index=False)
         print(f"官方除權息：{len(new)} 件已存 {OFFICIAL.name}")
+    if a.official_act:
+        new = fetch_official_actions(a.official_act, date.today().strftime("%Y-%m-%d"))
+        old = pd.read_parquet(OFFICIAL_ACT) if OFFICIAL_ACT.exists() else pd.DataFrame(columns=COLS)
+        pd.concat([old, new]).drop_duplicates(["ticker", "date", "type", "source"], keep="last")             .to_parquet(OFFICIAL_ACT, index=False)
+        print(f"官方減資／面額：{len(new)} 件已存 {OFFICIAL_ACT.name}")
     if a.finmind_split:
         df = fetch_fm_split()
         df.to_parquet(FM_SPLIT, index=False)

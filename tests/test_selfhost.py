@@ -206,6 +206,7 @@ def test_build_以既有corp_actions為底_不因缺歷史來源檔而退化(tmp
     monkeypatch.setattr(se, "SH", tmp_path)
     monkeypatch.setattr(se, "OUT", tmp_path / "corp_actions.parquet")
     monkeypatch.setattr(se, "OFFICIAL", tmp_path / "ev_official.parquet")
+    monkeypatch.setattr(se, "OFFICIAL_ACT", tmp_path / "ev_official_actions.parquet")
     monkeypatch.setattr(se, "FM_SPLIT", tmp_path / "ev_fm_split.parquet")
     monkeypatch.setattr(se, "FM_RED", tmp_path / "ev_fm_reduction.parquet")
     monkeypatch.setattr(se, "FM_RED_DONE", tmp_path / "done.json")
@@ -294,10 +295,44 @@ def test_TPEx法人_兩種格式都沒資料_回空表不是None(monkeypatch):
 
 def test_build_FM_RED在_done舊_不重複併入(tmp_path, monkeypatch):
     monkeypatch.setattr(se, "SH", tmp_path)
-    for k, f in (("OUT", "corp_actions.parquet"), ("OFFICIAL", "ev_official.parquet"), ("FM_SPLIT", "ev_fm_split.parquet"),
+    for k, f in (("OUT", "corp_actions.parquet"), ("OFFICIAL", "ev_official.parquet"), ("OFFICIAL_ACT", "ev_oa.parquet"),
+                 ("FM_SPLIT", "ev_fm_split.parquet"),
                  ("FM_RED", "ev_fm_reduction.parquet"), ("FM_RED_DONE", "done.json")):
         monkeypatch.setattr(se, k, tmp_path / f)
     pd.DataFrame([_ev("2607", "2025-10-07", "cap_reduction", 60 / 35, "fm_reduction")]).to_parquet(se.FM_RED)
     se.FM_RED_DONE.write_text("{}")                          # done 沒標記該檔
     out = se.build()
     assert int((out["source"] == "fm_reduction").sum()) == 1
+
+
+# ───────── 官方減資／面額變更表 ─────────
+def test_roc_支援民國7碼緊湊格式():
+    assert se._roc("1140113") == pd.Timestamp("2025-01-13")
+    assert se._roc("114/02/12") == pd.Timestamp("2025-02-12")
+
+
+_TWTAUU_FIELDS = ["恢復買賣日期", "股票代號", "名稱", "停止買賣前收盤價格", "恢復買賣參考價", "漲停價格", "跌停價格",
+                  "開盤競價基準", "除權參考價", "減資原因", "詳細資料"]
+
+
+def test_官方減資_純減資用恢復買賣參考價():
+    t = {"fields": _TWTAUU_FIELDS, "data": [["114/02/12", "2025", "千興", "10.50", "17.09", "18.75", "15.40", "17.10", "--", "彌補虧損", "x"]]}
+    r = se._parse_action_table(t, "twse_red", "cap_reduction", "TW", ("除權參考價", "恢復買賣參考價"))
+    assert len(r) == 1 and abs(r[0]["factor"] - 17.09 / 10.5) < 1e-9 and r[0]["date"] == pd.Timestamp("2025-02-12")
+
+
+def test_官方減資_併現金增資時優先用除權參考價():
+    t = {"fields": _TWTAUU_FIELDS, "data": [["107/04/10", "3312", "弘穎", "6.54", "8.48", "9", "7", "8.5", "8.34", "彌補虧損", "x"]]}
+    r = se._parse_action_table(t, "twse_red", "cap_reduction", "TW", ("除權參考價", "恢復買賣參考價"))
+    assert abs(r[0]["factor"] - 8.34 / 6.54) < 1e-9
+
+
+def test_官方減資_欄名對不上_整張丟棄不靜默錯位():
+    assert se._parse_action_table({"fields": ["a", "b"], "data": [["1", "2"]]}, "twse_red", "cap_reduction", "TW", ("除權參考價",)) == []
+
+
+def test_官方面額變更_千元級價格含逗號():
+    f = ["恢復買賣日期", "股票代號", "名稱", "停止買賣前收盤價格", "恢復買賣參考價", "漲停價格", "跌停價格", "開盤競價基準", "詳細資料"]
+    t = {"fields": f, "data": [["115/09/07", "6949", "沛爾生醫-創", "1,490.00", "74.50", "81.90", "67.10", "74.50", "x"]]}
+    r = se._parse_action_table(t, "twse_par", "par_change", "TW", ("恢復買賣參考價",))
+    assert abs(r[0]["factor"] - 74.5 / 1490) < 1e-9
