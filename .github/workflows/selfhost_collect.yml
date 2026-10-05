@@ -1,0 +1,125 @@
+name: 自建上游收集
+
+# 自建上游（docs/PLAN_OWN_UPSTREAM.md）每日收集：官方未還原日線、三大法人、融資券、公司行為事件。
+# 資料存 Release `selfhost-data`（約百 MB 級，不進 git）；每次「下載舊版 → 補近 14 天缺的 → 閘門 → 才覆蓋」，
+# 沿用上游 workflow 驗證過的保底做法，但閘門比上游嚴（檔數、倒退、市場別，見 scripts/selfhost_gate.py）。
+#
+# 一天兩班（官方盤後資料約 15:00 出齊）：台北 16:30（UTC 08:30）、18:45（UTC 10:45）。
+# 收集器都是「只補缺的」、重跑冪等；上市／上櫃各自記進度（上游用 2330 當唯一進度，上櫃缺日補不回來）。
+# tw-hold 是公開 repo → Actions 分鐘數無限。
+#
+# 首次：本機跑完 selfhost_backfill.py 後，把 data/selfhost/*.parquet 上傳成 Release `selfhost-data`
+#   gh release create selfhost-data data/selfhost/{raw_prices,inst,margin,corp_actions,ev_fm_reduction}.parquet \
+#     data/selfhost/ev_fm_reduction_done.json \
+#     --title "自建上游資料" --notes "由 selfhost_collect.yml 維護；勿手動覆蓋"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * 1-5"
+    - cron: "45 10 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: selfhost
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install pandas pyarrow requests
+
+      - name: 下載上一版（保底基準）
+        run: |
+          mkdir -p data/selfhost/_base
+          if gh release view selfhost-data >/dev/null 2>&1; then
+            for f in raw_prices.parquet inst.parquet margin.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
+              gh release download selfhost-data -D data/selfhost/_base -p "$f" --clobber || echo "（Release 尚無 $f，略過）"
+            done
+            cp data/selfhost/_base/* data/selfhost/ 2>/dev/null || true
+            ls -la data/selfhost/_base
+          else
+            echo "::error::Release selfhost-data 不存在——先用本機種子建立（見本檔頭說明）"; exit 1
+          fi
+
+      # 各步 continue-on-error：單一資料源掛掉不擋其他；閘門才是最後把關。
+      - name: 官方未還原日線（上市＋上櫃）
+        continue-on-error: true
+        run: python scripts/selfhost_raw_prices.py
+
+      - name: 三大法人＋融資券
+        continue-on-error: true
+        run: python scripts/selfhost_chips.py
+
+      # build 以 Release 下載回來的舊 corp_actions 為底聯集新事件（沒有歷史來源檔也不會退化）。
+      - name: 公司行為事件（官方除權息近兩個月＋FinMind 分割／面額）
+        continue-on-error: true
+        run: |
+          START=$(date -u -d "$(date -u +%Y-%m-01) -2 month" +%Y-%m-%d)
+          python scripts/selfhost_events.py --official "$START" --finmind-split --build
+
+      # 減資必須逐檔查（FinMind 全市場查是付費層）→ 每週五輪詢 450 檔（從未查過／最久沒查的先查），約 5 週輪完全市場。
+      - name: 減資事件輪詢（週五）
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * 1-5'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          if [ "$(date -u +%u)" = 5 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python scripts/selfhost_events.py --finmind-reduction --max-calls 450 --no-wait --build
+          fi
+
+      - name: 閘門（不比舊版差才放行）
+        id: gate
+        run: python scripts/selfhost_gate.py --base data/selfhost/_base --live data/selfhost
+
+      - name: 上傳 Release（僅閘門通過）
+        if: steps.gate.outcome == 'success'
+        run: |
+          for f in raw_prices.parquet inst.parquet margin.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
+            [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
+          done
+          # 週五另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
+          if [ "$(date -u +%u)" = 5 ]; then
+            D=$(date -u +%Y%m%d)
+            for f in raw_prices inst margin corp_actions; do
+              [ -f data/selfhost/$f.parquet ] && cp data/selfhost/$f.parquet "data/selfhost/snap-$D-$f.parquet" \
+                && gh release upload selfhost-data "data/selfhost/snap-$D-$f.parquet" --clobber
+            done
+            gh release view selfhost-data --json assets --jq '.assets[].name' | grep '^snap-' | sed -E 's/^snap-([0-9]{8})-.*/\1/' \
+              | sort -u | head -n -4 | while read old; do
+                gh release view selfhost-data --json assets --jq '.assets[].name' | grep "^snap-$old-" | xargs -r -n1 gh release delete-asset selfhost-data -y
+              done
+          fi
+
+      - name: commit 狀態小檔
+        if: always()
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          FILES="data/derived/selfhost_status.json"
+          [ -f data/derived/selfhost_status.json ] || { echo "沒有狀態檔——跳過"; exit 0; }
+          git add $FILES
+          git diff --cached --quiet -- $FILES && { echo "無實質變更——跳過 commit"; exit 0; }
+          git commit -m "自建上游狀態 $(date -u +%F)"
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            git pull --rebase origin main || { git checkout --theirs -- $FILES 2>/dev/null || true; git add -A $FILES; GIT_EDITOR=true git rebase --continue || git rebase --abort || true; }
+          done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
