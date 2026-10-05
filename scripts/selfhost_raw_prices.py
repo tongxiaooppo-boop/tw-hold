@@ -119,8 +119,17 @@ def fetch_tpex(d: date) -> pd.DataFrame | None:
                            "volume": "成交股數", "value": "成交金額(元)"}, "TWO", ymd)
 
 
-def collect_day(d: date) -> pd.DataFrame | None:
-    """上市＋上櫃合併；任一邊失敗 → None（整天不寫）；兩邊都空 → 空表（休市）。"""
+def collect_day(d: date, market: str = "both") -> pd.DataFrame | None:
+    """上市＋上櫃合併；任一邊失敗 → None（整天不寫）；兩邊都空 → 空表（休市）。
+    `market` 為 TW／TWO 時只問該市場（平行回補用：兩個市場是不同主機、限流分開，各跑一條線互不拖累）。"""
+    if market == "TW":
+        a = fetch_twse(d)
+        time.sleep(SLEEP)
+        return a
+    if market == "TWO":
+        b = fetch_tpex(d)
+        time.sleep(SLEEP)
+        return b
     a = fetch_twse(d)
     time.sleep(SLEEP)
     if d.weekday() == 5 and a is not None and a.empty:
@@ -139,10 +148,15 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", help="YYYY-MM-DD；預設今天往前 REFRESH_DAYS 天")
     ap.add_argument("--end", help="YYYY-MM-DD；預設今天")
+    ap.add_argument("--market", choices=["both", "TW", "TWO"], default="both",
+                    help="平行回補用：只收單一市場，輸出到 raw_prices_<市場>.parquet（之後用 selfhost_merge.py 合併）")
     a = ap.parse_args(argv)
     end = datetime.strptime(a.end, "%Y-%m-%d").date() if a.end else date.today()
     start = datetime.strptime(a.start, "%Y-%m-%d").date() if a.start else end - timedelta(days=REFRESH_DAYS)
 
+    global OUT
+    if a.market != "both":
+        OUT = OUT.with_name(f"raw_prices_{a.market}.parquet")
     old = pd.read_parquet(OUT) if OUT.exists() else pd.DataFrame(columns=COLS)
     have = set(pd.to_datetime(old["date"]).dt.date) if len(old) else set()
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
@@ -166,7 +180,7 @@ def main(argv=None) -> int:
         print(f"  已寫入 {OUT.name}（{len(allp)} 列，{allp['date'].nunique()} 天）", flush=True)
 
     for i, d in enumerate(todo, 1):
-        df = collect_day(d)
+        df = collect_day(d, a.market)
         if df is None:
             failed.append(d)
         elif df.empty:

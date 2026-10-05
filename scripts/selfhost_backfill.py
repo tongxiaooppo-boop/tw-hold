@@ -22,6 +22,18 @@ LOG = ROOT / "data" / "selfhost" / "backfill.log"
 PY = sys.executable
 TODAY = date.today().isoformat()
 
+# 平行回補：TWSE、TPEx 是不同主機、限流分開，各跑一條線（互不拖累；同一主機內仍保持 ~2 秒間隔）。
+# 每條線依序：實價 → 近兩年法人融資券 → 2015–2023 法人融資券。完成後跑 selfhost_merge.py。
+def lane_steps(m: str) -> dict:
+    return {
+        f"raw-{m}": [PY, "scripts/selfhost_raw_prices.py", "--market", m, "--start", "2015-01-05", "--end", TODAY],
+        f"chips-recent-{m}": [PY, "scripts/selfhost_chips.py", "--markets", m, "--start", "2024-01-01", "--end", TODAY],
+        f"chips-old-{m}": [PY, "scripts/selfhost_chips.py", "--markets", m, "--start", "2015-01-05", "--end", "2023-12-31"],
+    }
+
+
+LANES = {"twse": lane_steps("TW"), "tpex": lane_steps("TWO")}
+
 STEPS = {
     # 近期優先：讓驗證（接縫偵測、還原對帳）不必等全歷史回補完
     "raw-recent": [PY, "scripts/selfhost_raw_prices.py", "--start", "2026-05-04", "--end", TODAY],
@@ -43,8 +55,10 @@ def log(msg: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", choices=list(STEPS))
+    ap.add_argument("--lane", choices=list(LANES), help="平行回補：只跑單一主機的線（twse／tpex）")
     a = ap.parse_args()
-    for name, cmd in STEPS.items():
+    steps = LANES[a.lane] if a.lane else STEPS
+    for name, cmd in steps.items():
         if a.only and name != a.only:
             continue
         log(f"開始 {name}：{' '.join(cmd[1:])}")

@@ -68,12 +68,17 @@ def _n(x) -> float | None:
         return None
 
 
-def _trading_calendar() -> set[date] | None:
-    """官方實價（raw_prices）出現過的日期 ＝ 已知交易日。檔案不存在 → None（不判休市）。"""
-    p = SH / "raw_prices.parquet"
-    if not p.exists():
+def _trading_calendar(markets: tuple[str, ...] = ("TW", "TWO")) -> set[date] | None:
+    """官方實價出現過的日期 ＝ 已知交易日。優先用合併檔 raw_prices.parquet；平行回補期間用各市場自己的檔。
+    單市場線只看該市場的實價日曆。找不到任何檔 → None（不判休市）。"""
+    files = [SH / "raw_prices.parquet"] if len(markets) == 2 and (SH / "raw_prices.parquet").exists() else         [SH / f"raw_prices_{m}.parquet" for m in markets]
+    files = [f for f in files if f.exists()]
+    if not files:
         return None
-    return {pd.Timestamp(x).date() for x in pd.read_parquet(p, columns=["date"])["date"].unique()}
+    out: set[date] = set()
+    for f in files:
+        out |= {pd.Timestamp(x).date() for x in pd.read_parquet(f, columns=["date"])["date"].unique()}
+    return out
 
 
 def _code_ok(c: str) -> bool:
@@ -219,21 +224,24 @@ SOURCES = {
 }
 
 
-def run(dataset: str, start: date, end: date) -> int:
+def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", "TWO")) -> int:
     path, cols, fetchers = SOURCES[dataset]
+    fetchers = {m: f for m, f in fetchers.items() if m in markets}
+    tag = "" if len(fetchers) == 2 else "_" + next(iter(fetchers))        # 單市場線各寫各的檔
+    path = path.with_name(path.stem + tag + path.suffix)
     old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=cols)
     # 「已有」＝ (市場, 日期)；休市日另記在 closed 檔，避免每次重打（也不會被當缺口）
     have = {(m, pd.Timestamp(d).date()) for m, d in zip(old["market"], old["date"])}
-    closed_f = SH / f"{dataset}_closed.csv"
+    closed_f = SH / f"{dataset}{tag}_closed.csv"
     closed = set()
     if closed_f.exists():
         closed = {(r.market, date.fromisoformat(r.date)) for r in pd.read_csv(closed_f).itertuples()}
-    unavail_f = SH / f"{dataset}_unavailable.csv"       # 官方該端點該日根本沒資料（目前已知情況：無；TPEx 法人 2018 前只是格式不同，不是沒資料）
+    unavail_f = SH / f"{dataset}{tag}_unavailable.csv"       # 官方該端點該日根本沒資料（目前已知情況：無；TPEx 法人 2018 前只是格式不同，不是沒資料）
     if unavail_f.exists():
         closed |= {(r.market, date.fromisoformat(r.date)) for r in pd.read_csv(unavail_f).itertuples()}
     empties: list[tuple[str, date]] = []
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    cal = _trading_calendar()
+    cal = _trading_calendar(tuple(fetchers))
     cal_max = max(cal) if cal else None
     # 週六只在「官方實價日曆有該日」（＝補班日有交易）時才問；平日照舊
     todo = [(m, d) for d in days if (d.weekday() < 5 or (d.weekday() == 5 and cal is not None and d in cal))
@@ -291,12 +299,14 @@ def main(argv=None) -> int:
     ap.add_argument("--dataset", choices=["inst", "margin", "all"], default="all")
     ap.add_argument("--start")
     ap.add_argument("--end")
+    ap.add_argument("--markets", choices=["both", "TW", "TWO"], default="both",
+                    help="平行回補用：只收單一市場（各寫 inst_<市場>.parquet 等，之後 selfhost_merge.py 合併）")
     a = ap.parse_args(argv)
     end = datetime.strptime(a.end, "%Y-%m-%d").date() if a.end else date.today()
     start = datetime.strptime(a.start, "%Y-%m-%d").date() if a.start else end - timedelta(days=14)
     bad = 0
     for ds in (["inst", "margin"] if a.dataset == "all" else [a.dataset]):
-        bad += run(ds, start, end)
+        bad += run(ds, start, end, ("TW", "TWO") if a.markets == "both" else (a.markets,))
     return 1 if bad else 0
 
 
