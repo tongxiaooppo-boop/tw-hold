@@ -6,6 +6,11 @@
    （上游曾發生 .TWO 融資券整批缺／某日只有 57% 檔數；我們不重蹈，見 UPSTREAM_PRACTICES_AUDIT M4）。
 3. 實價每日檔數絕對下限（上市 ≥ 900、上櫃 ≥ 700）。
 
+4. 內容恆等式（最近 20 個資料日，逐市場）：法人「外資＋投信＋自營＝合計」不符比例／自營缺值比例 ≤ 5%、
+   實價 OHLC 一致性（0 < low ≤ min(open, close) ≤ max(open, close) ≤ high）違反比例 ≤ 1%——欄位位置解析錯位或
+   整欄空白時列數／檔數都正常，只有這層看得到（2026-08-27 上櫃自營整欄空白五週沒人發現）。
+   融資恆等式（前日餘額＋買進−賣出−現償＝今日餘額）暫只警告：上櫃實測 100%，上市尚未全量驗證。
+
 通過 → exit 0，並寫 `data/derived/selfhost_status.json`（各資料集最新日／列數／最新日檔數，給心跳與頁面用）。
 失敗 → exit 1，workflow **不得上傳**（壞版本不能蓋掉好版本）。
 
@@ -27,6 +32,9 @@ DAILY = {"raw_prices", "inst", "margin"}
 ABS_MIN = {"raw_prices": {"TW": 900, "TWO": 700}}
 RATIO_MIN = 0.90
 SHRINK_TOL = 0.001
+IDENT_DAYS = 20
+IDENT_MAX = 0.05       # 法人恆等式不符／自營缺值 比例上限
+OHLC_MAX = 0.01        # OHLC 違反比例上限
 
 
 def _summary(df: pd.DataFrame, daily: bool) -> dict:
@@ -67,6 +75,57 @@ def check_dataset(name: str, live: pd.DataFrame, base: pd.DataFrame | None) -> l
     return errs
 
 
+def _recent(df: pd.DataFrame) -> pd.DataFrame:
+    d = pd.to_datetime(df["date"])
+    cut = sorted(d.unique())[-IDENT_DAYS:][0]
+    return df[d >= cut]
+
+
+def content_checks(name: str, live: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """內容恆等式。回傳 (errors, warnings)；空表或缺欄＝略過（缺欄由別處處理）。"""
+    errs: list[str] = []
+    warns: list[str] = []
+    if live is None or not len(live) or "market" not in live.columns:
+        return errs, warns
+    r = _recent(live)
+    for m, g in r.groupby("market"):
+        if name == "inst" and {"foreign_net", "trust_net", "dealer_net", "total_net"} <= set(g.columns):
+            g = g[pd.to_numeric(g["total_net"], errors="coerce").notna()]
+            if not len(g):
+                continue
+            dl = pd.to_numeric(g["dealer_net"], errors="coerce")
+            miss = float(dl.isna().mean())
+            s = (pd.to_numeric(g["foreign_net"], errors="coerce").fillna(0)
+                 + pd.to_numeric(g["trust_net"], errors="coerce").fillna(0) + dl.fillna(0))
+            ok = ~dl.isna()
+            bad = float(((s - pd.to_numeric(g["total_net"], errors="coerce")).abs() > 1)[ok].mean()) if ok.any() else 0.0
+            if miss > IDENT_MAX:
+                errs.append(f"inst/{m}：近 {IDENT_DAYS} 日自營缺值 {miss:.1%} > {IDENT_MAX:.0%}（欄位整欄空白／錯位？）")
+            if bad > IDENT_MAX:
+                errs.append(f"inst/{m}：近 {IDENT_DAYS} 日 外資＋投信＋自營≠合計 {bad:.1%} > {IDENT_MAX:.0%}（欄位錯位？）")
+        elif name == "raw_prices" and {"open", "high", "low", "close"} <= set(g.columns):
+            o, h, l, c = (pd.to_numeric(g[k], errors="coerce") for k in ("open", "high", "low", "close"))
+            valid = o.notna() & h.notna() & l.notna() & c.notna()
+            if not valid.any():
+                continue
+            lo, hi = pd.concat([o, c], axis=1).min(axis=1), pd.concat([o, c], axis=1).max(axis=1)
+            viol = ((l <= 0) | (l > lo + 1e-9) | (h < hi - 1e-9))[valid]
+            if float(viol.mean()) > OHLC_MAX:
+                errs.append(f"raw_prices/{m}：近 {IDENT_DAYS} 日 OHLC 不一致 {viol.mean():.1%} > {OHLC_MAX:.0%}")
+        elif name == "margin" and {"margin_balance", "margin_buy", "margin_sell", "margin_redeem", "ticker"} <= set(g.columns):
+            g = g.sort_values(["ticker", "date"]).copy()
+            for k in ("margin_balance", "margin_buy", "margin_sell", "margin_redeem"):
+                g[k] = pd.to_numeric(g[k], errors="coerce")
+            g["_prev"] = g.groupby("ticker")["margin_balance"].shift()
+            x = g.dropna(subset=["_prev", "margin_balance", "margin_buy", "margin_sell", "margin_redeem"])
+            if len(x):
+                bad = float(((x["_prev"] + x["margin_buy"] - x["margin_sell"] - x["margin_redeem"]
+                              - x["margin_balance"]).abs() > 1).mean())
+                if bad > IDENT_MAX:
+                    warns.append(f"margin/{m}：近 {IDENT_DAYS} 日融資餘額恆等式不符 {bad:.1%}（暫為警告）")
+    return errs, warns
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
@@ -75,6 +134,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     base_dir, live_dir = Path(a.base), Path(a.live)
     errs: list[str] = []
+    warns: list[str] = []
     # 不放時間戳：資料沒變時狀態檔內容也不變，workflow 就不會每天為此 commit（噪音）
     status = {"datasets": {}}
     for name, fn in DATASETS.items():
@@ -87,11 +147,17 @@ def main(argv=None) -> int:
         bp = base_dir / fn
         base = pd.read_parquet(bp) if bp.exists() else None
         errs += check_dataset(name, live, base)
+        ce, cw = content_checks(name, live)
+        errs += ce
+        warns += cw
         status["datasets"][name] = _summary(live, name in DAILY)
     status["gate_ok"] = not errs
     status["errors"] = errs
+    status["warnings"] = warns
     Path(a.status).parent.mkdir(parents=True, exist_ok=True)
     Path(a.status).write_text(json.dumps(status, ensure_ascii=False, indent=1), encoding="utf-8")
+    for w in warns:
+        print(f"::warning::{w}")
     for e in errs:
         print(f"::error::{e}")
     print("閘門", "通過" if not errs else f"未通過（{len(errs)} 項）", json.dumps(status["datasets"], ensure_ascii=False))
