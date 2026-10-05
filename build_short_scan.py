@@ -32,6 +32,7 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "app"))
 
 import checklist as cl  # noqa: E402
+from reference.chips_guard import fill_dealer, identity_stats  # noqa: E402
 
 UPSTREAM = REPO / "data" / "upstream"
 DERIVED = REPO / "data" / "derived"
@@ -76,7 +77,9 @@ def _read(name: str, columns: list[str]) -> pd.DataFrame | None:
     p = UPSTREAM / name
     if not p.exists():
         return None
-    return pd.read_parquet(p, columns=columns)
+    import pyarrow.parquet as pq   # 舊 schema（缺新欄）不炸：只讀存在的欄
+    have = set(pq.read_schema(p).names)
+    return pd.read_parquet(p, columns=[c for c in columns if c in have])
 
 
 def _active_flags() -> dict:
@@ -145,7 +148,13 @@ def build() -> dict:
         raise SystemExit("bundle 沒有 prices_adj.parquet——無法掃描")
     px = adjust_per_share(_tail_days(px, PX_DAYS),
                           ["open", "high", "low", "close"])
-    chips = _read("chips.parquet", ["date", "ticker", "foreign_net", "trust_net", "dealer_net"])
+    chips = _read("chips.parquet", ["date", "ticker", "foreign_net", "trust_net", "dealer_net", "total_net"])
+    if chips is not None:
+        st = identity_stats(chips)
+        if st["dealer_missing"] > 0.05 or st["mismatch"] > 0.05:
+            print(f"[WARN] 法人恆等式異常（近20日）：自營缺 {st['dealer_missing']:.1%}、"
+                  f"三項≠合計 {st['mismatch']:.1%}——以合計−外資−投信補自營；上游多半又出事了")
+        chips = fill_dealer(chips)
     margin = _read("margin.parquet", ["date", "ticker", "margin_balance", "short_balance"])
 
     px_g = _by_code(px)

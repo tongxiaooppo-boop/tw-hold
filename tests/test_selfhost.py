@@ -336,3 +336,20 @@ def test_官方面額變更_千元級價格含逗號():
     t = {"fields": f, "data": [["115/09/07", "6949", "沛爾生醫-創", "1,490.00", "74.50", "81.90", "67.10", "74.50", "x"]]}
     r = se._parse_action_table(t, "twse_par", "par_change", "TW", ("恢復買賣參考價",))
     assert abs(r[0]["factor"] - 74.5 / 1490) < 1e-9
+
+
+def test_gate_content_checks_catch_blank_dealer_and_ohlc():
+    """列數／檔數都正常、但某市場自營整欄空白或 OHLC 錯位 → 閘門要紅（2026-08-27 事件）。"""
+    d = pd.date_range("2026-09-01", periods=5)
+    rows = [{"date": x, "ticker": f"T{i}", "market": "TWO", "foreign_net": 100, "trust_net": 10,
+             "dealer_net": None, "total_net": 115} for x in d for i in range(10)]
+    e, _ = sg.content_checks("inst", pd.DataFrame(rows))
+    assert any("自營缺值" in x for x in e)
+    rows = [{**r, "dealer_net": 5} for r in rows]
+    assert sg.content_checks("inst", pd.DataFrame(rows))[0] == []
+    rows[0]["dealer_net"] = 5000
+    px = pd.DataFrame([{"date": x, "ticker": "A", "market": "TW", "open": 10, "high": 9, "low": 8, "close": 10}
+                       for x in d])   # high < open/close → 全違反
+    assert any("OHLC" in x for x in sg.content_checks("raw_prices", px)[0])
+    ok = px.assign(high=11)
+    assert sg.content_checks("raw_prices", ok)[0] == []

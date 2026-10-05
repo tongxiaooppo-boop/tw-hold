@@ -20,6 +20,7 @@ if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 import fetch_bundle as fb   # noqa: E402  reuse _read_pat / _api / _release_assets
+from reference.chips_guard import fill_dealer  # noqa: E402
 
 UPSTREAM = _REPO / "data" / "upstream"
 
@@ -75,6 +76,10 @@ def _read(name: str, code: str, suffixed: bool, columns: list[str] | None = None
         return pd.DataFrame(columns=columns or [])
     c = _t(code)
     vals = [f"{c}.TW", f"{c}.TWO", c] if suffixed else [c]
+    if columns:   # 舊 schema 缺新欄時不炸：只讀存在的欄（呼叫端用 .get／有則用）
+        import pyarrow.parquet as pq
+        have = set(pq.read_schema(p).names)
+        columns = [c for c in columns if c in have]
     try:
         df = pd.read_parquet(p, filters=[("ticker", "in", vals)], columns=columns)
     except Exception:
@@ -119,9 +124,10 @@ def revenue(code: str) -> pd.DataFrame:
 def chips(code: str, lookback_days: int = 400) -> pd.DataFrame:
     """法人買賣超 → `[date, foreign, trust, dealer]`（單位：張＝÷1000），近 `lookback_days` 天。"""
     d = _read("chips.parquet", code, True,
-              ["date", "ticker", "foreign_net", "trust_net", "dealer_net"])
+              ["date", "ticker", "foreign_net", "trust_net", "dealer_net", "total_net"])
     if d.empty:
         return pd.DataFrame(columns=["date", "foreign", "trust", "dealer"])
+    d = fill_dealer(d)   # 上櫃自營欄 8/27 起空白的讀取端自保（reference/chips_guard.py）
     d["date"] = pd.to_datetime(d["date"])
     for c in ("foreign_net", "trust_net", "dealer_net"):
         d[c] = pd.to_numeric(d[c], errors="coerce") / 1000.0
