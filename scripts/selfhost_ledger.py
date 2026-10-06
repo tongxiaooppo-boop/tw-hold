@@ -18,6 +18,7 @@
 | `halt` | 上市停止買賣中快照（開始日、原因） | warn |
 | `gap` | 連續 ≥3 個交易日沒有實價：能歸因（無成交旁表／停止買賣快照）or 未歸因 | info／warn |
 | `jump` | 未還原收盤相鄰日 |漲跌| 超過漲跌幅限制（2015-06-01 前 7.5%、之後 10.5%）：歸因於事件／新上市前 5 日／ETF（無限制）；都不是 ⇒ **flag** | info／flag |
+| `refmark_no_event` | 官方行情表標「參考價被重設」（上市 X／上櫃 除息、除權…）的相鄰交易日，事件表卻沒有任何事件 ⇒ **可能漏事件**（flag；轉板首日例外記 `refmark`）。2026-10-06 全史驗證：相鄰標記日 16,967 個、事件對上 16,941 個，其餘 26 個全是轉板首日 | info／flag |
 | `adj_jump` | 還原收盤相鄰日跳動超過 10.5%（還原後應連續；超過 ⇒ 因子可能錯、事件缺漏） | info／flag |
 | `margin_note` | 融資券註記（O 停止融資／X 停止融券…）改變——講的是**次一營業日**，所以標的日期是「宣告日」，生效日是下一個交易日 | info |
 
@@ -55,13 +56,24 @@ def _row(t, d, kind, level, title, detail=""):
 
 def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: pd.DataFrame | None,
           notrade: pd.DataFrame | None, stophalt: pd.DataFrame | None, margin_note: pd.DataFrame | None,
-          adjlog: pd.DataFrame | None = None) -> pd.DataFrame:
+          adjlog: pd.DataFrame | None = None, refmark: pd.DataFrame | None = None) -> pd.DataFrame:
     rows: list[dict] = []
     raw = raw.sort_values(["ticker", "date"]).reset_index(drop=True)
     cal = np.sort(raw["date"].unique())
     ci = {d: i for i, d in enumerate(cal)}
     last_all = pd.Timestamp(cal[-1])
     raw["i"] = raw["date"].map(ci)
+    if "chg" not in raw.columns:
+        raw["chg"] = np.nan
+    chg_of = dict(zip(zip(raw["ticker"], raw["date"]), zip(raw["close"], raw["chg"])))     # 官方漲跌價差：close−chg＝官方當日參考價
+
+    def official_ok(t: str, d: pd.Timestamp, lim: float) -> tuple[bool, float | None]:
+        """官方漲跌幅（以官方參考價為準）是否在限制內。無 chg → (False, None)。"""
+        c, g = chg_of.get((t, d), (np.nan, np.nan))
+        if pd.isna(g) or pd.isna(c) or c - g <= 0:
+            return False, None
+        r = g / (c - g)
+        return abs(r) <= lim, r
     first = raw.groupby("ticker")["date"].min()
     last = raw.groupby("ticker")["date"].max()
     ca = ca.copy()
@@ -132,6 +144,30 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
                 why += "；其餘未歸因（可能停牌／漏抓）"
             rows.append(_row(t, days[0], "gap", lvl, f"連續 {len(days)} 個交易日無實價（{days[0].date()}～{days[-1].date()}）：{why}"))
 
+    # ── refmark：官方在行情表自己標的「參考價被重設日」（上市 X／上櫃 除息、除權…）──
+    # 與事件表互為獨立對帳：相鄰交易日的標記日若沒有任何事件可解釋 ⇒ 我們可能漏了事件（flag）；轉板首日（市場別改變）除外。
+    rm_days: set[tuple[str, pd.Timestamp]] = set()
+    if refmark is not None and len(refmark):
+        rmk = refmark.copy()
+        rmk["date"] = pd.to_datetime(rmk["date"])
+        rm_days = set(zip(rmk["ticker"].astype(str), rmk["date"]))
+        have_mkt = "market" in raw.columns
+        prow = raw.assign(prev_i=raw.groupby("ticker")["i"].shift(), prev_d=raw.groupby("ticker")["date"].shift(),
+                          prev_m=raw.groupby("ticker")["market"].shift() if have_mkt else None)
+        rm = rmk.merge(prow, on=["ticker", "date"], how="inner", suffixes=("_rm", ""))
+        rm = rm[(rm["i"] - rm["prev_i"]) == 1]                    # 相鄰交易日（前一天有價）：跨過無成交日的 X 是官方的「無比價」，不算事件
+        for r in rm.itertuples():
+            g = ev_by.get(r.ticker)
+            has_ev = g is not None and bool(((g["date"] > r.prev_d) & (g["date"] <= r.date)).any())
+            if has_ev:
+                continue
+            if have_mkt and r.prev_m != getattr(r, "market", r.prev_m) and pd.notna(r.prev_m):
+                rows.append(_row(r.ticker, r.date, "refmark", "info", f"官方標 {r.mark}：轉板首日（{r.prev_m}→{r.market}）"))
+            else:
+                rows.append(_row(r.ticker, r.date, "refmark_no_event", "flag",
+                                 f"官方行情標 {r.mark}（參考價被重設）但事件表在 {r.prev_d.date()}～{r.date.date()} 沒有任何事件——可能漏事件",
+                                 f"來源 {getattr(r, 'src', '')}"))
+
     # ── jump（未還原）──
     pr = raw.groupby("ticker")["close"].shift()
     pd_ = raw.groupby("ticker")["date"].shift()
@@ -148,6 +184,13 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
         pos = r.i - ci[first_map[t]]
         if evd is not None and len(evd):
             rows.append(_row(t, r.date, "jump", "info", f"未還原收盤 {r.ret:+.1%}：事件 {','.join(TYPE_ZH.get(x, x) for x in evd['type'])}"))
+        elif official_ok(t, r.date, LIMIT_NEW if r.date >= LIMIT_CUT else LIMIT_OLD)[0]:
+            ok, orr = official_ok(t, r.date, LIMIT_NEW if r.date >= LIMIT_CUT else LIMIT_OLD)
+            rows.append(_row(t, r.date, "jump", "info",
+                             f"未還原收盤 {r.ret:+.1%}（對我們前一筆 {r.prev_date.date()}），但官方漲跌價差顯示官方參考價與它不同，官方漲跌幅 {orr:+.1%} 在限制內"
+                             "（中間有無成交日，參考價改變；原因未驗證）"))
+        elif (t, r.date) in rm_days:
+            rows.append(_row(t, r.date, "jump", "info", f"未還原收盤 {r.ret:+.1%}：官方行情標記無比價日（X／除息類；前一筆 {r.prev_date.date()}，中間有無成交日）"))
         elif pos < NEW_LISTING_DAYS:
             rows.append(_row(t, r.date, "jump", "info", f"未還原收盤 {r.ret:+.1%}：新上市前 {NEW_LISTING_DAYS} 日（無漲跌幅限制）"))
         else:
@@ -169,6 +212,8 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
             pos = ci.get(r.date, 0) - ci.get(first_map.get(t), 0)
             if pos < NEW_LISTING_DAYS:
                 continue
+            if official_ok(t, r.date, LIMIT_NEW)[0] and not (evd is not None and len(evd)):
+                continue                                           # 官方漲跌幅合法 ⇒ 還原後的跳動來自我們前一筆≠官方參考價，不是還原錯
             if evd is not None and len(evd):
                 rows.append(_row(t, r.date, "adj_jump", "flag",
                                  f"還原後收盤仍 {r.ret:+.1%}（事件日：{','.join(TYPE_ZH.get(x, x) for x in evd['type'])}）——因子可能不對或事件重複／缺漏"))
@@ -218,7 +263,7 @@ def main(argv=None) -> int:
         p = SH / name
         return pd.read_parquet(p, **kw) if p.suffix == ".parquet" and p.exists() else (pd.read_csv(p, dtype={"ticker": str}) if p.exists() else None)
 
-    raw = pd.read_parquet(SH / "raw_prices.parquet", columns=["ticker", "date", "close"])
+    raw = pd.read_parquet(SH / "raw_prices.parquet", columns=["ticker", "market", "date", "close", "chg"])
     raw["date"] = pd.to_datetime(raw["date"])
     raw["ticker"] = raw["ticker"].astype(str)
     ca = pd.read_parquet(SH / "corp_actions.parquet")
@@ -231,11 +276,11 @@ def main(argv=None) -> int:
     if mn is not None:
         mn["ticker"] = mn["ticker"].astype(str)
         mn["date"] = pd.to_datetime(mn["date"])
-    nt, sp = rd("notrade.parquet"), rd("stophalt.parquet")
-    for d in (nt, sp):
+    nt, sp, rmk = rd("notrade.parquet"), rd("stophalt.parquet"), rd("refmark.parquet")
+    for d in (nt, sp, rmk):
         if d is not None:
             d["ticker"] = d["ticker"].astype(str)
-    led = build(raw, ca, adj, rd("seam_events.csv"), nt, sp, mn, rd("adjust_log.csv"))
+    led = build(raw, ca, adj, rd("seam_events.csv"), nt, sp, mn, rd("adjust_log.csv"), rmk)
     led.to_parquet(OUT, index=False, compression="zstd")
     flags = led[led["level"] == "flag"]
     summ = {"schema": 1, "rows": int(len(led)), "tickers": int(led["ticker"].nunique()),

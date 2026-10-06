@@ -56,6 +56,6 @@ def merge(base: str) -> None:
 
 
 if __name__ == "__main__":
-    for b in ("raw_prices", "inst", "margin", "notrade"):
+    for b in ("raw_prices", "inst", "margin", "notrade", "refmark"):
         merge(b)
     sys.exit(0)
