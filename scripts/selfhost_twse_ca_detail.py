@@ -37,8 +37,10 @@ def main():
     c = pd.read_parquet(SH / "corp_actions.parquet")
     t = c[(c.market == "TW") & c.event.isin(["除權", "除權息"])][["ticker", "date"]]
     done = pd.read_parquet(OUT) if OUT.exists() else pd.DataFrame(columns=["ticker", "date"])
-    if "ca_orig" not in done.columns:                       # 舊版沒存原股東認購股數：只重抓有現增的
-        done = done[~(done.get("ca_shares", 0) > 0)]
+    if "ca_orig" not in done.columns and "ca_shares" in done.columns:    # 舊版沒存原股東認購股數：只重抓有現增的
+        done = done[~(done["ca_shares"] > 0)]
+    if "cash_div" in done.columns:                          # 失敗列（cash_div 空）不算完成，下次重試
+        done = done[done["cash_div"].notna()]
     seen = set(zip(done.ticker, done.date))
     rows = done.to_dict("records")
     s = requests.Session()

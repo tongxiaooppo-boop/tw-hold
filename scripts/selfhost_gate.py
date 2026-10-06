@@ -28,7 +28,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASETS = {"raw_prices": "raw_prices.parquet", "inst": "inst.parquet", "margin": "margin.parquet",
-            "corp_actions": "corp_actions.parquet"}
+            "corp_actions": "corp_actions.parquet",
+            # 累積型旁表（補不回）：一樣要「不得變少、最新日不得倒退」
+            "notrade": "notrade.parquet", "refmark": "refmark.parquet", "stophalt": "stophalt.parquet"}
 DAILY = {"raw_prices", "inst", "margin"}
 ABS_MIN = {"raw_prices": {"TW": 900, "TWO": 700}}
 RATIO_MIN = 0.90
@@ -137,6 +139,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
     ap.add_argument("--live", required=True)
+    ap.add_argument("--assets", help="Release 上實際有的檔名清單（一行一個）。清單有、但 --base 缺檔＝下載失敗，一律擋（不可當成「尚無舊版」）")
     ap.add_argument("--status", default=str(ROOT / "data" / "derived" / "selfhost_status.json"))
     a = ap.parse_args(argv)
     base_dir, live_dir = Path(a.base), Path(a.live)
@@ -144,6 +147,11 @@ def main(argv=None) -> int:
     warns: list[str] = []
     # 不放時間戳：資料沒變時狀態檔內容也不變，workflow 就不會每天為此 commit（噪音）
     status = {"datasets": {}}
+    if a.assets and Path(a.assets).exists():
+        listed = {x.strip() for x in Path(a.assets).read_text(encoding="utf-8").splitlines() if x.strip()}
+        for fn in DATASETS.values():
+            if fn in listed and not (base_dir / fn).exists():
+                errs.append(f"{fn}：Release 上有、但舊版基準缺檔（下載失敗？）——不可當成『尚無舊版』放行")
     for name, fn in DATASETS.items():
         lp = live_dir / fn
         if not lp.exists():

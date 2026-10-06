@@ -73,6 +73,17 @@
 5. **公司分割減資**（分割並減資）在 TWSE／TPEx 是否有計算結果表？
 6. 無成交日後的**參考價規則**（我們實測 381 例官方參考價與前一筆收盤不同，原因推測未驗證）。
 
+## 5.9 Opus 審查結果（2026-10-06 晚）與處理
+
+結論原為「先不要 push」，阻擋項與建議項已修（354 passed，修法都做過突變驗證、workflow shell 語法 `bash -n` 通過）：
+- ✅ **阻擋**：Release 下載失敗被當成「尚無舊版」→ 閘門放行小檔覆蓋整份歷史。現在 workflow 先列 Release 資產、有列卻下載失敗（重試 3 次）就中止；`selfhost_gate.py --assets` 對「Release 有、基準缺」直接擋；notrade／refmark／stophalt 納入「不得變少」。
+- ✅ 休市複本守門把「實價那天抓失敗」誤記成休市：距今不足 30 日曆日（`CLOSED_MIN_AGE`）只丟棄、不記休市，下一班重試。
+- ✅ `ev_official_meta.jsonl` 加進 Release 下載／上傳清單（不進閘門，只增不減）。
+- ✅ `selfhost_twse_ca_detail.py`：無輸出檔時 KeyError(-1)、失敗列永遠不重試，兩個都修。
+- 停牌缺口閘門、notes 形狀：Opus 實測無反例（573 件減資／面額事件收盤與官方前收偏差皆 0）。
+
+**審查標為「可之後」、尚未處理**：TWT49UDetail 改依欄名（現用位置）；現增配股率公式在 ca_orig=0（9105）時退回 ca_per_1000／1000（目前程式沒實作、無除零風險；現增事件實為 504 件，文件寫 503 要核對）；實價半邊失敗時 notrade／refmark 仍寫進當天；`selfhost_ledger.py:289` 明確讀 chg 欄、舊檔會丟例外；meta 檔放 Release 後會持續長大（約 7.5MB／年，可依內容雜湊去重）；`data-fix.md` §4 的 C1、C2、D7、A12 標記已過時；TPEx 在 Actions 上的 TLS 要靠 push 後第一次 workflow_dispatch 驗證。**審查沒涵蓋**：ledger flag 規則、recon、seam_check、xsrc、monthly_review。
+
 ## 6. 還沒做／待決定
 
 - **Opus 審查前待辦（2026-10-06 晚；①②已實作，③待決定）**：

@@ -543,6 +543,7 @@ def test_chips_休市複本守門_兩市場實價都沒有的日子丟棄並記�
     cal = {mon}                                         # 10-02 兩市場都沒有實價（等同颱風假）；日曆最大日 10-05 之後
     calls = _fake_chips(monkeypatch, tmp_path, "margin", cal,
                         lambda m, d: [{"date": pd.Timestamp(d), "ticker": "6488", "market": m, "margin_balance": 1.0}])
+    monkeypatch.setattr(sc, "CLOSED_MIN_AGE", -1)       # 模擬「夠舊」的日子（太新的不記休市，見下一個測試）
     sc.run("margin", fri, fri, ("TW", "TWO"))
     assert calls                                        # 有去問
     assert not (tmp_path / "margin.parquet").exists() or len(pd.read_parquet(tmp_path / "margin.parquet")) == 0   # 但複本沒寫
@@ -773,3 +774,89 @@ def test_record_meta_appends_and_never_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(se, "SH", tmp_path / "no" / "dir")
     monkeypatch.setattr(se.Path, "mkdir", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
     se._record_meta("twse_ex", "a", "b", {})                 # 存檔失敗只警告、不丟例外
+
+
+def test_chips_太新的休市複本只丟棄不記休市_實價補回後下次重抓(monkeypatch, tmp_path):
+    # Opus 審查 2026-10-06：實價那天抓失敗，跟「休市複本」看起來一模一樣；太新就不能記休市，否則補回實價後仍永遠不抓
+    fri, mon = _date(2026, 10, 2), _date(2026, 10, 5)
+    cal = {mon}                                         # 10-02 實價缺（失敗或休市，分不出）
+    calls = _fake_chips(monkeypatch, tmp_path, "inst", cal, lambda m, d: _inst_row(m, d))
+    sc.run("inst", fri, fri, ("TW", "TWO"))
+    assert not (tmp_path / "inst_closed.csv").exists()  # 沒記休市
+    assert not (tmp_path / "inst.parquet").exists() or len(pd.read_parquet(tmp_path / "inst.parquet")) == 0
+    cal.add(fri)                                        # 實價補回（日曆現在有 10-02）
+    calls.clear()
+    sc.run("inst", fri, fri, ("TW", "TWO"))
+    assert {d for _, d in calls} == {fri}               # 重抓了
+    assert len(pd.read_parquet(tmp_path / "inst.parquet")) == 2
+
+
+# ───────── Opus 審查 2026-10-06：Release 下載失敗閘門、現增回填腳本 ─────────
+import selfhost_gate as sg2  # noqa: E402
+
+
+def test_gate_release_有檔卻缺基準_擋(tmp_path):
+    base, live = tmp_path / "base", tmp_path / "live"
+    base.mkdir(); live.mkdir()
+    pd.DataFrame({"date": pd.to_datetime(["2026-10-05"]), "ticker": ["2330"], "market": ["TW"], "open": [1.0], "high": [1.0],
+                  "low": [1.0], "close": [1.0]}).to_parquet(live / "raw_prices.parquet")
+    (tmp_path / "assets.txt").write_text("raw_prices.parquet" + chr(10) + "stophalt.parquet" + chr(10), encoding="utf-8")
+    rc = sg2.main(["--base", str(base), "--live", str(live), "--assets", str(tmp_path / "assets.txt"),
+                   "--status", str(tmp_path / "st.json")])
+    st = __import__("json").loads((tmp_path / "st.json").read_text(encoding="utf-8"))
+    assert rc == 1 and any("下載失敗" in e and "raw_prices" in e for e in st["errors"])
+    assert any("stophalt" in e for e in st["errors"])   # 旁表也算（Release 有、基準缺）
+
+
+def test_gate_沒列在Release上的檔缺基準是首次_不擋(tmp_path):
+    base, live = tmp_path / "base", tmp_path / "live"
+    base.mkdir(); live.mkdir()
+    (tmp_path / "assets.txt").write_text("", encoding="utf-8")
+    rc = sg2.main(["--base", str(base), "--live", str(live), "--assets", str(tmp_path / "assets.txt"),
+                   "--status", str(tmp_path / "st.json")])
+    assert rc == 0
+
+
+def test_gate_旁表列數變少_擋(tmp_path):
+    base, live = tmp_path / "base", tmp_path / "live"
+    base.mkdir(); live.mkdir()
+    pd.DataFrame({"ticker": ["a", "b", "c"], "date": pd.to_datetime(["2026-10-01"] * 3)}).to_parquet(base / "notrade.parquet")
+    pd.DataFrame({"ticker": ["a"], "date": pd.to_datetime(["2026-10-01"])}).to_parquet(live / "notrade.parquet")
+    rc = sg2.main(["--base", str(base), "--live", str(live), "--status", str(tmp_path / "st.json")])
+    assert rc == 1
+
+
+import selfhost_twse_ca_detail as cad  # noqa: E402
+
+
+def _cad_env(monkeypatch, tmp_path):
+    pd.DataFrame({"ticker": ["1111", "2222"], "market": ["TW", "TW"], "date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                  "event": ["除權", "除權息"]}).to_parquet(tmp_path / "corp_actions.parquet")
+    monkeypatch.setattr(cad, "SH", tmp_path)
+    monkeypatch.setattr(cad, "OUT", tmp_path / "ca.parquet")
+    monkeypatch.setattr(cad.time, "sleep", lambda *_: None)
+
+
+def test_ca_detail_沒有輸出檔時可從零開始跑(monkeypatch, tmp_path):
+    _cad_env(monkeypatch, tmp_path)
+    good = {"cash_div": 0.0, "bonus_per_1000": 0.0, "ca_shares": 0.0, "ca_price": 0.0, "ca_public": 0.0, "ca_staff": 0.0,
+            "ca_orig": 0.0, "ca_per_1000": 0.0}
+    monkeypatch.setattr(cad, "fetch", lambda tk, d, s: dict(good))
+    cad.main()                                          # 舊版這裡 KeyError(-1)
+    assert len(pd.read_parquet(tmp_path / "ca.parquet")) == 2
+
+
+def test_ca_detail_失敗列下次重試(monkeypatch, tmp_path):
+    _cad_env(monkeypatch, tmp_path)
+    good = {"cash_div": 1.0, "bonus_per_1000": 0.0, "ca_shares": 0.0, "ca_price": 0.0, "ca_public": 0.0, "ca_staff": 0.0,
+            "ca_orig": 0.0, "ca_per_1000": 0.0}
+    calls = []
+    monkeypatch.setattr(cad, "fetch", lambda tk, d, s: (calls.append(tk), None if tk == "2222" else dict(good))[1])
+    cad.main()
+    assert pd.read_parquet(tmp_path / "ca.parquet")["cash_div"].isna().sum() == 1
+    calls.clear()
+    monkeypatch.setattr(cad, "fetch", lambda tk, d, s: (calls.append(tk), dict(good))[1])
+    cad.main()
+    assert calls == ["2222"]                            # 只重試失敗的那件，成功的不重抓
+    out = pd.read_parquet(tmp_path / "ca.parquet")
+    assert len(out) == 2 and out["cash_div"].notna().all()
