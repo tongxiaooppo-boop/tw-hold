@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-06T14:35:14+00:00",
+    "updated_at": "2026-10-06T18:57:20+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -94,13 +94,31 @@
       "exit_date": "2026-10-05",
       "exit_price": 404.07,
       "ret_pct": 0.007656
+    },
+    {
+      "ticker": "2303",
+      "name": "聯電",
+      "entry_date": "2026-09-29",
+      "entry_price": 157.5,
+      "exit_date": "2026-10-06",
+      "exit_price": 151.5,
+      "ret_pct": -0.038095
+    },
+    {
+      "ticker": "3037",
+      "name": "欣興",
+      "entry_date": "2026-09-21",
+      "entry_price": 1120.0,
+      "exit_date": "2026-10-06",
+      "exit_price": 1310.86,
+      "ret_pct": 0.170411
     }
   ],
   "stats": {
-    "n": 10,
+    "n": 12,
     "win_rate": 0.5,
-    "avg_ret_gross": -4.99999999999997e-05,
-    "expectancy_net": -0.005900000000000001,
+    "avg_ret_gross": 0.010984666666666669,
+    "expectancy_net": 0.005134666666666667,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
@@ -116,9 +134,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 2,
+        "n": 4,
         "win_rate": 0.5,
-        "avg_ret_net": -0.021881
+        "avg_ret_net": 0.0192135
       }
     ]
   }
