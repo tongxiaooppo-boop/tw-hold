@@ -30,6 +30,12 @@ gh release view selfhost-data -R tongxiaooppo-boop/tw-hold-data --json assets --
 
 9. **私有參考資料（2026-10-06 晚已切換）**：`data/pcf/`、`data/reference/` 已從公開 repo 移除（`git rm --cached`＋`.gitignore`），改存私有 repo `tw-hold-data` 的 Release `refdata-latest`（一檔一資產；PCF 每基金一個 zip）。確認 `rebuild`／`global_macro`／`chip_flow_evening`／`heartbeat` 這幾條 log 有 `[refdata] pull … 項`、`[refdata] push …`，job 沒有紅；`pcf_retry` 只在補跑時才觸發。app 頁尾應顯示「私有參考資料：已從私有 Release 還原 14 項」。若出現「還原失敗」＝Streamlit secrets 的 `DATA_READ_PAT`（唯讀、Contents: Read-only）有問題。**注意**：`rebuild` 的還原是 `--strict`＋`continue-on-error`，失敗時會跳過推送（避免殘缺 PCF 目錄蓋掉 Release 歷史）並讓 job 變紅。
 
+10. **⭐ 決策點（使用者 2026-10-06 定）：驗證結束後才決定「切自建」還是「繼續用現有上游」，不預設要切。** 使用者原話：「先驗證，再決定繼續用上游，還是切換；不太想為了別人讓自己有風險，感覺搞這個有點沒意義了」。所以：
+    - 2026-10-12～10-30 的 15 日驗證照跑（自建每天收集、`selfhost_recon.py` 逐日對帳）。結束時**把證據攤出來讓使用者選**：①對帳相符率（目前 89.5%，其餘多歸因到上游缺陷）②tw-swing 訂正前後影響報告（規則結果有沒有實質改變）③驗證期間上游有沒有再出問題。
+    - 三條路：**A 切自建為主**（要每天抓）｜**B 維持上游、自建當保險**（可改每週抓一次＋停止買賣改走 OpenAPI 每日）｜**C 完全停止自建收集**（最乾淨，失去保險與驗證上游的能力）。
+    - **「全停」只需一個動作**：停用 `selfhost_collect.yml`（Actions 頁 Disable workflow，或刪掉 cron）；歷史資料已在私有 repo Release `selfhost-data`，不受影響。
+    - 不要主動勸使用者繼續做這條線；他明確表示覺得「搞這個有點沒意義」。已經做出的發現（上游接縫缺陷、OHLC 不一致、官方事件表對帳）本身有價值，不論切不切。
+
 之後依 §5 順序：2026-10-12 起連續 15 個交易日 `selfhost_recon.py` 逐日比對 → 通過後切主來源 → 接縫訂正。
 
 ## 0. 現況
