@@ -39,12 +39,19 @@ REFRESH_DAYS = 14
 RECHECK_DAYS = 3
 SLEEP = 2.0
 UA = {"User-Agent": "Mozilla/5.0"}
-COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value"]
+# chg：官方當日「漲跌價差」（有正負號；事件日標記為 X／除息 時為空）。close−chg＝官方當日參考價——
+# 跟我們「前一筆收盤」不同時（無成交後、事件日），只有它能說明價格跳動是否合乎漲跌幅限制。
+COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg"]
 NT_COLS = ["ticker", "market", "date", "volume", "value", "src"]
 # 官方有列、但當天沒有成交價（冷門股無成交、或只有零股成交）：不進 raw_prices（那裡每列都有價），改記在旁表 notrade.parquet。
 # 為什麼要留：①「缺日」才分得出是市場事實（無成交）還是漏抓；②有量無價的零股成交仍是真的成交量（算均量要納入、算均線不可）。
 # 見 tw-stock-data READ_CONTRACT「close 可能是空字串」。每次 fetch 後由 main() 取走並清空。
 NOTRADE: list[dict] = []
+# 官方在「參考價被重設」的日子，行情表的漲跌欄不是 +/-數字而是標記：上市 `X`（無比價；除權息、減資、轉板首日、無成交後復交易…），
+# 上櫃直接寫「除息／除權／除權息」。這是官方自己標出的事件日——跟我們的事件表互為獨立的對帳基準（事件簿 `refmark_no_event`）。
+# 只記非一般漲跌（+／−／數字）的列，旁表 refmark.parquet，量很小（歷史約 2 萬列）。
+REFMARK: list[dict] = []
+RM_COLS = ["ticker", "market", "date", "mark", "chg", "src"]
 
 
 def _get(url: str, retries: int = 3) -> dict | None:
@@ -71,10 +78,38 @@ def _num(x) -> float | None:
     return v if v > 0 else None
 
 
+def _mark(sign_cell, diff_cell=None) -> tuple[str, float | None]:
+    """漲跌欄 → (標記, 漲跌價差)。標記為空字串＝一般漲跌。上市：漲跌(+/-) 欄含 HTML（`<p>X</p>`、`<p style=color:red>+</p>`）；
+    上櫃：單一「漲跌」欄，一般是 `-0.80 ` 這種數字，事件日是文字（`除息 `）。"""
+    import re as _re
+    sg = _re.sub(r"<[^>]+>", "", str(sign_cell)).strip()
+    if diff_cell is None:                                  # 上櫃：單欄
+        if sg in ("", "---", "--"):
+            return "", None
+        v = _num_signed(sg)
+        return ("", v) if v is not None else (sg, None)
+    v = _num_signed(diff_cell)                              # 上市：符號欄 + 價差欄
+    if sg in ("+", "-", ""):
+        return "", (v if sg != "-" or v is None else -abs(v))
+    return sg, v
+
+
+def _num_signed(x) -> float | None:
+    s = str(x).replace(",", "").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame:
-    """`idx`: 標準欄名 → 官方欄名。用欄名（不是固定位置）取欄，耐改版。"""
+    """`idx`: 標準欄名 → 官方欄名。用欄名（不是固定位置）取欄，耐改版。
+    可選鍵 `sign`／`diff`：漲跌欄（見 `_mark`），有的話把非一般漲跌的列記進 REFMARK 旁表。"""
     fields = table["fields"]
-    pos = {k: fields.index(v) for k, v in idx.items()}
+    opt = {k: idx[k] for k in ("sign", "diff") if k in idx and idx[k] in fields}
+    pos = {k: fields.index(v) for k, v in idx.items() if k not in ("sign", "diff")}
+    sign_i = fields.index(opt["sign"]) if "sign" in opt else None
+    diff_i = fields.index(opt["diff"]) if "diff" in opt else None
     out = []
     for r in table["data"]:
         code = str(r[0]).strip()
@@ -85,11 +120,17 @@ def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame
             NOTRADE.append({"ticker": code, "market": market, "date": pd.Timestamp(d),
                             "volume": _num(r[pos["volume"]]) or 0.0, "value": _num(r[pos["value"]]) or 0.0, "src": "official"})
             continue
+        chg = None
+        if sign_i is not None:
+            mk, chg = _mark(r[sign_i], r[diff_i] if diff_i is not None else None)
+            if mk:
+                REFMARK.append({"ticker": code, "market": market, "date": pd.Timestamp(d), "mark": mk, "chg": chg, "src": "official"})
+                chg = None
         out.append({
             "ticker": code, "market": market, "date": pd.Timestamp(d),
             "open": _num(r[pos["open"]]) or close, "high": _num(r[pos["high"]]) or close,
             "low": _num(r[pos["low"]]) or close, "close": close,
-            "volume": _num(r[pos["volume"]]) or 0.0, "value": _num(r[pos["value"]]) or 0.0,
+            "volume": _num(r[pos["volume"]]) or 0.0, "value": _num(r[pos["value"]]) or 0.0, "chg": chg,
         })
     return pd.DataFrame(out, columns=COLS)
 
@@ -108,7 +149,8 @@ def fetch_twse(d: date) -> pd.DataFrame | None:
     for t in j.get("tables", []):
         if t.get("title") and "每日收盤行情" in t["title"] and t.get("data"):
             return _rows(t, {"open": "開盤價", "high": "最高價", "low": "最低價", "close": "收盤價",
-                             "volume": "成交股數", "value": "成交金額"}, "TW", ymd)
+                             "volume": "成交股數", "value": "成交金額",
+                             "sign": "漲跌(+/-)", "diff": "漲跌價差"}, "TW", ymd)
     return pd.DataFrame(columns=COLS)
 
 
@@ -124,7 +166,7 @@ def fetch_tpex(d: date) -> pd.DataFrame | None:
     if not tabs or not tabs[0].get("totalCount") or not tabs[0].get("data"):
         return pd.DataFrame(columns=COLS)           # 休市
     return _rows(tabs[0], {"open": "開盤", "high": "最高", "low": "最低", "close": "收盤",
-                           "volume": "成交股數", "value": "成交金額(元)"}, "TWO", ymd)
+                           "volume": "成交股數", "value": "成交金額(元)", "sign": "漲跌"}, "TWO", ymd)
 
 
 def collect_day(d: date, market: str = "both") -> pd.DataFrame | None:
@@ -160,6 +202,18 @@ def _flush_notrade() -> None:
     new = pd.DataFrame(NOTRADE, columns=NT_COLS)
     NOTRADE.clear()
     old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=NT_COLS)
+    allp = pd.concat([old, new], ignore_index=True).drop_duplicates(["ticker", "market", "date"], keep="last")
+    allp.sort_values(["date", "market", "ticker"]).reset_index(drop=True).to_parquet(path, index=False, compression="zstd")
+
+
+def _flush_refmark() -> None:
+    """同 _flush_notrade：累積型、同鍵以最新為準；檔名跟著 OUT。"""
+    if not REFMARK:
+        return
+    path = OUT.with_name(OUT.name.replace("raw_prices", "refmark"))
+    new = pd.DataFrame(REFMARK, columns=RM_COLS)
+    REFMARK.clear()
+    old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=RM_COLS)
     allp = pd.concat([old, new], ignore_index=True).drop_duplicates(["ticker", "market", "date"], keep="last")
     allp.sort_values(["date", "market", "ticker"]).reset_index(drop=True).to_parquet(path, index=False, compression="zstd")
 
@@ -201,6 +255,7 @@ def main(argv=None) -> int:
         old, new = allp, []
         print(f"  已寫入 {OUT.name}（{len(allp)} 列，{allp['date'].nunique()} 天）", flush=True)
         _flush_notrade()
+        _flush_refmark()
 
     for i, d in enumerate(todo, 1):
         df = collect_day(d, a.market)

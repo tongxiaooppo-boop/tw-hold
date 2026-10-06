@@ -11,7 +11,7 @@ name: 自建上游收集
 # tw-hold 是公開 repo → Actions 分鐘數無限。
 #
 # 首次：本機跑完 selfhost_backfill.py 後，把 data/selfhost/*.parquet 上傳成 Release `selfhost-data`
-#   gh release create selfhost-data data/selfhost/{raw_prices,inst,margin,notrade,stophalt,corp_actions,ev_fm_reduction}.parquet \
+#   gh release create selfhost-data data/selfhost/{raw_prices,inst,margin,notrade,refmark,stophalt,corp_actions,ev_fm_reduction}.parquet \
 #     data/selfhost/ev_fm_reduction_done.json \
 #     --title "自建上游資料" --notes "由 selfhost_collect.yml 維護；勿手動覆蓋"
 
@@ -51,7 +51,7 @@ jobs:
         run: |
           mkdir -p data/selfhost/_base
           if gh release view selfhost-data >/dev/null 2>&1; then
-            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
+            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
               gh release download selfhost-data -D data/selfhost/_base -p "$f" --clobber || echo "（Release 尚無 $f，略過）"
             done
             cp data/selfhost/_base/* data/selfhost/ 2>/dev/null || true
@@ -108,7 +108,7 @@ jobs:
       - name: 上傳 Release（僅閘門通過）
         if: steps.gate.outcome == 'success'
         run: |
-          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
+          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
           done
           # 週五另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份

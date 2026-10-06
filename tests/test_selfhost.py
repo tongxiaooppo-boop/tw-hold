@@ -642,3 +642,47 @@ def test_月檢查_事件對帳_官方有我們沒有_與反向():
 
 def test_月檢查_前一個月():
     assert smr.prev_month(_date(2026, 10, 6)) == "2026-09" and smr.prev_month(_date(2026, 1, 3)) == "2025-12"
+
+
+def test_漲跌欄_上市X與上櫃除息記進旁表_一般漲跌記chg():
+    rp.REFMARK.clear()
+    t = {"fields": ["證券代號", "開盤價", "最高價", "最低價", "收盤價", "成交股數", "成交金額", "漲跌(+/-)", "漲跌價差"],
+         "data": [["1418", "4.03", "4.03", "4.03", "4.03", "5,001", "20,154", "<p>X</p>", "0.00"],
+                  ["2330", "2375", "2395", "2290", "2290", "1,000", "100", "<p style= color:green>-</p>", "180.00"],
+                  ["1101", "30", "31", "30", "31", "1,000", "100", "<p style= color:red>+</p>", "1.00"]]}
+    df = rp._rows(t, {"open": "開盤價", "high": "最高價", "low": "最低價", "close": "收盤價", "volume": "成交股數", "value": "成交金額",
+                      "sign": "漲跌(+/-)", "diff": "漲跌價差"}, "TW", "20260717").set_index("ticker")
+    assert [(r["ticker"], r["mark"]) for r in rp.REFMARK] == [("1418", "X")]
+    assert pd.isna(df.loc["1418", "chg"]) and df.loc["2330", "chg"] == -180.0 and df.loc["1101", "chg"] == 1.0
+    rp.REFMARK.clear()
+    t2 = {"fields": ["代號", "收盤", "漲跌", "開盤", "最高", "最低", "成交股數", "成交金額(元)"],
+          "data": [["8358", "398.50", "除息 ", "415.5", "420", "395", "8,273,189", "3,363,820,272"],
+                   ["1240", "54.70", "-0.80 ", "55.5", "55.5", "54.7", "17,079", "938,806"]]}
+    d2 = rp._rows(t2, {"open": "開盤", "high": "最高", "low": "最低", "close": "收盤", "volume": "成交股數", "value": "成交金額(元)",
+                       "sign": "漲跌"}, "TWO", "20260717").set_index("ticker")
+    assert [(r["ticker"], r["mark"]) for r in rp.REFMARK] == [("8358", "除息")] and d2.loc["1240", "chg"] == -0.8
+    rp.REFMARK.clear()
+
+
+def test_事件簿_官方標記日無事件_標flag_轉板首日例外():
+    d = pd.bdate_range("2026-01-05", periods=10)
+    raw = pd.concat([pd.DataFrame({"ticker": "6001", "market": "TW", "date": d, "close": 10.0, "chg": 0.0}),
+                     pd.DataFrame({"ticker": "6002", "market": ["TWO"] * 5 + ["TW"] * 5, "date": d, "close": 10.0, "chg": 0.0})], ignore_index=True)
+    rmk = pd.DataFrame([{"ticker": "6001", "market": "TW", "date": d[4], "mark": "X", "chg": None, "src": "official"},
+                        {"ticker": "6002", "market": "TW", "date": d[5], "mark": "X", "chg": None, "src": "official"}])
+    led = sl.build(raw, pd.DataFrame(columns=["ticker", "date", "type", "prev_close", "ref_price", "factor", "source", "detail"]),
+                   None, None, None, None, None, None, rmk)
+    assert list(led[led["kind"] == "refmark_no_event"]["ticker"]) == ["6001"]
+    assert list(led[led["kind"] == "refmark"]["ticker"]) == ["6002"]
+
+
+def test_事件簿_官方參考價下漲跌幅合法_不標flag():
+    d = pd.bdate_range("2026-01-05", periods=8)
+    close = [10.0, 10.0, 10.0, 10.0, 12.5, 12.5, 12.5, 12.5]            # 缺日後 +25%，但官方漲跌價差 0.5（參考價 12.0）
+    raw = pd.concat([pd.DataFrame({"ticker": "7001", "market": "TW", "date": d[[0, 1, 2, 3, 6, 7]], "close": [10.0] * 4 + [12.5] * 2,
+                                   "chg": [0.0, 0.0, 0.0, 0.0, 0.5, 0.0]}),
+                     pd.DataFrame({"ticker": "7002", "market": "TW", "date": d, "close": 10.0, "chg": 0.0})], ignore_index=True)
+    led = sl.build(raw, pd.DataFrame(columns=["ticker", "date", "type", "prev_close", "ref_price", "factor", "source", "detail"]),
+                   None, None, None, None, None)
+    j = led[(led["ticker"] == "7001") & (led["kind"] == "jump")]
+    assert len(j) == 1 and j["level"].iloc[0] == "info" and "官方" in j["title"].iloc[0]
