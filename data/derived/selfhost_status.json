@@ -25,16 +25,16 @@
    }
   },
   "corp_actions": {
-   "rows": 18498,
-   "last_date": "2026-10-12"
+   "rows": 18557,
+   "last_date": "2026-10-19"
   },
   "notrade": {
    "rows": 61892,
    "last_date": "2026-10-05"
   },
   "refmark": {
-   "rows": 25969,
-   "last_date": "2026-10-05"
+   "rows": 25971,
+   "last_date": "2026-10-06"
   },
   "stophalt": {
    "rows": 16,
