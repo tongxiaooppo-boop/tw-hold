@@ -702,3 +702,74 @@ def test_enrich_事件名稱用官方原詞_並展開官方基準價欄位():
     assert out.loc["2614", "event"] == "除權息" and out.loc["2614", "open_base"] == 17.3 and out.loc["2614", "div_ref"] == 17.31
     assert out.loc["3536", "event"] == "減資" and out.loc["3536", "reason"] == "彌補虧損" and out.loc["3536", "limit_up"] == 14.25
     assert out.loc["1109", "reason"] == "Cash refund" and out.loc["1109", "open_base"] == 10.5 and out.loc["1109", "limit_down"] == 9.45
+
+
+# ───────── 停牌缺口閘門／官方 notes 保存（2026-10-06）─────────
+def _gap_raw(rows):
+    return pd.DataFrame(rows, columns=["ticker", "date", "close"]).assign(date=lambda d: pd.to_datetime(d["date"]))
+
+
+def _gap_ev(ticker, date, prev_close, cls="red"):
+    return pd.DataFrame([{"ticker": ticker, "date": pd.Timestamp(date), "cls": cls, "type": "cap_reduction",
+                          "factor": 2.0, "source": "twse_red", "prev_close": prev_close}])
+
+
+def test_gap_gate_rejects_fake_event_without_halt_and_price_mismatch():
+    # 事件日 01-09 前一交易日 01-08 就有實價（沒停牌），且收盤 10 vs 官方停止買賣前收盤 20 → 假事件（日期打錯）
+    raw = _gap_raw([("1111", "2026-01-07", 10), ("1111", "2026-01-08", 10), ("1111", "2026-01-09", 10),
+                    ("2222", "2026-01-07", 5), ("2222", "2026-01-08", 5), ("2222", "2026-01-09", 5)])
+    ok, bad, warn = sa.stop_gap_gate(_gap_ev("1111", "2026-01-09", 20.0), raw)
+    assert len(ok) == 0 and len(bad) == 1 and len(warn) == 0
+
+
+def test_gap_gate_keeps_real_halt_event():
+    # 停牌 3 個交易日（01-08、01-09 其他檔有交易、1111 沒有），收盤接得上官方前收 → 放行
+    raw = _gap_raw([("1111", "2026-01-06", 20), ("2222", "2026-01-07", 5), ("2222", "2026-01-08", 5),
+                    ("2222", "2026-01-09", 5), ("1111", "2026-01-12", 10), ("2222", "2026-01-12", 5)])
+    ok, bad, warn = sa.stop_gap_gate(_gap_ev("1111", "2026-01-12", 20.0), raw)
+    assert len(ok) == 1 and len(bad) == 0 and len(warn) == 0
+
+
+def test_gap_gate_only_price_mismatch_warns_not_rejects():
+    raw = _gap_raw([("1111", "2026-01-06", 18), ("2222", "2026-01-07", 5), ("2222", "2026-01-08", 5),
+                    ("1111", "2026-01-12", 10), ("2222", "2026-01-12", 5)])
+    ok, bad, warn = sa.stop_gap_gate(_gap_ev("1111", "2026-01-12", 20.0), raw)
+    assert len(ok) == 1 and len(bad) == 0 and len(warn) == 1
+
+
+def test_gap_gate_skips_events_without_prior_price_and_non_halt_classes():
+    raw = _gap_raw([("1111", "2026-01-12", 10)])
+    ok, bad, warn = sa.stop_gap_gate(_gap_ev("1111", "2026-01-12", 20.0), raw)
+    assert len(ok) == 1 and len(bad) == 0                    # 事件日前沒有實價 → 無從驗證，放行
+    raw2 = _gap_raw([("1111", "2026-01-08", 10), ("1111", "2026-01-09", 10)])
+    ok, bad, _ = sa.stop_gap_gate(_gap_ev("1111", "2026-01-09", 99.0, cls="div"), raw2)
+    assert len(ok) == 1 and len(bad) == 0                    # 除權息不是停止買賣型，不查
+
+
+def test_resolve_events_carries_prev_close():
+    ev = pd.DataFrame([{"ticker": "1111", "market": "TW", "date": pd.Timestamp("2026-01-12"), "type": "cap_reduction",
+                        "prev_close": 20.0, "ref_price": 10.0, "factor": 0.5, "source": "twse_red"}])
+    assert sa.resolve_events(ev)["prev_close"].iloc[0] == 20.0
+
+
+def test_meta_row_keeps_notes_hints_and_total_for_twse_and_tpex():
+    twse = {"stat": "OK", "title": "減資恢復買賣參考價格", "notes": ["a", "除息併案…"], "hints": "h", "total": 2,
+            "params": {"startDate": "20250101"}, "fields": ["x"], "data": [[1], [2]]}
+    r = se._meta_row("twse_red", "20250101", "20251231", twse)
+    assert r["n_rows"] == 2 and r["top"]["notes"] == ["a", "除息併案…"] and r["top"]["hints"] == "h" and "data" not in r["top"]
+    tpex = {"stat": "ok", "tables": [{"title": "t", "notes": ["n"], "totalCount": 1, "fields": ["x"], "data": [[1]]}]}
+    r2 = se._meta_row("tpex_red", "a", "b", tpex)
+    assert r2["n_rows"] == 1 and r2["table"]["notes"] == ["n"] and r2["table"]["totalCount"] == 1
+
+
+def test_record_meta_appends_and_never_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(se, "SH", tmp_path)
+    monkeypatch.setattr(se, "META", tmp_path / "m.jsonl")
+    se._record_meta("twse_ex", "a", "b", {"stat": "OK", "notes": ["n1"], "data": []})
+    se._record_meta("twse_ex", "a", "b", {"stat": "OK", "notes": ["n2"], "data": []})
+    lines = (tmp_path / "m.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2 and '"n2"' in lines[1]            # 只增不減（同請求兩次各記一列，因為 notes 會變）
+    monkeypatch.setattr(se, "META", tmp_path / "no" / "dir" / "m.jsonl")
+    monkeypatch.setattr(se, "SH", tmp_path / "no" / "dir")
+    monkeypatch.setattr(se.Path, "mkdir", lambda *a, **k: (_ for _ in ()).throw(OSError("x")))
+    se._record_meta("twse_ex", "a", "b", {})                 # 存檔失敗只警告、不丟例外

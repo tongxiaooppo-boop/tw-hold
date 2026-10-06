@@ -49,6 +49,7 @@ FM_SPLIT = SH / "ev_fm_split.parquet"
 FM_RED = SH / "ev_fm_reduction.parquet"
 FM_RED_DONE = SH / "ev_fm_reduction_done.json"
 OUT = SH / "corp_actions.parquet"
+META = SH / "ev_official_meta.jsonl"                    # 官方回應的 notes／hints／title／total／params 原文（只增不減）
 UA = {"User-Agent": "Mozilla/5.0"}
 FM_API = "https://api.finmindtrade.com/api/v4/data"
 FM_HOURLY = 560          # 免費註冊層 600/hr，留餘裕
@@ -101,6 +102,27 @@ _EXTRA = {"open_base": ("開盤競價基準", "開始交易基準價"), "div_ref
           "limit_up": ("漲停價格", "漲停價"), "limit_down": ("跌停價格", "跌停價")}
 
 
+def _meta_row(source: str, a: str, b: str, j: dict) -> dict:
+    """官方回應除了資料列以外的東西（notes、hints、title、total、params…）原文留存，不解析。
+    官方會在這裡寫口徑（例：TWTAUU 的 notes 夾「除息併案減資」的現金股利）；notes 也會變，所以每次請求都記一列。
+    TPEx 的表頭資訊在 tables[0]、上市在頂層，兩邊都收。"""
+    top = {k: v for k, v in j.items() if k not in ("data", "fields", "tables")} if isinstance(j, dict) else {}
+    tb = (j.get("tables") or [{}])[0] if isinstance(j, dict) and j.get("tables") else {}
+    tab = {k: v for k, v in tb.items() if k not in ("data", "fields")}
+    n = len(tb.get("data", [])) if tb else (len(j.get("data", [])) if isinstance(j, dict) else 0)
+    return {"fetched_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"), "source": source, "start": a, "end": b,
+            "n_rows": n, "top": top, "table": tab}
+
+
+def _record_meta(source: str, a: str, b: str, j: dict) -> None:
+    try:
+        SH.mkdir(parents=True, exist_ok=True)
+        with open(META, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(_meta_row(source, a, b, j), ensure_ascii=False, default=str) + chr(10))
+    except OSError as e:                                    # 存檔失敗不可擋住事件抓取
+        print(f"::warning::官方 notes 存檔失敗：{e}", file=sys.stderr)
+
+
 def _official_extra(fields: list[str], r: list) -> dict:
     out = {}
     for k, names in _EXTRA.items():
@@ -119,6 +141,7 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
         time.sleep(1.5)
         j = _http_json("https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={}&endDate={}&response=json"
                        .format(a.strftime("%Y%m%d"), b.strftime("%Y%m%d")))
+        _record_meta("twse_ex", a.strftime("%Y%m%d"), b.strftime("%Y%m%d"), j)
         f = j.get("fields") or []
         for r in j.get("data", []) if j.get("stat") == "OK" else []:
             try:
@@ -130,6 +153,7 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
         time.sleep(1.5)
         j = _http_json("https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={}&endDate={}&response=json"
                        .format(a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d")))
+        _record_meta("tpex_ex", a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d"), j)
         t = (j.get("tables") or [{}])[0]
         f = t.get("fields") or []
         for r in t.get("data", []):
@@ -214,6 +238,7 @@ def fetch_official_actions(start: str, end: str) -> pd.DataFrame:
             except (HTTPError, RuntimeError) as e:
                 print(f"::warning::{source} {yr} 抓取失敗：{e}", file=sys.stderr)
                 continue
+            _record_meta(source, a.strftime(fmt), b.strftime(fmt), j)
             t = (j.get("tables") or [j])[0] if source in _TPEX_BULLETIN else j
             if source not in _TPEX_BULLETIN and j.get("stat") != "OK":
                 continue                                    # 該年無資料（非錯誤）
