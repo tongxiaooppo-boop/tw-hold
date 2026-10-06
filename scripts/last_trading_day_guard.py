@@ -22,6 +22,9 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 URL = "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule"
+# 指定一定要跑的日子（不論是不是當週最後交易日）：使用者 2026-10-06 要求「今晚照常跑一次」來驗證排程觸發的完整流程，
+# 之後不需要時可以清空。
+FORCE_RUN_DATES = {date(2026, 10, 6)}
 OPEN_MARKERS = ("開始交易日", "最後交易日")      # 名稱含這些的是「有交易」的日子（春節前最後交易日等），不是休市
 
 
@@ -76,6 +79,8 @@ def fetch_closed() -> set[date] | None:
 def decide(today: date, closed: set[date] | None, event: str = "schedule") -> tuple[bool, str]:
     if event == "workflow_dispatch":
         return True, "手動觸發，一律執行"
+    if today in FORCE_RUN_DATES:
+        return True, f"{today} 是指定補跑日，執行"
     if closed is None:
         return True, "沒有休市日表，fail-open 執行"
     if is_last_trading_day_of_week(today, closed):

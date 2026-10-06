@@ -58,3 +58,11 @@ def test_decide_fail_open_and_dispatch():
 def test_roc_date_parse():
     assert g._roc("1151009") == date(2026, 10, 9)
     assert g._roc("1150102") == date(2026, 1, 2)
+
+
+def test_force_run_dates_override(monkeypatch):
+    monkeypatch.setattr(g, "FORCE_RUN_DATES", {date(2026, 10, 7)})
+    assert g.decide(date(2026, 10, 7), CLOSED)[0] is True                       # 指定補跑日：平常會跳過的週三也跑
+    assert g.decide(date(2026, 10, 7), CLOSED)[1].endswith("執行")
+    monkeypatch.setattr(g, "FORCE_RUN_DATES", set())
+    assert g.decide(date(2026, 10, 7), CLOSED)[0] is False
