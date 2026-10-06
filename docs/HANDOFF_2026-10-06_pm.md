@@ -28,6 +28,8 @@ gh release view selfhost-data -R tongxiaooppo-boop/tw-hold-data --json assets --
 7. 本週五 10-09 第一次跑 FinMind 減資輪詢（週二被略過）。
 8. **PAT 到期日**：`DATA_REPO_PAT`（fine-grained，只授權 tw-hold-data 的 Contents 讀寫）建於 2026-10-06，使用者設定一年期；**2027-09-29 起提醒換**（記憶 `tw-hold-bundle-pat-expiry` 已加）。
 
+9. **私有參考資料（2026-10-06 晚已切換）**：`data/pcf/`、`data/reference/` 已從公開 repo 移除（`git rm --cached`＋`.gitignore`），改存私有 repo `tw-hold-data` 的 Release `refdata-latest`（一檔一資產；PCF 每基金一個 zip）。確認 `rebuild`／`global_macro`／`chip_flow_evening`／`heartbeat` 這幾條 log 有 `[refdata] pull … 項`、`[refdata] push …`，job 沒有紅；`pcf_retry` 只在補跑時才觸發。app 頁尾應顯示「私有參考資料：已從私有 Release 還原 14 項」。若出現「還原失敗」＝Streamlit secrets 的 `DATA_READ_PAT`（唯讀、Contents: Read-only）有問題。**注意**：`rebuild` 的還原是 `--strict`＋`continue-on-error`，失敗時會跳過推送（避免殘缺 PCF 目錄蓋掉 Release 歷史）並讓 job 變紅。
+
 之後依 §5 順序：2026-10-12 起連續 15 個交易日 `selfhost_recon.py` 逐日比對 → 通過後切主來源 → 接縫訂正。
 
 ## 0. 現況
@@ -116,6 +118,8 @@ gh release view selfhost-data -R tongxiaooppo-boop/tw-hold-data --json assets --
 - **手動演練結果**：run 37413944270（寫公開 Release，TPEx TLS 無誤）、37416328750（改寫私有 repo，閘門通過）、37417176629（補 FINMIND_TOKEN 後，結果見下）。
 - **FinMind token 踩坑（2026-10-06）**：secret `FINMIND_TOKEN` 貼上時結尾帶了換行，Actions 上 FinMind 回 `HTTP 400 {"msg":"Token is illegal"...}`（回應的 `token_tail` 尾巴是 `
 ` 才看出來）。該步 `continue-on-error`，整個 run 顯示綠色，**靜默失敗**。修法：`selfhost_events._token`／`selfhost_xsrc._token` 一律 `.strip()`（`reference/finmind_client.py` 本來就有）；已加測試。**修後驗證**：run 37417691902 的 log 出現「FinMind 分割／面額變更：51 件」（與本機 ev_fm_split 51 件一致），無 `Token is illegal`。**教訓**：continue-on-error 的綠色不等於成功，驗證要 grep log。
+- **私有參考資料設計**：程式 `reference/refdata.py`＋`scripts/refdata_sync.py`（pull／push／`--strict`）；secrets：GitHub `DATA_REPO_PAT`（CI 讀寫）、Streamlit `DATA_READ_PAT`（app 唯讀，一年期，**2027-09-29 起提醒換**）。本機開發照讀 `data/`（已 gitignore，不會被 pull 覆蓋，除非手動跑 `refdata_sync.py pull`）。新 clone 的環境跑 `tests/test_app_smoke.py`／`test_snapshot_pcf.py` 前先 `python scripts/refdata_sync.py pull`（需 token），否則缺檔。
+- **使用條款與風險（使用者已知）**：證交所／櫃買中心／期交所網站條款禁止腳本下載與散布（已授權 data.gov.tw 者除外）。目前：抓取這條仍違反（改走 OpenAPI 才能消除，但 OpenAPI 只回最新一天、不能補抓）；散布這條已降低（資料不在公開 repo，但 app 公開頁仍顯示衍生內容，例如主動式 ETF 的持股明細）。是否做 OpenAPI 涵蓋度探測：待使用者決定。
 - **操作教訓**：`gh release download` 在本機網路下極慢（約 12KB/s），別用它搬 180MB；用本機檔案直接 `gh release create`。中途殺下載會讓後續的 `gh release create _seed/*` 把**殘缺檔**傳上去（今天發生過一次，已刪重建）。
 
 ## 6. 還沒做／待決定
