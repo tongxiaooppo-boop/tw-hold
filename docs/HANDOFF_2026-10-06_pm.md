@@ -12,6 +12,31 @@
 
 **除非現有上游（tw-stock-scanner 的 data_pack）掛了，否則持續用上游；自建只用來驗證上游的資料對不對、並在上游真的掛掉時當備援。** 所以：不接任何下游、不做「切主來源」；每週收集一次（見下）；上游異常的判準＝`selfhost_recon.py` 對帳（相符率掉、出現新接縫）或 tw-swing 的 `--require-fresh` 告警（上游超過 30 小時沒發佈）。真的要切時才需要寫轉接層（把自建資料轉成 data_pack 同 schema），並先出「訂正前後影響報告」。
 
+## 📌 本週待辦（使用者 2026-10-06 要求，期限：本週內，約 10-11 前）：寫「自建 → data_pack」轉接層
+
+**目的**：上游掛了時，能把自建資料轉成 tw-swing 現行匯入吃的 `data_pack.zip` 格式，**下游（tw-swing 匯入、bundle、tw-hold）完全不用改**。平時仍用現有上游；轉接層只是備援，本週只要「寫好並驗收」，**不切換**。
+
+**目標格式**（tw-swing `scripts/import_data_pack.py`、`import_chips.py`、`docs/DATA_INVENTORY.md` 已記載）：
+| zip 內檔案 | 欄位 | 自建來源 |
+| :-- | :-- | :-- |
+| `data/{code}.TW.csv`／`.TWO.csv` | `Date,Open,High,Low,Close,Volume`（**還原價**，無成交金額） | `data/selfhost/adj_prices.parquet`（官方未還原價 × 官方因子，2015-01-05 起） |
+| `data/institutional/{code}_inst.csv` | `ticker,name,fi_prop_net,it_net,dealer_self_net,dealer_hedge_net,total_net,date` 等（新舊格式混雜，`chips.normalize_institutional` 負責正規化，轉接層輸出新格式） | `inst.parquet`（`foreign_net`、`fi_prop_net`、`trust_net`、`dealer_net`、`total_net`；上櫃自營拆分欄要補） |
+| `data/margin/{code}_margin.csv` | `ticker,name,margin_buy,margin_sell,margin_redeem,margin_prev,margin_balance,margin_quota,short_buy,short_sell,short_redeem,short_prev,short_balance,short_quota,offset,note,date` | `margin.parquet`（已有 `margin_prev`／`short_prev`／`note`；**缺 `margin_quota`／`short_quota`（融資融券限額）→ 留空或補抓**） |
+| `data/stock_list.csv` | `ticker,code,name,market(上市/上櫃),sector` | 名稱與產業別沿用 tw-swing 既有 `stock_list.parquet`／`fundamentals/industry.parquet`，以自建的市場別為準 |
+| `data/tdcc/*`、`data/*` 其他 | 集保等 | **不轉**（tw-swing 自己有集保週快照，data_pack 的集保已停更） |
+
+**設計**：
+- 程式放 tw-hold（跟 selfhost 在一起）：`scripts/selfhost_to_datapack.py` → 產出 `data_pack_selfhost.zip`；放私有 repo `tw-hold-data` 的 Release `datapack-selfhost`（只在需要時由手動 workflow `selfhost_datapack.yml` 產生並上傳，**不排程**）。
+- tw-swing 端：`update_data.py` 加 `--pack-source selfhost`（或環境變數 `PACK_SOURCE`），改從該 Release 下載（需要 tw-swing 私有 repo 的 secret：對 `tw-hold-data` 的唯讀 PAT，**新建一把，不用 `DATA_REPO_PAT`**）。預設仍是現有上游 URL。
+- 注意 `apply_chips_baseline.py` 要緊接 `import_chips.py` 的順序不變（FinMind 修好的籌碼歷史底稿仍要疊回）。
+
+**驗收（本週要做完）**：
+1. 單元測試：欄位對映、新舊格式、上櫃自營補位、缺欄留空、`.TW`／`.TWO` 與 code 對映。
+2. **同期對照**：用同一段期間把轉接層 zip 匯入暫存 store，跟現行 store 比：還原價相對差 ≤0.2% 的列佔比（已知差在接縫與官方因子捨入，需列出不符清單並歸因）、法人／融資券逐日相符率、近 20 日法人恆等式守門通過。
+3. 用轉接層 store 跑 `daily_list.py`，與現行清單比對差異檔數並說明原因；tw-swing 全部測試通過。
+4. 記錄口徑差：官方因子 vs Yahoo 還原、融資限額缺、成交金額缺（兩邊都沒有）。
+**不在本週範圍**：實際切換、排程、tw-swing 規則／回測在新數字上的重驗（真要切時先出「訂正前後影響報告」）。
+
 ## 週更後發現「現有上游資料有問題」的處理流程（2026-10-06 定稿）
 
 自建只當證據，**不自動覆蓋任何上游資料**。每週收集完（當週最後交易日的隔天）依序：
