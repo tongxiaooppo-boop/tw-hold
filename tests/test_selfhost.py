@@ -860,3 +860,12 @@ def test_ca_detail_失敗列下次重試(monkeypatch, tmp_path):
     assert calls == ["2222"]                            # 只重試失敗的那件，成功的不重抓
     out = pd.read_parquet(tmp_path / "ca.parquet")
     assert len(out) == 2 and out["cash_div"].notna().all()
+
+
+def test_finmind_token_環境變數結尾換行要去掉(monkeypatch):
+    # 2026-10-06：GitHub secret 貼上帶了結尾換行，FinMind 回 400「Token is illegal」，FinMind 步驟因 continue-on-error 靜默失敗
+    import selfhost_xsrc as sx
+    monkeypatch.setenv("FINMIND_TOKEN", "abc.def" + chr(10))
+    assert se._token() == "abc.def" and sx._token() == "abc.def"
+    monkeypatch.setenv("FINMIND_TOKEN", "  abc.def" + chr(13) + chr(10))
+    assert se._token() == "abc.def" and sx._token() == "abc.def"

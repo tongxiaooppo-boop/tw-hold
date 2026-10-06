@@ -54,7 +54,7 @@ def universe() -> list[str]:
 
 
 def _token() -> str | None:
-    t = os.environ.get("FINMIND_TOKEN")
+    t = (os.environ.get("FINMIND_TOKEN") or "").strip()      # secret 貼上時常帶結尾換行 → FinMind 回 400「Token is illegal」（2026-10-06 實際發生）
     if t:
         return t
     p = ROOT / ".env"

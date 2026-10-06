@@ -8,15 +8,37 @@
 
 ---
 
+## ⭐ 明天（2026-10-07）第一件事：查昨天自建收集有沒有真的跑成功
+
+**背景**：今天 13:00 起 `selfhost_collect.yml` 已在 Actions 上線，今天 16:30／18:45／23:59（台北，GitHub 排程常延遲 30～60 分鐘）是**第一次由排程觸發**（之前都是手動 dispatch）。失敗只會留紅色 run、**不會通知**（使用者選「自癒不要告警」），所以一定要有人去看。
+
+```
+gh run list --workflow=selfhost_collect.yml -R tongxiaooppo-boop/tw-hold --limit 10
+gh run view <id> --log | grep -E "閘門|::error|::warning|Release 尚無|下載 .* 失敗"
+gh release view selfhost-data -R tongxiaooppo-boop/tw-hold-data --json assets --jq '.assets[]|"\(.updatedAt) \(.size) \(.name)"'
+```
+
+逐項檢查（約 5 分鐘）：
+1. 三班都 success？（若某班缺＝排程沒觸發；若紅＝看 log 的第一個 `::error`）
+2. 閘門訊息「閘門 通過」，且 raw_prices／inst／margin 最新日 ＝ 2026-10-06（收盤後資料已進）。
+3. 私有 Release（`tongxiaooppo-boop/tw-hold-data`）檔案更新時間是今天晚上；公開 repo **沒有** `selfhost-data` Release（已刪）。
+4. 23:59 那班的「近 3 日曆日重抓」有實際覆蓋更正（可比對 10-05 投信／成交量是否與 10-05 首次抓的不同）。
+5. `FINMIND_TOKEN` 在 Actions 上生效：log 內 FinMind 分割／面額那步沒有 400／401／402（⚠ 該步 `continue-on-error`，run 顯示綠色也可能實際失敗，**一定要 grep log 的 `Token is illegal`／`HTTPError`**）。今晚已修（見 §5.95），修後驗證結果見該節。
+6. `ev_official_meta.jsonl` 有在增長（CI 上每次 events 步驟都會 append，下載→append→上傳）。
+7. 本週五 10-09 第一次跑 FinMind 減資輪詢（週二被略過）。
+8. **PAT 到期日**：`DATA_REPO_PAT`（fine-grained，只授權 tw-hold-data 的 Contents 讀寫）建於 2026-10-06，使用者設定一年期；**2027-09-29 起提醒換**（記憶 `tw-hold-bundle-pat-expiry` 已加）。
+
+之後依 §5 順序：2026-10-12 起連續 15 個交易日 `selfhost_recon.py` 逐日比對 → 通過後切主來源 → 接縫訂正。
+
 ## 0. 現況
 
 | | |
 | :-- | :-- |
-| tw-hold `main` | 本機領先 origin 13 個 commit，**都沒 push**；今天新增三個：`c4ff8c6`（防呆＋事件簿＋月檢查）、`e023d2d`（官方漲跌標記 refmark／chg）、`28b378b`（EVENTS.md＋官方用語欄位） |
+| tw-hold `main` | ✅ 2026-10-06 已全部 push（Opus 審查後；最新 `b9ea3fc`）。工作樹只剩三個 `data/derived/selfhost_*` 執行產出檔未進版控 |
 | 自建庫 | 全在本機 `data/selfhost/`（gitignored，約 500MB）：`raw_prices`（含 `chg`）、`inst`、`margin`（含 `margin_prev`／`short_prev`／`note`）、`notrade`、`refmark`、`stophalt`、`corp_actions`、`adj_prices`、`ledger`；2015-01-05～2026-10-05，2,864 天 |
 | 沒接下游 | tw-hold／tw-swing 現行仍用上游 data_pack（接縫 1,576 件還在）；自建庫尚未被任何頁面消費 |
-| GitHub | Release `selfhost-data` 沒建、`selfhost_collect.yml` 從沒在 Actions 跑過 |
-| 測試 | `python -m pytest -q` → 339 passed |
+| GitHub | ✅ `selfhost_collect.yml` 已上線；資料 Release 在**私有 repo `tongxiaooppo-boop/tw-hold-data`**（tag `selfhost-data`）；tw-hold 公開 repo 的舊 Release 已刪（2026-10-06）。手動演練 3 次通過，排程首次觸發為 10-06 16:30 |
+| 測試 | `python -m pytest -q` → 354 passed |
 
 ## 1. 今天做完的（程式；細節看 commit 訊息與各檔檔頭）
 
@@ -83,6 +105,18 @@
 - 停牌缺口閘門、notes 形狀：Opus 實測無反例（573 件減資／面額事件收盤與官方前收偏差皆 0）。
 
 **審查標為「可之後」、尚未處理**：TWT49UDetail 改依欄名（現用位置）；現增配股率公式在 ca_orig=0（9105）時退回 ca_per_1000／1000（目前程式沒實作、無除零風險；現增事件實為 504 件，文件寫 503 要核對）；實價半邊失敗時 notrade／refmark 仍寫進當天；`selfhost_ledger.py:289` 明確讀 chg 欄、舊檔會丟例外；meta 檔放 Release 後會持續長大（約 7.5MB／年，可依內容雜湊去重）；`data-fix.md` §4 的 C1、C2、D7、A12 標記已過時；TPEx 在 Actions 上的 TLS 要靠 push 後第一次 workflow_dispatch 驗證。**審查沒涵蓋**：ledger flag 規則、recon、seam_check、xsrc、monthly_review。
+
+## 5.95 2026-10-06 晚的架構決定與設定（使用者決定「1＋3」）
+
+- **程式公開、資料不公開**：tw-hold 是公開 repo，但自建上游收集的資料不再放公開 Release。`selfhost_collect.yml` 的 job env：`GH_TOKEN: ${{ secrets.DATA_REPO_PAT || github.token }}`、`GH_REPO: ${{ vars.DATA_REPO || github.repository }}`；目前 `DATA_REPO=tongxiaooppo-boop/tw-hold-data`（repo 變數）、secret `DATA_REPO_PAT` 已設。⚠ 順序：先設 secret 再設變數。若要回到寫本 repo：刪掉變數即可。
+- **為什麼**：證交所與櫃買中心網站使用條款（證交所第 6、8 項；櫃買中心第五、七條）禁止腳本下載網站資料、禁止重製散布，**但書只豁免已授權 data.gov.tw 的資料**（OpenAPI＝OGDL v1，須顯名）。我們用的是網站 `rwd`／`www/zh-tw` 端點，不是 OpenAPI。→ README 加「資料來源與授權」（顯名、不公開散布、下架聲明、各目錄來源表）。
+- **OpenAPI 可否取代**：實測日行情端點只回最新一天（日期參數被忽略），無歷史、不能補抓、不能做「近 3 天更正重抓」。若要往後合法公開，需先做涵蓋度探測（欄位、法人、融資券、更正）再評估「歷史用現有、增量改 OpenAPI」。**使用者尚未決定要不要探測。**
+- **長期**：自建上游驗證通過後，資料專案（公開、Actions 無限）與策略專案（私密）分家；已記入記憶 `tw-hold-data-layer-split-plan`。使用者 2026-10-06 說「現有歷史公開沒差」。
+- **Secrets（tw-hold）**：`DATA_REPO_PAT`（新）、`FINMIND_TOKEN`（今天補，同 tw-swing 的值；本機 token 驗證有效，額度 600／小時）、`TWSWING_BUNDLE_PAT`（2026-12-07 到期，11-30 起提醒）。
+- **手動演練結果**：run 37413944270（寫公開 Release，TPEx TLS 無誤）、37416328750（改寫私有 repo，閘門通過）、37417176629（補 FINMIND_TOKEN 後，結果見下）。
+- **FinMind token 踩坑（2026-10-06）**：secret `FINMIND_TOKEN` 貼上時結尾帶了換行，Actions 上 FinMind 回 `HTTP 400 {"msg":"Token is illegal"...}`（回應的 `token_tail` 尾巴是 `
+` 才看出來）。該步 `continue-on-error`，整個 run 顯示綠色，**靜默失敗**。修法：`selfhost_events._token`／`selfhost_xsrc._token` 一律 `.strip()`（`reference/finmind_client.py` 本來就有）；已加測試。**教訓**：continue-on-error 的綠色不等於成功，驗證要 grep log。
+- **操作教訓**：`gh release download` 在本機網路下極慢（約 12KB/s），別用它搬 180MB；用本機檔案直接 `gh release create`。中途殺下載會讓後續的 `gh release create _seed/*` 把**殘缺檔**傳上去（今天發生過一次，已刪重建）。
 
 ## 6. 還沒做／待決定
 

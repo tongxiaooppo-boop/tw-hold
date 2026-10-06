@@ -250,7 +250,7 @@ def fetch_official_actions(start: str, end: str) -> pd.DataFrame:
 
 # ───────────────────────── FinMind ─────────────────────────
 def _token() -> str | None:
-    t = os.environ.get("FINMIND_TOKEN")
+    t = (os.environ.get("FINMIND_TOKEN") or "").strip()      # secret 貼上時常帶結尾換行 → FinMind 回 400「Token is illegal」（2026-10-06 實際發生）
     if t:
         return t
     for p in (ROOT / ".env",):       # tw-hold 自己的 .env；本機也可直接設環境變數 FINMIND_TOKEN
