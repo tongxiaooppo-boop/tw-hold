@@ -2799,7 +2799,8 @@ def _macro_refresh_button() -> None:
 
     st.subheader("手動重整")
     st.caption("發現上面卡片有 ⚠️ 過期標記時可以按這個——觸發雲端重跑，通常幾分鐘後"
-               "資料就會更新，但這頁本身**不會自動跳新**，要手動重新整理瀏覽器再看一次。")
+               "資料就會更新，但這頁本身**不會自動跳新**，要手動重新整理瀏覽器再看一次。"
+               "（私有參考資料每 30 分鐘才會從雲端重拉；按下後這頁會立刻重拉一次，但雲端重跑還沒跑完前拿到的仍是舊的。）")
 
     gate = _refresh_gate()
     now = time.time()
@@ -2809,6 +2810,7 @@ def _macro_refresh_button() -> None:
         return
 
     if st.button("🔄 立即重新整理資料", key="macro_refresh_btn"):
+        _ensure_refdata.clear()             # 下一次 rerun 重拉私有參考資料（否則要等 30 分鐘 TTL）
         gate["until"] = time.time() + 900   # 15 分鐘，行程級、任何人按都算數
         # 觸發前先問 GitHub 這兩條最近一輪跑完了沒——這層判斷在 GitHub 端，
         # 任何 client（不管是不是這個按鈕）都繞不過，比單純的本地冷卻更權威，

@@ -8,7 +8,7 @@
 **只碰不進版控的東西**：`data/upstream/`（bundle）+ `data/derived/*.json`（重算結果，
 這個雖然進版控，但改完你要自己看 `git diff` 決定要不要 commit——本機重算可能因為
 拉 bundle 的時間點跟 CI 不同秒，數字會有極小的重算漂移，不要無腦全部 commit，
-只挑真的要的檔案）。**不碰** `data/pcf/`（主動式 ETF PCF 快照）——那是
+只挑真的要的檔案）。**不重抓** `data/pcf/`（主動式 ETF PCF 快照；只從私有 Release 還原，不打投信官網）——那是
 `scripts/snapshot_pcf.py` 打投信官網即時資料，本來就該一天一次由 CI 跑，
 本機隨便重跑等於多打一次外部網站，不必要。
 
@@ -48,6 +48,10 @@ def main() -> int:
         return rc
     if args.check:
         return 0
+
+    # data/pcf、data/reference 已不進公開 repo（存私有 Release），`git pull` 不會再更新它們；
+    # 有 token（.env 的 DATA_REPO_PAT／DATA_READ_PAT）才還原，沒有就略過（本機沿用既有檔）。
+    _run("scripts/refdata_sync.py", "pull")
 
     rc = _run("build_lists.py")
     if rc != 0:

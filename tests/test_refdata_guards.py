@@ -159,3 +159,20 @@ def test_push_without_marker_is_not_blocked(monkeypatch, tmp_path):
     monkeypatch.setattr(rd, "_upload", lambda tok, rel, name, blob: sent.append(name))
     rd.push([ref / "g.parquet"], tok="t", root=tmp_path)
     assert sent == ["ref__g.parquet"]                            # 沒做過 pull（本機首次）不擋
+
+
+def test_unzip_prunes_snapshots_trimmed_from_release(tmp_path):
+    d = tmp_path / "A"
+    d.mkdir()
+    for n in ("old1", "old2", "keep"):
+        pd.DataFrame({"a": [1]}).to_parquet(d / f"{n}.parquet")
+    n = rd.unzip_pcf(_zip_with(["keep.parquet", "new.parquet"]), d)
+    assert n == 2 and sorted(p.name for p in d.glob("*.parquet")) == ["keep.parquet", "new.parquet"]   # 已被 Release 修剪的 old1／old2 不留
+
+
+def test_unzip_empty_zip_does_not_wipe_directory(tmp_path):
+    d = tmp_path / "A"
+    d.mkdir()
+    pd.DataFrame({"a": [1]}).to_parquet(d / "keep.parquet")
+    assert rd.unzip_pcf(_zip_with([]), d) == 0
+    assert (d / "keep.parquet").exists()                          # 空 zip（異常）不可把本地快照清光

@@ -87,16 +87,24 @@ def zip_pcf_dir(fund_dir: Path) -> bytes:
 
 
 def unzip_pcf(blob: bytes, fund_dir: Path) -> int:
-    """還原 zip 到 `fund_dir`；只收單純檔名、副檔名 parquet（防路徑穿越）。回傳檔數。"""
+    """還原 zip 到 `fund_dir`；只收單純檔名、副檔名 parquet（防路徑穿越）。回傳檔數。
+    zip 正常（至少一個檔）才移除目錄裡 zip 沒有的舊快照——Release 上已被 `KEEP` 修剪掉的快照不留在 app 容器裡
+    （否則 `snaps_n` 會隨時間越變越大）；空 zip 不動目錄（由呼叫端當失敗處理）。"""
     fund_dir.mkdir(parents=True, exist_ok=True)
     n = 0
+    keep: set[str] = set()
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         for info in z.infolist():
             name = info.filename
             if "/" in name or "\\" in name or name.startswith(".") or not name.endswith(".parquet"):
                 continue
             _atomic_write(fund_dir / name, z.read(info))
+            keep.add(name)
             n += 1
+    if n:
+        for old in fund_dir.glob("*.parquet"):
+            if old.name not in keep:
+                old.unlink(missing_ok=True)
     return n
 
 
