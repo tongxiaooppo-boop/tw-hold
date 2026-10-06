@@ -1,0 +1,127 @@
+{
+ "schema": 1,
+ "generated": "2026-10-06T01:58:35+00:00",
+ "window": [
+  "2025-09-22",
+  "2026-10-05"
+ ],
+ "days": 250,
+ "tol": 0.002,
+ "tickers_compared": 1969,
+ "counts": {
+  "ok": 1762,
+  "factor_diff": 128,
+  "upstream_stepwise": 46,
+  "unexplained": 13,
+  "upstream_seam": 8,
+  "pending_event": 5,
+  "single_day": 5,
+  "upstream_unadjusted": 2
+ },
+ "unexplained_top": [
+  {
+   "ticker": "3489",
+   "n": 250,
+   "max_dev": 0.14151,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "1441",
+   "n": 244,
+   "max_dev": 0.13919,
+   "bad_days": 234,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "3591",
+   "n": 243,
+   "max_dev": 0.06225,
+   "bad_days": 234,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "3217",
+   "n": 250,
+   "max_dev": 0.06116,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "5878",
+   "n": 229,
+   "max_dev": 0.06107,
+   "bad_days": 151,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "3303",
+   "n": 250,
+   "max_dev": 0.05338,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "3034",
+   "n": 250,
+   "max_dev": 0.04432,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "2610",
+   "n": 250,
+   "max_dev": 0.03984,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "2891",
+   "n": 250,
+   "max_dev": 0.03725,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "4968",
+   "n": 250,
+   "max_dev": 0.01456,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "0051",
+   "n": 250,
+   "max_dev": 0.00389,
+   "bad_days": 249,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "3055",
+   "n": 250,
+   "max_dev": 0.00317,
+   "bad_days": 186,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  },
+  {
+   "ticker": "8289",
+   "n": 250,
+   "max_dev": 0.0025,
+   "bad_days": 169,
+   "first_bad": "2025-09-22",
+   "status": "unexplained"
+  }
+ ]
+}
