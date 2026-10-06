@@ -17,6 +17,12 @@
       "signal_date": "2026-10-05",
       "risk_stop_ref": 2500.02
     },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-10-05",
+      "risk_stop_ref": 47.44
+    },
     "6197": {
       "name": "佳必琪",
       "first_seen": "2026-10-02",
@@ -406,12 +412,6 @@
       "dropped_date": null,
       "exit_date": "2026-10-05",
       "exit_price": 404.07
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-10-05",
-      "risk_stop_ref": 47.44
     }
   }
 }
