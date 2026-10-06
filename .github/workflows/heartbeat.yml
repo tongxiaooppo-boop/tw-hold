@@ -44,6 +44,14 @@ jobs:
           cache: pip
       - run: pip install pandas pyarrow
 
+      # index_0050／index_006201 存私有 Release（不在公開 repo）；還原失敗不擋心跳
+      - name: 還原私有參考資料（ref）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only ref
+
       - name: 開盤前新鮮度檢查
         id: freshness
         run: |

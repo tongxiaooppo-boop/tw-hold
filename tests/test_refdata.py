@@ -113,3 +113,17 @@ def test_app_status_text():
     assert "還原失敗" in app._refdata_status({"_error": "boom"})
     assert "已從私有 Release 還原 2 項" in app._refdata_status({"ref__a": True, "pcf__B.zip": 3})
     assert "1 項失敗" in app._refdata_status({"ref__a": True, "ref__b": "失敗：x"})
+
+
+def test_cli_pull_strict_fails_without_token_and_non_strict_passes(monkeypatch, tmp_path, capsys):
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("refdata_sync", Path(__file__).resolve().parents[1] / "scripts" / "refdata_sync.py")
+    cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
+    monkeypatch.setattr(cli.refdata, "pull", lambda only="all": {"_skipped": "no token"})
+    assert cli.main(["pull", "--only", "pcf", "--strict"]) == 1        # 寫入端：沒 token 就中止
+    assert cli.main(["pull", "--only", "pcf"]) == 0                     # 讀取端／本機：不擋
+    monkeypatch.setattr(cli.refdata, "pull", lambda only="all": {"pcf__A.zip": 3, "ref__b": "失敗：x"})
+    assert cli.main(["pull", "--strict"]) == 1                          # 任一資產失敗也中止
+    monkeypatch.setattr(cli.refdata, "pull", lambda only="all": {"pcf__A.zip": 3})
+    assert cli.main(["pull", "--strict"]) == 0

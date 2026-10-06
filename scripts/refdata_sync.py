@@ -21,6 +21,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p1 = sub.add_parser("pull")
     p1.add_argument("--only", choices=["all", "ref", "pcf"], default="all")
+    p1.add_argument("--strict", action="store_true", help="沒 token／沒 Release／任一資產失敗 → 結束碼 1（寫入端用）")
     p2 = sub.add_parser("push")
     p2.add_argument("paths", nargs="+")
     a = ap.parse_args(argv)
@@ -31,6 +32,9 @@ def main(argv=None) -> int:
             print(f"[refdata] pull {a.only}：{len(r)} 項", {k: v for k, v in list(r.items())[:12]})
             for k, v in bad.items():
                 print(f"::warning::refdata pull {k} {v}", file=sys.stderr)
+            if a.strict and (r.get("_skipped") or bad):
+                print(f"::error::refdata pull --strict 失敗：{r.get('_skipped') or list(bad)}", file=sys.stderr)
+                return 1
             return 0
         r = refdata.push([Path(p) for p in a.paths])
         print("[refdata] push", r)
