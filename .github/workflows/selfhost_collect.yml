@@ -4,7 +4,10 @@ name: 自建上游收集
 # 資料存 Release `selfhost-data`（約百 MB 級，不進 git；可用變數 DATA_REPO 指到私有 repo）；每次「下載舊版 → 補近 14 天缺的 → 閘門 → 才覆蓋」，
 # 沿用上游 workflow 驗證過的保底做法，但閘門比上游嚴（檔數、倒退、市場別，見 scripts/selfhost_gate.py）。
 #
-# 一天三班：台北 16:30（UTC 08:30）、18:45（UTC 10:45）、**23:59（UTC 15:59）**。
+# **每週一次（使用者 2026-10-06 決定）**：只在「當週最後一個交易日」台北 23:59 收集一次，一次補整週（收集器本來就補近 14 天缺的）；
+# 原本每天三班（16:30／18:45／23:59），改週更後請求量少約 95%。當週最後交易日由 scripts/last_trading_day_guard.py 判斷
+# （證交所 OpenAPI 休市表；抓不到就 fail-open 照跑）。例：2026-10-09 週五國慶補假 → 當週最後交易日是 10-08 週四。
+# 手動觸發（workflow_dispatch）一律執行。⚠️ 停止買賣快照（只回當天）因此每週只有一天，沒有下游用它，可接受。
 # 為什麼要第三班：官方當日資料收盤後會被更正、融資券要 20:30～22:30 才陸續出齊（實測 2026-10-05 投信 14 檔、成交量 17 檔事後改過；
 # tw-stock-data 的 23:59 那班也是為了修正 19:00 的錯漏）。收集器對最近 3 個日曆日每次重抓覆蓋，其餘只補缺的，重跑冪等；
 # 上市／上櫃各自記進度（上游用 2330 當唯一進度，上櫃缺日補不回來）。
@@ -18,8 +21,8 @@ name: 自建上游收集
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 8 * * 1-5"
-    - cron: "45 10 * * 1-5"
+    # 每個平日台北 23:59（UTC 15:59）觸發，但**只有「當週最後交易日」才真的收集**（見 guard 步驟）。
+    # 為什麼 23:59：官方當日資料收盤後會被更正、融資券要 20:30～22:30 才陸續出齊，這班拿到的是最完整的版本。
     - cron: "59 15 * * 1-5"
 
 permissions:
@@ -51,7 +54,14 @@ jobs:
 
       - run: pip install pandas pyarrow requests
 
+      - name: 今天是當週最後交易日嗎？
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: python scripts/last_trading_day_guard.py
+
       - name: 下載上一版（保底基準）
+        if: steps.guard.outputs.run == 'true'
         run: |
           mkdir -p data/selfhost/_base
           if gh release view selfhost-data >/dev/null 2>&1; then
@@ -78,21 +88,25 @@ jobs:
 
       # 各步 continue-on-error：單一資料源掛掉不擋其他；閘門才是最後把關。
       - name: 官方未還原日線（上市＋上櫃）
+        if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: python scripts/selfhost_raw_prices.py
 
       - name: 三大法人＋融資券
+        if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: python scripts/selfhost_chips.py
 
       # 停止買賣中名單沒有歷史（date= 參數被官方忽略）→ 漏抓一天永久少一天，所以每班都抓（冪等）。
       # 累積型檔：只增不減（merge_into 內有斷言）；首次種子見 scripts/selfhost_stophalt.py 檔頭。
       - name: 上市停止買賣中快照
+        if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: python scripts/selfhost_stophalt.py
 
       # build 以 Release 下載回來的舊 corp_actions 為底聯集新事件（沒有歷史來源檔也不會退化）。
       - name: 公司行為事件（官方除權息近兩個月＋FinMind 分割／面額）
+        if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: |
           START=$(date -u -d "$(date -u +%Y-%m-01) -2 month" +%Y-%m-%d)
@@ -101,6 +115,7 @@ jobs:
       # 官方減資／面額變更表（TWTAUU、revivt、TWTB8U）免逐檔、可日期區間，是事件表的**主來源**；
       # 近兩年重抓一次（含已公告的新事件），冪等。
       - name: 官方減資／面額變更
+        if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: |
           START=$(date -u -d "-2 year" +%Y-01-01)
@@ -109,7 +124,7 @@ jobs:
       # FinMind 減資（逐檔）只當交叉驗證（2026-10-05 實測：FinMind 已查 345 件全部在官方表內、因子差中位數 0）；
       # 每週五輪詢 150 檔，避免占用與 tw-swing 共用的 FinMind 額度。
       - name: 減資事件輪詢（週五，交叉驗證）
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * 1-5'
+        if: (github.event_name == 'workflow_dispatch' || github.event.schedule == '59 15 * * 1-5') && steps.guard.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 15
         run: |
@@ -118,11 +133,12 @@ jobs:
           fi
 
       - name: 閘門（不比舊版差才放行）
+        if: steps.guard.outputs.run == 'true'
         id: gate
         run: python scripts/selfhost_gate.py --base data/selfhost/_base --live data/selfhost --assets data/selfhost/_assets.txt
 
       - name: 上傳 Release（僅閘門通過）
-        if: steps.gate.outcome == 'success'
+        if: (steps.gate.outcome == 'success') && steps.guard.outputs.run == 'true'
         run: |
           for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
@@ -141,7 +157,7 @@ jobs:
           fi
 
       - name: commit 狀態小檔
-        if: always()
+        if: always() && steps.guard.outputs.run == 'true'
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
