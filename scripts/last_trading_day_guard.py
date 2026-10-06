@@ -22,9 +22,11 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 URL = "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule"
-# 指定一定要跑的日子（不論是不是當週最後交易日）：使用者 2026-10-06 要求「今晚照常跑一次」來驗證排程觸發的完整流程，
-# 之後不需要時可以清空。
-FORCE_RUN_DATES = {date(2026, 10, 6)}
+# 指定一定要跑的日子（不論是不是當週最後交易日）；平時留空。
+FORCE_RUN_DATES: set[date] = set()
+# 排程 23:59 常被 GitHub 延遲、甚至跨過午夜（2026-10-06 實測延遲約 5 小時，凌晨 04:47 才觸發，被誤判成「10-07 不是最後交易日」而漏收）。
+# 所以台北時間這個鐘點以前觸發的排程，視為「前一天 23:59 那班」，用前一天的日期判斷。
+LATE_CUTOFF_HOUR = 8
 OPEN_MARKERS = ("開始交易日", "最後交易日")      # 名稱含這些的是「有交易」的日子（春節前最後交易日等），不是休市
 
 
@@ -76,6 +78,13 @@ def fetch_closed() -> set[date] | None:
         return None
 
 
+def effective_date(now: datetime, event: str = "schedule") -> date:
+    """排程班次要判斷的「日期」：延遲跨過午夜（台北 00:00～LATE_CUTOFF_HOUR）→ 算前一天；手動觸發不受影響。"""
+    if event == "schedule" and now.hour < LATE_CUTOFF_HOUR:
+        return now.date() - timedelta(days=1)
+    return now.date()
+
+
 def decide(today: date, closed: set[date] | None, event: str = "schedule") -> tuple[bool, str]:
     if event == "workflow_dispatch":
         return True, "手動觸發，一律執行"
@@ -94,8 +103,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", help="YYYY-MM-DD（預設今天，台北時區）")
     a = ap.parse_args(argv)
-    today = date.fromisoformat(a.date) if a.date else datetime.now(ZoneInfo("Asia/Taipei")).date()
-    run, why = decide(today, fetch_closed(), os.environ.get("EVENT_NAME", "schedule"))
+    event = os.environ.get("EVENT_NAME", "schedule")
+    now = datetime.now(ZoneInfo("Asia/Taipei"))
+    today = date.fromisoformat(a.date) if a.date else effective_date(now, event)
+    if not a.date and today != now.date():
+        print(f"[guard] 現在台北 {now:%Y-%m-%d %H:%M}，排程延遲跨午夜 → 以前一天 {today} 判斷")
+    run, why = decide(today, fetch_closed(), event)
     print(f"[guard] run={'true' if run else 'false'}：{why}")
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
