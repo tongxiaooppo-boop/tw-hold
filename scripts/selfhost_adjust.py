@@ -20,6 +20,9 @@
 - **成交量**：不隨分割調整（官方原值）；Yahoo 只對分割調量。切換資料源時分割點的量能／成交值類指標會不連續。
 - **同日除息＋減資**：官方減資參考價公式已含息值，所以**同日的除權息列會被丟掉、只套減資**（`resolve_events`，印出被丟的清單）；目前資料 0 組，這是防呆。
 
+## 停牌缺口閘門（連乘前）
+減資／面額變更事件日前一交易日就有實價、且收盤對不上官方停止買賣前收盤 → 拒收（寫 `adjust_rejected.csv`）；只有收盤對不上 → 警告。見 `stop_gap_gate`。
+
 ## 輸出
 - `data/selfhost/adj_prices.parquet`：ticker, date, open, high, low, close, volume, raw_close
 - `data/selfhost/adjust_log.csv`：每個被套用的事件（ticker, date, class, type, factor, source, 重複來源的因子、conflict 旗標）
@@ -63,6 +66,7 @@ def resolve_events(ev: pd.DataFrame) -> pd.DataFrame:
         first = g.iloc[0]
         facs = g["factor"].tolist()
         rows.append({"ticker": t, "date": d, "cls": c, "type": first["type"], "factor": first["factor"],
+                     "prev_close": first.get("prev_close"),
                      "source": first["source"], "n_sources": len(g),
                      "all_factors": ";".join(f"{s}:{f:.6f}" for s, f in zip(g["source"], facs)),
                      "conflict": bool(max(facs) / min(facs) - 1 > CONFLICT_TOL) if len(facs) > 1 else False})
@@ -91,6 +95,44 @@ def drop_future(res: pd.DataFrame, last_day: pd.Timestamp) -> tuple[pd.DataFrame
         return res, res
     fut = res["date"] > last_day
     return res[~fut].copy(), res[fut].copy()
+
+
+GAP_CLASSES = ("red", "par")        # 減資、面額變更＝停止買賣型事件：恢復買賣前一定有停牌缺口
+GAP_TOL = 0.005
+
+
+def stop_gap_gate(res: pd.DataFrame, raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """停牌缺口閘門（tw-stock-data CLAUDE.md C1；還原因子是連乘，一筆假事件會讓整條序列錯，所以擋在連乘之前）。
+
+    停止買賣型事件（減資、面額變更）的事件日是「恢復買賣日」，之前一定停牌過。兩個條件：
+      ① 我方事件日前最後一筆實價 ＝ 日曆上事件日的前一個交易日 → 沒有停牌缺口
+      ② 該筆收盤 vs 官方「停止買賣前收盤」差 > GAP_TOL → 對不上
+    **兩條同時成立才拒收**（官方表打錯日期：同代號只差一個數字，那天根本沒停牌、價格也接得上前一日卻對不上官方前收）；
+    只有 ② 是我方價格問題，只警告、不丟事件。事件日之前沒有任何實價（早於資料起點）→ 無從驗證，放行。
+    回傳 (可套用, 拒收, 只有②的警告)。"""
+    if res.empty or "prev_close" not in res.columns:
+        return res, res.iloc[0:0], res.iloc[0:0]
+    cal = np.sort(raw["date"].unique())
+    by = {t: g.sort_values("date") for t, g in raw.groupby("ticker")}
+    reject, warn = [], []
+    for i, r in zip(res.index, res.itertuples()):
+        if r.cls not in GAP_CLASSES:
+            continue
+        g = by.get(r.ticker)
+        if g is None:
+            continue
+        prior = g[g["date"] < r.date]
+        if prior.empty:
+            continue
+        last = prior.iloc[-1]
+        gap_days = int(np.searchsorted(cal, r.date.to_datetime64()) - np.searchsorted(cal, last["date"].to_datetime64()) - 1)
+        pc = r.prev_close
+        mism = bool(pc and pc > 0 and abs(last["close"] / pc - 1) > GAP_TOL)
+        if gap_days == 0 and mism:
+            reject.append(i)
+        elif mism:
+            warn.append(i)
+    return res.drop(index=reject), res.loc[reject], res.loc[warn]
 
 
 def adjust(raw: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
@@ -129,6 +171,14 @@ def main(argv=None) -> int:
     if len(future):
         print(f"  未來事件 {len(future)} 件不套用（事件日晚於最後實價日 {raw['date'].max().date()}）："
               f"{future[['ticker', 'date']].assign(date=future['date'].dt.strftime('%m-%d')).values.tolist()}")
+    res, gap_bad, gap_warn = stop_gap_gate(res, raw)
+    if len(gap_bad):
+        print(f"::warning::停牌缺口閘門拒收 {len(gap_bad)} 件（事件日前一交易日就有實價、且收盤對不上官方停止買賣前收盤）："
+              f"{gap_bad[['ticker', 'date']].astype(str).values.tolist()[:10]}", file=sys.stderr)
+        gap_bad.to_csv(SH / "adjust_rejected.csv", index=False, encoding="utf-8-sig")
+    if len(gap_warn):
+        print(f"  停牌缺口閘門警告 {len(gap_warn)} 件（有停牌缺口但收盤對不上官方前收，我方價格可能有問題）："
+              f"{gap_warn[['ticker', 'date']].astype(str).values.tolist()[:10]}")
     # 只套用落在實價涵蓋期之後的事件（涵蓋期之前的事件發生在第一筆實價之前，不影響）
     adj = adjust(raw[["ticker", "date", "open", "high", "low", "close", "volume"]], res)
     adj = adj.merge(raw[["ticker", "date", "close"]].rename(columns={"close": "raw_close"}), on=["ticker", "date"], how="left") \
