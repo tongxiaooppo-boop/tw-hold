@@ -147,7 +147,11 @@ _ACT_SOURCES = [
      "%Y/%m/%d", "cap_reduction", "TWO", ("除權參考價", "減資恢復買賣開始日參考價格")),
     ("twse_par", "https://www.twse.com.tw/rwd/zh/change/TWTB8U?startDate={a}&endDate={b}&response=json",
      "%Y%m%d", "par_change", "TW", ("恢復買賣參考價",)),
+    # 上櫃變更面額（公告區，跟 revivt／exDailyQ 同一族；期間參數有效：回應 date 回顯 20150101~…）。tw-stock-data 2026-09-15 找到
+    ("tpex_par", "https://www.tpex.org.tw/www/zh-tw/bulletin/pvChgRslt?startDate={a}&endDate={b}&response=json",
+     "%Y/%m/%d", "par_change", "TWO", ("恢復買賣開始參考價",)),
 ]
+_TPEX_BULLETIN = ("tpex_red", "tpex_par")
 
 
 def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols: tuple[str, ...]) -> list[dict]:
@@ -157,7 +161,7 @@ def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols:
     f = t.get("fields") or []
     try:
         i_date = f.index("恢復買賣日期")
-        i_code = f.index("股票代號")
+        i_code = next(i for i, n in enumerate(f) if n in ("股票代號", "證券代號"))     # revivt 叫股票代號、pvChgRslt 叫證券代號
         i_pre = next(i for i, n in enumerate(f) if n in ("停止買賣前收盤價格", "最後交易日之收盤價格"))
     except (ValueError, StopIteration):
         print(f"::warning::{source} 欄名對不上：{f}", file=sys.stderr)
@@ -194,8 +198,8 @@ def fetch_official_actions(start: str, end: str) -> pd.DataFrame:
             except (HTTPError, RuntimeError) as e:
                 print(f"::warning::{source} {yr} 抓取失敗：{e}", file=sys.stderr)
                 continue
-            t = (j.get("tables") or [j])[0] if source == "tpex_red" else j
-            if source != "tpex_red" and j.get("stat") != "OK":
+            t = (j.get("tables") or [j])[0] if source in _TPEX_BULLETIN else j
+            if source not in _TPEX_BULLETIN and j.get("stat") != "OK":
                 continue                                    # 該年無資料（非錯誤）
             rows += _parse_action_table(t, source, typ, market, price_cols)
         print(f"  {yr} 累計 {len(rows)} 件", flush=True)

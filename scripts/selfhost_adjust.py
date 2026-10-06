@@ -11,14 +11,14 @@
 - `par`   ：par_change / split / reverse_split（FinMind fm_split / fm_par）
 - `red`   ：cap_reduction（FinMind fm_reduction）
 同組內多筆取優先序第一筆（官方 > fm_split > fm_par），**因子差 >0.5% 記 conflict**，供人工檢視。
-不同類別同一天（如除息＋減資）各自套用，並記 `multi_class`。
+不同類別同一天各自套用並記 `multi_class`；**唯一例外**：減資＋除權息同日只套減資（見下方）。
 
 ## 已知口徑分歧（Opus 審查 2026-10-05，對帳時要預期）
 - **現金增資**：官方因子＝理論除權價 / 前收（認購價高於市價時 factor > 1，TPEx 約 483 件、TWSE 約 11 件）。自建**依官方理論除權價還原**；
   上游（Yahoo）對這類事件的處理本身不穩（實測 1586、3234、5227、4714 呈現「ex 前約 9 天到前一天被乘、其餘未還原」的怪樣），兩者必然不同，不算自建誤差。
 - **權息同日**：Yahoo 與官方因子可差數個百分點（例：6870 Yahoo 0.90 vs 官方 0.8266），自建以官方為準。
 - **成交量**：不隨分割調整（官方原值）；Yahoo 只對分割調量。切換資料源時分割點的量能／成交值類指標會不連續。
-- **同日除息＋減資**：若減資參考價已內含股利會重複套用；目前資料沒有這種案例，出現時 `multi_class=True` 會標出來人工看。
+- **同日除息＋減資**：官方減資參考價公式已含息值，所以**同日的除權息列會被丟掉、只套減資**（`resolve_events`，印出被丟的清單）；目前資料 0 組，這是防呆。
 
 ## 輸出
 - `data/selfhost/adj_prices.parquet`：ticker, date, open, high, low, close, volume, raw_close
@@ -46,7 +46,7 @@ LOG = SH / "adjust_log.csv"
 
 CLASS = {"ex_div": "div", "ex_rights": "div", "ex_both": "div",
          "par_change": "par", "split": "par", "reverse_split": "par", "cap_reduction": "red"}
-PRIORITY = {"twse_ex": 0, "tpex_ex": 0, "twse_red": 0, "tpex_red": 0, "twse_par": 0,   # 官方優先
+PRIORITY = {"twse_ex": 0, "tpex_ex": 0, "twse_red": 0, "tpex_red": 0, "twse_par": 0, "tpex_par": 0,   # 官方優先
             "fm_split": 1, "fm_par": 2, "fm_reduction": 1}
 CONFLICT_TOL = 0.005
 
@@ -69,9 +69,28 @@ def resolve_events(ev: pd.DataFrame) -> pd.DataFrame:
     res = pd.DataFrame(rows)
     if res.empty:
         return res
+    # 減資與除權息同一天只算一次：官方公式「恢復買賣參考價＝(停止買賣前收盤價−息值−每股退還股款)/減資換股率」已含息值，
+    # 兩邊都乘會把除息扣兩次（tw-stock-data READ_CONTRACT「減資：三件跟除權息不一樣的事」③；本庫目前 0 組，這是防呆）
+    red_days = set(zip(res.loc[res["cls"] == "red", "ticker"], res.loc[res["cls"] == "red", "date"]))
+    if red_days:
+        drop = res["cls"].eq("div") & pd.Series(list(zip(res["ticker"], res["date"])), index=res.index).isin(red_days)
+        if drop.any():
+            print(f"  同日減資＋除權息：丟掉 {int(drop.sum())} 筆除權息（減資參考價已含息值）：{res.loc[drop, ['ticker', 'date']].astype(str).values.tolist()[:6]}")
+            res = res[~drop].copy()
     cnt = res.groupby(["ticker", "date"])["cls"].transform("size")
     res["multi_class"] = cnt > 1
     return res
+
+
+def drop_future(res: pd.DataFrame, last_day: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """事件日晚於最後一個實價日的事件還沒發生（官方預告表／減資公告會提前列出），不可套用：
+    套了之後「最新價」就不等於未還原價（最新價的 F 必須是 1，現價不動、被調整的是歷史）。
+    實測 2026-10-06：6 件（2614、8021 除權息；2323、3085、4527、5301 減資），其中 2614 最後一列 close 被乘 0.8445。
+    回傳 (可套用, 被丟掉的)。"""
+    if res.empty:
+        return res, res
+    fut = res["date"] > last_day
+    return res[~fut].copy(), res[fut].copy()
 
 
 def adjust(raw: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
@@ -106,6 +125,10 @@ def main(argv=None) -> int:
     unknown = ev[~ev["type"].isin(CLASS)]
     print(f"事件：原始 {len(ev)} 列 → 去重後 {len(res)} 件；"
           f"conflict {int(res['conflict'].sum()) if len(res) else 0}；未知類型 {len(unknown)}")
+    res, future = drop_future(res, raw["date"].max())
+    if len(future):
+        print(f"  未來事件 {len(future)} 件不套用（事件日晚於最後實價日 {raw['date'].max().date()}）："
+              f"{future[['ticker', 'date']].assign(date=future['date'].dt.strftime('%m-%d')).values.tolist()}")
     # 只套用落在實價涵蓋期之後的事件（涵蓋期之前的事件發生在第一筆實價之前，不影響）
     adj = adjust(raw[["ticker", "date", "open", "high", "low", "close", "volume"]], res)
     adj = adj.merge(raw[["ticker", "date", "close"]].rename(columns={"close": "raw_close"}), on=["ticker", "date"], how="left") \

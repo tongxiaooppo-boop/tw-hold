@@ -36,9 +36,15 @@ TWSE = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={d}&type=ALLBU
 TPEX = "https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={d}&response=json"
 OUT = Path(__file__).resolve().parents[1] / "data" / "selfhost" / "raw_prices.parquet"
 REFRESH_DAYS = 14
+RECHECK_DAYS = 3
 SLEEP = 2.0
 UA = {"User-Agent": "Mozilla/5.0"}
 COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value"]
+NT_COLS = ["ticker", "market", "date", "volume", "value", "src"]
+# 官方有列、但當天沒有成交價（冷門股無成交、或只有零股成交）：不進 raw_prices（那裡每列都有價），改記在旁表 notrade.parquet。
+# 為什麼要留：①「缺日」才分得出是市場事實（無成交）還是漏抓；②有量無價的零股成交仍是真的成交量（算均量要納入、算均線不可）。
+# 見 tw-stock-data READ_CONTRACT「close 可能是空字串」。每次 fetch 後由 main() 取走並清空。
+NOTRADE: list[dict] = []
 
 
 def _get(url: str, retries: int = 3) -> dict | None:
@@ -75,7 +81,9 @@ def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame
         if not (code.isdigit() and len(code) == 4):
             continue
         close = _num(r[pos["close"]])
-        if close is None:         # 當日無成交
+        if close is None:         # 當日無成交價 → 記旁表，不進 raw_prices
+            NOTRADE.append({"ticker": code, "market": market, "date": pd.Timestamp(d),
+                            "volume": _num(r[pos["volume"]]) or 0.0, "value": _num(r[pos["value"]]) or 0.0, "src": "official"})
             continue
         out.append({
             "ticker": code, "market": market, "date": pd.Timestamp(d),
@@ -144,6 +152,18 @@ def collect_day(d: date, market: str = "both") -> pd.DataFrame | None:
     return pd.concat([a, b], ignore_index=True)
 
 
+def _flush_notrade() -> None:
+    """把 NOTRADE 併進旁表（累積型：只增不減；同鍵以最新一次為準）。檔名跟著 OUT（單市場線寫 notrade_TW／TWO）。"""
+    if not NOTRADE:
+        return
+    path = OUT.with_name(OUT.name.replace("raw_prices", "notrade"))
+    new = pd.DataFrame(NOTRADE, columns=NT_COLS)
+    NOTRADE.clear()
+    old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=NT_COLS)
+    allp = pd.concat([old, new], ignore_index=True).drop_duplicates(["ticker", "market", "date"], keep="last")
+    allp.sort_values(["date", "market", "ticker"]).reset_index(drop=True).to_parquet(path, index=False, compression="zstd")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", help="YYYY-MM-DD；預設今天往前 REFRESH_DAYS 天")
@@ -159,6 +179,8 @@ def main(argv=None) -> int:
         OUT = OUT.with_name(f"raw_prices_{a.market}.parquet")
     old = pd.read_parquet(OUT) if OUT.exists() else pd.DataFrame(columns=COLS)
     have = set(pd.to_datetime(old["date"]).dt.date) if len(old) else set()
+    # 官方成交量收盤後會更正（實測 2026-10-05 有 17 檔事後改過）→ 最近 RECHECK_DAYS 天每次重抓覆蓋
+    have = {d for d in have if d <= end - timedelta(days=RECHECK_DAYS)}
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     # 含週六：補行上班日（例：2016-01-30、2017-09-30、2018-03-31、2018-12-22）股市照常交易，上游母表漏了這些日子
     todo = [d for d in days if d.weekday() < 6 and d not in have]
@@ -178,6 +200,7 @@ def main(argv=None) -> int:
         allp.to_parquet(OUT, index=False, compression="zstd")
         old, new = allp, []
         print(f"  已寫入 {OUT.name}（{len(allp)} 列，{allp['date'].nunique()} 天）", flush=True)
+        _flush_notrade()
 
     for i, d in enumerate(todo, 1):
         df = collect_day(d, a.market)
