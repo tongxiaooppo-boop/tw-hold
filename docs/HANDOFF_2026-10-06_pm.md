@@ -12,7 +12,12 @@
 
 **除非現有上游（tw-stock-scanner 的 data_pack）掛了，否則持續用上游；自建只用來驗證上游的資料對不對、並在上游真的掛掉時當備援。** 所以：不接任何下游、不做「切主來源」；每週收集一次（見下）；上游異常的判準＝`selfhost_recon.py` 對帳（相符率掉、出現新接縫）或 tw-swing 的 `--require-fresh` 告警（上游超過 30 小時沒發佈）。真的要切時才需要寫轉接層（把自建資料轉成 data_pack 同 schema），並先出「訂正前後影響報告」。
 
-## 📌 本週待辦（使用者 2026-10-06 要求，期限：本週內，約 10-11 前）：寫「自建 → data_pack」轉接層
+## ✅ 轉接層已寫好並驗收（2026-10-06，`d47e785`）；細節與驗收結果見 `docs/DATAPACK_ADAPTER.md`
+
+`scripts/selfhost_to_datapack.py`（產 zip）＋`scripts/selfhost_datapack_parity.py`（用 tw-swing 自己的解析器與現行 store 比）＋`tests/test_selfhost_datapack.py`（10 個）。全量 2,147 檔 zip 約 202MB，**全部能被 tw-swing 的匯入解析（0 失敗）**；融資券 100% 相符、法人 99.4～99.95%；還原價與現行 store 不逐列相同，**91.6% 的差異歸因到上游還原接縫**（變動點出現在我們下一個事件前 7～8 天）；成交量自建高 3～11%（官方含零股）。
+**還沒做（本週內可繼續，非必要）**：①tw-swing `update_data.py --pack-source selfhost`（改從私有 Release 下載；需要 tw-swing 的唯讀 PAT，對 `tw-hold-data` 新建一把）②手動 workflow `selfhost_datapack.yml`（從 `selfhost-data` Release 下載→產 zip→傳 `datapack-selfhost`；CI 上沒有 tw-swing 的 stock_list，名稱／產業別要靠 bundle 的 universe 或把 stock_list 一起放進私有 repo）③切換前的「訂正前後影響報告」。
+
+## （原規格，保留參考）本週待辦：寫「自建 → data_pack」轉接層
 
 **目的**：上游掛了時，能把自建資料轉成 tw-swing 現行匯入吃的 `data_pack.zip` 格式，**下游（tw-swing 匯入、bundle、tw-hold）完全不用改**。平時仍用現有上游；轉接層只是備援，本週只要「寫好並驗收」，**不切換**。
 
