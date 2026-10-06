@@ -14,7 +14,7 @@
 
 ## 0. 一分鐘現況
 
-app：**https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/**（Streamlit Community Cloud，
+app：**（app 網址不公開，見 Streamlit 後台）**（Streamlit Community Cloud，
 `tongxiaooppo-boop/tw-hold` main，main file `app/streamlit_app.py`，push main 即自動重佈）。
 
 | | commit | 測試 |

@@ -21,7 +21,7 @@
 ## 0. 一分鐘現況
 
 **M0a（部分上線）已達成。** tw-hold 跑在
-**https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/**（Streamlit Community Cloud，
+**（app 網址不公開，見 Streamlit 後台）**（Streamlit Community Cloud，
 `tongxiaooppo-boop/tw-hold` main 分支，main file `app/streamlit_app.py`）。
 四分頁（價值/定存/長波段/個股查詢）都渲染正常，價值 30 檔、定存 30 檔、長波段空
 （M1 未做）、個股查詢是 M4 placeholder。

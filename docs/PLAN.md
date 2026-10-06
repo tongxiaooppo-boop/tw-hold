@@ -5,7 +5,7 @@
 > 規格與理由在 [`../PRD.md`](../PRD.md)（凍結）。介面長相在 `scratchpad/tw-hold-mock.html`。
 
 **建立**：2026-09-07 ｜ **修訂**：2026-09-08（**M0b 完成，完整上線**）
-｜ **狀態**：✅ **M0 完整上線**——https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/
+｜ **狀態**：✅ **M0 完整上線**——（app 網址不公開，見 Streamlit 後台）
 （Streamlit Community Cloud）。M0.1a/M0.1b/M0.2/M0.3/M0.4/M0.5 + U1a/U1b/U2/U3 全綠。
 `publish_bundle.yml`（U1b）跑綠、Release `data-latest` 12 資產 / `_meta.json` 11 檔、
 `rebuild.yml` 接線並實測、清單補齊現價 + 年化週波動（`universe_filtered=True`）。

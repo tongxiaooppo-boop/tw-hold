@@ -18,7 +18,7 @@ tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
 - 價值/定存：買入建議價 或「不推薦」＋原因；每期揭露「新進/移除 + 移除原因」= 出場訊號
 - 個股查詢：不打分，數據 + plotly 圖表；不在前 500 大的即時補 FinMind（僅本地）
 - 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）。公開連結：
-  https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/
+  （app 網址不公開，見 Streamlit 後台）
 
 ## 資料來源與授權
 
