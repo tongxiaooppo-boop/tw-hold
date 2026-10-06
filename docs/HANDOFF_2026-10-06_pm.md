@@ -12,11 +12,11 @@
 
 | | |
 | :-- | :-- |
-| tw-hold `main` | 本機領先 origin 12 個 commit（含今天的 `c4ff8c6` 與後續），**都沒 push** |
+| tw-hold `main` | 本機領先 origin 13 個 commit，**都沒 push**；今天新增三個：`c4ff8c6`（防呆＋事件簿＋月檢查）、`e023d2d`（官方漲跌標記 refmark／chg）、`28b378b`（EVENTS.md＋官方用語欄位） |
 | 自建庫 | 全在本機 `data/selfhost/`（gitignored，約 500MB）：`raw_prices`（含 `chg`）、`inst`、`margin`（含 `margin_prev`／`short_prev`／`note`）、`notrade`、`refmark`、`stophalt`、`corp_actions`、`adj_prices`、`ledger`；2015-01-05～2026-10-05，2,864 天 |
 | 沒接下游 | tw-hold／tw-swing 現行仍用上游 data_pack（接縫 1,576 件還在）；自建庫尚未被任何頁面消費 |
 | GitHub | Release `selfhost-data` 沒建、`selfhost_collect.yml` 從沒在 Actions 跑過 |
-| 測試 | `python -m pytest -q` → 338 passed |
+| 測試 | `python -m pytest -q` → 339 passed |
 
 ## 1. 今天做完的（程式；細節看 commit 訊息與各檔檔頭）
 
@@ -63,6 +63,15 @@
 4. 驗證期：2026-10-12 起連續 15 個交易日，自建 vs 現有上游逐日比對（`selfhost_recon.py` 已有骨架）；通過後切為還原價主來源（使用者 10-05 已定）。
 5. tw-hold 訂正排程（週三 dry-run＋報告、週四 Opus、週五接線 push、週六 06:00 驗證；`seam_fix_log.json` 要記每檔每事件的跡）；tw-swing 下週（先出訂正前後影響報告，含 OHLC 不一致 8,327 列）。
 6. 月初：`python scripts/selfhost_monthly_review.py` → 把「第 3 節 flag 清單＋提示詞」貼給 Gemini 查證（程式能對帳的不給 AI）。
+
+## 5.5 給 Gemini 的待查證題（只要事實與出處，不要建議）
+
+1. **新上市／上櫃首日起幾日無漲跌幅限制？** 我們事件簿假設「前 5 日不查漲跌幅」，沒有出處。請給：現行規則、2015-06-01 前後是否不同、興櫃轉上櫃是否適用。
+2. **全額交割（變更交易方法）與分盤交易**是否改變開盤基準價或漲跌幅限制？
+3. **TWSE 歷史除權的現金增資欄位**（認購價、現金增資配股率）官方歷史來源是 `TWT49UDetail` 嗎？欄位與參數？
+4. **ETF 受益權單位分割／反分割**的官方公告名稱與來源表。
+5. **公司分割減資**（分割並減資）在 TWSE／TPEx 是否有計算結果表？
+6. 無成交日後的**參考價規則**（我們實測 381 例官方參考價與前一筆收盤不同，原因推測未驗證）。
 
 ## 6. 還沒做／待決定
 
