@@ -78,7 +78,7 @@
 - **Opus 審查前待辦（2026-10-06 晚；①②已實作，③待決定）**：
   1. ✅ **停牌缺口閘門**（`selfhost_adjust.stop_gap_gate`；真實資料 573 件減資／面額變更全數放行、0 拒收、0 警告；拒收會寫 `adjust_rejected.csv`）（TSD CLAUDE.md C1）：停止買賣型事件（減資、面額變更）一定有停牌缺口——①事件日前最後一筆收盤＝事件日前一交易日→沒缺口；②且官方「停止買賣前收盤」對不上我方→兩條同時成立才判不成立（只有②是我方價格問題，報給人看）。擋在 `selfhost_adjust` 連乘之前。
   2. ✅ **保存官方回應的 `notes`／`hints`／`title`／`total`／`params`**：目前收集端只斷言 `date`，其餘丟掉；`TWTAUU` 的 notes 夾「除息併案減資」現金股利等自由文字。保存原文、不解析（同融資 `note` 做法）。實作：`selfhost_events._record_meta` → `data/selfhost/ev_official_meta.jsonl`（只增不減，每次請求一列；下次跑 `--official`／`--official-act` 起累積，**歷史請求的 notes 補不回**）。測試 348 passed，閘門已做突變驗證。
-  3. 現增旁表 `ev_twse_ca_detail.parquet`（`scripts/selfhost_twse_ca_detail.py`）：維持旁表、不併 `corp_actions`；補 4 件失敗＋1 件原股東認購為 0；排程要不要週更待決定。
+  3. 現增旁表 `ev_twse_ca_detail.parquet`（`scripts/selfhost_twse_ca_detail.py`）：維持旁表、不併 `corp_actions`；4 件失敗已補、9105 官方就是原股東認購為 0（不是漏抓）；排程要不要週更待決定。
 
 - **A/B 現增決策文件**（用 A 的理由：官方除權參考價、報酬連續）；`corp_actions` 沒存 B／開盤基準欄。
 - **70 個 `adj_jump` flag 逐一查證**（可先查 20 個事件日的，用官方 TWT49U 漲跌停價驗收盤）。
