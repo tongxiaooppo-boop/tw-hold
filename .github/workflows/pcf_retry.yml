@@ -42,6 +42,14 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py）；雙寫階段：仍 commit，同時推私有 Release。
+      - name: 還原私有參考資料（pcf）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only pcf
+
       - name: 今天還有沒抓到／根本沒抓過的投信才要補
         id: check
         run: |
@@ -75,6 +83,14 @@ jobs:
         if: steps.check.outputs.need_retry == '1'
         continue-on-error: true
         run: python build_active_etf_flags.py
+
+      - name: 推到私有 Release（雙寫階段）
+        if: always() && steps.check.outputs.need_retry == '1'
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py push data/pcf
 
       # continue-on-error：上面兩步任一步出錯都不該擋到這步——已經補抓到的
       # PCF 快照是這條 workflow 唯一存在的理由、且永久不可回復，不能因為

@@ -50,6 +50,14 @@ jobs:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
 
+      # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py）；雙寫階段：仍 commit，同時推私有 Release。
+      - name: 還原私有參考資料（all）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only all
+
       # 006201（元大富櫃50，唯一追蹤櫃買指數的 ETF）不在 tw-swing data_pack 的
       # universe 裡，獨立向 FinMind 抓（總經導航 MA60/MA200 卡用）。跟三清單
       # 無關，失敗不擋主線——見 scripts/fetch_index_proxy.py 檔頭。
@@ -157,6 +165,14 @@ jobs:
           [ -z "$WEBHOOK" ] && exit 0
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20 \
             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
+
+      - name: 推到私有 Release（雙寫階段）
+        if: always()
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py push data/reference/index_0050.parquet data/reference/index_006201.parquet data/pcf
 
       - name: commit data/derived/ + resolved.json
         run: |
