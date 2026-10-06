@@ -101,3 +101,15 @@ def test_push_builds_expected_assets(monkeypatch, tmp_path):
     r = rd.push([ref / "g.parquet", pcf, tmp_path / "nope.txt"], tok="t")
     assert set(sent) == {"ref__g.parquet", "pcf__A.zip", "pcf___index.json"}
     assert "略過" in r[str(tmp_path / "nope.txt")]
+
+
+def test_app_status_text():
+    import importlib
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    app = importlib.import_module("app.streamlit_app")
+    assert "未設定 token" in app._refdata_status({"_skipped": "no token"})
+    assert "還原失敗" in app._refdata_status({"_error": "boom"})
+    assert "已從私有 Release 還原 2 項" in app._refdata_status({"ref__a": True, "pcf__B.zip": 3})
+    assert "1 項失敗" in app._refdata_status({"ref__a": True, "ref__b": "失敗：x"})
