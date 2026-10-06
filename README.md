@@ -26,6 +26,17 @@ tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
   其中以 OpenAPI（`openapi.twse.com.tw` 等，政府資料開放授權條款－第 1 版）取得者，提供機關為各該機構，依該條款顯名標示。
 - 兩機構網站另有使用條款（含禁止自動化程式下載、重製與散布網站內容，但已授權政府資料開放平臺者不在此限）。
   為此：**本 repo 的程式公開，自建上游收集到的資料不公開散布**（存放於私有 repo 的 Release），僅供個人研究使用。
+- 本 repo 內建檔案的來源（顯名）：
+
+  | 目錄 | 內容 | 來源 |
+  | :-- | :-- | :-- |
+  | `data/derived/` | 三清單、短線掃描、模擬單等 | **本專案自行計算的衍生結果**；輸入為 tw-swing bundle（FinMind、證交所、櫃買中心資料）與 `data/pcf/` |
+  | `data/pcf/` | 主動式 ETF 每日申購買回清單（PCF）快照 | 統一投信（ezmoney.com.tw）、群益投信（capitalfund.com.tw）、復華投信（fhtrust.com.tw）官方網站，每日一次 |
+  | `data/reference/global_macro*` | 國際指數、美股、匯率等收盤 | Yahoo Finance（yfinance），每日一次 |
+  | `data/reference/tx_futures*`、`foreign_futures*` | 台指期收盤、外資台指期未平倉 | 臺灣期貨交易所 OpenAPI（`openapi.taifex.com.tw`，提供機關：金融監督管理委員會證券期貨局，政府資料開放授權條款－第 1 版）；外資未平倉部分另取自期交所網站下載頁 |
+  | `data/reference/inst_flow*` | 三大法人買賣超金額 | 臺灣證券交易所（BFI82U） |
+  | `data/reference/index_0050*`、`index_006201*` | 0050、006201 收盤序列 | 0050 取自 tw-swing bundle；006201 取自 FinMind |
+
 - 本專案僅供個人研究與學習，**不構成投資建議**；資料可能有誤、延遲或缺漏，使用者自行負責。
 - 任何權利人認為本專案有不當之處，請來信或開 issue，將立即下架處理。
 
