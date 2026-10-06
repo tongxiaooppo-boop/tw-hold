@@ -72,6 +72,9 @@ def pcf_asset(code: str) -> str:
 
 
 PCF_INDEX_ASSET = "pcf___index.json"
+REF_EXPECTED = ("global_macro.parquet", "global_macro_meta.json", "tx_futures.parquet", "tx_futures_meta.json",
+                "foreign_futures.parquet", "inst_flow.parquet", "index_0050.parquet", "index_006201.parquet")
+SHRINK_MIN = 0.5      # 累積型參考檔推回去的大小不得低於 pull 時的這個比例（Opus 審查 2026-10-06）
 
 
 def zip_pcf_dir(fund_dir: Path) -> bytes:
@@ -135,16 +138,23 @@ def _release(tok: str, create: bool = False) -> dict | None:
 # ───────────────────────── pull ／ push ─────────────────────────
 def pull(only: str = "all", root: Path = DATA, tok: str | None = None) -> dict:
     """把 Release 資產還原到 `root/`（預設 data/）。沒 token 或沒 Release → 不動作。
-    only：`all`｜`ref`｜`pcf`。回傳 {資產名: 檔數或 True}。任何單一資產失敗只記錄、不中斷。"""
+    only：`all`｜`ref`｜`pcf`。回傳 {資產名: 檔數或 True}；失敗項是 "失敗：…" 字串；
+    **預期有但 Release 上沒有的資產**（上傳中斷把它刪掉了）記在 `_missing`（--strict 會因此失敗，
+    不然下一輪會從殘缺目錄續寫再推上去，把歷史永久截斷）。"""
     tok = tok or read_token()
     if not tok:
         return {"_skipped": "no token"}
     rel = _release(tok)
     if rel is None:
         return {"_skipped": "no release"}
+    assets = {a["name"]: a for a in rel.get("assets", [])}
+    for n in list(assets):          # 上傳到一半留下的 X.new：只在正式檔不存在時當後備（內容是完整的新版）
+        if n.endswith(".new"):
+            if n[:-4] not in assets:
+                assets[n[:-4]] = assets[n]
+            del assets[n]
     out: dict = {}
-    for a in rel.get("assets", []):
-        name = a["name"]
+    for name, a in sorted(assets.items()):
         want = ((only in ("all", "ref") and name.startswith("ref__"))
                 or (only in ("all", "pcf") and name.startswith("pcf__")))
         if not want:
@@ -158,21 +168,84 @@ def pull(only: str = "all", root: Path = DATA, tok: str | None = None) -> dict:
                 _atomic_write(root / "pcf" / "_index.json", blob)
                 out[name] = True
             else:
-                out[name] = unzip_pcf(blob, root / "pcf" / name[len("pcf__"):-len(".zip")])
+                n = unzip_pcf(blob, root / "pcf" / name[len("pcf__"):-len(".zip")])
+                out[name] = n if n > 0 else "失敗：zip 裡沒有任何快照檔"
         except Exception as e:      # noqa: BLE001
             out[name] = f"失敗：{str(e)[:120]}"
+    missing: list[str] = []
+    if only in ("all", "ref"):
+        missing += [ref_asset(n) for n in REF_EXPECTED if ref_asset(n) not in assets]
+    if only in ("all", "pcf"):
+        if PCF_INDEX_ASSET not in assets:
+            missing.append(PCF_INDEX_ASSET)
+        else:
+            try:
+                funds = json.loads((root / "pcf" / "_index.json").read_text(encoding="utf-8")).get("funds", {})
+                missing += [pcf_asset(c) for c in funds if pcf_asset(c) not in assets]
+            except Exception as e:      # noqa: BLE001
+                missing.append(f"{PCF_INDEX_ASSET}（讀不懂：{str(e)[:60]}）")
+    if missing:
+        out["_missing"] = missing
+    _write_marker(root)
     return out
 
 
+def _write_marker(root: Path) -> None:
+    """記下 pull 當下各檔規模（PCF 每基金快照數、參考檔大小），push 前對照。"""
+    try:
+        m: dict = {"pcf": {}, "ref": {}}
+        pcf = root / "pcf"
+        if pcf.is_dir():
+            for d in pcf.iterdir():
+                if d.is_dir():
+                    m["pcf"][d.name] = len(list(d.glob("*.parquet")))
+        ref = root / "reference"
+        if ref.is_dir():
+            for f in ref.iterdir():
+                if f.is_file() and f.suffix in (".parquet", ".json"):
+                    m["ref"][f.name] = f.stat().st_size
+        (root / ".refdata_pulled.json").write_text(json.dumps(m), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _guard_against_shrink(jobs_meta: list, root: Path) -> None:
+    """push 前的不倒退閘門：pull 時記下的規模 vs 現在要推的。jobs_meta＝[(kind, key, 現在規模)]，kind＝pcf／ref。"""
+    mk = root / ".refdata_pulled.json"
+    if not mk.exists():
+        return
+    try:
+        m = json.loads(mk.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    for kind, key, now in jobs_meta:
+        before = (m.get(kind) or {}).get(key)
+        if before is None:
+            continue
+        if kind == "pcf" and now < before:
+            raise RefdataError(f"pcf/{key} 快照數 {now} < pull 時的 {before}：疑似殘缺目錄，拒絕覆蓋 Release")
+        if kind == "ref" and before > 0 and now < before * SHRINK_MIN:
+            raise RefdataError(f"reference/{key} 大小 {now} < pull 時 {before} 的 {int(SHRINK_MIN * 100)}%：疑似殘缺，拒絕覆蓋 Release")
+
+
 def _upload(tok: str, rel: dict, name: str, blob: bytes) -> None:
+    """先傳暫名 `<name>.new`，成功後才刪舊資產、再改名——任何一步失敗，Release 上都至少留著一份完整檔
+    （舊版或 .new），不會像「先刪後傳」那樣 POST 失敗就讓歷史消失。pull 對孤兒 .new 有後備。"""
+    repo = data_repo()
+    tmp = name + ".new"
+    for a in rel.get("assets", []):
+        if a["name"] == tmp:                                  # 上次中斷留下的暫存，先清掉
+            _req(f"{GH_API}/repos/{repo}/releases/assets/{a['id']}", tok, "DELETE")
+    url = f"{UPLOAD_API}/repos/{repo}/releases/{rel['id']}/assets?name={urllib.request.quote(tmp)}"
+    new = json.loads(_req(url, tok, "POST", blob, "application/octet-stream"))
     for a in rel.get("assets", []):
         if a["name"] == name:
-            _req(f"{GH_API}/repos/{data_repo()}/releases/assets/{a['id']}", tok, "DELETE")
-    url = f"{UPLOAD_API}/repos/{data_repo()}/releases/{rel['id']}/assets?name={urllib.request.quote(name)}"
-    _req(url, tok, "POST", blob, "application/octet-stream")
+            _req(f"{GH_API}/repos/{repo}/releases/assets/{a['id']}", tok, "DELETE")
+    _req(f"{GH_API}/repos/{repo}/releases/assets/{new['id']}", tok, "PATCH",
+         json.dumps({"name": name}).encode(), "application/json")
 
 
-def push(paths: list[Path], tok: str | None = None) -> dict:
+def push(paths: list[Path], tok: str | None = None, root: Path = DATA) -> dict:
     """上傳指定檔／目錄。檔在 `data/reference/` → `ref__`；目錄 `data/pcf` → 每檔基金一個 zip＋_index.json；
     `data/pcf/<code>` → 該基金 zip。缺檔略過並回報。沒 token → RefdataError（寫入端沒 token 是設定錯誤，要大聲）。"""
     tok = tok or read_token()
@@ -196,6 +269,14 @@ def push(paths: list[Path], tok: str | None = None) -> dict:
             jobs.append((PCF_INDEX_ASSET, p.read_bytes()))
         else:
             out[str(p)] = "略過（不存在或不是 data/reference 檔、data/pcf 目錄）"
+    meta = []
+    for name, blob in jobs:
+        if name.startswith("pcf__") and name.endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(blob)) as z:
+                meta.append(("pcf", name[len("pcf__"):-len(".zip")], len(z.namelist())))
+        elif name.startswith("ref__"):
+            meta.append(("ref", name[len("ref__"):], len(blob)))
+    _guard_against_shrink(meta, root)
     for name, blob in jobs:
         _upload(tok, rel, name, blob)
         out[name] = len(blob)

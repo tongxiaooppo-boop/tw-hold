@@ -28,12 +28,15 @@ def main(argv=None) -> int:
     try:
         if a.cmd == "pull":
             r = refdata.pull(a.only)
-            bad = {k: v for k, v in r.items() if isinstance(v, str) and v.startswith("失敗")}
+            bad = {k: v for k, v in r.items() if k != "_missing" and isinstance(v, str) and v.startswith("失敗")}
             print(f"[refdata] pull {a.only}：{len(r)} 項", {k: v for k, v in list(r.items())[:12]})
             for k, v in bad.items():
                 print(f"::warning::refdata pull {k} {v}", file=sys.stderr)
-            if a.strict and (r.get("_skipped") or bad):
-                print(f"::error::refdata pull --strict 失敗：{r.get('_skipped') or list(bad)}", file=sys.stderr)
+            miss = r.get("_missing")
+            if miss:
+                print(f"::warning::refdata pull 預期的資產不在 Release 上：{miss}", file=sys.stderr)
+            if a.strict and (r.get("_skipped") or bad or miss):
+                print(f"::error::refdata pull --strict 失敗：{r.get('_skipped') or list(bad) or miss}", file=sys.stderr)
                 return 1
             return 0
         r = refdata.push([Path(p) for p in a.paths])

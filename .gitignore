@@ -31,3 +31,4 @@ data/selfhost/
 # CI 與 Streamlit app 執行期還原到這兩個目錄，本機開發照常讀寫。
 data/pcf/
 data/reference/
+data/.refdata_pulled.json

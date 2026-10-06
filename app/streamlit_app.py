@@ -3207,7 +3207,10 @@ def _refdata_banner(res: dict) -> None:
 
 def main() -> None:
     st.set_page_config(page_title=APP_NAME, page_icon="📡", layout="wide")
-    _refdata_banner(_ensure_refdata())
+    _res = _ensure_refdata()
+    if _res.get('_error') or _res.get('_missing'):
+        _ensure_refdata.clear()          # 失敗不快取 30 分鐘：下一次 rerun 再試（新容器剛啟動 data/ 是空的）
+    _refdata_banner(_res)
     _route()
     goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
     if goto in NAV:
@@ -3242,7 +3245,7 @@ def main() -> None:
 
     st.divider()
     st.caption(ATTRIBUTION)
-    st.caption(_refdata_status(_ensure_refdata()))
+    st.caption(_refdata_status(_res))
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 

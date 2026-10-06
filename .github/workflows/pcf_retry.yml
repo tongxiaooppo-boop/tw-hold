@@ -28,7 +28,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: pcf-retry
+  # 與 rebuild.yml 共用群組（見該檔說明）
+  group: refdata-pcf
   cancel-in-progress: false
 
 jobs:

@@ -29,7 +29,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: rebuild
+  # 與 pcf_retry.yml 共用群組：兩者都讀改寫同一批私有 pcf__* 資產，必須序列化（Opus 審查 2026-10-06）
+  group: refdata-pcf
   cancel-in-progress: false
 
 jobs:
@@ -97,10 +98,12 @@ jobs:
       # 每日 PCF → 落 data/pcf/ 快照 → 前後兩日差分 → active_etf_flags.json。
       # 單一投信掛掉 / 網路失敗都 continue-on-error，**不擋三清單**。
       - name: 主動式 ETF PCF 快照
+        if: steps.refpull.outcome == 'success'
         continue-on-error: true
         run: python scripts/snapshot_pcf.py       # → data/pcf/<code>/<date>.parquet
 
       - name: 主動式 ETF 認養旗標
+        if: steps.refpull.outcome == 'success'
         continue-on-error: true
         run: python build_active_etf_flags.py     # → data/derived/active_etf_flags.json
 
@@ -170,7 +173,10 @@ jobs:
             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
 
       - name: 推到私有 Release
+        id: refpush
         if: always() && steps.refpull.outcome == 'success'
+        # continue-on-error：私有附屬資料推不上去不可拖垮三清單 commit（核心產品）；失敗由最後一個 step 讓 job 變紅
+        continue-on-error: true
         env:
           DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
           DATA_REPO: ${{ vars.DATA_REPO }}
@@ -220,10 +226,10 @@ jobs:
           [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }
 
       # 私有資料還原失敗 → 今天的 PCF／指數序列沒有推上去（上面已跳過）；讓 job 變紅，才不會「綠燈但資料沒存」。
-      - name: 私有資料還原失敗就讓 job 變紅
-        if: always() && steps.refpull.outcome != 'success'
+      - name: 私有資料還原或推送失敗就讓 job 變紅
+        if: always() && (steps.refpull.outcome != 'success' || steps.refpush.outcome == 'failure')
         run: |
-          echo "::error::私有參考資料還原失敗，今天的 PCF 快照與 006201／0050 序列沒有存進私有 Release（補不回的是 PCF 快照）"
+          echo "::error::私有參考資料還原或推送失敗，今天的 PCF 快照與 006201／0050 序列可能沒有存進私有 Release（補不回的是 PCF 快照）"
           exit 1
 
   # ⚠️ 這個 job 自己絕對不可以失敗（抄自 tw-swing daily.yml）。
