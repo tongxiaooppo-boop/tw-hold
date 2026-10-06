@@ -115,7 +115,7 @@ gh release view selfhost-data -R tongxiaooppo-boop/tw-hold-data --json assets --
 - **Secrets（tw-hold）**：`DATA_REPO_PAT`（新）、`FINMIND_TOKEN`（今天補，同 tw-swing 的值；本機 token 驗證有效，額度 600／小時）、`TWSWING_BUNDLE_PAT`（2026-12-07 到期，11-30 起提醒）。
 - **手動演練結果**：run 37413944270（寫公開 Release，TPEx TLS 無誤）、37416328750（改寫私有 repo，閘門通過）、37417176629（補 FINMIND_TOKEN 後，結果見下）。
 - **FinMind token 踩坑（2026-10-06）**：secret `FINMIND_TOKEN` 貼上時結尾帶了換行，Actions 上 FinMind 回 `HTTP 400 {"msg":"Token is illegal"...}`（回應的 `token_tail` 尾巴是 `
-` 才看出來）。該步 `continue-on-error`，整個 run 顯示綠色，**靜默失敗**。修法：`selfhost_events._token`／`selfhost_xsrc._token` 一律 `.strip()`（`reference/finmind_client.py` 本來就有）；已加測試。**教訓**：continue-on-error 的綠色不等於成功，驗證要 grep log。
+` 才看出來）。該步 `continue-on-error`，整個 run 顯示綠色，**靜默失敗**。修法：`selfhost_events._token`／`selfhost_xsrc._token` 一律 `.strip()`（`reference/finmind_client.py` 本來就有）；已加測試。**修後驗證**：run 37417691902 的 log 出現「FinMind 分割／面額變更：51 件」（與本機 ev_fm_split 51 件一致），無 `Token is illegal`。**教訓**：continue-on-error 的綠色不等於成功，驗證要 grep log。
 - **操作教訓**：`gh release download` 在本機網路下極慢（約 12KB/s），別用它搬 180MB；用本機檔案直接 `gh release create`。中途殺下載會讓後續的 `gh release create _seed/*` 把**殘缺檔**傳上去（今天發生過一次，已刪重建）。
 
 ## 6. 還沒做／待決定
