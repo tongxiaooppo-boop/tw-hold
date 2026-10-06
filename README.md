@@ -38,6 +38,7 @@ tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
   | `data/reference/index_0050*`、`index_006201*` | 0050、006201 收盤序列 | 0050 取自 tw-swing bundle；006201 取自 FinMind |
 
 - 本專案僅供個人研究與學習，**不構成投資建議**；資料可能有誤、延遲或缺漏，使用者自行負責。
+- **授權**：本 repo 的程式碼以 [MIT 授權](LICENSE) 釋出（軟體按現狀提供、不附任何保證）。程式抓取資料的來源網站另有各自的使用條款（見上），**資料的取得與使用須由執行者自行遵守**；本 repo 不提供也不散布這些原始資料。
 - 任何權利人認為本專案有不當之處，請來信或開 issue，將立即下架處理。
 
 規格見 [PRD.md](PRD.md)（v1 範圍凍結，見 `docs/PLAN.md` 凍結條件）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜
