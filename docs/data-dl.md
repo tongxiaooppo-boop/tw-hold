@@ -300,3 +300,31 @@
 - **打平不用動**：月營收、PER、基本資料。
 - **不要抄**：TSD 的 MOPS 財報走 POST 頁面／新站 JSON，有 repo 說會被 WAF 擋（data-dl §2.4），我們用 FinMind 取得財報足夠。
 - **本節未驗證**：`tdcc_hist` 的來源與每週完整度、`filing_dates` 的實際做法與涵蓋、TSD 財報內容與 FinMind 是否一致。要引用前先實查。
+
+---
+
+## 11. OpenAPI 增量涵蓋度探測（2026-10-06，唯讀實測）
+
+> 目的：往後每日增量改走 OpenAPI（OGDL v1，可合法再散布、顯名即可），能不能取代我們現在打的網站端點。方法：讀兩邊 swagger（TWSE 143 條、TPEx 225 條路徑）＋逐一實打。**不是已採用的設計**，只是涵蓋度結論。
+
+**共通限制（最關鍵）**：swagger 上這些端點**全部沒有任何查詢參數**，只回「最新一個交易日」。所以①不能補抓某一天（漏跑一天＝永久缺一天）②不能照現在的「近 3 日曆日重抓覆蓋官方更正」做，只能靠「最新日一直掛著、多跑幾班」模擬③歷史完全沒有（歷史維持用現有資料）。
+
+| 我們需要的 | OpenAPI 端點 | 能不能 | 備註 |
+| :-- | :-- | :-- | :-- |
+| 上市日線 OHLCV＋漲跌價差 | TWSE `exchangeReport/STOCK_DAY_ALL` | ✅ | 1,381 列、有 Date／OHLC／Change／成交量值／筆數；含 ETF 等，需濾 4 碼 |
+| 上櫃日線 | TPEx `tpex_mainboard_quotes`（1,012 列）、`tpex_mainboard_daily_close_quotes`（12,060 列含權證） | ✅ | 另有買賣揭示價、**次日參考價與次日漲跌停**（`NextReferencePrice`／`NextLimitUp`／`NextLimitDown`）——比現在更直接解決「無成交日參考價」 |
+| 上市融資融券 | TWSE `exchangeReport/MI_MARGN` | ⚠️ | 欄位齊全（含前日餘額、註記），但**回應沒有日期欄**，無法自己斷言是哪一天（違反 data-fix A1），要靠同批 STOCK_DAY_ALL 的日期推定；含 ETF（1,297 列） |
+| 上櫃融資融券 | TPEx `tpex_mainboard_margin_balance` | ✅ | 有 Date、前日餘額、Note |
+| **上市三大法人個股** | （無） | ❌ | TWSE OpenAPI 沒有 T86；只有外資持股比率類彙總。**這是最大缺口（日資料 100 萬列級）** |
+| 上櫃三大法人 | TPEx `tpex_3insti_daily_trading` | ⚠️ | 有 Date，但欄名有空白／重複的 bug（`Dealers -TotalSell`、前導空白），自營拆分欄不可靠（先前實測 148／780 檔對不上） |
+| 除權息結果（含參考價） | 上市：無（只有 `TWT48U_ALL` 預告表）；上櫃：`tpex_exright_daily` | ⚠️ | 上櫃只回當天事件（8 列）、含現增欄；上市結果表無，可用已驗證的官方公式（A，99.6% 相符）自算 |
+| 減資、面額變更 | （無） | ❌ | TWSE `TWTAUU`／`TWTB8U`、TPEx `revivt`／`pvChgRslt` 都不在 OpenAPI；每年約百件，量小 |
+| 停止買賣／變更交易 | 上市 `TWTAWU`（暫停交易）、`BFI84U`；上櫃 `tpex_cmode`、`tpex_spendi_today` | ✅ | 上櫃終於有來源（現在的 `selfhost_stophalt` 只有上市） |
+| 處置／注意股、估值 | `announcement/punish`／`notice`、`BWIBBU_d`；上櫃對應端點 | ✅ | tw-swing 已在用 |
+| 漲跌標記 `refmark`（X／除息） | 無對應欄位 | ❌ | 事件日對帳基準會少一個獨立來源 |
+
+**結論**
+- 價量＋融資券＋停止買賣＋處置：**可以用 OpenAPI 取代每日增量**（約佔現在請求量的一半以上）。
+- **取代不了**：上市三大法人、減資／面額變更／上市除權息結果、漲跌標記。這幾項仍得打網站端點，或改用第三方（FinMind，授權條款未查）。
+- 副作用：失去「補抓指定日期」與「近 3 天重抓更正」，要用「多班排程＋隔天清晨再抓一次（端點在新交易日資料出來前一直回前一日）」模擬；漏跑一天＝永久缺。
+- 工作量：新增一組 OpenAPI 收集器＋與現有網站版並行對帳（至少 15 個交易日）才能切；法人與事件表仍留網站版（但呼叫量從每天上千次降到每天個位數）。
