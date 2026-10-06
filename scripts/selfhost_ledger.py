@@ -208,7 +208,7 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
             ok, orr = official_ok(t, r.date, LIMIT_NEW if r.date >= LIMIT_CUT else LIMIT_OLD)
             rows.append(_row(t, r.date, "jump", "info",
                              f"未還原收盤 {r.ret:+.1%}（對我們前一筆 {r.prev_date.date()}），但官方漲跌價差顯示官方參考價與它不同，官方漲跌幅 {orr:+.1%} 在限制內"
-                             "（中間有無成交日，參考價改變；原因未驗證）"))
+                             "（中間有無成交日，依營業細則 §58-3 參考價改變）"))
         elif (t, r.date) in rm_days:
             rows.append(_row(t, r.date, "jump", "info", f"未還原收盤 {r.ret:+.1%}：官方行情標記無比價日（X／除息類；前一筆 {r.prev_date.date()}，中間有無成交日）"))
         elif pos < NEW_LISTING_DAYS:
