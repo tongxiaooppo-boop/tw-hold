@@ -41,6 +41,7 @@ MARGIN = SH / "margin.parquet"
 UA = {"User-Agent": "Mozilla/5.0"}
 SLEEP = 2.0
 REFRESH_DAYS = 3         # 近幾個日曆日每次重抓（見 run()）
+CLOSED_MIN_AGE = 30            # 休市複本守門：距今不足這麼多日曆日的日子不記休市（可能是實價抓失敗，下次重試）
 T86 = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d}&selectType=ALLBUT0999&response=json"
 TPEX_INST = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=AL&date={d}&response=json"
 MI_MARGN = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d}&selectType=STOCK&response=json"
@@ -299,8 +300,13 @@ def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", 
                 empties.append((m, d))              # 交易日卻沒資料：缺料或端點無此歷史，迴圈後再分辨
         elif cal_any is not None and d <= cal_any_max and d not in cal_any:
             # 兩市場實價都沒有的日子（颱風假等）= 休市；TPEx 融資券端點休市日會回前一日的複本，不能存
-            print(f"::warning::{dataset} {m} {d} 不在交易日曆但端點有資料（疑似休市複本），丟棄並記為休市", file=sys.stderr)
-            newly_closed.append((m, d.isoformat()))
+            # 但「實價那天抓失敗」看起來一模一樣（Opus 審查 2026-10-06）：太新的日子只丟棄、不記休市，下一班重試；
+            # 夠舊（實價也早已重抓過）才記，避免颱風假每次回補都重打
+            if d < end - timedelta(days=CLOSED_MIN_AGE):
+                print(f"::warning::{dataset} {m} {d} 不在交易日曆但端點有資料（疑似休市複本），丟棄並記為休市", file=sys.stderr)
+                newly_closed.append((m, d.isoformat()))
+            else:
+                print(f"::warning::{dataset} {m} {d} 不在交易日曆但端點有資料（疑似休市複本或當日實價抓失敗），丟棄、暫不記休市，下次重試", file=sys.stderr)
         else:
             new.append(df)
         if i % 20 == 0:

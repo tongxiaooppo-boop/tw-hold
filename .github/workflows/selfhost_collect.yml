@@ -51,8 +51,20 @@ jobs:
         run: |
           mkdir -p data/selfhost/_base
           if gh release view selfhost-data >/dev/null 2>&1; then
-            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
-              gh release download selfhost-data -D data/selfhost/_base -p "$f" --clobber || echo "（Release 尚無 $f，略過）"
+            # Release 上實際有哪些檔：有列出卻下載失敗 ＝ 錯（重試 3 次仍失敗就中止），不可當成「尚無舊版」
+            # （否則閘門沒有基準可比、會放行一份只有 14 天的小檔去覆蓋整份歷史）
+            gh release view selfhost-data --json assets --jq '.assets[].name' > data/selfhost/_assets.txt
+            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl; do
+              if grep -qx "$f" data/selfhost/_assets.txt; then
+                ok=0
+                for try in 1 2 3; do
+                  gh release download selfhost-data -D data/selfhost/_base -p "$f" --clobber && ok=1 && break
+                  sleep $((try * 10))
+                done
+                [ "$ok" = 1 ] || { echo "::error::下載 $f 失敗（Release 上有）——中止，不繼續"; exit 1; }
+              else
+                echo "（Release 尚無 $f，略過）"
+              fi
             done
             cp data/selfhost/_base/* data/selfhost/ 2>/dev/null || true
             ls -la data/selfhost/_base
@@ -103,12 +115,12 @@ jobs:
 
       - name: 閘門（不比舊版差才放行）
         id: gate
-        run: python scripts/selfhost_gate.py --base data/selfhost/_base --live data/selfhost
+        run: python scripts/selfhost_gate.py --base data/selfhost/_base --live data/selfhost --assets data/selfhost/_assets.txt
 
       - name: 上傳 Release（僅閘門通過）
         if: steps.gate.outcome == 'success'
         run: |
-          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json; do
+          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
           done
           # 週五另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
