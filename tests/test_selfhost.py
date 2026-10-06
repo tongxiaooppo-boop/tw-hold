@@ -686,3 +686,19 @@ def test_事件簿_官方參考價下漲跌幅合法_不標flag():
                    None, None, None, None, None)
     j = led[(led["ticker"] == "7001") & (led["kind"] == "jump")]
     assert len(j) == 1 and j["level"].iloc[0] == "info" and "官方" in j["title"].iloc[0]
+
+
+def test_enrich_事件名稱用官方原詞_並展開官方基準價欄位():
+    ev = pd.DataFrame([
+        {"ticker": "2614", "market": "TW", "date": _ts("2026-10-06"), "type": "ex_both", "prev_close": 19.1, "ref_price": 16.13,
+         "factor": 0.8445, "source": "twse_ex",
+         "detail": '{"value": "2.96", "open_base": 17.3, "div_ref": 17.31, "limit_up": 19.0, "limit_down": 14.55}'},
+        {"ticker": "3536", "market": "TW", "date": _ts("2015-03-20"), "type": "cap_reduction", "prev_close": 6.58, "ref_price": 13.06,
+         "factor": 1.98, "source": "twse_red", "detail": '{"reason": "彌補虧損", "open_base": 13.35, "limit_up": 14.25, "limit_down": 12.15}'},
+        {"ticker": "1109", "market": "TW", "date": _ts("2015-10-30"), "type": "cap_reduction", "prev_close": 10.45, "ref_price": 10.5,
+         "factor": 1.0048, "source": "fm_reduction",
+         "detail": '{"ReasonforCapitalReduction": "Cash refund", "OpeningReferencePrice": 10.5, "LimitUp": 11.55, "LimitDown": 9.45, "ExrightReferencePrice": -1.0}'}])
+    out = se.enrich(ev).set_index("ticker")
+    assert out.loc["2614", "event"] == "除權息" and out.loc["2614", "open_base"] == 17.3 and out.loc["2614", "div_ref"] == 17.31
+    assert out.loc["3536", "event"] == "減資" and out.loc["3536", "reason"] == "彌補虧損" and out.loc["3536", "limit_up"] == 14.25
+    assert out.loc["1109", "reason"] == "Cash refund" and out.loc["1109", "open_base"] == 10.5 and out.loc["1109", "limit_down"] == 9.45

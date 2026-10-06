@@ -95,6 +95,22 @@ def _f(x) -> float | None:
     return v if v > 0 else None
 
 
+# 官方事件表在「參考價」之外還給：開盤競價基準（TPEx 叫開始交易基準價）、減除股利參考價、漲停價、跌停價。
+# 這些是官方認定「下一交易日開盤基準」的原值，不是我們推的；收進 detail，build 時展成欄位（見 enrich）。
+_EXTRA = {"open_base": ("開盤競價基準", "開始交易基準價"), "div_ref": ("減除股利參考價",),
+          "limit_up": ("漲停價格", "漲停價"), "limit_down": ("跌停價格", "跌停價")}
+
+
+def _official_extra(fields: list[str], r: list) -> dict:
+    out = {}
+    for k, names in _EXTRA.items():
+        i = next((fields.index(n) for n in names if n in fields), None)
+        v = _f(r[i]) if i is not None else None
+        if v is not None:
+            out[k] = v
+    return out
+
+
 # ───────────────────────── 官方除權息 ─────────────────────────
 def fetch_official(start: str, end: str) -> pd.DataFrame:
     rows = []
@@ -108,7 +124,7 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
             try:
                 rows.append(("TW", str(r[1]).strip(), _roc(r[0]), str(r[f.index("權/息")]).strip(),
                              _f(r[f.index("除權息前收盤價")]), _f(r[f.index("除權息參考價")]),
-                             {"value": r[f.index("權值+息值")], "src": "twse_ex"}))
+                             {"value": r[f.index("權值+息值")], "src": "twse_ex", **_official_extra(f, r)}))
             except (ValueError, IndexError):
                 continue
         time.sleep(1.5)
@@ -123,7 +139,7 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
                              {"value": r[f.index("權值+息值")], "cash_div": r[f.index("現金股利")],
                               "stock_div_per_1000": r[f.index("每仟股無償配股")],
                               "cash_increase_shares": r[f.index("現金增資股數")],
-                              "cash_increase_price": r[f.index("現金增資認購價")], "src": "tpex_ex"}))
+                              "cash_increase_price": r[f.index("現金增資認購價")], "src": "tpex_ex", **_official_extra(f, r)}))
             except (ValueError, IndexError):
                 continue
         print(f"  {p} 累計 {len(rows)} 件", flush=True)
@@ -182,7 +198,7 @@ def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols:
                     "ref_price": ref, "factor": ref / pre, "source": source,
                     "detail": json.dumps({"reason": r[i_reason] if i_reason is not None else None,
                                           "price_col": next(f[i] for i in i_prices if _f(r[i])),
-                                          "row": [str(x)[:60] for x in r[:10]]}, ensure_ascii=False)})
+                                          "row": [str(x)[:60] for x in r[:10]], **_official_extra(f, r)}, ensure_ascii=False)})
     return out
 
 
@@ -338,6 +354,29 @@ def _save_red(rows: list[dict], done: dict[str, str]) -> None:
 
 
 # ───────────────────────── 合併 ─────────────────────────
+_EVENT_NAME = {"ex_div": "除息", "ex_rights": "除權", "ex_both": "除權息", "cap_reduction": "減資",
+               "par_change": "變更股票面額", "split": "分割", "reverse_split": "反分割"}
+# 事件名稱用官方原詞：TWSE 除權除息表的「權/息」欄寫 息／權／權息、TPEx 寫 除息／除權／除權息（統一成後者）；
+# 減資＝TWTAUU／revivt（原因：退還股款、彌補虧損；上櫃另有「現金減資」）；變更股票面額＝TWTB8U／pvChgRslt。
+# 官方**沒有**獨立的「現金增資」事件——現增是「除權」裡的現金增資欄位（TPEx exDailyQ 的現金增資股數／認購價）。
+# 「分割」是 FinMind 的用語（ETF 分割，官方名稱待查）。`type` 欄是舊的內部代碼（與 event 一一對應），保留只為相容。
+
+
+def enrich(ev: pd.DataFrame) -> pd.DataFrame:
+    """加欄：event（官方事件名稱）、reason（官方減資原因／FinMind 原文）、open_base（開盤競價基準）、div_ref（減除股利參考價）、
+    limit_up／limit_down（官方漲跌停價）。來源欄位名不同（FinMind 用 OpeningReferencePrice 等），這裡只做搬欄位，不改值。"""
+    ev = ev.copy()
+    ev["event"] = ev["type"].map(_EVENT_NAME)
+    det = ev["detail"].map(lambda x: json.loads(x) if isinstance(x, str) and x.startswith("{") else {})
+    ev["reason"] = [d.get("reason") or d.get("ReasonforCapitalReduction") for d in det]
+    pick = lambda d, *ks: next((float(d[k]) for k in ks if d.get(k) not in (None, "", -1, -1.0)), None)   # noqa: E731
+    ev["open_base"] = [pick(d, "open_base", "OpeningReferencePrice", "open_price", "after_ref_open") for d in det]
+    ev["div_ref"] = [pick(d, "div_ref") for d in det]
+    ev["limit_up"] = [pick(d, "limit_up", "LimitUp", "max_price", "after_ref_max") for d in det]
+    ev["limit_down"] = [pick(d, "limit_down", "LimitDown", "min_price", "after_ref_min") for d in det]
+    return ev
+
+
 def build() -> pd.DataFrame:
     """合併成 corp_actions.parquet。**以既有 corp_actions 為底、聯集各來源檔、同鍵取最新**——
     CI 只有近兩個月的官方除權息與 FinMind 分割，沒有歷史來源檔，若不以舊檔為底就會把事件表重建成殘缺版本。"""
@@ -358,7 +397,7 @@ def build() -> pd.DataFrame:
         queried = set(_load_done())
         ev = ev[~((ev["source"] == "fm_reduction") & ev["ticker"].isin(queried))]
         ev = pd.concat([ev, red[COLS].assign(date=pd.to_datetime(red["date"]))], ignore_index=True)
-    ev = ev.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True)
+    ev = enrich(ev.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True))
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ev.to_parquet(OUT, index=False, compression="zstd")        # 不寫 built_at：內容不變時檔案位元組也不變
     print(f"corp_actions：{len(ev)} 件 / {ev['ticker'].nunique()} 檔；來源 {ev['source'].value_counts().to_dict()}")

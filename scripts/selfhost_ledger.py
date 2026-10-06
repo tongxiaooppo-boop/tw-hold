@@ -46,8 +46,9 @@ LIMIT_OLD, LIMIT_NEW = 0.075, 0.105           # 2015-06-01 起漲跌幅 7%→10%
 LIMIT_CUT = pd.Timestamp("2015-06-01")
 MIN_GAP = 3
 NEW_LISTING_DAYS = 5
+# 事件名稱一律用官方原詞（corp_actions.event）；這張舊代碼對照只為沒有 event 欄的舊檔相容
 TYPE_ZH = {"ex_div": "除息", "ex_rights": "除權", "ex_both": "除權息", "cap_reduction": "減資",
-           "par_change": "面額變更", "split": "分割"}
+           "par_change": "變更股票面額", "split": "分割"}
 
 
 def _row(t, d, kind, level, title, detail=""):
@@ -78,6 +79,8 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
     last = raw.groupby("ticker")["date"].max()
     ca = ca.copy()
     ca["date"] = pd.to_datetime(ca["date"])
+    if "event" not in ca.columns:
+        ca["event"] = ca["type"].map(TYPE_ZH)
     ev_by = {t: g.sort_values("date") for t, g in ca.groupby("ticker")}
     seam_by = {}
     if seam is not None and len(seam):
@@ -101,7 +104,24 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
             future = r.date > last_all
             seam_s = seam_by.get((t, r.date, r.type), "")
             warn = ((t, r.date) in conflict) or ("cash_increase" in str(r.detail) and False)
-            title = (f"{TYPE_ZH.get(r.type, r.type)}：前收 {r.prev_close:g} → 參考價 {r.ref_price:g}（因子 {r.factor:.4f}）[{r.source}]"
+            extra = []
+            for lab, v in (("開盤競價基準", getattr(r, "open_base", None)), ("減除股利參考價", getattr(r, "div_ref", None))):
+                if v is not None and not pd.isna(v):
+                    extra.append(f"{lab} {v:g}")
+            lu, ld = getattr(r, "limit_up", None), getattr(r, "limit_down", None)
+            if lu is not None and not pd.isna(lu):
+                extra.append(f"漲停 {lu:g}／跌停 {ld:g}")
+            name = getattr(r, "event", None) or TYPE_ZH.get(r.type, r.type)
+            rs = getattr(r, "reason", None)
+            if rs is not None and not pd.isna(rs):
+                name += f"（{rs}）"
+            cl = chg_of.get((t, r.date), (np.nan, np.nan))[0]
+            out_of_limit = (lu is not None and not pd.isna(lu) and not pd.isna(cl) and not (ld - 1e-6 <= cl <= lu + 1e-6))
+            warn = warn or out_of_limit
+            ref_lab = "除權息參考價" if getattr(r, "event", None) in ("除息", "除權", "除權息") else "恢復買賣參考價"
+            title = (f"{name}：前收 {r.prev_close:g} → {ref_lab} {r.ref_price:g}（因子 {r.factor:.4f}）"
+                     + ("；" + "；".join(extra) if extra else "") + f" [{r.source}]"
+                     + ("｜⚠事件日收盤超出官方漲跌停" if out_of_limit else "")
                      + ("｜⚠未來事件（尚未發生，不套用）" if future else "")
                      + ("｜⚠來源間因子衝突" if (t, r.date) in conflict else "")
                      + (f"｜上游還原：{seam_s}" if seam_s else ""))
@@ -233,8 +253,10 @@ def build(raw: pd.DataFrame, ca: pd.DataFrame, adj: pd.DataFrame | None, seam: p
     return out.sort_values(["ticker", "date", "kind"]).reset_index(drop=True)
 
 
-def render(ledger: pd.DataFrame, ticker: str) -> str:
+def render(ledger: pd.DataFrame, ticker: str, with_notes: bool = False) -> str:
     g = ledger[ledger["ticker"] == ticker]
+    if not with_notes:
+        g = g[g["kind"] != "margin_note"]               # 融資註記很多，預設不印；--all 才印
     if g.empty:
         return f"{ticker}：事件簿沒有紀錄"
     mark = {"info": "  ", "warn": "⚠ ", "flag": "⛔"}
@@ -248,11 +270,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ticker")
     ap.add_argument("--flags", action="store_true")
+    ap.add_argument("--all", action="store_true", help="時間軸連融資券註記一起印")
     a = ap.parse_args(argv)
     if a.ticker or a.flags:
         led = pd.read_parquet(OUT)
         if a.ticker:
-            print(render(led, a.ticker))
+            print(render(led, a.ticker, a.all))
         else:
             f = led[led["level"] == "flag"]
             print(f.groupby("kind").size().to_string())
