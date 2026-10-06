@@ -3184,6 +3184,19 @@ def _ensure_refdata() -> dict:
         return {"_error": str(e)[:200]}
 
 
+def _refdata_status(res: dict) -> str:
+    """頁尾的一行狀態：讓人一眼確認唯讀 token 有沒有生效（secrets 的 DATA_READ_PAT）。"""
+    if res.get("_error"):
+        return f"私有參考資料：還原失敗（{res['_error'][:60]}）"
+    if res.get("_skipped") == "no token":
+        return "私有參考資料：未設定 token，使用 repo 內檔案"
+    if res.get("_skipped"):
+        return f"私有參考資料：略過（{res['_skipped']}）"
+    bad = [k for k, v in res.items() if isinstance(v, str)]
+    return (f"私有參考資料：已從私有 Release 還原 {len(res) - len(bad)} 項"
+            + (f"，{len(bad)} 項失敗" if bad else "") + "（每 30 分鐘更新）")
+
+
 def _refdata_banner(res: dict) -> None:
     ref_ok = (REPO / "data" / "reference" / "global_macro.parquet").exists()
     if res.get("_error"):
@@ -3229,6 +3242,7 @@ def main() -> None:
 
     st.divider()
     st.caption(ATTRIBUTION)
+    st.caption(_refdata_status(_ensure_refdata()))
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
