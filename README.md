@@ -20,6 +20,15 @@ tw-hold 用 PAT 拉 bundle、每日重算三清單、做 domain 與 UI。
 - 佈署：Streamlit Community Cloud（個股即時補抓為本地進階模式）。公開連結：
   https://tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app/
 
+## 資料來源與授權
+
+- 價量、籌碼、公司行為等原始資料來自 **臺灣證券交易所（TWSE）** 與 **財團法人中華民國證券櫃檯買賣中心（TPEx）** 的公開資訊；
+  其中以 OpenAPI（`openapi.twse.com.tw` 等，政府資料開放授權條款－第 1 版）取得者，提供機關為各該機構，依該條款顯名標示。
+- 兩機構網站另有使用條款（含禁止自動化程式下載、重製與散布網站內容，但已授權政府資料開放平臺者不在此限）。
+  為此：**本 repo 的程式公開，自建上游收集到的資料不公開散布**（存放於私有 repo 的 Release），僅供個人研究使用。
+- 本專案僅供個人研究與學習，**不構成投資建議**；資料可能有誤、延遲或缺漏，使用者自行負責。
+- 任何權利人認為本專案有不當之處，請來信或開 issue，將立即下架處理。
+
 規格見 [PRD.md](PRD.md)（v1 範圍凍結，見 `docs/PLAN.md` 凍結條件）｜執行 checklist 見 [docs/PLAN.md](docs/PLAN.md)｜
 **最新審核/交接 [docs/REVIEW_RESPONSE_2026-09-22.md](docs/REVIEW_RESPONSE_2026-09-22.md)**
 （資料管線備援/自癒機制：push 靜默失敗 bug、PCF 假訊號雙層防守、國際總經絕對新鮮度偵測、
