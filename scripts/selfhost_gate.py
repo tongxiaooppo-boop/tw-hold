@@ -9,7 +9,8 @@
 4. 內容恆等式（最近 20 個資料日，逐市場）：法人「外資＋投信＋自營＝合計」不符比例／自營缺值比例 ≤ 5%、
    實價 OHLC 一致性（0 < low ≤ min(open, close) ≤ max(open, close) ≤ high）違反比例 ≤ 1%——欄位位置解析錯位或
    整欄空白時列數／檔數都正常，只有這層看得到（2026-08-27 上櫃自營整欄空白五週沒人發現）。
-   融資恆等式（前日餘額＋買進−賣出−現償＝今日餘額）暫只警告：上櫃實測 100%，上市尚未全量驗證。
+   融資恆等式（前日餘額＋買進−賣出−現償＝今日餘額）：逐日不符比例的**中位數** ≤ 5%，否則擋上傳（上市 2015–2026 全量驗證 99.4%+ 成立；
+   官方會「隔日調帳」，個別日子有五成個股不連續，所以單日只警告、不用整窗平均）。
 
 通過 → exit 0，並寫 `data/derived/selfhost_status.json`（各資料集最新日／列數／最新日檔數，給心跳與頁面用）。
 失敗 → exit 1，workflow **不得上傳**（壞版本不能蓋掉好版本）。
@@ -119,10 +120,16 @@ def content_checks(name: str, live: pd.DataFrame) -> tuple[list[str], list[str]]
             g["_prev"] = g.groupby("ticker")["margin_balance"].shift()
             x = g.dropna(subset=["_prev", "margin_balance", "margin_buy", "margin_sell", "margin_redeem"])
             if len(x):
-                bad = float(((x["_prev"] + x["margin_buy"] - x["margin_sell"] - x["margin_redeem"]
-                              - x["margin_balance"]).abs() > 1).mean())
-                if bad > IDENT_MAX:
-                    warns.append(f"margin/{m}：近 {IDENT_DAYS} 日融資餘額恆等式不符 {bad:.1%}（暫為警告）")
+                # 官方「隔日調帳」：個別日子（長假後、調帳高峰）會有五成個股「前日餘額≠昨日今日餘額」（實測 2019-02-11、2026-04-09），
+                # 所以不用整窗平均，改看「逐日不符比例的中位數」——欄位錯位幾乎每天都壞，單日調帳不會
+                badrow = ((x["_prev"] + x["margin_buy"] - x["margin_sell"] - x["margin_redeem"]
+                           - x["margin_balance"]).abs() > 1)
+                per_day = badrow.groupby(x["date"]).mean()
+                med = float(per_day.median())
+                if med > IDENT_MAX:
+                    errs.append(f"margin/{m}：近 {IDENT_DAYS} 日融資餘額恆等式逐日不符比例中位數 {med:.1%} > {IDENT_MAX:.0%}（欄位錯位？）")
+                elif float(per_day.max()) > 0.3:
+                    warns.append(f"margin/{m}：{per_day.idxmax():%Y-%m-%d} 融資餘額恆等式不符 {per_day.max():.0%}（可能是官方隔日調帳，單日不擋）")
     return errs, warns
 
 

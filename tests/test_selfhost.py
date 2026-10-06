@@ -57,9 +57,9 @@ def test_多來源因子差異過大標_conflict():
 
 def test_同日不同類別各自套用並標_multi_class():
     ev = pd.DataFrame([_ev("2607", "2025-10-07", "ex_div", 0.98, "twse_ex"),
-                       _ev("2607", "2025-10-07", "cap_reduction", 1.714, "fm_reduction")])
+                       _ev("2607", "2025-10-07", "par_change", 0.1, "fm_par")])
     r = sa.resolve_events(ev)
-    assert len(r) == 2 and r["multi_class"].all()
+    assert len(r) == 2 and r["multi_class"].all()      # 除息＋面額變更：兩種都套（減資＋除息才只套減資，見下方測試）
 
 
 def test_未知類型不套用():
@@ -353,3 +353,292 @@ def test_gate_content_checks_catch_blank_dealer_and_ohlc():
     assert any("OHLC" in x for x in sg.content_checks("raw_prices", px)[0])
     ok = px.assign(high=11)
     assert sg.content_checks("raw_prices", ok)[0] == []
+
+
+# ───────── 2026-10-06 新增：融資恆等式（中位數）、跨市場重複、前日餘額、重抓窗口 ─────────
+def _margin_frame(days=20, bad_days=(), bad_frac=0.5, n=40, swap_all=False):
+    rows = []
+    rng = np.random.default_rng(0)
+    bal = {f"{1000 + i}": 1000.0 for i in range(n)}
+    for k in range(days):
+        d = pd.Timestamp("2026-09-01") + pd.Timedelta(days=k)
+        for i, t in enumerate(bal):
+            buy, sell, red = float(rng.integers(0, 50)), float(rng.integers(0, 50)), float(rng.integers(0, 10))
+            new = bal[t] + buy - sell - red
+            if k in bad_days and i < n * bad_frac:
+                new += 7                    # 官方隔日調帳：前日餘額與昨日今日餘額不連續
+            rows.append({"date": d, "ticker": t, "market": "TW", "margin_balance": new,
+                         "margin_buy": sell if swap_all else buy, "margin_sell": buy if swap_all else sell,
+                         "margin_redeem": red})
+            bal[t] = new
+    return pd.DataFrame(rows)
+
+
+def test_閘門_融資恆等式_單日調帳只警告不擋():
+    errs, warns = sg.content_checks("margin", _margin_frame(bad_days=(10,)))
+    assert not errs and any("隔日調帳" in w for w in warns)
+
+
+def test_閘門_融資恆等式_欄位對調要擋():
+    errs, _ = sg.content_checks("margin", _margin_frame(swap_all=True))
+    assert any("融資餘額恆等式" in e for e in errs)
+
+
+def test_閘門_融資恆等式_正常資料不報():
+    assert sg.content_checks("margin", _margin_frame()) == ([], [])
+
+
+def test_merge_跨市場同日重複_留當日實價所在市場(tmp_path, monkeypatch):
+    import selfhost_merge as sm
+    px = pd.DataFrame({"date": [_ts("2017-09-07")], "ticker": ["4739"], "market": ["TWO"]})
+    px.to_parquet(tmp_path / "raw_prices.parquet")
+    monkeypatch.setattr(sm, "SH", tmp_path)
+    df = pd.DataFrame({"date": [_ts("2017-09-07")] * 2 + [_ts("2017-09-08")], "ticker": ["4739", "4739", "4739"],
+                       "market": ["TW", "TWO", "TW"], "margin_balance": [1.0, 1.0, 2.0]})
+    out = sm._drop_cross_market_dups(df)
+    assert len(out) == 2 and set(out["market"][out["date"] == _ts("2017-09-07")]) == {"TWO"}
+
+
+def test_merge_跨市場重複_兩邊都沒實價_不動(tmp_path, monkeypatch):
+    import selfhost_merge as sm
+    pd.DataFrame({"date": [_ts("2020-01-02")], "ticker": ["9999"], "market": ["TW"]}).to_parquet(tmp_path / "raw_prices.parquet")
+    monkeypatch.setattr(sm, "SH", tmp_path)
+    df = pd.DataFrame({"date": [_ts("2017-09-07")] * 2, "ticker": ["4739"] * 2, "market": ["TW", "TWO"], "margin_balance": [1.0, 1.0]})
+    assert len(sm._drop_cross_market_dups(df)) == 2
+
+
+def test_融資券解析_含前日餘額(monkeypatch):
+    j = {"stat": "OK", "date": "20260930", "tables": [{"fields": [str(i) for i in range(16)], "data": [
+        ["2330", "台積電", "1073", "498", "13", "30134", "30696", "x", "1", "4", "0", "15", "18", "x", "1", "x"]]}]}
+    monkeypatch.setattr(sc, "_get", lambda *a, **k: j)
+    df = sc.margin_twse(_date(2026, 9, 30))
+    r = df.iloc[0]
+    assert r["margin_prev"] == 30134 and r["margin_balance"] == 30696 and r["short_prev"] == 15 and r["short_balance"] == 18
+    assert r["margin_prev"] + r["margin_buy"] - r["margin_sell"] - r["margin_redeem"] == r["margin_balance"]
+
+
+def test_同日減資加除權息_只套減資不重複扣息():
+    ev = pd.DataFrame([
+        {"ticker": "9999", "date": _ts("2024-05-01"), "type": "ex_div", "factor": 0.97, "source": "twse_ex"},
+        {"ticker": "9999", "date": _ts("2024-05-01"), "type": "cap_reduction", "factor": 1.5, "source": "twse_red"},
+        {"ticker": "8888", "date": _ts("2024-05-01"), "type": "ex_div", "factor": 0.98, "source": "twse_ex"},
+        {"ticker": "9999", "date": _ts("2024-06-03"), "type": "ex_div", "factor": 0.95, "source": "twse_ex"},
+    ])
+    res = sa.resolve_events(ev)
+    r = res[(res.ticker == "9999") & (res.date == _ts("2024-05-01"))]
+    assert list(r["cls"]) == ["red"]                                   # 同日只留減資
+    assert len(res[(res.ticker == "8888")]) == 1                       # 其他檔不受影響
+    assert len(res[(res.ticker == "9999") & (res.date == _ts("2024-06-03"))]) == 1   # 不同日的除息照常
+
+
+# ───────── 2026-10-06 新增：無成交旁表、註記原文、停止買賣快照 ─────────
+def test_rows_無成交列不進實價_改記旁表且保留零股量():
+    rp.NOTRADE.clear()
+    t = {"fields": ["證券代號", "開盤價", "最高價", "最低價", "收盤價", "成交股數", "成交金額"],
+         "data": [["2330", "100", "101", "99", "100", "1,000", "100,000"],
+                  ["6904", "--", "--", "--", "--", "2,000", "21,000"],       # 有量無價（零股成交）
+                  ["9999", "--", "--", "--", "--", "0", "0"]]}
+    df = rp._rows(t, {"open": "開盤價", "high": "最高價", "low": "最低價", "close": "收盤價",
+                      "volume": "成交股數", "value": "成交金額"}, "TW", "20260903")
+    assert list(df["ticker"]) == ["2330"]
+    nt = {r["ticker"]: r for r in rp.NOTRADE}
+    assert set(nt) == {"6904", "9999"} and nt["6904"]["volume"] == 2000.0 and nt["9999"]["volume"] == 0.0
+    rp.NOTRADE.clear()
+
+
+def test_註記_保留原文內部空白_只去全形空白與頭尾():
+    assert sc._note("OX ") == "OX"
+    assert sc._note("　") == ""
+    assert sc._note("11    BC") == "11    BC"        # 上櫃註記是定位字串，內部空白不能動
+
+
+import selfhost_stophalt as sh  # noqa: E402
+
+
+def _stop_json(title="115年10月06日 停止買賣"):
+    return {"stat": "ok", "tables": [{"title": title, "fields": sh.FIELDS,
+                                       "data": [["1589", "永冠-KY", "第50-3條", "1.未申報\r\n2.併案", "115年04月07日"]]}]}
+
+
+def test_停止買賣_解析並把民國日期轉西元():
+    df, note = sh.parse(_stop_json(), "2026-10-06")
+    assert df is not None and df.iloc[0]["ticker"] == "1589" and df.iloc[0]["halt_since"] == "2026-04-07"
+    assert "\n" not in df.iloc[0]["reason"] and "\r" not in df.iloc[0]["reason"]
+
+
+def test_停止買賣_快照日對不上就拒收():
+    df, why = sh.parse(_stop_json("115年10月05日 停止買賣"), "2026-10-06")
+    assert df is None and "不是今天" in why
+
+
+def test_停止買賣_欄位改版拒收():
+    j = _stop_json()
+    j["tables"][0]["fields"] = ["證券代號", "證券名稱"]
+    assert sh.parse(j, "2026-10-06")[0] is None
+
+
+def test_停止買賣_累積檔只增不減(tmp_path):
+    p = tmp_path / "stophalt.parquet"
+    a, _ = sh.parse(_stop_json(), "2026-10-06")
+    n1 = sh.merge_into(a, p)
+    b, _ = sh.parse(_stop_json("115年10月07日 停止買賣"), "2026-10-07")
+    n2 = sh.merge_into(b, p)
+    assert (n1, n2) == (1, 2)
+    assert sh.merge_into(a, p) == 2                       # 重跑冪等，不重複
+
+
+def test_未來事件不套用_最新價等於未還原價():
+    res = pd.DataFrame([
+        {"ticker": "2614", "date": _ts("2026-10-06"), "cls": "div", "type": "ex_both", "factor": 0.8445, "source": "twse_ex"},
+        {"ticker": "2614", "date": _ts("2026-07-01"), "cls": "div", "type": "ex_div", "factor": 0.95, "source": "twse_ex"}])
+    ok, fut = sa.drop_future(res, _ts("2026-10-05"))
+    assert list(ok["date"]) == [_ts("2026-07-01")] and list(fut["date"]) == [_ts("2026-10-06")]
+    raw = pd.DataFrame({"ticker": "2614", "date": [_ts("2026-06-30"), _ts("2026-10-05")],
+                        "open": 1.0, "high": 1.0, "low": 1.0, "close": [20.0, 19.1], "volume": 1.0})
+    adj = sa.adjust(raw, ok)
+    assert adj["close"].iloc[-1] == 19.1                       # 最新價不動
+    assert abs(adj["close"].iloc[0] - 19.0) < 1e-9             # 7/1 除息只乘在 7/1 之前
+
+
+# ───────── 2026-10-06 補測：重抓窗口、休市複本守門、週六日曆（agent 審查指出「有實作沒測試」）─────────
+def _fake_chips(monkeypatch, tmp_path, dataset, cal, mk_rows):
+    """把 selfhost_chips.run 接到 tmp_path：假抓取器、假日曆。回傳 calls（被問過的 (市場, 日期)）。"""
+    calls = []
+    cols = sc.INST_COLS if dataset == "inst" else sc.MARGIN_COLS
+
+    def mk(m):
+        def f(d):
+            calls.append((m, d))
+            return pd.DataFrame(mk_rows(m, d), columns=cols)
+        return f
+
+    monkeypatch.setattr(sc, "SH", tmp_path)
+    monkeypatch.setattr(sc, "SLEEP", 0)
+    monkeypatch.setattr(sc, "_trading_calendar", lambda markets=("TW", "TWO"): cal)
+    monkeypatch.setitem(sc.SOURCES, dataset, (tmp_path / f"{dataset}.parquet", cols, {"TW": mk("TW"), "TWO": mk("TWO")}))
+    return calls
+
+
+def _inst_row(m, d, trust=1.0):
+    return [{"date": pd.Timestamp(d), "ticker": "2330" if m == "TW" else "6488", "market": m, "foreign_net": 0.0,
+             "fi_prop_net": 0.0, "trust_net": trust, "dealer_net": 0.0, "total_net": trust}]
+
+
+def test_chips_最近幾天每次重抓覆蓋_更早的不重抓(monkeypatch, tmp_path):
+    d_old, d_new = _date(2026, 9, 1), _date(2026, 10, 5)
+    cal = {d_old, d_new}
+    calls = _fake_chips(monkeypatch, tmp_path, "inst", cal, lambda m, d: _inst_row(m, d, trust=2.0))
+    seed = pd.concat([pd.DataFrame(_inst_row(m, d, trust=1.0), columns=sc.INST_COLS) for m in ("TW", "TWO") for d in (d_old, d_new)])
+    seed.to_parquet(tmp_path / "inst.parquet")
+    sc.run("inst", d_old, d_new, ("TW", "TWO"))
+    asked = {d for _, d in calls}
+    assert d_new in asked and d_old not in asked                       # 近 3 天重抓、更早的已有就不問
+    out = pd.read_parquet(tmp_path / "inst.parquet")
+    assert out[pd.to_datetime(out["date"]) == "2026-10-05"]["trust_net"].eq(2.0).all()     # 被覆蓋成最新值
+    assert out[pd.to_datetime(out["date"]) == "2026-09-01"]["trust_net"].eq(1.0).all()      # 舊的原封不動
+
+
+def test_chips_休市複本守門_兩市場實價都沒有的日子丟棄並記休市(monkeypatch, tmp_path):
+    fri, mon = _date(2026, 10, 2), _date(2026, 10, 5)
+    cal = {mon}                                         # 10-02 兩市場都沒有實價（等同颱風假）；日曆最大日 10-05 之後
+    calls = _fake_chips(monkeypatch, tmp_path, "margin", cal,
+                        lambda m, d: [{"date": pd.Timestamp(d), "ticker": "6488", "market": m, "margin_balance": 1.0}])
+    sc.run("margin", fri, fri, ("TW", "TWO"))
+    assert calls                                        # 有去問
+    assert not (tmp_path / "margin.parquet").exists() or len(pd.read_parquet(tmp_path / "margin.parquet")) == 0   # 但複本沒寫
+    closed = pd.read_csv(tmp_path / "margin_closed.csv")
+    assert set(closed["market"]) == {"TW", "TWO"} and set(closed["date"]) == {"2026-10-02"}
+
+
+def test_chips_週六只在實價日曆有該日時才問(monkeypatch, tmp_path):
+    sat = _date(2026, 9, 12)
+    calls = _fake_chips(monkeypatch, tmp_path, "inst", {sat}, lambda m, d: _inst_row(m, d))
+    sc.run("inst", sat, sat, ("TW", "TWO"))
+    assert {d for _, d in calls} == {sat}               # 補班週六（日曆有）→ 問
+    calls.clear()
+    monkeypatch.setattr(sc, "_trading_calendar", lambda markets=("TW", "TWO"): {_date(2026, 9, 11)})
+    sc.run("inst", sat, sat, ("TW", "TWO"))
+    assert calls == []                                  # 一般週六（日曆沒有）→ 不問
+
+
+def _fake_raw(monkeypatch, tmp_path, volume):
+    calls = []
+
+    def fake(d, market="both"):
+        calls.append(d)
+        return pd.DataFrame([{"ticker": "2330", "market": "TW", "date": pd.Timestamp(d), "open": 1.0, "high": 1.0,
+                              "low": 1.0, "close": 1.0, "volume": volume, "value": 1.0}], columns=rp.COLS)
+
+    monkeypatch.setattr(rp, "OUT", tmp_path / "raw_prices.parquet")
+    monkeypatch.setattr(rp, "collect_day", fake)
+    return calls
+
+
+def test_實價_最近幾天重抓覆蓋(monkeypatch, tmp_path):
+    calls = _fake_raw(monkeypatch, tmp_path, volume=2.0)
+    pd.DataFrame([{"ticker": "2330", "market": "TW", "date": pd.Timestamp("2026-10-05"), "open": 1.0, "high": 1.0,
+                   "low": 1.0, "close": 1.0, "volume": 1.0, "value": 1.0}], columns=rp.COLS).to_parquet(tmp_path / "raw_prices.parquet")
+    rp.main(["--start", "2026-10-05", "--end", "2026-10-05"])
+    assert calls == [_date(2026, 10, 5)]
+    out = pd.read_parquet(tmp_path / "raw_prices.parquet")
+    assert len(out) == 1 and out["volume"].iloc[0] == 2.0
+
+
+def test_實價_週六要問_週日不問(monkeypatch, tmp_path):
+    calls = _fake_raw(monkeypatch, tmp_path, volume=1.0)
+    rp.main(["--start", "2026-09-12", "--end", "2026-09-13"])          # 週六、週日
+    assert calls == [_date(2026, 9, 12)]                                # 補行上班的週六股市照常交易，不能用 weekday<5
+
+
+# ───────── 事件簿與月檢查 ─────────
+import selfhost_ledger as sl  # noqa: E402
+import selfhost_monthly_review as smr  # noqa: E402
+
+
+def _raw_series(t, closes, start="2026-01-05"):
+    d = pd.bdate_range(start, periods=len(closes))
+    return pd.DataFrame({"ticker": t, "date": d, "close": closes})
+
+
+def test_事件簿_無事件的大跳動標flag_有事件的歸因():
+    closes = [10.0] * 10 + [14.0] + [14.0] * 5          # 第 11 天 +40%
+    raw = pd.concat([_raw_series("1111", closes), _raw_series("2222", closes)], ignore_index=True)
+    day = pd.bdate_range("2026-01-05", periods=16)[10]
+    ca = pd.DataFrame([{"ticker": "2222", "date": day, "type": "cap_reduction", "prev_close": 10.0, "ref_price": 14.0,
+                        "factor": 1.4, "source": "twse_red", "detail": "{}"}])
+    led = sl.build(raw, ca, None, None, None, None, None)
+    j = led[led["kind"] == "jump"].set_index("ticker")
+    assert j.loc["1111", "level"] == "flag" and j.loc["2222", "level"] == "info"
+
+
+def test_事件簿_新上市前幾日跳動不算flag_ETF不查():
+    raw = pd.concat([_raw_series("3333", [10.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]),
+                     _raw_series("0050", [10.0, 20.0] + [20.0] * 10)], ignore_index=True)
+    led = sl.build(raw, pd.DataFrame(columns=["ticker", "date", "type", "prev_close", "ref_price", "factor", "source", "detail"]),
+                   None, None, None, None, None)
+    assert (led[led["kind"] == "jump"]["level"] == "flag").sum() == 0
+
+
+def test_事件簿_減資換發停牌的缺日歸因為info():
+    d = pd.bdate_range("2026-01-05", periods=30)
+    keep = list(range(0, 10)) + list(range(18, 30))       # 缺第 10~17 天（8 天）
+    raw = pd.concat([pd.DataFrame({"ticker": "4444", "date": d[keep], "close": 10.0}),
+                     pd.DataFrame({"ticker": "5555", "date": d, "close": 10.0})], ignore_index=True)   # 5555 提供完整交易日曆
+    ca = pd.DataFrame([{"ticker": "4444", "date": d[18], "type": "cap_reduction", "prev_close": 10.0, "ref_price": 10.0,
+                        "factor": 1.0, "source": "twse_red", "detail": "{}"}])
+    led = sl.build(raw, ca, None, None, None, None, None)
+    g = led[(led["kind"] == "gap") & (led["ticker"] == "4444")]
+    assert len(g) == 1 and g["level"].iloc[0] == "info" and "換發" in g["title"].iloc[0]
+
+
+def test_月檢查_事件對帳_官方有我們沒有_與反向():
+    off = pd.DataFrame([{"ticker": "1101", "date": "2026-09-10", "type": "ex_div", "source": "twse_ex"},
+                        {"ticker": "2330", "date": "2026-09-11", "type": "cap_reduction", "source": "twse_red"}])
+    ours = pd.DataFrame([{"ticker": "1101", "date": "2026-09-10", "type": "ex_both", "source": "x"},     # 詞彙不同但同類別 → 對上
+                         {"ticker": "9999", "date": "2026-09-12", "type": "par_change", "source": "fm_par"}])
+    miss, extra = smr.diff_events(off, ours)
+    assert list(miss["ticker"]) == ["2330"] and list(extra["ticker"]) == ["9999"]
+
+
+def test_月檢查_前一個月():
+    assert smr.prev_month(_date(2026, 10, 6)) == "2026-09" and smr.prev_month(_date(2026, 1, 3)) == "2025-12"

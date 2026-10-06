@@ -16,6 +16,30 @@ SH = Path(__file__).resolve().parents[1] / "data" / "selfhost"
 KEYS = ["date", "ticker", "market"]
 
 
+def _drop_cross_market_dups(df: pd.DataFrame) -> pd.DataFrame:
+    """同日同代號在上市、上櫃各有一列（上櫃轉上市當天兩邊報表都列；或端點殘列）→ 留「當日實價所在市場」那列。
+    實測 2026-10-06：4739 在 2017-09-07（上櫃最後交易日）兩邊數值完全相同；6201 在 2016-09-26 上櫃端點多一列殘列。"""
+    dup = df.duplicated(["date", "ticker"], keep=False)
+    if not dup.any():
+        return df
+    raw = SH / "raw_prices.parquet"
+    if not raw.exists():
+        return df
+    px = pd.read_parquet(raw, columns=["date", "ticker", "market"]).drop_duplicates()
+    d = df[dup].merge(px.assign(_px=True), on=["date", "ticker", "market"], how="left")
+    drop_idx = d.index[(d["_px"] != True)]            # noqa: E712 — 這個市場當天沒有實價的那列
+    keys = d.loc[drop_idx, ["date", "ticker", "market"]]
+    # 兩邊都沒有實價（例：實價缺料）→ 不動，避免誤刪
+    both_missing = d.groupby(["date", "ticker"])["_px"].transform(lambda s: (s != True).all())  # noqa: E712
+    keys = d.loc[drop_idx[~both_missing.loc[drop_idx].to_numpy()], ["date", "ticker", "market"]]
+    if keys.empty:
+        return df
+    key = list(zip(keys["date"], keys["ticker"], keys["market"]))
+    print(f"  跨市場同日重複：丟掉 {len(key)} 列（留當日實價所在市場）：{[(str(k[0])[:10], k[1], k[2]) for k in key][:6]}")
+    mask = pd.Series(list(zip(df["date"], df["ticker"], df["market"])), index=df.index).isin(set(key))
+    return df[~mask]
+
+
 def merge(base: str) -> None:
     parts = [SH / f"{base}_{m}.parquet" for m in ("TW", "TWO")]
     parts = [p for p in parts if p.exists()]
@@ -25,11 +49,13 @@ def merge(base: str) -> None:
     out = SH / f"{base}.parquet"
     frames = ([pd.read_parquet(out)] if out.exists() else []) + [pd.read_parquet(p) for p in parts]
     df = pd.concat(frames, ignore_index=True).drop_duplicates(KEYS, keep="last").sort_values(["date", "market", "ticker"])
+    if base == "margin":
+        df = _drop_cross_market_dups(df)
     df.to_parquet(out, index=False, compression="zstd")
     print(f"{base}：合併 {len(parts)} 個單市場檔 → {len(df)} 列、{df['date'].nunique()} 天（{pd.Timestamp(df['date'].min()).date()}～{pd.Timestamp(df['date'].max()).date()}）")
 
 
 if __name__ == "__main__":
-    for b in ("raw_prices", "inst", "margin"):
+    for b in ("raw_prices", "inst", "margin", "notrade"):
         merge(b)
     sys.exit(0)

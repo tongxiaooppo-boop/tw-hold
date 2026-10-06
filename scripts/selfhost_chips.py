@@ -5,7 +5,10 @@
 這裡用 `ticker`（純 4 碼代號）＋`market`（TW/TWO）；margin 的數值欄這裡是 float。切換下游前要做一層欄位轉接，不是直接替換：
 - `data/selfhost/inst.parquet`   date, ticker, market, foreign_net, fi_prop_net, trust_net, dealer_net, total_net（股）
 - `data/selfhost/margin.parquet` date, ticker, market, margin_balance, margin_buy, margin_sell, margin_redeem,
-                                 short_balance, short_buy, short_sell, short_redeem, offset（張）
+                                 short_balance, short_buy, short_sell, short_redeem, offset（張）,
+                                 note（官方註記原文；講的是**次一營業日**，不翻譯、不移日）,
+                                 margin_prev, short_prev（官方「前日餘額」；官方次日仍調帳、**以前日餘額為準**，
+                                 所以 D 日最終餘額＝D+1 日的 *_prev；今日餘額只是當日公布值）
 
 ## 與上游做法的差異（見 `UPSTREAM_PRACTICES_AUDIT.md`）
 - **上市、上櫃各自記進度、各自補洞**：上游用 2330 的最後日當唯一基準，上櫃缺日永遠不會補（C3/M4）。
@@ -37,13 +40,14 @@ INST = SH / "inst.parquet"
 MARGIN = SH / "margin.parquet"
 UA = {"User-Agent": "Mozilla/5.0"}
 SLEEP = 2.0
+REFRESH_DAYS = 3         # 近幾個日曆日每次重抓（見 run()）
 T86 = "https://www.twse.com.tw/rwd/zh/fund/T86?date={d}&selectType=ALLBUT0999&response=json"
 TPEX_INST = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=AL&date={d}&response=json"
 MI_MARGN = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d}&selectType=STOCK&response=json"
 TPEX_MARGIN = "https://www.tpex.org.tw/www/zh-tw/margin/balance?date={d}&response=json"
 INST_COLS = ["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net"]
 MARGIN_COLS = ["date", "ticker", "market", "margin_balance", "margin_buy", "margin_sell", "margin_redeem",
-               "short_balance", "short_buy", "short_sell", "short_redeem", "offset"]
+               "short_balance", "short_buy", "short_sell", "short_redeem", "offset", "margin_prev", "short_prev", "note"]
 
 
 def _get(url: str, retries: int = 3) -> dict | None:
@@ -79,6 +83,13 @@ def _trading_calendar(markets: tuple[str, ...] = ("TW", "TWO")) -> set[date] | N
     for f in files:
         out |= {pd.Timestamp(x).date() for x in pd.read_parquet(f, columns=["date"])["date"].unique()}
     return out
+
+
+def _note(x) -> str:
+    """官方「註記／備註」原文（只去掉全形空白與頭尾空白；內部空白保留，因為 TPEx 的註記是定位字串，例如 '11    BC'）。
+    ⚠ 講的是**成交日的次一營業日**的信用交易狀況（O 停止融資／X 停止融券／@ 融資分配／% 融券分配／! 停止買賣；上櫃另有 * A B C D），
+    所以「D 這天能不能融資買進」要看 D 的前一個交易日那列；偏移由讀取端處理，這裡不翻譯、不移日。空字串＝官方那天沒有註記。"""
+    return str(x).replace("　", "").strip()
 
 
 def _code_ok(c: str) -> bool:
@@ -186,7 +197,8 @@ def margin_twse(d: date) -> pd.DataFrame | None:
             rows.append({"date": pd.Timestamp(d), "ticker": c, "market": "TW", "margin_balance": _n(r[6]),
                          "margin_buy": _n(r[2]), "margin_sell": _n(r[3]), "margin_redeem": _n(r[4]),
                          "short_balance": _n(r[12]), "short_buy": _n(r[8]), "short_sell": _n(r[9]),
-                         "short_redeem": _n(r[10]), "offset": _n(r[14])})
+                         "short_redeem": _n(r[10]), "offset": _n(r[14]),
+                         "margin_prev": _n(r[5]), "short_prev": _n(r[11]), "note": _note(r[15])})
     return pd.DataFrame(rows, columns=MARGIN_COLS)
 
 
@@ -213,7 +225,8 @@ def margin_tpex(d: date) -> pd.DataFrame | None:
             rows.append({"date": pd.Timestamp(d), "ticker": c, "market": "TWO", "margin_balance": _n(r[6]),
                          "margin_buy": _n(r[3]), "margin_sell": _n(r[4]), "margin_redeem": _n(r[5]),
                          "short_balance": _n(r[14]), "short_buy": _n(r[12]), "short_sell": _n(r[11]),
-                         "short_redeem": _n(r[13]), "offset": _n(r[18])})
+                         "short_redeem": _n(r[13]), "offset": _n(r[18]),
+                         "margin_prev": _n(r[2]), "short_prev": _n(r[10]), "note": _note(r[19])})
     return pd.DataFrame(rows, columns=MARGIN_COLS)
 
 
@@ -232,6 +245,8 @@ def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", 
     old = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=cols)
     # 「已有」＝ (市場, 日期)；休市日另記在 closed 檔，避免每次重打（也不會被當缺口）
     have = {(m, pd.Timestamp(d).date()) for m, d in zip(old["market"], old["date"])}
+    # 官方當日資料收盤後會更正（投信、融資券；實測 2026-10-05 投信 14 檔事後改過）→ 最近 REFRESH_DAYS 天不算「已有」，每次重抓覆蓋
+    have = {(m, d) for m, d in have if d <= end - timedelta(days=REFRESH_DAYS)}
     closed_f = SH / f"{dataset}{tag}_closed.csv"
     closed = set()
     if closed_f.exists():
@@ -243,6 +258,8 @@ def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", 
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     cal = _trading_calendar(tuple(fetchers))
     cal_max = max(cal) if cal else None
+    cal_any = _trading_calendar(("TW", "TWO"))          # 休市複本守門用：任一市場有實價即為交易日
+    cal_any_max = max(cal_any) if cal_any else None
     # 週六只在「官方實價日曆有該日」（＝補班日有交易）時才問；平日照舊
     todo = [(m, d) for d in days if (d.weekday() < 5 or (d.weekday() == 5 and cal is not None and d in cal))
             for m in fetchers if (m, d) not in have and (m, d) not in closed]
@@ -255,6 +272,10 @@ def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", 
         nonlocal old, new
         if new:
             allp = pd.concat([old] + new, ignore_index=True).drop_duplicates(["date", "ticker", "market"], keep="last")
+            if dataset == "margin" and len(fetchers) == 2:
+                # 每日排程（兩市場一起跑）不經 selfhost_merge：轉板當天兩邊報表都列同一檔 → 這裡也要去重（留當日實價所在市場）
+                from selfhost_merge import _drop_cross_market_dups
+                allp = _drop_cross_market_dups(allp)
             allp = allp.sort_values(["date", "market", "ticker"]).reset_index(drop=True)
             allp.to_parquet(path, index=False, compression="zstd")
             old, new = allp, []
@@ -276,6 +297,10 @@ def run(dataset: str, start: date, end: date, markets: tuple[str, ...] = ("TW", 
                 newly_closed.append((m, d.isoformat()))
             elif cal is not None and d in cal:
                 empties.append((m, d))              # 交易日卻沒資料：缺料或端點無此歷史，迴圈後再分辨
+        elif cal_any is not None and d <= cal_any_max and d not in cal_any:
+            # 兩市場實價都沒有的日子（颱風假等）= 休市；TPEx 融資券端點休市日會回前一日的複本，不能存
+            print(f"::warning::{dataset} {m} {d} 不在交易日曆但端點有資料（疑似休市複本），丟棄並記為休市", file=sys.stderr)
+            newly_closed.append((m, d.isoformat()))
         else:
             new.append(df)
         if i % 20 == 0:
