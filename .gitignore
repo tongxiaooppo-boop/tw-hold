@@ -25,3 +25,9 @@ data/derived/*.parquet
 
 # 自建上游資料：全歷史約百 MB 級，存 Release `selfhost-data`，不進 git（狀態小檔在 data/derived/）
 data/selfhost/
+
+# 私有參考資料（PCF 快照、總經／期貨／法人／指數序列）：來源網站條款禁止再散布，**不進公開 repo**。
+# 存私有 repo tw-hold-data 的 Release refdata-latest（見 reference/refdata.py、scripts/refdata_sync.py）；
+# CI 與 Streamlit app 執行期還原到這兩個目錄，本機開發照常讀寫。
+data/pcf/
+data/reference/

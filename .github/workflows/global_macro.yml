@@ -38,13 +38,13 @@ jobs:
       # 「刻意控依賴」），yfinance 只有這支 CI 腳本要，裝在這裡就好。
       - run: pip install pandas pyarrow yfinance
 
-      # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py）；雙寫階段：仍 commit，同時推私有 Release。
+      # 私有參考資料存私有 repo Release（見 reference/refdata.py），**不進公開 repo 的 git**。
+      # --strict：還原不完整就直接中止（累積型序列若從殘缺檔續寫再推上去，會把 Release 上的歷史蓋掉）。
       - name: 還原私有參考資料（ref）
-        continue-on-error: true
         env:
           DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
           DATA_REPO: ${{ vars.DATA_REPO }}
-        run: python scripts/refdata_sync.py pull --only ref
+        run: python scripts/refdata_sync.py pull --only ref --strict
 
       - name: 抓國際指數/個股/總經指標
         run: python scripts/fetch_global_macro.py
@@ -67,46 +67,11 @@ jobs:
         continue-on-error: true
         run: python scripts/fetch_inst_flow.py
 
-      - name: 推到私有 Release（雙寫階段）
-        continue-on-error: true
+      - name: 推到私有 Release
         env:
           DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
           DATA_REPO: ${{ vars.DATA_REPO }}
         run: python scripts/refdata_sync.py push data/reference/global_macro.parquet data/reference/global_macro_meta.json data/reference/tx_futures.parquet data/reference/tx_futures_meta.json data/reference/foreign_futures.parquet data/reference/inst_flow.parquet
-
-      - name: commit data/reference/global_macro.parquet
-        run: |
-          git config user.name  "tw-hold-bot"
-          git config user.email "noreply@github.com"
-          git add data/reference/global_macro.parquet data/reference/global_macro_meta.json \
-                  data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                  data/reference/foreign_futures.parquet data/reference/inst_flow.parquet
-          git diff --cached --quiet -- data/reference/global_macro.parquet data/reference/global_macro_meta.json \
-                  data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                  data/reference/foreign_futures.parquet data/reference/inst_flow.parquet && {
-            echo "無實質變更——跳過 commit"; exit 0; }
-          git commit -m "國際總經快照 $(date -u +%F)"
-          # 跟 rebuild.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕一次
-          # 觸發兩條時常常撞在一起。2026-09-22 Opus 審過：原本迴圈跑完最後一步若
-          # 剛好是成功的 pull（push 其實沒成功），exit code 會是 0——靜默掉資料，
-          # 改用 $pushed 旗標明確判斷；衝突時這批產出檔取自己這輪的版本
-          # （rebase 中 HEAD 是目標分支、這裡的新 commit 才是 --theirs）。
-          pushed=0
-          for i in 1 2 3 4 5; do
-            if git push; then pushed=1; break; fi
-            echo "push 被拒（第 $i 次），rebase 後重試"
-            sleep $(( (RANDOM % 5) + i * 3 ))
-            if ! git pull --rebase origin main; then
-              git checkout --theirs -- data/reference/global_macro.parquet \
-                data/reference/global_macro_meta.json data/reference/tx_futures.parquet \
-                data/reference/tx_futures_meta.json data/reference/foreign_futures.parquet data/reference/inst_flow.parquet 2>/dev/null || true
-              git add -A data/reference/global_macro.parquet data/reference/global_macro_meta.json \
-                data/reference/tx_futures.parquet data/reference/tx_futures_meta.json \
-                data/reference/foreign_futures.parquet data/reference/inst_flow.parquet 2>/dev/null || true
-              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
-            fi
-          done
-          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }
 
       # 部分過期（某幾檔比同批其他檔舊超過 3 天，見 fetch_global_macro.py::_check_staleness）
       # 不擋 commit——資料照樣是「這批抓到最新的」，只是有落後的幾檔，先讓 app 有得用。
