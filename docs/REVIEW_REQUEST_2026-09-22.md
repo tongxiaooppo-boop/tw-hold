@@ -87,7 +87,7 @@
 ## 4. 我特別想要你挑戰的點（這才是重點，不要只覆核我列的清單）
 
 1. **手動重整按鈕的存取控制**：這個 Streamlit app 目前是公開連結
-   （`tw-hold-jchm8ooiwp7ewqisfzmpoo.streamlit.app`，使用者說過要讓朋友測），
+   （`（app 網址不公開，見 Streamlit 後台）`，使用者說過要讓朋友測），
    而按鈕本身**沒有任何身份驗證**——`_macro_refresh_button()` 只要
    `st.secrets["GH_DISPATCH_PAT"]` 存在就顯示按鈕，任何拿到連結的人都能按。
    冷卻機制是 `st.session_state["_macro_refresh_cooldown"]`（60 秒），但
