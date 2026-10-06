@@ -12,6 +12,20 @@
 
 **除非現有上游（tw-stock-scanner 的 data_pack）掛了，否則持續用上游；自建只用來驗證上游的資料對不對、並在上游真的掛掉時當備援。** 所以：不接任何下游、不做「切主來源」；每週收集一次（見下）；上游異常的判準＝`selfhost_recon.py` 對帳（相符率掉、出現新接縫）或 tw-swing 的 `--require-fresh` 告警（上游超過 30 小時沒發佈）。真的要切時才需要寫轉接層（把自建資料轉成 data_pack 同 schema），並先出「訂正前後影響報告」。
 
+## 週更後發現「現有上游資料有問題」的處理流程（2026-10-06 定稿）
+
+自建只當證據，**不自動覆蓋任何上游資料**。每週收集完（當週最後交易日的隔天）依序：
+1. **對帳**：`python scripts/selfhost_recon.py`（自建還原價 vs 上游，近 250 日）＋ `selfhost_seam_check.py`（偵測還原接縫）＋ `selfhost_ledger.py`（事件簿 flag）。看相符率有沒有掉、有沒有「新」的接縫或單日異常（對照上次的 `data/derived/selfhost_recon.json`）。
+2. **確認誰錯**：自建的未還原價來自官方，但仍要用第二來源核（FinMind、`books/new-book6/tw-stock-data-main`）；三方一致才當成上游錯。官方偶爾事後更正，也可能是我們自己抓錯。
+3. **量影響**：哪些股票、哪些日期、在近 250 日內還是舊歷史；會不會改變清單／規則（tw-swing 的規則吃還原價與籌碼；tw-hold 清單吃財報與價格）。用 ledger 的 flag 與對帳明細數。
+4. **分級處理**（由輕到重，使用者決定）：
+   - ① **只記錄**：寫進交接檔／`known_data_issues.yaml`（tw-swing，附裁決日與理由），不改資料。單檔、舊歷史、不影響規則的多半停在這一級。
+   - ② **局部補丁**：個別股票用現有手動機制修（tw-hold `reference/corporate_actions.py` 的 `_MANUAL`／`IGNORE_JUMPS`、`resolve_splits.py`；tw-swing 的 `known_data_issues.yaml`、FinMind 補日）。
+   - ③ **整批訂正**（接縫 1,576 件那類）：用官方因子做訂正層。**必須先出「訂正前後影響報告」、Opus 審、使用者同意**，tw-hold 先、tw-swing 後；訂正跡要記（`seam_fix_log.json`）。
+   - ④ **上游停更或大面積壞掉**：才考慮切到自建（需先寫轉接層，產出與 data_pack 同 schema 的 prices_adj／chips／margin）。判準：tw-swing 的 `--require-fresh` 紅燈（上游超過 30 小時沒發佈）、或對帳相符率大幅下滑。
+5. 必要時向上游回報（他們的 repo issue），非必須。
+6. 不要為了讓對帳變綠就直接改 known_issues；沒有裁決的抑制比沒有偵測器更糟（tw-swing 既有原則）。
+
 ## ⭐⭐ 2026-10-06 晚最新（取代下面「明天第一件事」中關於每天三班的描述）：自建收集改「每週一次，當週最後交易日」
 
 使用者決定：自建上游**每週處理一次，當週最後交易日下載**；驗證縮為 5 個交易日；平時仍以現有上游為主、自建當備援。實作：`selfhost_collect.yml` 只留台北 23:59 一個 cron（每個平日觸發），第一步 `scripts/last_trading_day_guard.py` 判斷是不是當週最後交易日（用證交所 OpenAPI 休市表；抓不到就 fail-open 照跑；手動觸發一律跑），不是就整條跳過。**本週 10-09（週五）是國慶補假，當週最後交易日是 10-08（週四）。**
