@@ -27,6 +27,10 @@ for _p in (str(REPO), str(REPO / "app")):
 
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
 
+ATTRIBUTION = (
+    "資料來源：部分資料取自臺灣證券交易所、財團法人中華民國證券櫃檯買賣中心、臺灣集中保管結算所之政府資料開放平臺資料（政府資料開放授權條款－第 1 版）；期貨資料取自臺灣期貨交易所（提供機關：金融監督管理委員會證券期貨局，同條款）；其餘來自 FinMind、Yahoo Finance 與各投信官網公開資訊。畫面上的清單與分數為本系統自行計算之衍生結果。"
+)
+
 DISCLAIMER = (
     "**這不是投資建議。** 只給候選標的與判斷依據，**買賣由你決定**；數字可能有誤或過期，"
     "verdict／買價是規則算出來的，不是預測。真金下單前自己再查一次。"
@@ -3204,6 +3208,7 @@ def main() -> None:
         _macro_compass_page()
 
     st.divider()
+    st.caption(ATTRIBUTION)
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 
