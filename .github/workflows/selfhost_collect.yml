@@ -68,7 +68,7 @@ jobs:
             # Release 上實際有哪些檔：有列出卻下載失敗 ＝ 錯（重試 3 次仍失敗就中止），不可當成「尚無舊版」
             # （否則閘門沒有基準可比、會放行一份只有 14 天的小檔去覆蓋整份歷史）
             gh release view selfhost-data --json assets --jq '.assets[].name' > data/selfhost/_assets.txt
-            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl; do
+            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
               if grep -qx "$f" data/selfhost/_assets.txt; then
                 ok=0
                 for try in 1 2 3; do
@@ -132,6 +132,13 @@ jobs:
             python scripts/selfhost_events.py --finmind-reduction --max-calls 150 --no-wait --build
           fi
 
+      # 除權除息預告表（TWT48U，只有未來、沒有歷史）每週存一份快照：量測各類事件實際預告提前多久、預掛下一週還原參數用。
+      # 累積檔只增不減（腳本內有斷言）；每週 1 次官方請求，不增加頻率。不進閘門。
+      - name: 除權除息預告表快照
+        if: steps.guard.outputs.run == 'true'
+        continue-on-error: true
+        run: python scripts/selfhost_forecast_snapshot.py
+
       - name: 閘門（不比舊版差才放行）
         if: steps.guard.outputs.run == 'true'
         id: gate
@@ -140,7 +147,7 @@ jobs:
       - name: 上傳 Release（僅閘門通過）
         if: (steps.gate.outcome == 'success') && steps.guard.outputs.run == 'true'
         run: |
-          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl; do
+          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
           done
           # 週五另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
