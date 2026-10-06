@@ -72,6 +72,7 @@ def test_effective_date_late_schedule_counts_as_previous_day():
     # 2026-10-06 實測：23:59 那班延遲到 10-07 04:47 才觸發，要算 10-06
     assert g.effective_date(datetime(2026, 10, 7, 4, 47)) == date(2026, 10, 6)
     assert g.effective_date(datetime(2026, 10, 7, 7, 59)) == date(2026, 10, 7 - 1)
+    assert g.effective_date(datetime(2026, 10, 7, 9, 30)) == date(2026, 10, 6)        # 延遲 9.5 小時（本 repo 實測最長約 8.8）
     assert g.effective_date(datetime(2026, 10, 7, 23, 59)) == date(2026, 10, 7)       # 準時
     assert g.effective_date(datetime(2026, 10, 7, 4, 47), "workflow_dispatch") == date(2026, 10, 7)
 
