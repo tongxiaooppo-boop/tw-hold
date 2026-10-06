@@ -38,6 +38,14 @@ jobs:
       # 「刻意控依賴」），yfinance 只有這支 CI 腳本要，裝在這裡就好。
       - run: pip install pandas pyarrow yfinance
 
+      # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py）；雙寫階段：仍 commit，同時推私有 Release。
+      - name: 還原私有參考資料（ref）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only ref
+
       - name: 抓國際指數/個股/總經指標
         run: python scripts/fetch_global_macro.py
 
@@ -58,6 +66,13 @@ jobs:
       - name: 三大法人買賣超
         continue-on-error: true
         run: python scripts/fetch_inst_flow.py
+
+      - name: 推到私有 Release（雙寫階段）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py push data/reference/global_macro.parquet data/reference/global_macro_meta.json data/reference/tx_futures.parquet data/reference/tx_futures_meta.json data/reference/foreign_futures.parquet data/reference/inst_flow.parquet
 
       - name: commit data/reference/global_macro.parquet
         run: |

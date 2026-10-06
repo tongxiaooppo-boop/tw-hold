@@ -3173,8 +3173,28 @@ def _route() -> None:
         del st.query_params["code"]
 
 
+@st.cache_resource(ttl=1800, show_spinner=False)
+def _ensure_refdata() -> dict:
+    """私有參考資料（PCF 快照、總經序列）不在公開 repo——有唯讀 token（secrets 的 DATA_READ_PAT）就從私有 Release 還原到 data/，
+    每 30 分鐘重拉一次；沒 token 就不動作（本機開發照讀 data/）。見 reference/refdata.py。"""
+    from reference import refdata
+    try:
+        return refdata.pull()
+    except Exception as e:      # noqa: BLE001  拉不到不擋 app：讀檔端對缺檔本來就要容錯
+        return {"_error": str(e)[:200]}
+
+
+def _refdata_banner(res: dict) -> None:
+    ref_ok = (REPO / "data" / "reference" / "global_macro.parquet").exists()
+    if res.get("_error"):
+        st.warning(f"私有參考資料還原失敗：{res['_error']}（總經導航與主動式 ETF 的部分卡片可能顯示舊資料或缺資料）")
+    elif not ref_ok:
+        st.warning("私有參考資料尚未設定（secrets 的 `DATA_READ_PAT`）——總經導航與主動式 ETF 的部分卡片暫時沒有資料。")
+
+
 def main() -> None:
     st.set_page_config(page_title=APP_NAME, page_icon="📡", layout="wide")
+    _refdata_banner(_ensure_refdata())
     _route()
     goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
     if goto in NAV:

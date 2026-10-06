@@ -33,6 +33,14 @@ jobs:
 
       - run: pip install pandas pyarrow
 
+      # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py）；雙寫階段：仍 commit，同時推私有 Release。
+      - name: 還原私有參考資料（ref）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only ref
+
       # 任一支掛掉不該擋另一支（continue-on-error），commit 步驟只在有實質變更時才 commit。
       - name: 外資台指期未平倉
         continue-on-error: true
@@ -41,6 +49,13 @@ jobs:
       - name: 三大法人買賣超
         continue-on-error: true
         run: python scripts/fetch_inst_flow.py
+
+      - name: 推到私有 Release（雙寫階段）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py push data/reference/foreign_futures.parquet data/reference/inst_flow.parquet
 
       - name: commit 籌碼流向小檔
         run: |
