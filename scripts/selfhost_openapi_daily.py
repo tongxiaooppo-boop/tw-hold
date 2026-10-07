@@ -31,7 +31,7 @@
 上市 `TWT48U_ALL`、上櫃 `tpex_exright_prepost` 兩份除權除息預告表，每次執行抓一次（同市場至少間隔 3 小時），存 `openapi_forecast.jsonl`；
 內容與上一份相同只記抓取時間（same_as）。預告表只有未來事件、沒有歷史，用來事後比對「預告值 vs 官方結果表」，並備好當天事件的還原因子。
 
-輸出（`data/selfhost/`）：`openapi_prices.parquet`、`openapi_margin.parquet`、`openapi_forecast.jsonl`、`openapi_fetch_log.jsonl`。
+輸出（`data/selfhost/`）：`openapi_prices.parquet`、`openapi_margin.parquet`、`openapi_inst.parquet`（三大法人，網站端點帶日期，台北 18:00 起）、`openapi_forecast.jsonl`、`openapi_fetch_log.jsonl`。
 """
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ PRICES = SH / "openapi_prices.parquet"
 MARGIN = SH / "openapi_margin.parquet"
 LOG = SH / "openapi_fetch_log.jsonl"
 FORECAST = SH / "openapi_forecast.jsonl"
+INST = SH / "openapi_inst.parquet"
 UA = {"User-Agent": "Mozilla/5.0"}
 TWSE_DAY = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 TPEX_DAY = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
@@ -60,16 +61,21 @@ TPEX_FORECAST = "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"       
 FORECAST_MIN_GAP_HOURS = 3     # 同一市場兩次抓取至少間隔這麼久（官方請求要節制）
 TZ = ZoneInfo("Asia/Taipei")
 MAX_AGE_DAYS = 7           # 超過只印註記
-MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300, "twse_margin": 300}
+MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300, "twse_margin": 300, "twse_inst": 500, "tpex_inst": 300}
 SHRINK_RATIO = 0.9
 SRC_TPEX_DC = "openapi_dc"   # 上櫃改用 daily_close_quotes 後的標記；舊端點（src=openapi）存下的同一天量額偏低，要能被它覆蓋
 SRC_WEB_MARGN = "web_mi_margn"
 MARGN_TODAY_AFTER_HOUR = 22     # 上市融資約台北 21:00～22:00 才公布：白天到 22:00 前整段不打（今天、前一天都不打）；實測輪詢後再調
+INST_FROM_HOUR = 18            # 三大法人約台北 16:15～17:00 才齊（使用者設定 18:00 起）；之前不請求
+INST_QUIET_FROM_HOUR = 8        # 隔日清晨班（04:00）補前一晚漏的；08:00～18:00 不請求
+INST_MAX_MISMATCH = 0.02        # 法人合計恆等式（外資＋外資自營＋投信＋自營＝合計）不符比例超過這個就不存（多半是欄位錯位）
 MARGN_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:00）仍收，用來補前一晚漏的與官方隔日調帳；08:00～22:00 之間一律不打
 SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
 GAP_WINDOW_DAYS = 14
 
-PRICE_COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg", "src", "last_modified", "fetched_at"]
+PRICE_COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg", "next_ref", "next_limit_up", "next_limit_down",
+              "src", "last_modified", "fetched_at"]   # next_*：上櫃 daily_close_quotes 的官方次日參考價／漲跌停（上市沒有＝NaN）；除權息前一晚可直接拿到官方因子
+INST_OA_COLS = ["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net", "src", "fetched_at"]
 MARGIN_COLS = ["ticker", "market", "date", "margin_prev", "margin_buy", "margin_sell", "margin_redeem", "margin_balance",
                "short_prev", "short_buy", "short_sell", "short_redeem", "short_balance", "offset", "note",
                "src", "last_modified", "fetched_at"]
@@ -120,9 +126,11 @@ def parse_prices(rows: list[dict], market: str, d: date, lm, fetched) -> pd.Data
         if market == "TW":
             code, o, h, l, c = r.get("Code"), r.get("OpeningPrice"), r.get("HighestPrice"), r.get("LowestPrice"), r.get("ClosingPrice")
             vol, val, chg = r.get("TradeVolume"), r.get("TradeValue"), r.get("Change")
+            nxt = (None, None, None)
         else:
             code, o, h, l, c = r.get("SecuritiesCompanyCode"), r.get("Open"), r.get("High"), r.get("Low"), r.get("Close")
             vol, val, chg = r.get("TradingShares"), r.get("TransactionAmount"), r.get("Change")
+            nxt = (r.get("NextReferencePrice"), r.get("NextLimitUp"), r.get("NextLimitDown"))
         code = str(code or "").strip()
         close = _num(c)
         if not (code.isdigit() and len(code) == 4) or close is None or close <= 0:     # 與 raw_prices 同規則：4 碼、有成交價
@@ -130,8 +138,10 @@ def parse_prices(rows: list[dict], market: str, d: date, lm, fetched) -> pd.Data
         out.append({"ticker": code, "market": market, "date": pd.Timestamp(d),
                     "open": _num(o) or close, "high": _num(h) or close, "low": _num(l) or close, "close": close,
                     "volume": _num(vol) or 0.0, "value": _num(val) or 0.0, "chg": _num(chg),
+                    "next_ref": _num(nxt[0]), "next_limit_up": _num(nxt[1]), "next_limit_down": _num(nxt[2]),
                     "src": "openapi" if market == "TW" else SRC_TPEX_DC, "last_modified": lm, "fetched_at": fetched})
-    return pd.DataFrame(out, columns=PRICE_COLS)
+    df = pd.DataFrame(out, columns=PRICE_COLS)
+    return df.astype({"next_ref": float, "next_limit_up": float, "next_limit_down": float})   # 全是 None 時也要 float，否則 parquet 會存成 null 型別
 
 
 def parse_margin(rows: list[dict], market: str, d: date, lm, fetched) -> pd.DataFrame:
@@ -381,6 +391,71 @@ def collect_forecasts(fetched: pd.Timestamp, recs: list[dict]) -> tuple[list[dic
     return recs, changed
 
 
+def inst_candidates(today: date, hour: int) -> list[date]:
+    """三大法人要試的日期：台北 18:00 之後試今天；隔日清晨班（hour < 8）補前一個平日；08:00～18:00 不請求。週末不試。"""
+    if INST_QUIET_FROM_HOUR <= hour < INST_FROM_HOUR:
+        return []
+    out = []
+    if hour >= INST_FROM_HOUR and today.weekday() < 5:
+        out.append(today)
+    if hour < INST_QUIET_FROM_HOUR:
+        d = today - timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+        out.append(d)
+    return out
+
+
+def inst_mismatch(df: pd.DataFrame) -> float:
+    """法人合計恆等式不符比例：外資＋外資自營＋投信＋自營 ＝ 三大法人合計（2026-10-05 實測上市 1,088／上櫃 795 檔全部吻合）。"""
+    x = df.dropna(subset=["total_net"])
+    if x.empty:
+        return 1.0
+    s = x[["foreign_net", "fi_prop_net", "trust_net", "dealer_net"]].fillna(0).sum(axis=1)
+    return float(((s - x["total_net"]).abs() >= 1).mean())
+
+
+def collect_inst(today: date, fetched, table: pd.DataFrame, hour: int = 24) -> tuple[pd.DataFrame, bool]:
+    """每日三大法人（上市 T86、上櫃 insti/dailyTrade，都是網站端點、帶日期、回應回傳自己的日期；OpenAPI 沒有可用的）。
+    取到就停：已存的 (市場, 日) 不再請求；沒資料＝尚未公布，只記 log；失敗只警告（網站端點補得回來）；
+    恆等式不符超過 INST_MAX_MISMATCH 或列數不足 → 不存。重用 selfhost_chips 的解析（欄名辨識、日期斷言）。"""
+    cands = inst_candidates(today, hour)
+    if not cands:
+        return table, False
+    if str(Path(__file__).parent) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).parent))
+    import selfhost_chips as sc  # noqa: PLC0415
+    changed = False
+    have = {(m, x.date()) for m, x in zip(table["market"], table["date"])} if len(table) else set()
+    for d in cands:
+        for market, fn, name, src in (("TW", sc.inst_twse, "twse_inst", "web_t86"), ("TWO", sc.inst_tpex, "tpex_inst", "web_tpex_insti")):
+            if (market, d) in have:
+                continue
+            entry = {"fetched_at": str(fetched), "endpoint": name, "data_date": str(d)}
+            df = fn(d)
+            if df is None:
+                entry["result"] = "失敗（連線／日期不符／欄位改版）"
+                print(f"::warning::三大法人 {name} {d} 失敗（連線、回應日期不符或欄位改版），不存", file=sys.stderr)
+            elif df.empty:
+                entry["result"] = "尚未公布（沒有資料）"
+                print(f"[openapi] {name}：{d} 尚未公布或休市")
+            elif len(df) < MIN_ROWS[name]:
+                entry["result"] = f"失敗：只有 {len(df)} 列（下限 {MIN_ROWS[name]}），不存"
+                print(f"::warning::三大法人 {name} {d} 只有 {len(df)} 列（下限 {MIN_ROWS[name]}）——殘缺？不存", file=sys.stderr)
+            elif (mm := inst_mismatch(df)) > INST_MAX_MISMATCH:
+                entry["result"] = f"失敗：合計恆等式不符 {mm:.1%}，不存"
+                print(f"::warning::三大法人 {name} {d} 合計恆等式不符 {mm:.1%}（欄位錯位？），不存", file=sys.stderr)
+            else:
+                new = df[["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net"]].copy()
+                new["src"], new["fetched_at"] = src, fetched
+                table = (pd.concat([table, new], ignore_index=True) if len(table) else new).sort_values(["date", "market", "ticker"]).reset_index(drop=True)[INST_OA_COLS]
+                changed = True
+                entry["rows"], entry["result"] = len(new), f"added {len(new)} 列（恆等式不符 {mm:.2%}）"
+                print(f"[openapi] {name}：資料日 {d}、{len(new)} 列、added（恆等式不符 {mm:.2%}）")
+            _log(entry)
+    return table, changed
+
+
 def main() -> int:
     now = datetime.now(TZ)
     today, fetched = now.date(), pd.Timestamp(now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None))
@@ -427,6 +502,18 @@ def main() -> int:
         changed = changed or c2
     except Exception as e:      # noqa: BLE001  上市融資失敗不拖垮 OpenAPI 三個端點
         print(f"::warning::上市融資 MI_MARGN 收集例外：{str(e)[:120]}", file=sys.stderr)
+    inst_changed = False
+    inst_t = _read(INST, INST_OA_COLS)
+    try:
+        if os.environ.get("INST_DISABLED"):
+            print("::warning::三大法人收集已停用（Release 缺 openapi_inst.parquet 但 fetch log 有寫入記錄）——其他端點照跑，請人工處理", file=sys.stderr)
+        else:
+            inst_t, inst_changed = collect_inst(today, fetched, inst_t, now.hour)
+        if inst_changed:
+            SH.mkdir(parents=True, exist_ok=True)
+            _atomic_parquet(inst_t, INST)
+    except Exception as e:      # noqa: BLE001  法人失敗不拖垮其他端點（網站端點帶日期，補得回來）
+        print(f"::warning::三大法人收集例外：{str(e)[:120]}", file=sys.stderr)
     forecast_changed = False
     try:
         recs, forecast_changed = collect_forecasts(fetched, _load_forecast())
@@ -445,13 +532,16 @@ def main() -> int:
         with open(out, "a", encoding="utf-8") as f:
             f.write(f"changed={'true' if changed else 'false'}\n")
             f.write(f"forecast_changed={'true' if forecast_changed else 'false'}\n")
+            f.write(f"inst_changed={'true' if inst_changed else 'false'}\n")
     try:
         sys.path.insert(0, str(Path(__file__).parent))
         import last_trading_day_guard as g  # noqa: PLC0415
         closed = g.fetch_closed()
     except Exception:       # noqa: BLE001
         closed = None
-    for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO"), ("上市融資券", MARGIN, "TW")):
+    tables[INST] = inst_t
+    for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO"), ("上市融資券", MARGIN, "TW"),
+                           ("上市三大法人", INST, "TW"), ("上櫃三大法人", INST, "TWO")):
         t = tables[path]
         t = t[t["market"] == mk] if len(t) else t
         if not len(t):                      # 累積檔還是空的（首日、端點整個失敗）→ 不查，免得報出假缺口
