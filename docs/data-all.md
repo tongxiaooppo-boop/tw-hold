@@ -68,13 +68,14 @@
 
 *只列「新增功能」；修 bug 不列（例：reference/chips_guard.py 的上櫃自營補位、tw-swing chips.py 補位、drop_future）。*
 
-### tw-hold（17 項）
+### tw-hold（19 項）
 
 | 檔案 | 類型 | 抓什麼／做什麼 | 輸出 | 排程 | 狀態 |
 | :-- | :-: | :-- | :-- | :-- | :-: |
 | `scripts/selfhost_raw_prices.py` | 抓取 | TWSE MI_INDEX／TPEx dailyQuotes 官方未還原日線依日期收集（每個回應斷言自己的日期）。10-06 增補：官方漲跌價差 chg、無成交旁表 notrade、漲跌標記旁表 refmark | data/selfhost/raw_prices、notrade、refmark.parquet | selfhost_collect.yml 每週當週最後交易日台北 23:59 | 已上線（排程自動跑） |
 | `scripts/selfhost_chips.py` | 抓取 | 三大法人（T86／TPEx insti）＋融資融券（MI_MARGN／TPEx margin）個股，依欄名／欄數解析。10-06 增補：前日餘額 margin_prev／short_prev、備註 note | data/selfhost/inst、margin.parquet | 同上 | 已上線（排程自動跑） |
 | `scripts/selfhost_stophalt.py` | 抓取 | TWSE violation/stop 停止買賣中每日快照（無歷史，從 10-06 起累積） | data/selfhost/stophalt.parquet | 同上 | 已上線（排程自動跑） |
+| `scripts/selfhost_openapi_daily.py` | 抓取 | 官方 OpenAPI 每日收集（10-07 上線，只存不用）：上市日線 `STOCK_DAY_ALL`、上櫃日線 `tpex_mainboard_daily_close_quotes`（與網站量額價全同；舊端點量額偏低已棄用）、上櫃融資 `tpex_mainboard_margin_balance`；上市融資 MI_MARGN 走網站端點帶日期（台北 08:00～22:00 不請求，隔日 04:00 再打吸收官方調帳）。每列 Date 必須一致且非未來；列數下限；Last-Modified 較新才整天覆蓋、縮水 <90% 不覆蓋；src 單向升級；每次請求記 fetch log；缺交易日偵測 | openapi_prices.parquet、openapi_margin.parquet、openapi_fetch_log.jsonl（Release openapi-daily） | openapi_daily.yml 平日 5 班 | 已上線（排程自動跑） |
 | `scripts/selfhost_events.py` | 抓取 | 官方除權息 TWT49U／exDailyQ、減資 TWTAUU／revivt、面額變更 TWTB8U／pvChgRslt；FinMind 分割／減資為交叉驗證。增補：官方用語欄位（event、reason、open_base、div_ref、漲跌停價）、官方回應 notes 原文保存 | data/selfhost/corp_actions.parquet、ev_official_meta.jsonl | selfhost_collect.yml | 已上線（排程自動跑） |
 | `scripts/selfhost_twse_ca_detail.py` | 抓取 | TWSE TWT49UDetail 逐件抓現金增資明細（認購價、現增股數、原股東認購）；驗證官方參考價 A 公式，503 件中 99.6% 相符 | data/selfhost/ev_twse_ca_detail.parquet | 手動（可續跑） | 已 push・手動執行（未入排程） |
 | `scripts/selfhost_xsrc.py` | 抓取 | FinMind、Yahoo 平行回補，只做交叉驗證與缺口備援，不覆蓋官方資料 | data/selfhost/xsrc/ | 手動 | 已 push・手動執行（未入排程） |
@@ -85,8 +86,9 @@
 | `scripts/selfhost_recon.py` | 運算 | P3 對帳：自建還原價 vs 上游 data_pack，近 250 交易日；1,762／1,969 檔相符 | recon_detail.csv、data/derived/selfhost_recon.json | 手動；2026-10-12 起每日 | 已 push・手動執行（未入排程） |
 | `scripts/selfhost_ledger.py` | 運算 | 每檔事件簿：事件、缺日、停牌、價格跳動 flag、官方漲跌標記對帳 | ledger.parquet、data/derived/selfhost_ledger_summary.json | 手動 | 已 push・手動執行（未入排程） |
 | `scripts/selfhost_monthly_review.py` | 運算 | 月初完整性檢查＋官方事件對帳，產可貼給 AI 查證的 Markdown | data/derived/selfhost_monthly_review_*.md | 月初手動 | 已 push・手動執行（未入排程） |
-| `tests/test_selfhost.py ＋ test_twse_ca_detail.py` | 守門 | 自建上游的單元測試（348 passed） | — | pytest | 已 push・手動執行（未入排程） |
+| `tests/test_selfhost.py ＋ test_twse_ca_detail.py` | 守門 | 自建上游的單元測試（348 passed）；10-07 起加 `tests/test_selfhost_openapi_daily.py`（24 個）；tw-hold 全套 428 passed | — | pytest | 已 push・手動執行（未入排程） |
 | `.github/workflows/selfhost_collect.yml` | 排程 | 每週一次收集（守門判斷當週最後交易日 → raw_prices → chips → stophalt → events → gate → 上傳 Release selfhost-data） | Release selfhost-data | 每週一次（當週最後交易日台北 23:59；2026-10-06 起；資料存私有 repo Release） | 已上線（排程自動跑） |
+| `.github/workflows/openapi_daily.yml` | 排程 | 每個平日 5 班（UTC 08／10／12／15／20 ＝ 台北 16／18／20／23／隔日 04，不含 GitHub 延遲；實測延遲 2～9 小時）：下載累積檔 → 收集 → 上傳；有 fetch log 卻缺 parquet 則中止；parquet 只在有變更時重傳。班次預計依 10-07 官方公布時間量測結果重排 | Release openapi-daily（私有 repo） | 平日 16:00／18:00／20:00／23:00／04:00（台北） | 已上線（排程自動跑） |
 | `reference/refdata.py ＋ scripts/refdata_sync.py` | 運算 | 私有參考資料（PCF 快照、總經／期貨／法人／指數序列）的存取：pull／push 私有 repo tw-hold-data 的 Release refdata-latest；先傳暫名再改名、預期清單、不倒退閘門（防殘缺目錄蓋掉歷史） | 私有 Release refdata-latest（14 個資產） | rebuild／global_macro／chip_flow_evening／pcf_retry／heartbeat 與 Streamlit app | 已上線（排程自動跑） |
 | `.github/workflows/check_secrets.yml` | 守門 | 手動：量 FINMIND_TOKEN 長度與結尾字元，並用未處理的原值打 FinMind（secret 貼上常帶結尾換行） | log | 手動 | 已上線（排程自動跑） |
 
