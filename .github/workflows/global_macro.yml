@@ -1,7 +1,7 @@
 name: 國際總經快照
 
 # 獨立於 rebuild.yml——那條是台股 bundle 觸發（台北午後），美股都還沒開盤。
-# 這條排 UTC 22:00（美東 4pm 收盤最晚 21:00 UTC，留 1 小時緩衝）＝台北隔天 06:00。
+# 這條排 UTC 22:37（美東 4pm 收盤最晚 21:00 UTC，留 1 小時緩衝）＝台北隔天 06:37。
 # 日經/恆生/KOSPI 台北時間下午就收了，資料早就到齊，跟著美股排程一起拉即可，
 # 不用另外排更早的時間。
 #
@@ -50,7 +50,7 @@ jobs:
         run: python scripts/fetch_global_macro.py
 
       # 台指期近月日盤/夜盤——TAIFEX OpenAPI 免key，跟這條排程同一個時間點最合適
-      # （夜盤 05:00 收，這條 06:00 跑）。continue-on-error：TAIFEX 偶爾不給資料
+      # （夜盤 05:00 收，這條 06:37 跑）。continue-on-error：TAIFEX 偶爾不給資料
       # 不該擋掉上面美股/國際指數那筆真正的每日快照。
       - name: 台指期近月日盤/夜盤
         continue-on-error: true

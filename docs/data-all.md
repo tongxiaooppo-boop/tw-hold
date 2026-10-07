@@ -24,7 +24,7 @@
 
 | 檔案 | 類型 | 抓什麼／做什麼 | 輸出 | 排程 | 狀態 |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| `scripts/update_data.py ＋ import_data_pack.py` | 抓取 | 他人 repo（tw-stock-scanner）的 data_pack.zip：日線 2015 起全量重匯（冪等）；L1 偵測母表落後並告警；串起 import_chips → apply_chips_baseline | data/store 日線母表 parquet | daily.yml 台北 21:00／01:00／05:30 | 已上線（排程自動跑） |
+| `scripts/update_data.py ＋ import_data_pack.py` | 抓取 | 他人 repo（tw-stock-scanner）的 data_pack.zip：日線 2015 起全量重匯（冪等）；L1 偵測母表落後並告警；串起 import_chips → apply_chips_baseline | data/store 日線母表 parquet | daily.yml 台北 21:07／01:07／05:32 | 已上線（排程自動跑） |
 | `scripts/import_chips.py` | 抓取 | data_pack 內的三大法人、融資券、股票清單 → 籌碼母表 | data/store 籌碼母表 | 隨 update_data | 已上線（排程自動跑） |
 | `scripts/apply_chips_baseline.py ＋ pack_chips_baseline.py` | 運算 | 把 FinMind 修好的籌碼歷史底稿（cutoff 以前）疊回重匯後的母表；底稿放 GitHub Release | 籌碼母表（歷史段） | 隨 update_data | 已上線（排程自動跑） |
 | `scripts/merge_finmind.py ＋ verify_chips_twse.py ＋ audit_chips.py` | 守門 | FinMind 整段取代籌碼歷史（預設只對帳）；TWSE 官方當第三來源抽驗；母表完整性稽核（缺日、複本、空值） | 稽核報告 | audit_chips 隨 daily | 已上線（排程自動跑） |
@@ -33,10 +33,10 @@
 | `scripts/fetch_watchlist.py ＋ src/twswing/data/watchlist.py` | 抓取 | TWSE／TPEx 處置股、注意股清單（無歷史，每天不抓即永久缺） | data/watchlist 每日快照 | daily.yml | 已上線（排程自動跑） |
 | `scripts/fetch_revenue.py ＋ append_revenue_history.py ＋ build_revenue_history.py` | 抓取 | OpenAPI 月營收（只回最新一期）每日快照 → 併回版控的 revenue_history.parquet | data/revenue 快照、fundamentals/revenue_history.parquet | daily（快照）、週六（併檔） | 已上線（排程自動跑） |
 | `scripts/fetch_valuation.py ＋ build_per_parquet.py` | 抓取 | TWSE／TPEx 每日 PER／PBR／殖利率增量 | data/valuation 快照、fundamentals/per.parquet | publish_bundle.yml | 已上線（排程自動跑） |
-| `scripts/fetch_fundamentals.py` | 抓取 | FinMind 財報三表、股利、產業；每週限速跑一批累積成整併檔 | fundamentals/income、balance、cashflow、dividend、industry.parquet | fundamentals.yml 週六台北 10:00 | 已上線（排程自動跑） |
+| `scripts/fetch_fundamentals.py` | 抓取 | FinMind 財報三表、股利、產業；每週限速跑一批累積成整併檔 | fundamentals/income、balance、cashflow、dividend、industry.parquet | fundamentals.yml 週六台北 10:07 | 已上線（排程自動跑） |
 | `scripts/append_tdcc_history.py ＋ src/twswing/data/tdcc.py` | 抓取 | TDCC 集保股權分散表（只回最新一週，漏一週永久缺） | data/tdcc 週快照 | fundamentals.yml 週六 | 已上線（排程自動跑） |
 | `scripts/build_universe.py` | 運算 | 標的宇宙（市值、成交值排名） | fundamentals/universe.parquet | publish_bundle | 已上線（排程自動跑） |
-| `scripts/build_u1b_bundle.py ＋ make_bundle_meta.py ＋ bundle_gate.py` | 運算 | 打包日更 bundle 給 tw-hold，寫 _meta.json（唯一正式介面）；新鮮度閘門（本機 store 比 Release 新才發） | Release tag data-latest | publish_bundle.yml 台北 06:00／07:00／08:30 | 已上線（排程自動跑） |
+| `scripts/build_u1b_bundle.py ＋ make_bundle_meta.py ＋ bundle_gate.py` | 運算 | 打包日更 bundle 給 tw-hold，寫 _meta.json（唯一正式介面）；新鮮度閘門（本機 store 比 Release 新才發） | Release tag data-latest | publish_bundle.yml 台北 06:09／07:09／08:38 | 已上線（排程自動跑） |
 | `src/twswing/screener/precompute.py ＋ engine.py` | 運算 | 指標預計算（所有規則共用欄位算一次）＋全市場掃描引擎（唯一掃描實作） | 掃描結果 | daily | 已上線（排程自動跑） |
 | `src/twswing/indicators/* ＋ rules/*` | 運算 | 均線、型態、樞紐、趨勢線、箱型；規則登錄與積木式進場條件 | — | daily | 已上線（排程自動跑） |
 | `scripts/daily_list.py ＋ src/twswing/dashboard.py` | 運算 | 每日候選清單（HTML、CSV、分享版 share-*.json） | data/daily | daily | 已上線（排程自動跑） |
@@ -48,18 +48,18 @@
 
 | 檔案 | 類型 | 抓什麼／做什麼 | 輸出 | 排程 | 狀態 |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| `fetch_bundle.py` | 抓取 | 從 tw-swing 私有 repo 的 Release（tag data-latest）拉 bundle，跑守門員 | data/upstream/ | rebuild.yml 台北 16:00 | 已上線（排程自動跑） |
+| `fetch_bundle.py` | 抓取 | 從 tw-swing 私有 repo 的 Release（tag data-latest）拉 bundle，跑守門員 | data/upstream/ | rebuild.yml 台北 16:17 | 已上線（排程自動跑） |
 | `scripts/fetch_index_proxy.py ＋ promote_index_0050.py` | 抓取 | FinMind 006201（櫃買代理）；bundle 內 0050 小檔驗證後複製 | data/reference 收盤序列 | rebuild.yml | 已上線（排程自動跑） |
-| `scripts/fetch_global_macro.py` | 抓取 | yfinance 一天一次抓國際指數、美股已完成的常規盤收盤 | data/reference/global_macro | global_macro.yml 台北 06:00 | 已上線（排程自動跑） |
-| `scripts/fetch_tx_futures.py ＋ fetch_foreign_futures.py ＋ fetch_inst_flow.py（10-03 加入）` | 抓取 | 台指期日盤／夜盤收盤；外資台指期未平倉淨空單；三大法人買賣超金額 | data/reference/*.json | global_macro.yml、chip_flow_evening.yml 台北 18:30 | 已上線（排程自動跑） |
-| `scripts/snapshot_pcf.py ＋ pcf_fetchers.py` | 抓取 | 統一、群益、復華三家主動式 ETF 官網每日 PCF | data/pcf/<code>/<date>.parquet | rebuild.yml 備援、pcf_retry.yml 台北 17:00／19:00 | 已上線（排程自動跑） |
+| `scripts/fetch_global_macro.py` | 抓取 | yfinance 一天一次抓國際指數、美股已完成的常規盤收盤 | data/reference/global_macro | global_macro.yml 台北 06:37 | 已上線（排程自動跑） |
+| `scripts/fetch_tx_futures.py ＋ fetch_foreign_futures.py ＋ fetch_inst_flow.py（10-03 加入）` | 抓取 | 台指期日盤／夜盤收盤；外資台指期未平倉淨空單；三大法人買賣超金額 | data/reference/*.json | global_macro.yml、chip_flow_evening.yml 台北 18:28 | 已上線（排程自動跑） |
+| `scripts/snapshot_pcf.py ＋ pcf_fetchers.py` | 抓取 | 統一、群益、復華三家主動式 ETF 官網每日 PCF | data/pcf/<code>/<date>.parquet | rebuild.yml 備援、pcf_retry.yml 台北 17:13／19:13 | 已上線（排程自動跑） |
 | `scripts/resolve_splits.py ＋ reference/corporate_actions.py` | 運算 | 自動解析未還原的分割、面額變更、減資；手動對照表補缺 | reference/corporate_actions_resolved.json | rebuild.yml | 已上線（排程自動跑） |
 | `build_factors.py ＋ factors/factors.py ＋ reference/loader.py` | 運算 | 財報季度面板 → 價值／定存因子表 | data/derived/factors_*.parquet | rebuild.yml（由 build_lists.py 呼叫） | 已上線（排程自動跑） |
 | `build_lists.py ＋ screener/{screen,pricing,deposit_pricing,candidate_pool,industry,gates}.py` | 運算 | 三清單（價值、定存、長波段候選池）：剔除門檻、買價、verdict、產業上限 | data/derived/*_list.json | rebuild.yml | 已上線（排程自動跑） |
 | `screener/swing_stops.py ＋ swing_paper.py ＋ scripts/backfill_swing_history.py` | 運算 | 長波段出場觀察表（移動停損）、輕量版模擬單 | swing_stops.json、swing_paper.json、swing_history.json | rebuild.yml | 已上線（排程自動跑） |
 | `build_active_etf_flags.py` | 運算 | 三家 PCF 每日快照差分 → 主動式 ETF 認領旗標 | data/derived/active_etf_flags.json | rebuild.yml、pcf_retry.yml | 已上線（排程自動跑） |
 | `build_short_scan.py ＋ reference/chip_flow.py（10-03 加入）` | 運算 | 短線條件掃描第四名單（含融資券、進榜日期） | data/derived/short_scan.json | rebuild.yml | 已上線（排程自動跑） |
-| `reference/{price_series_guard,freshness,chips_guard}.py ＋ check_upstream_drift.py ＋ scripts/freshness_check.py` | 守門 | 收盤序列落地前守門、新鮮度判斷、法人籌碼恆等式與補位、上游來源檔漂移偵測 | heartbeat／_meta.json | heartbeat.yml 台北 08:30 | 已上線（排程自動跑） |
+| `reference/{price_series_guard,freshness,chips_guard}.py ＋ check_upstream_drift.py ＋ scripts/freshness_check.py` | 守門 | 收盤序列落地前守門、新鮮度判斷、法人籌碼恆等式與補位、上游來源檔漂移偵測 | heartbeat／_meta.json | heartbeat.yml 台北 08:28 | 已上線（排程自動跑） |
 | `app/*（streamlit_app、bundle_data、checklist、stockcharts）` | 運算 | 唯讀顯示層：執行期拉 Release、讀預算 JSON | — | Streamlit Cloud | 已上線（排程自動跑） |
 
 ## 階段 2　自建上游＋新增 py（10-05～10-06）
@@ -72,7 +72,7 @@
 
 | 檔案 | 類型 | 抓什麼／做什麼 | 輸出 | 排程 | 狀態 |
 | :-- | :-: | :-- | :-- | :-- | :-: |
-| `scripts/selfhost_raw_prices.py` | 抓取 | TWSE MI_INDEX／TPEx dailyQuotes 官方未還原日線依日期收集（每個回應斷言自己的日期）。10-06 增補：官方漲跌價差 chg、無成交旁表 notrade、漲跌標記旁表 refmark | data/selfhost/raw_prices、notrade、refmark.parquet | selfhost_collect.yml 每週當週最後交易日台北 23:59 | 已上線（排程自動跑） |
+| `scripts/selfhost_raw_prices.py` | 抓取 | TWSE MI_INDEX／TPEx dailyQuotes 官方未還原日線依日期收集（每個回應斷言自己的日期）。10-06 增補：官方漲跌價差 chg、無成交旁表 notrade、漲跌標記旁表 refmark | data/selfhost/raw_prices、notrade、refmark.parquet | selfhost_collect.yml 每週當週最後交易日台北 23:58 | 已上線（排程自動跑） |
 | `scripts/selfhost_chips.py` | 抓取 | 三大法人（T86／TPEx insti）＋融資融券（MI_MARGN／TPEx margin）個股，依欄名／欄數解析。10-06 增補：前日餘額 margin_prev／short_prev、備註 note | data/selfhost/inst、margin.parquet | 同上 | 已上線（排程自動跑） |
 | `scripts/selfhost_stophalt.py` | 抓取 | TWSE violation/stop 停止買賣中每日快照（無歷史，從 10-06 起累積） | data/selfhost/stophalt.parquet | 同上 | 已上線（排程自動跑） |
 | `scripts/selfhost_openapi_daily.py` | 抓取 | 官方 OpenAPI 每日收集（10-07 上線，只存不用）：上市日線 `STOCK_DAY_ALL`、上櫃日線 `tpex_mainboard_daily_close_quotes`（與網站量額價全同；舊端點量額偏低已棄用）、上櫃融資 `tpex_mainboard_margin_balance`；上市融資 MI_MARGN 走網站端點帶日期（台北 08:00～22:00 不請求，隔日 04:00 再打吸收官方調帳）。每列 Date 必須一致且非未來；列數下限；Last-Modified 較新才整天覆蓋、縮水 <90% 不覆蓋；src 單向升級；每次請求記 fetch log；缺交易日偵測 | openapi_prices.parquet、openapi_margin.parquet、openapi_fetch_log.jsonl（Release openapi-daily） | openapi_daily.yml 平日 5 班 | 已上線（排程自動跑） |
@@ -87,8 +87,8 @@
 | `scripts/selfhost_ledger.py` | 運算 | 每檔事件簿：事件、缺日、停牌、價格跳動 flag、官方漲跌標記對帳 | ledger.parquet、data/derived/selfhost_ledger_summary.json | 手動 | 已 push・手動執行（未入排程） |
 | `scripts/selfhost_monthly_review.py` | 運算 | 月初完整性檢查＋官方事件對帳，產可貼給 AI 查證的 Markdown | data/derived/selfhost_monthly_review_*.md | 月初手動 | 已 push・手動執行（未入排程） |
 | `tests/test_selfhost.py ＋ test_twse_ca_detail.py` | 守門 | 自建上游的單元測試（348 passed）；10-07 起加 `tests/test_selfhost_openapi_daily.py`（24 個）；tw-hold 全套 428 passed | — | pytest | 已 push・手動執行（未入排程） |
-| `.github/workflows/selfhost_collect.yml` | 排程 | 每週一次收集（守門判斷當週最後交易日 → raw_prices → chips → stophalt → events → gate → 上傳 Release selfhost-data） | Release selfhost-data | 每週一次（當週最後交易日台北 23:59；2026-10-06 起；資料存私有 repo Release） | 已上線（排程自動跑） |
-| `.github/workflows/openapi_daily.yml` | 排程 | 每個平日 5 班（UTC 08／10／12／15／20 ＝ 台北 16／18／20／23／隔日 04，不含 GitHub 延遲；實測延遲 2～9 小時）：下載累積檔 → 收集 → 上傳；有 fetch log 卻缺 parquet 則中止；parquet 只在有變更時重傳。班次預計依 10-07 官方公布時間量測結果重排 | Release openapi-daily（私有 repo） | 平日 16:00／18:00／20:00／23:00／04:00（台北） | 已上線（排程自動跑） |
+| `.github/workflows/selfhost_collect.yml` | 排程 | 每週一次收集（守門判斷當週最後交易日 → raw_prices → chips → stophalt → events → gate → 上傳 Release selfhost-data） | Release selfhost-data | 每週一次（當週最後交易日台北 23:58；2026-10-06 起；資料存私有 repo Release） | 已上線（排程自動跑） |
+| `.github/workflows/openapi_daily.yml` | 排程 | 每個平日 5 班（UTC 08:02／10:02／12:02／15:02／20:02 ＝ 台北 16:02／18:02／20:02／23:02／隔日 04:02，不含 GitHub 延遲；實測延遲 2～9 小時）：下載累積檔 → 收集 → 上傳；有 fetch log 卻缺 parquet 則中止；parquet 只在有變更時重傳。班次預計依 10-07 官方公布時間量測結果重排 | Release openapi-daily（私有 repo） | 平日 16:02／18:02／20:02／23:02／04:02（台北） | 已上線（排程自動跑） |
 | `reference/refdata.py ＋ scripts/refdata_sync.py` | 運算 | 私有參考資料（PCF 快照、總經／期貨／法人／指數序列）的存取：pull／push 私有 repo tw-hold-data 的 Release refdata-latest；先傳暫名再改名、預期清單、不倒退閘門（防殘缺目錄蓋掉歷史） | 私有 Release refdata-latest（14 個資產） | rebuild／global_macro／chip_flow_evening／pcf_retry／heartbeat 與 Streamlit app | 已上線（排程自動跑） |
 | `.github/workflows/check_secrets.yml` | 守門 | 手動：量 FINMIND_TOKEN 長度與結尾字元，並用未處理的原值打 FinMind（secret 貼上常帶結尾換行） | log | 手動 | 已上線（排程自動跑） |
 

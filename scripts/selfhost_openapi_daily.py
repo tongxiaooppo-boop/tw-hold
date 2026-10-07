@@ -71,11 +71,11 @@ SRC_TPEX_DC = "openapi_dc"   # 上櫃改用 daily_close_quotes 後的標記；�
 SRC_WEB_MARGN = "web_mi_margn"
 MARGN_TODAY_AFTER_HOUR = 22     # 上市融資約台北 21:00～22:00 才公布：白天到 22:00 前整段不打（今天、前一天都不打）；實測輪詢後再調
 PRICE_FROM_HOUR = 16            # 日線（上市＋上櫃）官方約 14:00 起陸續出、使用者設定 16:00 起；之前不請求（官方還沒公布不去打）
-PRICE_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:00）仍收；08:00～16:00 一律不請求
+PRICE_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:02）仍收；08:00～16:00 一律不請求
 INST_FROM_HOUR = 18            # 三大法人約台北 16:15～17:00 才齊（使用者設定 18:00 起）；之前不請求
-INST_QUIET_FROM_HOUR = 8        # 隔日清晨班（04:00）補前一晚漏的；08:00～18:00 不請求
+INST_QUIET_FROM_HOUR = 8        # 隔日清晨班（04:02）補前一晚漏的；08:00～18:00 不請求
 INST_MAX_MISMATCH = 0.02        # 法人合計恆等式（外資＋外資自營＋投信＋自營＝合計）不符比例超過這個就不存（多半是欄位錯位）
-MARGN_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:00）仍收，用來補前一晚漏的與官方隔日調帳；08:00～22:00 之間一律不打
+MARGN_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:02）仍收，用來補前一晚漏的與官方隔日調帳；08:00～22:00 之間一律不打
 SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
 GAP_WINDOW_DAYS = 14
 

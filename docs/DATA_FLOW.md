@@ -11,26 +11,26 @@
 ```
 【外部來源】                              【tw-swing（私有 repo）】                         【tw-hold（公開 repo）】
 maosof007 data_pack.zip ─┐
-  (日線還原+法人+融資券)  ├─> daily.yml(21:00/01:00/05:30) ──> update_data.py ──> data/store/（不進git）
+  (日線還原+法人+融資券)  ├─> daily.yml(21:07/01:07/05:32) ──> update_data.py ──> data/store/（不進git）
 TWSE/TPEx OpenAPI ───────┤     ├ 處置股快照 ─┐                   │
 TDCC 開放資料 ────────────┤     ├ 月營收快照 ─┼─ commit 回 repo   └─> daily_list.py ─> data/daily/*.json (進git)
 FinMind(token) ──────────┤                                                              │
                          │   publish_bundle.yml                                         ▼
-                         │     ① workflow_run(daily完成) ② cron 06:00/07:00/08:30  share-latest.json ──(原生渲染)──┐
+                         │     ① workflow_run(daily完成) ② cron 06:09/07:09/08:38  share-latest.json ──(原生渲染)──┐
                          │     └ bundle_gate(新鮮度) → build_u1b_bundle ─> Release data-latest                        │
                          │         (prices_adj/prices_raw_close/chips/margin/revenue/index_0050/universe/財報五表)     │
                          │                                    │ repository_dispatch(TWHOLD_DISPATCH_PAT)            │
-                         │   fundamentals.yml(週六10:00) ─ FinMind 財報/月營收歷史/TDCC週快照 ─ commit + U1a bundle     │
+                         │   fundamentals.yml(週六10:07) ─ FinMind 財報/月營收歷史/TDCC週快照 ─ commit + U1a bundle     │
                          │                                    ▼                                                       │
-FinMind(006201) ─────────┼───────────────────────────> rebuild.yml(dispatch主 + cron 16:00備援)                        │
+FinMind(006201) ─────────┼───────────────────────────> rebuild.yml(dispatch主 + cron 16:17備援)                        │
 TWSE STOCK_DAY_ALL ──────┤                               ├ fetch_bundle(PAT) ─> data/upstream/                         │
 投信官網 PCF×3 ───────────┤                               ├ build_lists ─> value/deposit/swing_list.json                │
                          │                               ├ snapshot_pcf + build_active_etf_flags                       │
                          │                               ├ build_short_scan ─> short_scan.json                         │
                          │                               └ commit data/derived/ ──> Streamlit Cloud app 讀 ◄───────────┘
-yfinance ────────────────┤   global_macro.yml(06:00)  ─ 國際指數/台指期日夜盤/外資淨空單/三大法人 ─ commit data/reference/
-TAIFEX(OpenAPI+CSV) ─────┤   chip_flow_evening.yml(18:30) ─ 外資淨空單/三大法人（補當日）
-TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:00) ─ PCF 補跑      heartbeat.yml(08:30) ─ 只檢查不修
+yfinance ────────────────┤   global_macro.yml(06:37)  ─ 國際指數/台指期日夜盤/外資淨空單/三大法人 ─ commit data/reference/
+TAIFEX(OpenAPI+CSV) ─────┤   chip_flow_evening.yml(18:28) ─ 外資淨空單/三大法人（補當日）
+TWSE BFI82U ─────────────┘   pcf_retry.yml(17:13/19:13) ─ PCF 補跑      heartbeat.yml(08:28) ─ 只檢查不修
 ```
 
 ---
@@ -46,7 +46,7 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 | 5 | TAIFEX：OpenAPI `DailyMarketReportFut`、網站 CSV `futContractsDateDown` | 台指期日夜盤、外資期貨未平倉 | 無 | 日夜盤**無**；外資期貨 CSV **有（3 個月/次）** | 日夜盤該天夜盤永久缺；外資淨空單可補回 | 外資：CSV 主＋OpenAPI 備；每次重抓近 14 天自癒 | 🟢 |
 | 6 | TWSE `www.twse.com.tw/rwd/zh/fund/BFI82U` | 三大法人買賣超 | 無（⚠️ `openapi.twse` 同名端點回 HTML，別用） | **有（帶日期）** | 補近 14 天缺的平日自癒 | 無需 | 🟢 |
 | 7 | yfinance（Yahoo） | 國際指數/個股/總經 | 無 | 每次全量重抓 2 年 → 自癒 | 當天缺但隔天補齊；Yahoo 介面改版全停 | 無（單源） | 🟡 |
-| 8 | 投信官網 PCF×3（統一 ezmoney / 群益 capitalfund / 復華 fhtrust）＋TWSE `STOCK_DAY_ALL` | 主動 ETF 持股、規模、折溢價 | cookie／內部 API，**非官方承諾** | **無（只給當天）** | 該天缺＝前後兩日差分跨日；三家各自可能改版 | `pcf_retry.yml`（17:00/19:00）當日補跑；差分用 `span_days` 標示跨日 | 🟡 |
+| 8 | 投信官網 PCF×3（統一 ezmoney / 群益 capitalfund / 復華 fhtrust）＋TWSE `STOCK_DAY_ALL` | 主動 ETF 持股、規模、折溢價 | cookie／內部 API，**非官方承諾** | **無（只給當天）** | 該天缺＝前後兩日差分跨日；三家各自可能改版 | `pcf_retry.yml`（17:13/19:13）當日補跑；差分用 `span_days` 標示跨日 | 🟡 |
 | 9 | GitHub（Actions／Release／repo） | 排程、bundle 儲存、資料版控 | 兩顆 PAT（見 §5） | — | 全部 | 本機備份（`backup/backup.ps1`，D→G 鏡像＋memory→OneDrive）；兩 repo 皆有 GitHub 遠端 | 🟡 |
 | 10 | Streamlit Cloud | app 託管 | secrets：`TWSWING_BUNDLE_PAT` | — | app 打不開（資料不受影響） | 資料都在 repo，換託管可重建 | 🟢 |
 
@@ -87,16 +87,16 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 
 | Workflow | 觸發 | 備援 | 手動 | 產出 |
 | :-- | :-- | :-- | :-- | :-- |
-| **tw-swing `daily.yml`** | 21:00／01:00／05:30（三槍，平日） | 三槍本身互為備援；第三槍 `--require-fresh` | ✅ dispatch | `data/daily/*.json`、模擬單、share-latest.json |
-| **tw-swing `publish_bundle.yml`** | ① **`workflow_run`（daily 完成即接）** ② cron 06:00／07:00／08:30 | 三個 cron＋閘門（`bundle_gate.py`，沒新資料就跳過，取不到資訊一律發佈） | ✅ dispatch（**不過閘門**，救援用） | Release `data-latest`（13 個資產）＋`repository_dispatch` 叫 tw-hold |
-| **tw-swing `fundamentals.yml`** | 週六 10:00 | — | ✅ | 財報五表／TDCC／月營收歷史，U1a bundle |
-| **tw-hold `rebuild.yml`** | **`repository_dispatch`（publish 完）** | cron 16:00（UTC 08:00，實測落在 22:00–00:00） | ✅ | `data/derived/*`（三清單、flags、short_scan）、`derived-latest` Release |
-| **tw-hold `global_macro.yml`** | 06:00 | 傍晚 18:30 班補外資/三大法人 | ✅ | `data/reference/*` |
-| **tw-hold `chip_flow_evening.yml`** | 18:30（平日） | 06:00 那班 | ✅ | `foreign_futures.parquet`、`inst_flow.parquet` |
-| **tw-hold `pcf_retry.yml`** | 17:00／19:00 | rebuild 內也有一次 | ✅ | `data/pcf/`、`active_etf_flags.json` |
-| **tw-hold `heartbeat.yml`** | 08:30 | — | ✅ | **只檢查不修**（實測 GitHub 延遲到 13:00–14:00 才跑） |
+| **tw-swing `daily.yml`** | 21:07／01:07／05:32（三槍，平日） | 三槍本身互為備援；第三槍 `--require-fresh` | ✅ dispatch | `data/daily/*.json`、模擬單、share-latest.json |
+| **tw-swing `publish_bundle.yml`** | ① **`workflow_run`（daily 完成即接）** ② cron 06:09／07:09／08:38 | 三個 cron＋閘門（`bundle_gate.py`，沒新資料就跳過，取不到資訊一律發佈） | ✅ dispatch（**不過閘門**，救援用） | Release `data-latest`（13 個資產）＋`repository_dispatch` 叫 tw-hold |
+| **tw-swing `fundamentals.yml`** | 週六 10:07 | — | ✅ | 財報五表／TDCC／月營收歷史，U1a bundle |
+| **tw-hold `rebuild.yml`** | **`repository_dispatch`（publish 完）** | cron 16:17（UTC 08:17，實測落在 22:00–00:00） | ✅ | `data/derived/*`（三清單、flags、short_scan）、`derived-latest` Release |
+| **tw-hold `global_macro.yml`** | 06:37 | 傍晚 18:28 班補外資/三大法人 | ✅ | `data/reference/*` |
+| **tw-hold `chip_flow_evening.yml`** | 18:28（平日） | 06:37 那班 | ✅ | `foreign_futures.parquet`、`inst_flow.parquet` |
+| **tw-hold `pcf_retry.yml`** | 17:13／19:13 | rebuild 內也有一次 | ✅ | `data/pcf/`、`active_etf_flags.json` |
+| **tw-hold `heartbeat.yml`** | 08:28 | — | ✅ | **只檢查不修**（實測 GitHub 延遲到 13:00–14:00 才跑） |
 
-**時間鏈（目標）**：data_pack 05:08 好 → daily 第三槍 05:30（實落 05:4x）→ publish ~05:50 → rebuild ~05:55 → 清單開盤前更新。
+**時間鏈（目標）**：data_pack 05:08 好 → daily 第三槍 05:32（實落 05:4x）→ publish ~05:50 → rebuild ~05:55 → 清單開盤前更新。
 ⚠️ **新時間鏈（workflow_run 接 daily＋閘門放行）尚未在真實環境驗過**，週一 10-05 才有第一輪（見 HANDOFF_2026-10-03 §3）。
 
 ---
@@ -128,7 +128,7 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 | :-- | :-- |
 | 清單停在舊日、bundle 沒更新 | `cd tw-swing && gh workflow run publish_bundle.yml --ref master`（**不過閘門**，會發佈並叫 tw-hold 重算）。先看 daily 有沒有跑：`gh run list --workflow daily.yml --limit 5` |
 | daily 沒跑／失敗 | `gh workflow run daily.yml --ref master`（冪等，當日清單已存在會 SKIP） |
-| tw-hold 清單沒重算（bundle 已發佈、dispatch 沒送到） | `cd tw-hold && gh workflow run rebuild.yml --ref main`（或等 cron 16:00 備援） |
+| tw-hold 清單沒重算（bundle 已發佈、dispatch 沒送到） | `cd tw-hold && gh workflow run rebuild.yml --ref main`（或等 cron 16:17 備援） |
 | 總經導航卡片停更 | `gh workflow run global_macro.yml --ref main`（外資/三大法人另有 `chip_flow_evening.yml`） |
 | 主動 ETF 旗標缺天 | `gh workflow run pcf_retry.yml --ref main`（當天內才補得到） |
 | 本機要最新資料（本機無自動化、`data/store/` 不進 git） | `cd tw-swing && python scripts/update_data.py "D:/g/claude/books/claude/tw-stock-scanner-main-data/data_pack.zip"`（⚠️ 預設路徑已不存在，必須帶路徑；跑完 `git checkout --` 還原被改髒的 `data/revenue/`、`data/watchlist/` 當日檔再 `git pull`） |
@@ -150,7 +150,7 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:00/19:
 | 憑證 | 用途 | 放哪 | 到期 | 過期後果 |
 | :-- | :-- | :-- | :-- | :-- |
 | `TWSWING_BUNDLE_PAT`（tw-hold-bundle-read，唯讀 tw-swing contents） | tw-hold 拉 tw-swing 私有 Release | tw-hold `.env`＋tw-hold Actions secret＋Streamlit Cloud secret（**三處**） | **~2026-12-07**（11-30 起提醒） | rebuild 的 `fetch_bundle` 失敗、個股查詢頁拉不到 bundle |
-| `TWHOLD_DISPATCH_PAT`（Actions:write 到 tw-hold） | tw-swing publish 後叫 tw-hold 重算 | tw-swing Actions secret | **~2027-09-08**（08-25 起提醒） | 沒有 dispatch → 只剩 cron 16:00 備援（清單晚更新，不是斷） |
+| `TWHOLD_DISPATCH_PAT`（Actions:write 到 tw-hold） | tw-swing publish 後叫 tw-hold 重算 | tw-swing Actions secret | **~2027-09-08**（08-25 起提醒） | 沒有 dispatch → 只剩 cron 16:17 備援（清單晚更新，不是斷） |
 | `FINMIND_TOKEN` | 財報／006201／分割 | tw-swing＋tw-hold Actions secret | 不明（免費層額度） | 財報週更、006201、分割解析停 |
 | `ALERT_WEBHOOK` | 所有 notify-failure／告警 | — | **從沒設過**（使用者回絕設定） | **所有告警步驟形同空的**，只剩 GitHub 紅叉與 heartbeat |
 
