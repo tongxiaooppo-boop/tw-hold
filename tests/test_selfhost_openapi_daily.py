@@ -19,6 +19,7 @@ def _isolate_log(tmp_path, monkeypatch):
     monkeypatch.setattr(oa, "SH", tmp_path)
     monkeypatch.setattr(oa, "LOG", tmp_path / "log.jsonl")
     monkeypatch.setattr(oa, "FORECAST", tmp_path / "forecast.jsonl")
+    monkeypatch.setattr(oa, "INST", tmp_path / "inst.parquet")
     monkeypatch.setattr(oa, "PRICES", tmp_path / "prices.parquet")
     monkeypatch.setattr(oa, "MARGIN", tmp_path / "margin.parquet")
 
@@ -391,7 +392,105 @@ def test_main_writes_forecast_changed_output(monkeypatch, tmp_path):
     monkeypatch.setattr(oa.requests, "get", _fake_get())
     monkeypatch.setattr(oa, "fetch", lambda url: (None, None, None, "x"))                              # 三個 OpenAPI 端點都失敗
     monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))      # 不讓 main 測試連到真網站
     out = tmp_path / "gh_out"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     oa.main()
     assert "forecast_changed=true" in out.read_text(encoding="utf-8") and oa.FORECAST.exists()
+
+
+# ───────── 每日三大法人（網站端點帶日期）＋上櫃次日參考價 ─────────
+def test_parse_prices_tpex_next_reference_price():
+    row = dict(_tpex_row(code="2947", close="62.60"), NextReferencePrice="61.60", NextLimitUp="67.7", NextLimitDown="55.5")
+    df = oa.parse_prices([row], "TWO", date(2026, 10, 6), LM1, FETCHED)
+    assert (df.next_ref.iloc[0], df.next_limit_up.iloc[0], df.next_limit_down.iloc[0]) == (61.6, 67.7, 55.5)
+    tw = oa.parse_prices([_tw()], "TW", date(2026, 10, 6), LM1, FETCHED)
+    assert pd.isna(tw.next_ref.iloc[0])                                                              # 上市沒有這欄＝NaN
+
+
+def test_inst_candidates_window():
+    d = date(2026, 10, 7)                                                                            # 週三
+    for h in (8, 12, 16, 17):
+        assert oa.inst_candidates(d, h) == []                                                        # 18:00 前整段不請求
+    assert oa.inst_candidates(d, 18) == [d] and oa.inst_candidates(d, 23) == [d]
+    assert oa.inst_candidates(d, 4) == [date(2026, 10, 6)]                                           # 隔日清晨班：只補前一個平日
+    assert oa.inst_candidates(date(2026, 10, 5), 4) == [date(2026, 10, 2)]                           # 週一清晨補週五
+    assert oa.inst_candidates(date(2026, 10, 10), 20) == []                                          # 週六不試今天
+
+
+def _inst_df(d, market, n=600, bad=False):
+    rows = [{"date": pd.Timestamp(d), "ticker": str(1000 + i), "market": market, "foreign_net": 100.0, "fi_prop_net": 10.0,
+             "trust_net": 20.0, "dealer_net": 30.0, "total_net": 999.0 if bad else 160.0} for i in range(n)]
+    return pd.DataFrame(rows, columns=["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net"])
+
+
+def _fake_chips_inst(monkeypatch, tw, tpex):
+    m = _types.ModuleType("selfhost_chips")
+    m.inst_twse, m.inst_tpex, m.margin_twse = tw, tpex, (lambda d: pd.DataFrame())
+    monkeypatch.setitem(_sys.modules, "selfhost_chips", m)
+
+
+def _empty_inst():
+    return pd.DataFrame(columns=oa.INST_OA_COLS).astype({"date": "datetime64[ns]"})
+
+
+def test_collect_inst_added_then_stops_when_got(monkeypatch):
+    calls = []
+    _fake_chips_inst(monkeypatch, lambda d: calls.append(("TW", d)) or _inst_df(d, "TW"), lambda d: calls.append(("TWO", d)) or _inst_df(d, "TWO", 400))
+    t, ch = oa.collect_inst(date(2026, 10, 7), FETCHED, _empty_inst(), 18)
+    assert ch and len(t) == 1000 and set(t.market) == {"TW", "TWO"} and set(t.src) == {"web_t86", "web_tpex_insti"}
+    assert list(t.columns) == oa.INST_OA_COLS
+    calls.clear()
+    t2, ch2 = oa.collect_inst(date(2026, 10, 7), FETCHED, t, 20)                                     # 取到就停：同一天不再請求
+    assert not ch2 and calls == [] and len(t2) == 1000
+
+
+def test_collect_inst_not_published_failure_thin_and_identity(monkeypatch, capsys):
+    empty = pd.DataFrame(columns=["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net"])
+    _fake_chips_inst(monkeypatch, lambda d: empty, lambda d: None)                                   # 上市沒資料、上櫃失敗
+    t, ch = oa.collect_inst(date(2026, 10, 7), FETCHED, _empty_inst(), 18)
+    assert not ch and len(t) == 0 and "::warning::" in capsys.readouterr().err
+    _fake_chips_inst(monkeypatch, lambda d: _inst_df(d, "TW", n=50), lambda d: _inst_df(d, "TWO", bad=True, n=400))
+    t, ch = oa.collect_inst(date(2026, 10, 7), FETCHED, _empty_inst(), 18)
+    assert not ch and len(t) == 0                                                                    # 太少列、恆等式全不符 → 都不存
+    err = capsys.readouterr().err
+    assert "只有 50 列" in err and "恆等式不符" in err
+
+
+def test_collect_inst_quiet_hours_never_request(monkeypatch):
+    calls = []
+    _fake_chips_inst(monkeypatch, lambda d: calls.append(d) or _inst_df(d, "TW"), lambda d: calls.append(d) or _inst_df(d, "TWO", 400))
+    for h in (8, 12, 16, 17):
+        oa.collect_inst(date(2026, 10, 7), FETCHED, _empty_inst(), h)
+    assert calls == []
+
+
+def test_inst_saturday_early_run_fills_friday():
+    assert oa.inst_candidates(date(2026, 10, 10), 4) == [date(2026, 10, 9)]                           # 真正會發生的班次：週六 04:00 補週五
+
+
+def test_main_inst_disabled_skips_collect_but_runs_others(monkeypatch, capsys):
+    monkeypatch.setenv("INST_DISABLED", "1")
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "fetch", lambda url: (None, None, None, "x"))
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    called = []
+    monkeypatch.setattr(oa, "collect_inst", lambda *a, **k: called.append(1) or (a[2], False))
+    oa.main()
+    assert called == [] and "已停用" in capsys.readouterr().err and oa.FORECAST.exists()            # 法人停用，預告表照存
+
+
+def test_main_writes_inst_parquet_and_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "fetch", lambda url: (None, None, None, "x"))
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (_inst_df(date(2026, 10, 7), "TW").assign(src="web_t86", fetched_at=FETCHED)[oa.INST_OA_COLS], True))
+    out = tmp_path / "gh_out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    oa.main()
+    assert "inst_changed=true" in out.read_text(encoding="utf-8") and oa.INST.exists()
+
+
+def test_parse_prices_next_cols_are_float_even_when_all_none():
+    df = oa.parse_prices([_tw()], "TW", date(2026, 10, 6), LM1, FETCHED)
+    assert str(df.next_ref.dtype) == "float64"
