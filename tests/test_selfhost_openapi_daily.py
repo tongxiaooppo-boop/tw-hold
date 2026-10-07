@@ -20,6 +20,7 @@ def _isolate_log(tmp_path, monkeypatch):
     monkeypatch.setattr(oa, "LOG", tmp_path / "log.jsonl")
     monkeypatch.setattr(oa, "FORECAST", tmp_path / "forecast.jsonl")
     monkeypatch.setattr(oa, "INST", tmp_path / "inst.parquet")
+    monkeypatch.setattr(oa._retry.time, "sleep", lambda n: None)                  # 重試不真的等（個別測試要檢查等待秒數時自行覆蓋）
     monkeypatch.setattr(oa, "PRICES", tmp_path / "prices.parquet")
     monkeypatch.setattr(oa, "MARGIN", tmp_path / "margin.parquet")
 
@@ -308,6 +309,7 @@ def test_collect_twse_margin_before_22_never_requests_today(monkeypatch):
 
 # ───────── 預告表快照（上市 TWT48U_ALL＋上櫃 tpex_exright_prepost）─────────
 class _Resp:
+    headers = {}
     def __init__(self, j): self._j = j; self.status_code = 200
     def raise_for_status(self): pass
     def json(self): return self._j
@@ -505,7 +507,7 @@ class _Bad:
 
 
 class _Ok(_Resp):
-    headers = {}
+    pass
 
 
 class _Http:
@@ -520,14 +522,14 @@ def test_fetch_retries_truncated_json_then_succeeds(monkeypatch):
     seq = [_Bad(), _Bad(), _Ok([{"a": 1}])]
     sleeps = []
     monkeypatch.setattr(oa.requests, "get", lambda url, **kw: seq.pop(0))
-    monkeypatch.setattr(oa.time, "sleep", lambda n: sleeps.append(n))
+    monkeypatch.setattr(oa._retry.time, "sleep", lambda n: sleeps.append(n))
     rows, lm, st, err = oa.fetch("http://x")
-    assert rows == [{"a": 1}] and err == "" and sleeps == [5, 15]            # 前兩次截斷、第三次成功
+    assert rows == [{"a": 1}] and err == "" and sleeps == [10, 20]            # 前兩次截斷、第三次成功
 
 
 def test_fetch_gives_up_after_three_and_does_not_retry_4xx(monkeypatch):
     n = []
-    monkeypatch.setattr(oa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(oa._retry.time, "sleep", lambda s: None)
     monkeypatch.setattr(oa.requests, "get", lambda url, **kw: n.append(1) or _Bad())
     rows, _, _, err = oa.fetch("http://x")
     assert rows is None and len(n) == 3 and "Unterminated" in err
@@ -562,3 +564,16 @@ def test_main_skips_openapi_endpoints_outside_window(monkeypatch):
     monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
     oa.main()
     assert called == []                                                                                       # 12:00：日線與上櫃融資一個都不請求
+
+
+def test_forecast_uses_same_retry_rule(monkeypatch):
+    seq = [_Bad(), _Bad(), _Ok(_TW)]
+    sleeps = []
+    monkeypatch.setattr(oa._retry.time, "sleep", lambda n: sleeps.append(n))
+    def get(url, **kw):
+        if "TWT48U" in url:
+            return seq.pop(0)
+        return _Ok(_TWO)
+    monkeypatch.setattr(oa.requests, "get", get)
+    recs, ch = oa.collect_forecasts(pd.Timestamp("2026-10-07 08:00:00"), [])
+    assert ch and {r["market"] for r in recs} == {"TW", "TWO"} and sleeps == [10, 20]              # 預告表也是 3 次、等 10／20 秒

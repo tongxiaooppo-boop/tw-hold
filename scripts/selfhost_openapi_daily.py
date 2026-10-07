@@ -47,6 +47,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent))
+import _retry  # noqa: E402
+
 SH = Path(__file__).resolve().parents[1] / "data" / "selfhost"
 PRICES = SH / "openapi_prices.parquet"
 MARGIN = SH / "openapi_margin.parquet"
@@ -217,33 +220,36 @@ def _log(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
 
-FETCH_TRIES = 3
-FETCH_BACKOFF = (5, 15)        # 第 1、2 次失敗後各等幾秒
-
-
-def fetch(url: str):
-    """回 (rows|None, last_modified_header|None, http_status|None, 錯誤字串)。
-    上櫃 daily_close_quotes 一次回 12,000 多列、約 4MB，官方偶爾回被截斷的 JSON（Response ended prematurely／JSON 解析失敗，
-    2026-10-07 實際發生）。OpenAPI 只回最新一天、漏了補不回來，所以截斷、連線錯誤、5xx 都重試；4xx 與「回應不是非空列表」不重試。"""
+def _request_json(url: str):
+    """回 (json|None, last_modified|None, http_status|None, 錯誤字串)。重試規則統一在 scripts/_retry.py（最多 3 次，失敗後等 10、20 秒）。
+    上櫃 daily_close_quotes 一次回 12,000 多列、約 4MB，官方偶爾回被截斷的 JSON／重置連線（2026-10-07 線上與本機都發生）。
+    OpenAPI 只回最新一天、漏了補不回來，所以截斷、連線錯誤、5xx 都重試；4xx 不重試。"""
     err, status, lm = "", None, None
-    for i in range(FETCH_TRIES):
+    for i in range(_retry.TRIES):
         try:
             r = requests.get(url, headers=UA, timeout=60)
             lm, status = r.headers.get("Last-Modified"), r.status_code
             r.raise_for_status()
-            j = r.json()
-            if not isinstance(j, list) or not j:
-                return None, lm, status, "回應不是非空列表"
-            return j, lm, status, ""
+            return r.json(), lm, status, ""
         except Exception as e:      # noqa: BLE001
             status = getattr(getattr(e, "response", None), "status_code", None) or status
             err = str(e)[:120]
             if status is not None and 400 <= status < 500:
                 break
-            if i < FETCH_TRIES - 1:
-                print(f"[openapi] 請求失敗（第 {i + 1} 次）：{err}；{FETCH_BACKOFF[i]} 秒後重試", file=sys.stderr)
-                time.sleep(FETCH_BACKOFF[i])
+            if i < _retry.TRIES - 1:
+                print(f"[openapi] 請求失敗（第 {i + 1} 次）：{err}；{_retry.WAITS[min(i, len(_retry.WAITS) - 1)]} 秒後重試", file=sys.stderr)
+                _retry.wait_after_failure(i)
     return None, lm, status, err
+
+
+def fetch(url: str):
+    """回 (rows|None, last_modified_header|None, http_status|None, 錯誤字串)；回應必須是非空列表。"""
+    j, lm, status, err = _request_json(url)
+    if j is None:
+        return None, lm, status, err
+    if not isinstance(j, list) or not j:
+        return None, lm, status, "回應不是非空列表"
+    return j, lm, status, ""
 
 
 def _read(p: Path, cols: list[str]) -> pd.DataFrame:
@@ -397,9 +403,9 @@ def collect_forecasts(fetched: pd.Timestamp, recs: list[dict]) -> tuple[list[dic
             continue
         entry = {"fetched_at": str(fetched), "endpoint": f"forecast_{market}"}
         try:
-            r = requests.get(url, headers=UA, timeout=60)
-            r.raise_for_status()
-            raw = r.json()
+            raw, _, _, rerr = _request_json(url)
+            if raw is None:
+                raise RuntimeError(rerr)
             if not isinstance(raw, list):
                 raise ValueError("回應不是列表")
             rows = normalize_forecast(raw, market)

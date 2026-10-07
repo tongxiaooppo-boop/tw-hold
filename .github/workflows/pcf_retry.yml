@@ -21,8 +21,8 @@ name: 主動式 ETF PCF 補跑
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 9 * * 1-5"    # 台北 17:00（rebuild.yml 排程備援 16:00 之後）
-    - cron: "0 11 * * 1-5"   # 台北 19:00
+    - cron: "13 9 * * 1-5"    # 台北 17:13（避開整點）（rebuild.yml 排程備援 16:00 之後）
+    - cron: "13 11 * * 1-5"   # 台北 19:13（避開整點）
 
 permissions:
   contents: write
