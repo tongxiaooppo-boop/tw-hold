@@ -18,6 +18,9 @@ def _isolate_log(tmp_path, monkeypatch):
     """測試不能寫進真實的 data/selfhost/openapi_fetch_log.jsonl（那份是官方更新時間的實測紀錄）。"""
     monkeypatch.setattr(oa, "SH", tmp_path)
     monkeypatch.setattr(oa, "LOG", tmp_path / "log.jsonl")
+    monkeypatch.setattr(oa, "FORECAST", tmp_path / "forecast.jsonl")
+    monkeypatch.setattr(oa, "PRICES", tmp_path / "prices.parquet")
+    monkeypatch.setattr(oa, "MARGIN", tmp_path / "margin.parquet")
 
 
 TODAY = date(2026, 10, 7)
@@ -300,3 +303,95 @@ def test_collect_twse_margin_before_22_never_requests_today(monkeypatch):
     calls.clear()
     oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 23)                       # 23:00 那班
     assert calls == [date(2026, 10, 7), date(2026, 10, 6)]
+
+
+# ───────── 預告表快照（上市 TWT48U_ALL＋上櫃 tpex_exright_prepost）─────────
+class _Resp:
+    def __init__(self, j): self._j = j; self.status_code = 200
+    def raise_for_status(self): pass
+    def json(self): return self._j
+
+
+_TW = [{"Date": "1151008", "Code": "2330", "Name": "台積電", "Exdividend": "息", "StockDividendRatio": "", "SubscriptionRatio": "",
+        "SubscriptionPricePerShare": "", "CashDividend": "4.5"}]
+_TWO = [{"ExRrightsExDividendDate": "1151008", "SecuritiesCompanyCode": "8440", "CompanyName": "綠電", "ExRrightsExDividend": "除息",
+         "StockDividendRatio": "0.00000000", "SubscriptionRatioToNewSharesIssued": "0.00000000", "SubscriptionPricePerShare": "0.00",
+         "CashDividend": "0.35000000"}]
+
+
+def _fake_get(tw=_TW, two=_TWO):
+    def get(url, **kw):
+        if "TWT48U" in url:
+            return _Resp(tw)
+        if "tpex_exright_prepost" in url:
+            return _Resp(two)
+        raise AssertionError(url)
+    return get
+
+
+def test_normalize_forecast_both_markets():
+    a = oa.normalize_forecast(_TW, "TW")[0]
+    assert (a["code"], a["ex"], a["kind"], a["cash"], a["stock_ratio"]) == ("2330", "2026-10-08", "息", 4.5, None)   # 空字串＝待公告＝None
+    b = oa.normalize_forecast(_TWO, "TWO")[0]
+    assert (b["code"], b["ex"], b["kind"], b["cash"], b["sub_ratio"]) == ("8440", "2026-10-08", "除息", 0.35, 0.0)
+
+
+def test_collect_forecasts_dedupes_and_throttles(monkeypatch):
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    t0 = pd.Timestamp("2026-10-07 08:00:00")
+    recs, ch = oa.collect_forecasts(t0, [])
+    assert ch and len(recs) == 2 and {r["market"] for r in recs} == {"TW", "TWO"} and all(r["rows"] for r in recs)
+    recs, ch = oa.collect_forecasts(t0 + pd.Timedelta(hours=1), recs)                        # 間隔不足 3 小時：不請求
+    assert not ch and len(recs) == 2
+    recs, ch = oa.collect_forecasts(t0 + pd.Timedelta(hours=4), recs)                        # 內容相同：記抓取時間、rows 記 None
+    assert ch and len(recs) == 4 and recs[-1]["rows"] is None and recs[-1]["same_as"] == str(t0)
+    monkeypatch.setattr(oa.requests, "get", _fake_get(tw=_TW + [dict(_TW[0], Code="2317")]))
+    recs, ch = oa.collect_forecasts(t0 + pd.Timedelta(hours=8), recs)                        # 內容有變：存新 rows
+    tw_last = [r for r in recs if r["market"] == "TW"][-1]
+    assert len(tw_last["rows"]) == 2 and tw_last["same_as"] is None
+
+
+def test_collect_forecasts_failure_only_warns(monkeypatch, capsys):
+    def boom(url, **kw): raise RuntimeError("down")
+    monkeypatch.setattr(oa.requests, "get", boom)
+    recs, ch = oa.collect_forecasts(pd.Timestamp("2026-10-07 08:00:00"), [])
+    assert not ch and recs == [] and "::warning::" in capsys.readouterr().err
+
+
+def test_normalize_forecast_tolerates_bad_rows_keeps_raw_and_sorts(capsys):
+    rows = [dict(_TW[0], Code="2317", Date="1151009", CashDividend="待公告"),
+            dict(_TW[0], Code="9999", Date="壞掉"),                                                    # 日期壞 → 跳過
+            {"Name": "缺欄"},                                                                          # 缺 Code → 跳過
+            dict(_TW[0], Code="1101", Date="1151008", CashDividend="")]
+    out = oa.normalize_forecast(rows, "TW")
+    assert [r["code"] for r in out] == ["1101", "2317"]                                                # 依 (ex, code) 排序、壞列跳過
+    assert out[1]["cash"] is None and out[1]["cash_raw"] == "待公告" and out[0]["cash_raw"] == ""      # 原字串保留，分得出待公告
+    assert "2 列解析失敗" in capsys.readouterr().err
+    with pytest.raises(ValueError):
+        oa.normalize_forecast([{"x": 1}], "TW")                                                        # 整份壞（欄名改版）→ 拋
+
+
+def test_forecast_dedupe_ignores_row_order(monkeypatch):
+    a, b = dict(_TW[0]), dict(_TW[0], Code="2317")
+    monkeypatch.setattr(oa.requests, "get", _fake_get(tw=[a, b]))
+    t0 = pd.Timestamp("2026-10-07 08:00:00")
+    recs, _ = oa.collect_forecasts(t0, [])
+    monkeypatch.setattr(oa.requests, "get", _fake_get(tw=[b, a]))                                       # 官方只換排列
+    recs, _ = oa.collect_forecasts(t0 + pd.Timedelta(hours=4), recs)
+    assert [r for r in recs if r["market"] == "TW"][-1]["rows"] is None
+
+
+def test_load_forecast_skips_truncated_line(tmp_path, capsys):
+    ok = '{"_fetched": "2026-10-07 08:00:00", "market": "TW", "rows": []}'
+    oa.FORECAST.write_text(ok + "\n" + '{"_fetched": "2026-10-0', encoding="utf-8")
+    assert len(oa._load_forecast()) == 1 and "壞掉" in capsys.readouterr().err                         # 壞行不讓之後每班都失敗
+
+
+def test_main_writes_forecast_changed_output(monkeypatch, tmp_path):
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "fetch", lambda url: (None, None, None, "x"))                              # 三個 OpenAPI 端點都失敗
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    out = tmp_path / "gh_out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    oa.main()
+    assert "forecast_changed=true" in out.read_text(encoding="utf-8") and oa.FORECAST.exists()

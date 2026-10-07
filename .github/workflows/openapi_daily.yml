@@ -1,6 +1,6 @@
 name: 官方 OpenAPI 每日收集
 
-# 只存不使用（2026-10-07）：每天抓官方 OpenAPI 的上市日線、上櫃日線、上櫃融資券，存私有 Release `openapi-daily`；不進閘門、不接任何下游。
+# 只存不使用（2026-10-07）：每天抓官方 OpenAPI 的上市日線、上櫃日線、上櫃融資券，加上市融資（網站端點帶日期，08:00～22:00 不請求）與上市／上櫃除權除息預告表快照，存私有 Release `openapi-daily`；不進閘門、不接任何下游。
 # 為什麼要每天：OpenAPI 沒有日期參數、只回最新一天，漏一天就補不回來（網站端點才補得回來）。
 # 為什麼多班：GitHub 排程實測會延遲 2～9 小時（created_at＝run_started_at，延遲在排程器建立 run 之前）；多班任一班成功即可，
 # 重複班次冪等（同一資料日、Last-Modified 沒比較新就略過；較新＝官方事後更正才覆蓋）。
@@ -53,7 +53,7 @@ jobs:
                 grep -qx "$f" data/selfhost/_oa_assets.txt || { echo "::error::Release 上有 fetch log 卻缺 $f——疑似上次上傳中斷，請人工處理"; exit 1; }
               done
             fi
-            for f in openapi_prices.parquet openapi_margin.parquet openapi_fetch_log.jsonl; do
+            for f in openapi_prices.parquet openapi_margin.parquet openapi_forecast.jsonl openapi_fetch_log.jsonl; do
               if grep -qx "$f" data/selfhost/_oa_assets.txt; then
                 ok=0
                 for try in 1 2 3; do
@@ -64,6 +64,10 @@ jobs:
                 [ "$ok" = 1 ] || { echo "::error::下載 $f 失敗（Release 上有）——中止"; exit 1; }
               fi
             done
+            # 預告快照：fetch log 已有「成功記錄」卻缺檔＝上次上傳可能傳到一半；預告表只有未來事件、補不回來，不可從空檔重來
+            if grep -q '"endpoint": "forecast_[A-Z]*", "rows"' data/selfhost/openapi_fetch_log.jsonl 2>/dev/null && ! grep -qx openapi_forecast.jsonl data/selfhost/_oa_assets.txt; then
+              echo "::error::Release 上缺 openapi_forecast.jsonl，但 fetch log 已有預告表成功記錄——疑似上傳中斷，請人工處理"; exit 1
+            fi
           else
             gh release create openapi-daily --title "官方 OpenAPI 每日累積" --notes "由 openapi_daily.yml 維護；只存不使用，勿手動覆蓋"
           fi
@@ -82,4 +86,8 @@ jobs:
             for f in openapi_prices.parquet openapi_margin.parquet; do
               [ -f data/selfhost/$f ] && gh release upload openapi-daily data/selfhost/$f --clobber
             done
+          fi
+          # 預告快照放最後、失敗只警告：不能因為它擋掉當班日線／融資的上傳（OpenAPI 只回最新一天，漏傳就補不回來）
+          if [ "${{ steps.collect.outputs.forecast_changed }}" = "true" ] && [ -f data/selfhost/openapi_forecast.jsonl ]; then
+            gh release upload openapi-daily data/selfhost/openapi_forecast.jsonl --clobber || echo "::warning::預告快照上傳失敗，下一班會再傳"
           fi
