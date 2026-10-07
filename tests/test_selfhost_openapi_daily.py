@@ -208,9 +208,15 @@ def _empty_margin():
 
 
 def test_margin_candidates_skip_weekend():
-    assert oa.margin_candidates(date(2026, 10, 7)) == [date(2026, 10, 7), date(2026, 10, 6)]       # 週三：今天＋昨天
-    assert oa.margin_candidates(date(2026, 10, 5)) == [date(2026, 10, 5), date(2026, 10, 2)]       # 週一：前一個平日是週五
-    assert oa.margin_candidates(date(2026, 10, 3)) == [date(2026, 10, 2)]                          # 週六：只試週五
+    assert oa.margin_candidates(date(2026, 10, 7), 23) == [date(2026, 10, 7), date(2026, 10, 6)]   # 週三 23 點：今天＋昨天
+    assert oa.margin_candidates(date(2026, 10, 5), 23) == [date(2026, 10, 5), date(2026, 10, 2)]   # 週一：前一個平日是週五
+    assert oa.margin_candidates(date(2026, 10, 3), 23) == [date(2026, 10, 2)]                      # 週六：只試週五
+
+
+def test_margin_today_not_tried_before_22():
+    for h in (4, 16, 18, 20, 21):
+        assert oa.margin_candidates(date(2026, 10, 7), h) == [date(2026, 10, 6)]                  # 融資還沒公布：不打今天
+    assert oa.margin_candidates(date(2026, 10, 7), 22)[0] == date(2026, 10, 7)
 
 
 def test_collect_twse_margin_added_then_not_refetched(monkeypatch):
@@ -220,7 +226,7 @@ def test_collect_twse_margin_added_then_not_refetched(monkeypatch):
         calls.append(d)
         return _margin_df(d) if d == date(2026, 10, 6) else pd.DataFrame(columns=_margin_df(d).columns)   # 今天還沒公布
     _fake_chips(monkeypatch, fake)
-    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 23)
     assert ch and len(t) == 400 and set(t.src) == {oa.SRC_WEB_MARGN} and set(t.market) == {"TW"}
     assert list(t.columns) == oa.MARGIN_COLS
     calls.clear()
@@ -232,10 +238,10 @@ def test_collect_twse_margin_added_then_not_refetched(monkeypatch):
 
 def test_collect_twse_margin_failure_and_thin_do_not_store(monkeypatch, capsys):
     _fake_chips(monkeypatch, lambda d: None)
-    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 23)
     assert not ch and len(t) == 0 and "::warning::" in capsys.readouterr().err
     _fake_chips(monkeypatch, lambda d: _margin_df(d, n=50))
-    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 23)
     assert not ch and len(t) == 0                                                               # 殘缺不存
 
 
@@ -280,3 +286,17 @@ def test_margin_cols_match_selfhost_chips():
     _sys.modules.pop("selfhost_chips", None)
     import selfhost_chips as sc
     assert set(oa.MARGIN_COLS) - {"src", "last_modified", "fetched_at"} <= set(sc.MARGIN_COLS) | {"src"}
+
+
+def test_collect_twse_margin_before_22_never_requests_today(monkeypatch):
+    calls = []
+    _fake_chips(monkeypatch, lambda d: calls.append(d) or pd.DataFrame())
+    for h in (8, 16, 18, 20, 21):                                                                  # 08:00～22:00 整段不請求
+        t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), h)
+        assert not ch and len(t) == 0
+    assert calls == []
+    oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 4)                         # 隔日 04:00 清晨班：只補前一晚
+    assert calls == [date(2026, 10, 6)]
+    calls.clear()
+    oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin(), 23)                       # 23:00 那班
+    assert calls == [date(2026, 10, 7), date(2026, 10, 6)]

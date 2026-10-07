@@ -12,7 +12,7 @@
 | 上櫃日線 | www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes | 與網站 dailyQuotes 889 檔四碼股量額價**全部相同**（2026-10-07 實測）。⚠️ 舊端點 `tpex_mainboard_quotes` 量額有 860／889 檔偏低（總量少 2.2%），不要用 |
 | 上櫃融資券 | www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance | 11 個數值欄與網站完全相同 |
 上市融資：OpenAPI 的 MI_MARGN 沒有日期欄，不用；改打**網站端點** `rwd/zh/marginTrading/MI_MARGN?date=`（帶日期、回應會回傳自己的日期，
-由 `selfhost_chips.margin_twse` 斷言相符，沒資料回「沒有符合條件」＝尚未公布）。每次嘗試今天與前一個平日；已存的日子若最後抓取早於隔日 00:00（台北）會再打一次、內容有差才整天替換（官方隔日調帳），之後不再打；src 標 `web_mi_margn`。
+由 `selfhost_chips.margin_twse` 斷言相符，沒資料回「沒有符合條件」＝尚未公布）。每次嘗試前一個平日；「今天」要台北 22:00 之後才試（融資約 22:00 公布）；已存的日子若最後抓取早於隔日 00:00（台北）會再打一次、內容有差才整天替換（官方隔日調帳），之後不再打；src 標 `web_mi_margn`。
 
 ## 規矩
 - 回應內每列 `Date`（民國 7 碼）必須全部相同、且不是未來；否則丟棄並警告，絕不存。**太舊不算錯**（春節等長假官方日期會停在封關日，
@@ -56,6 +56,8 @@ MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300, "twse_margin":
 SHRINK_RATIO = 0.9
 SRC_TPEX_DC = "openapi_dc"   # 上櫃改用 daily_close_quotes 後的標記；舊端點（src=openapi）存下的同一天量額偏低，要能被它覆蓋
 SRC_WEB_MARGN = "web_mi_margn"
+MARGN_TODAY_AFTER_HOUR = 22     # 上市融資約台北 21:00～22:00 才公布：白天到 22:00 前整段不打（今天、前一天都不打）；實測輪詢後再調
+MARGN_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:00）仍收，用來補前一晚漏的與官方隔日調帳；08:00～22:00 之間一律不打
 SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
 GAP_WINDOW_DAYS = 14
 
@@ -205,9 +207,9 @@ def _read(p: Path, cols: list[str]) -> pd.DataFrame:
     return pd.read_parquet(p) if p.exists() else pd.DataFrame(columns=cols).astype({"date": "datetime64[ns]"})
 
 
-def margin_candidates(today: date) -> list[date]:
-    """上市融資要試的日期：今天＋前一個平日（隔日清晨那班要補前一天）。週末不試；國定假日會回「沒有符合條件」，不算錯。"""
-    out = [today] if today.weekday() < 5 else []
+def margin_candidates(today: date, hour: int = 24) -> list[date]:
+    """上市融資要試的日期：前一個平日（已公布）＋今天（台北 MARGN_TODAY_AFTER_HOUR 點之後才試）。週末不試；國定假日會回「沒有符合條件」，不算錯。"""
+    out = [today] if today.weekday() < 5 and hour >= MARGN_TODAY_AFTER_HOUR else []
     d = today - timedelta(days=1)
     while d.weekday() >= 5:
         d -= timedelta(days=1)
@@ -236,15 +238,17 @@ def _same_content(a: pd.DataFrame, b: pd.DataFrame) -> bool:
     return x.shape == y.shape and x.equals(y)
 
 
-def collect_twse_margin(today: date, fetched, table: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+def collect_twse_margin(today: date, fetched, table: pd.DataFrame, hour: int = 24) -> tuple[pd.DataFrame, bool]:
     """回 (新表, 是否有變更)。沒資料＝尚未公布，只記 log；回應日期不符或欄位改版→ margin_twse 回 None → 警告。
     已存的 (TW, 日)：若最後抓取早於隔日 00:00（台北）就再打一次，內容有差才整天替換（官方隔日調帳／首次公布不完整），
     縮水（<90%）不覆蓋；過了該窗口就不再打。web 來源沒有 Last-Modified，所以不走 merge_day 的時間判斷。"""
+    if MARGN_QUIET_FROM_HOUR <= hour < MARGN_TODAY_AFTER_HOUR:
+        return table, False                      # 官方還沒公布的時段：不請求、不記 log
     if str(Path(__file__).parent) not in sys.path:
         sys.path.insert(0, str(Path(__file__).parent))
     import selfhost_chips as sc  # noqa: PLC0415
     changed = False
-    for d in margin_candidates(today):
+    for d in margin_candidates(today, hour):
         entry = {"fetched_at": str(fetched), "endpoint": "twse_margin", "data_date": str(d)}
         mask = (table["market"] == "TW") & (table["date"] == pd.Timestamp(d)) if len(table) else pd.Series([], dtype=bool)
         stored = bool(mask.any())
@@ -321,7 +325,7 @@ def main() -> int:
         _log(entry)
         ok += 1
     try:
-        tables[MARGIN], c2 = collect_twse_margin(today, fetched, tables[MARGIN])
+        tables[MARGIN], c2 = collect_twse_margin(today, fetched, tables[MARGIN], now.hour)
         changed = changed or c2
     except Exception as e:      # noqa: BLE001  上市融資失敗不拖垮 OpenAPI 三個端點
         print(f"::warning::上市融資 MI_MARGN 收集例外：{str(e)[:120]}", file=sys.stderr)
