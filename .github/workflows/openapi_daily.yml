@@ -1,0 +1,85 @@
+name: 官方 OpenAPI 每日收集
+
+# 只存不使用（2026-10-07）：每天抓官方 OpenAPI 的上市日線、上櫃日線、上櫃融資券，存私有 Release `openapi-daily`；不進閘門、不接任何下游。
+# 為什麼要每天：OpenAPI 沒有日期參數、只回最新一天，漏一天就補不回來（網站端點才補得回來）。
+# 為什麼多班：GitHub 排程實測會延遲 2～9 小時（created_at＝run_started_at，延遲在排程器建立 run 之前）；多班任一班成功即可，
+# 重複班次冪等（同一資料日、Last-Modified 沒比較新就略過；較新＝官方事後更正才覆蓋）。
+# 班次（UTC，平日）：08:00／10:00／12:00／15:00／20:00 ＝ 台北 16:00／18:00／20:00／23:00／隔日 04:00（不含延遲）。
+# 資料日斷言、每次請求的 Last-Modified 記錄、缺交易日偵測見 scripts/selfhost_openapi_daily.py。
+# 資料放 DATA_REPO（私有）；沿用 selfhost_collect.yml 的 DATA_REPO／DATA_REPO_PAT 設定。
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1-5"
+    - cron: "0 10 * * 1-5"
+    - cron: "0 12 * * 1-5"
+    - cron: "0 15 * * 1-5"
+    - cron: "0 20 * * 1-5"
+
+permissions:
+  contents: write            # 沒設 DATA_REPO_PAT 時退回內建 token，建立／上傳 Release 需要寫入權限
+
+concurrency:
+  group: openapi-daily
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.DATA_REPO_PAT || github.token }}
+      GH_REPO: ${{ vars.DATA_REPO || github.repository }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install pandas pyarrow requests
+
+      - name: 下載累積檔
+        run: |
+          mkdir -p data/selfhost
+          if gh release view openapi-daily >/dev/null 2>&1; then
+            gh release view openapi-daily --json assets --jq '.assets[].name' > data/selfhost/_oa_assets.txt
+            # 已有 fetch log（＝不是第一次跑）卻缺 parquet ＝ 上次上傳可能傳到一半（--clobber 是先刪再傳）：不可當成「從來沒有」而從空表重來
+            if grep -qx openapi_fetch_log.jsonl data/selfhost/_oa_assets.txt; then
+              for f in openapi_prices.parquet openapi_margin.parquet; do
+                grep -qx "$f" data/selfhost/_oa_assets.txt || { echo "::error::Release 上有 fetch log 卻缺 $f——疑似上次上傳中斷，請人工處理"; exit 1; }
+              done
+            fi
+            for f in openapi_prices.parquet openapi_margin.parquet openapi_fetch_log.jsonl; do
+              if grep -qx "$f" data/selfhost/_oa_assets.txt; then
+                ok=0
+                for try in 1 2 3; do
+                  gh release download openapi-daily -D data/selfhost -p "$f" --clobber && ok=1 && break
+                  sleep $((try * 10))
+                done
+                # Release 上有卻下載失敗＝錯：不可當成「尚無舊檔」而用一份只有今天的小檔去覆蓋累積歷史
+                [ "$ok" = 1 ] || { echo "::error::下載 $f 失敗（Release 上有）——中止"; exit 1; }
+              fi
+            done
+          else
+            gh release create openapi-daily --title "官方 OpenAPI 每日累積" --notes "由 openapi_daily.yml 維護；只存不使用，勿手動覆蓋"
+          fi
+
+      - name: 收集 OpenAPI 日線／融資券
+        id: collect
+        run: python scripts/selfhost_openapi_daily.py
+
+      - name: 上傳累積檔
+        # 收集步驟失敗也要傳（fetch log 記了失敗原因）；但下載累積檔失敗時收集會被跳過，此時不能傳（會用殘缺檔蓋掉歷史）
+        # 被取消時不傳（可能有寫到一半的檔）；parquet 只有「真的有新增／更正」才重傳，fetch log 每班都傳（每班都有記錄）
+        if: ${{ !cancelled() && steps.collect.conclusion != 'skipped' }}
+        run: |
+          gh release upload openapi-daily data/selfhost/openapi_fetch_log.jsonl --clobber
+          if [ "${{ steps.collect.outputs.changed }}" = "true" ]; then
+            for f in openapi_prices.parquet openapi_margin.parquet; do
+              [ -f data/selfhost/$f ] && gh release upload openapi-daily data/selfhost/$f --clobber
+            done
+          fi
