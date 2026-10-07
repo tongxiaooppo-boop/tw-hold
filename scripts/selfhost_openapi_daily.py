@@ -27,7 +27,11 @@
 - 每次結尾對交易日曆檢查近 14 天有沒有缺的交易日，有洞就發 `::warning::`（不失敗；網站端點補得回來）。
 - 單一端點失敗不影響其他端點；三個 OpenAPI 端點全失敗才非零退出（上市融資是網站端點，不計入，失敗只發警告）。
 
-輸出（`data/selfhost/`）：`openapi_prices.parquet`、`openapi_margin.parquet`、`openapi_fetch_log.jsonl`。
+## 預告表（2026-10-07 加）
+上市 `TWT48U_ALL`、上櫃 `tpex_exright_prepost` 兩份除權除息預告表，每次執行抓一次（同市場至少間隔 3 小時），存 `openapi_forecast.jsonl`；
+內容與上一份相同只記抓取時間（same_as）。預告表只有未來事件、沒有歷史，用來事後比對「預告值 vs 官方結果表」，並備好當天事件的還原因子。
+
+輸出（`data/selfhost/`）：`openapi_prices.parquet`、`openapi_margin.parquet`、`openapi_forecast.jsonl`、`openapi_fetch_log.jsonl`。
 """
 from __future__ import annotations
 
@@ -46,10 +50,14 @@ SH = Path(__file__).resolve().parents[1] / "data" / "selfhost"
 PRICES = SH / "openapi_prices.parquet"
 MARGIN = SH / "openapi_margin.parquet"
 LOG = SH / "openapi_fetch_log.jsonl"
+FORECAST = SH / "openapi_forecast.jsonl"
 UA = {"User-Agent": "Mozilla/5.0"}
 TWSE_DAY = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 TPEX_DAY = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
 TPEX_MARGIN = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance"
+TWSE_FORECAST = "https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL"      # 上市除權除息預告表（只有未來事件）
+TPEX_FORECAST = "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"           # 上櫃除權除息預告表
+FORECAST_MIN_GAP_HOURS = 3     # 同一市場兩次抓取至少間隔這麼久（官方請求要節制）
 TZ = ZoneInfo("Asia/Taipei")
 MAX_AGE_DAYS = 7           # 超過只印註記
 MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300, "twse_margin": 300}
@@ -183,6 +191,13 @@ def _atomic_parquet(df: pd.DataFrame, p: Path) -> None:
     os.replace(tmp, p)
 
 
+def _atomic_text(p: Path, text: str) -> None:
+    """同 _atomic_parquet：先寫暫存檔再換名，被取消時不留下寫到一半的檔。"""
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, p)
+
+
 def _log(entry: dict) -> None:
     SH.mkdir(parents=True, exist_ok=True)
     with LOG.open("a", encoding="utf-8") as f:
@@ -283,6 +298,89 @@ def collect_twse_margin(today: date, fetched, table: pd.DataFrame, hour: int = 2
     return table, changed
 
 
+def _roc7_iso(x: str) -> str:
+    x = str(x).strip()
+    return date(int(x[:-4]) + 1911, int(x[-4:-2]), int(x[-2:])).isoformat()
+
+
+def normalize_forecast(rows: list[dict], market: str) -> list[dict]:
+    """預告表 → 同一種 rows：code、name、ex（除權除息日 ISO）、kind、stock_ratio、sub_ratio、sub_price、cash，
+    另存 cash_raw／sub_price_raw 原字串（上市 '' 可能是「不適用」也可能是「待公告」，上櫃「尚未公告」＝待公告、0.00000000＝不適用，
+    轉成數字後分不出來）。壞掉的列跳過並計數（整份回應全壞才拋例外）；結果依 (ex, code) 排序，內容比對不受官方排列順序影響。
+    官方預告表**沒有參考價**，要用「前收 − 現金股利」等公式自己算（上市截斷到分、上櫃四捨五入到分，2026-10-07 實測各 100% 吻合結果表）。"""
+    out, bad = [], 0
+    for r in rows:
+        try:
+            if market == "TW":
+                g = {"code": r["Code"], "name": r.get("Name", ""), "ex": _roc7_iso(r["Date"]), "kind": r.get("Exdividend", ""),
+                     "stock_ratio": r.get("StockDividendRatio"), "sub_ratio": r.get("SubscriptionRatio"),
+                     "sub_price": r.get("SubscriptionPricePerShare"), "cash": r.get("CashDividend")}
+            else:
+                g = {"code": r["SecuritiesCompanyCode"], "name": r.get("CompanyName", ""), "ex": _roc7_iso(r["ExRrightsExDividendDate"]),
+                     "kind": r.get("ExRrightsExDividend", ""), "stock_ratio": r.get("StockDividendRatio"),
+                     "sub_ratio": r.get("SubscriptionRatioToNewSharesIssued"), "sub_price": r.get("SubscriptionPricePerShare"),
+                     "cash": r.get("CashDividend")}
+            g["cash_raw"], g["sub_price_raw"] = str(g["cash"] or "").strip(), str(g["sub_price"] or "").strip()
+            for k in ("stock_ratio", "sub_ratio", "sub_price", "cash"):
+                g[k] = _num(g[k])
+        except (KeyError, ValueError, TypeError):
+            bad += 1
+            continue
+        out.append(g)
+    if bad:
+        print(f"::warning::預告表 {market} 有 {bad} 列解析失敗，已跳過", file=sys.stderr)
+    if rows and not out:
+        raise ValueError("預告表整份解析失敗（欄名改版？）")
+    return sorted(out, key=lambda g: (g["ex"], g["code"]))
+
+
+def _load_forecast() -> list[dict]:
+    if not FORECAST.exists():
+        return []
+    out = []
+    for i, x in enumerate(FORECAST.read_text(encoding="utf-8").splitlines()):
+        if not x.strip():
+            continue
+        try:
+            out.append(json.loads(x))
+        except json.JSONDecodeError:
+            print(f"::warning::openapi_forecast.jsonl 第 {i + 1} 行壞掉（截斷？），已跳過", file=sys.stderr)
+    return out
+
+
+def collect_forecasts(fetched: pd.Timestamp, recs: list[dict]) -> tuple[list[dict], bool]:
+    """每日預告表快照（上市＋上櫃）。每次抓取記一筆 {_fetched, market, source, n, rows|None, same_as}：
+    內容與同市場上一份相同 → rows 記 None、same_as 指向上一份的 _fetched（檔案不膨脹，但抓取時間全留）。
+    同市場兩次抓取至少間隔 FORECAST_MIN_GAP_HOURS；失敗只警告。預告表只有未來事件，漏抓就補不回來。"""
+    changed = False
+    for market, url in (("TW", TWSE_FORECAST), ("TWO", TPEX_FORECAST)):
+        mine = [r for r in recs if r.get("market") == market]
+        if mine and fetched - pd.Timestamp(mine[-1]["_fetched"]) < pd.Timedelta(hours=FORECAST_MIN_GAP_HOURS):
+            continue
+        entry = {"fetched_at": str(fetched), "endpoint": f"forecast_{market}"}
+        try:
+            r = requests.get(url, headers=UA, timeout=60)
+            r.raise_for_status()
+            raw = r.json()
+            if not isinstance(raw, list):
+                raise ValueError("回應不是列表")
+            rows = normalize_forecast(raw, market)
+        except Exception as e:      # noqa: BLE001
+            entry["result"] = f"失敗：{str(e)[:100]}"
+            print(f"::warning::預告表 {market} 失敗：{str(e)[:100]}（預告表只有未來事件，漏抓補不回來）", file=sys.stderr)
+            _log(entry)
+            continue
+        prev_full = next((x for x in reversed(mine) if x.get("rows") is not None), None)
+        same = prev_full is not None and prev_full["rows"] == rows
+        recs.append({"_fetched": str(fetched), "market": market, "source": "openapi", "n": len(rows),
+                     "rows": None if same else rows, "same_as": prev_full["_fetched"] if same else None})
+        entry["rows"], entry["result"] = len(rows), "同上一份" if same else "有變動"
+        print(f"[openapi] forecast_{market}：{len(rows)} 件、{entry['result']}")
+        _log(entry)
+        changed = True
+    return recs, changed
+
+
 def main() -> int:
     now = datetime.now(TZ)
     today, fetched = now.date(), pd.Timestamp(now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None))
@@ -329,6 +427,14 @@ def main() -> int:
         changed = changed or c2
     except Exception as e:      # noqa: BLE001  上市融資失敗不拖垮 OpenAPI 三個端點
         print(f"::warning::上市融資 MI_MARGN 收集例外：{str(e)[:120]}", file=sys.stderr)
+    forecast_changed = False
+    try:
+        recs, forecast_changed = collect_forecasts(fetched, _load_forecast())
+        if forecast_changed:
+            SH.mkdir(parents=True, exist_ok=True)
+            _atomic_text(FORECAST, "\n".join(json.dumps(x, ensure_ascii=False) for x in recs) + "\n")
+    except Exception as e:      # noqa: BLE001  預告表失敗不拖垮其他端點
+        print(f"::warning::預告表收集例外：{str(e)[:120]}", file=sys.stderr)
     SH.mkdir(parents=True, exist_ok=True)
     if changed:         # 沒有變更就不寫檔、workflow 也不重傳 parquet（--clobber 是先刪再傳，傳到一半失敗會永久丟歷史）
         for p, t in tables.items():
@@ -338,6 +444,7 @@ def main() -> int:
     if out:
         with open(out, "a", encoding="utf-8") as f:
             f.write(f"changed={'true' if changed else 'false'}\n")
+            f.write(f"forecast_changed={'true' if forecast_changed else 'false'}\n")
     try:
         sys.path.insert(0, str(Path(__file__).parent))
         import last_trading_day_guard as g  # noqa: PLC0415
