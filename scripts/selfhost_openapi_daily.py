@@ -11,12 +11,13 @@
 | 上市日線 | openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL | 與網站端點 MI_INDEX 7 欄完全相同 |
 | 上櫃日線 | www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes | 與網站 dailyQuotes 889 檔四碼股量額價**全部相同**（2026-10-07 實測）。⚠️ 舊端點 `tpex_mainboard_quotes` 量額有 860／889 檔偏低（總量少 2.2%），不要用 |
 | 上櫃融資券 | www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance | 11 個數值欄與網站完全相同 |
-上市融資 `MI_MARGN` 沒有日期欄，無法斷言資料日 → **本版不收**（待用「前日餘額＝昨日最終餘額」自證後再加）。
+上市融資：OpenAPI 的 MI_MARGN 沒有日期欄，不用；改打**網站端點** `rwd/zh/marginTrading/MI_MARGN?date=`（帶日期、回應會回傳自己的日期，
+由 `selfhost_chips.margin_twse` 斷言相符，沒資料回「沒有符合條件」＝尚未公布）。每次嘗試今天與前一個平日；已存的日子若最後抓取早於隔日 00:00（台北）會再打一次、內容有差才整天替換（官方隔日調帳），之後不再打；src 標 `web_mi_margn`。
 
 ## 規矩
 - 回應內每列 `Date`（民國 7 碼）必須全部相同、且不是未來；否則丟棄並警告，絕不存。**太舊不算錯**（春節等長假官方日期會停在封關日，
   超過 7 天只印註記；同一資料日重複抓到會因 Last-Modified 沒變而略過）。
-- 解析後列數低於下限（上市日線 500、上櫃日線 400、上櫃融資 300）→ 視為失敗不存（官方改欄名／回殘缺資料時不能悄悄寫入空表）。
+- 解析後列數低於下限（上市日線 500、上櫃日線 400、上櫃融資 300、上市融資 300）→ 視為失敗不存（官方改欄名／回殘缺資料時不能悄悄寫入空表）。
 - 同一資料日被「較新的 Last-Modified」覆蓋時，新列數若不到舊列數的 90% → 不覆蓋、發警告（`shrunk`），避免半成品換掉完整的一天。
 - 每列記 `last_modified`（HTTP 標頭，官方最後一次重新產生檔案的時間）與 `fetched_at`；每次請求另記一行 `openapi_fetch_log.jsonl`
   （端點、HTTP 狀態、資料日、Last-Modified、列數），累積「官方每天什麼時候更新」的實測分布。
@@ -24,7 +25,7 @@
   例外：src 等級較高者（上櫃 openapi_dc 對舊端點存下的 openapi）無視 Last-Modified 覆蓋；反方向略過；縮水保護不分來源。
   舊端點量額偏低的原因見 docs/data-fix.md B4 第 3 點（6488 實測：舊端點不含零股、盤後、鉅額，daily_close_quotes 含鉅額）。
 - 每次結尾對交易日曆檢查近 14 天有沒有缺的交易日，有洞就發 `::warning::`（不失敗；網站端點補得回來）。
-- 單一端點失敗不影響其他端點；全部失敗才非零退出。
+- 單一端點失敗不影響其他端點；三個 OpenAPI 端點全失敗才非零退出（上市融資是網站端點，不計入，失敗只發警告）。
 
 輸出（`data/selfhost/`）：`openapi_prices.parquet`、`openapi_margin.parquet`、`openapi_fetch_log.jsonl`。
 """
@@ -51,9 +52,10 @@ TPEX_DAY = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes
 TPEX_MARGIN = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance"
 TZ = ZoneInfo("Asia/Taipei")
 MAX_AGE_DAYS = 7           # 超過只印註記
-MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300}
+MIN_ROWS = {"twse_day": 500, "tpex_day": 400, "tpex_margin": 300, "twse_margin": 300}
 SHRINK_RATIO = 0.9
 SRC_TPEX_DC = "openapi_dc"   # 上櫃改用 daily_close_quotes 後的標記；舊端點（src=openapi）存下的同一天量額偏低，要能被它覆蓋
+SRC_WEB_MARGN = "web_mi_margn"
 SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
 GAP_WINDOW_DAYS = 14
 
@@ -203,6 +205,80 @@ def _read(p: Path, cols: list[str]) -> pd.DataFrame:
     return pd.read_parquet(p) if p.exists() else pd.DataFrame(columns=cols).astype({"date": "datetime64[ns]"})
 
 
+def margin_candidates(today: date) -> list[date]:
+    """上市融資要試的日期：今天＋前一個平日（隔日清晨那班要補前一天）。週末不試；國定假日會回「沒有符合條件」，不算錯。"""
+    out = [today] if today.weekday() < 5 else []
+    d = today - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return out + [d]
+
+
+def web_margin_to_openapi_schema(df: pd.DataFrame, fetched) -> pd.DataFrame:
+    """selfhost_chips.margin_twse 的輸出 → 本檔 openapi_margin 欄位（多 src／last_modified／fetched_at）。"""
+    out = df.copy()
+    out["src"] = SRC_WEB_MARGN
+    out["last_modified"] = pd.NaT
+    out["fetched_at"] = fetched
+    return out[MARGIN_COLS]
+
+
+def _stale_fetch(table_rows: pd.DataFrame, d: date) -> bool:
+    """該日最後一次抓取早於 D+1 台北 00:00（＝D 16:00 UTC）→ 還沒過「官方隔日調帳」窗口，值得再打一次。"""
+    fa = table_rows["fetched_at"].max()
+    return pd.isna(fa) or pd.Timestamp(fa) < pd.Timestamp(d) + pd.Timedelta(hours=16)
+
+
+def _same_content(a: pd.DataFrame, b: pd.DataFrame) -> bool:
+    num = [c for c in MARGIN_COLS if c not in ("ticker", "market", "date", "note", "src", "last_modified", "fetched_at")]
+    x = a.sort_values("ticker").reset_index(drop=True)[["ticker", *num]]
+    y = b.sort_values("ticker").reset_index(drop=True)[["ticker", *num]]
+    return x.shape == y.shape and x.equals(y)
+
+
+def collect_twse_margin(today: date, fetched, table: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """回 (新表, 是否有變更)。沒資料＝尚未公布，只記 log；回應日期不符或欄位改版→ margin_twse 回 None → 警告。
+    已存的 (TW, 日)：若最後抓取早於隔日 00:00（台北）就再打一次，內容有差才整天替換（官方隔日調帳／首次公布不完整），
+    縮水（<90%）不覆蓋；過了該窗口就不再打。web 來源沒有 Last-Modified，所以不走 merge_day 的時間判斷。"""
+    if str(Path(__file__).parent) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).parent))
+    import selfhost_chips as sc  # noqa: PLC0415
+    changed = False
+    for d in margin_candidates(today):
+        entry = {"fetched_at": str(fetched), "endpoint": "twse_margin", "data_date": str(d)}
+        mask = (table["market"] == "TW") & (table["date"] == pd.Timestamp(d)) if len(table) else pd.Series([], dtype=bool)
+        stored = bool(mask.any())
+        if stored and not _stale_fetch(table.loc[mask], d):
+            continue
+        df = sc.margin_twse(d)
+        if df is None:
+            entry["result"] = "失敗（連線／日期不符／欄位改版）"
+            print(f"::warning::上市融資 MI_MARGN {d} 失敗（連線、回應日期不符或欄位改版），不存", file=sys.stderr)
+        elif df.empty:
+            entry["result"] = "尚未公布（沒有符合條件）"
+            print(f"[openapi] twse_margin：{d} 尚未公布或休市")
+        elif len(df) < MIN_ROWS["twse_margin"]:
+            entry["result"] = f"失敗：只有 {len(df)} 列（下限 {MIN_ROWS['twse_margin']}），不存"
+            print(f"::warning::上市融資 MI_MARGN {d} 只有 {len(df)} 列（下限 {MIN_ROWS['twse_margin']}）——殘缺？不存", file=sys.stderr)
+        elif stored and len(df) < SHRINK_RATIO * int(mask.sum()):
+            entry["result"] = f"shrunk {len(df)} 列"
+            print(f"::warning::上市融資 MI_MARGN {d} 重打只有 {len(df)} 列（已存 {int(mask.sum())}），不覆蓋", file=sys.stderr)
+        elif stored and _same_content(table.loc[mask], df):
+            table.loc[mask, "fetched_at"] = fetched                  # 內容沒變：只更新抓取時間，窗口過後就不再重打
+            changed = True
+            entry["rows"], entry["result"] = len(df), "unchanged（更新抓取時間）"
+            print(f"[openapi] twse_margin：資料日 {d}、{len(df)} 列、內容沒變")
+        else:
+            new = web_margin_to_openapi_schema(df, fetched)
+            table = pd.concat([table.loc[~mask], new], ignore_index=True).sort_values(["date", "market", "ticker"]).reset_index(drop=True)[MARGIN_COLS]
+            changed = True
+            action = "replaced" if stored else "added"
+            entry["rows"], entry["result"] = len(df), f"{action} {len(df)} 列"
+            print(f"[openapi] twse_margin：資料日 {d}、{len(df)} 列、{action}")
+        _log(entry)
+    return table, changed
+
+
 def main() -> int:
     now = datetime.now(TZ)
     today, fetched = now.date(), pd.Timestamp(now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None))
@@ -244,6 +320,11 @@ def main() -> int:
         print(f"[openapi] {name}：資料日 {d}、{len(df)} 列、{action}（Last-Modified {lm_hdr}）")
         _log(entry)
         ok += 1
+    try:
+        tables[MARGIN], c2 = collect_twse_margin(today, fetched, tables[MARGIN])
+        changed = changed or c2
+    except Exception as e:      # noqa: BLE001  上市融資失敗不拖垮 OpenAPI 三個端點
+        print(f"::warning::上市融資 MI_MARGN 收集例外：{str(e)[:120]}", file=sys.stderr)
     SH.mkdir(parents=True, exist_ok=True)
     if changed:         # 沒有變更就不寫檔、workflow 也不重傳 parquet（--clobber 是先刪再傳，傳到一半失敗會永久丟歷史）
         for p, t in tables.items():
@@ -259,7 +340,7 @@ def main() -> int:
         closed = g.fetch_closed()
     except Exception:       # noqa: BLE001
         closed = None
-    for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO")):
+    for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO"), ("上市融資券", MARGIN, "TW")):
         t = tables[path]
         t = t[t["market"] == mk] if len(t) else t
         if not len(t):                      # 累積檔還是空的（首日、端點整個失敗）→ 不查，免得報出假缺口
@@ -267,7 +348,7 @@ def main() -> int:
         have = {x.date() for x in t["date"].unique()}
         gaps = [d for d in missing_trading_days(have, today, closed) if d >= min(have)]
         if gaps:
-            print(f"::warning::OpenAPI {name} 累積檔缺交易日：{', '.join(map(str, gaps))}（網站端點補得回來）", file=sys.stderr)
+            print(f"::warning::OpenAPI {name} 累積檔缺交易日：{', '.join(map(str, gaps))}（網站端點補得回來；上市融資這支不會自動補，需手動）", file=sys.stderr)
     return 0 if ok else 1
 
 

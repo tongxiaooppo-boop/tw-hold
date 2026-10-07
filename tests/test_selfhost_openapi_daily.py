@@ -6,11 +6,19 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 _spec = importlib.util.spec_from_file_location(
     "oa", Path(__file__).resolve().parents[1] / "scripts" / "selfhost_openapi_daily.py")
 oa = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(oa)
+
+@pytest.fixture(autouse=True)
+def _isolate_log(tmp_path, monkeypatch):
+    """測試不能寫進真實的 data/selfhost/openapi_fetch_log.jsonl（那份是官方更新時間的實測紀錄）。"""
+    monkeypatch.setattr(oa, "SH", tmp_path)
+    monkeypatch.setattr(oa, "LOG", tmp_path / "log.jsonl")
+
 
 TODAY = date(2026, 10, 7)
 LM1 = pd.Timestamp("2026-10-06 15:30:05")
@@ -173,3 +181,102 @@ def test_tpex_real_shape_filters_no_trade_and_non_4digit():
     rows = [_tpex_row(), _tpex_row(code="00411A"), _tpex_row(code="1241", close="---"), _tpex_row(code="030001")]
     df = oa.parse_prices(rows, "TWO", date(2026, 10, 6), LM1, FETCHED)
     assert list(df.ticker) == ["1240"] and df.chg.iloc[0] == 0.11
+
+
+# ───────── 上市融資 MI_MARGN（網站端點，帶日期）─────────
+import sys as _sys
+import types as _types
+
+
+def _margin_df(d, n=400):
+    cols = ["date", "ticker", "market", "margin_balance", "margin_buy", "margin_sell", "margin_redeem",
+            "short_balance", "short_buy", "short_sell", "short_redeem", "offset", "margin_prev", "short_prev", "note"]
+    rows = [{"date": pd.Timestamp(d), "ticker": str(1000 + i), "market": "TW", "margin_balance": 9.0, "margin_buy": 1.0,
+             "margin_sell": 2.0, "margin_redeem": 0.0, "short_balance": 6.0, "short_buy": 1.0, "short_sell": 2.0,
+             "short_redeem": 0.0, "offset": 0.0, "margin_prev": 10.0, "short_prev": 5.0, "note": ""} for i in range(n)]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def _fake_chips(monkeypatch, fn):
+    m = _types.ModuleType("selfhost_chips")
+    m.margin_twse = fn
+    monkeypatch.setitem(_sys.modules, "selfhost_chips", m)
+
+
+def _empty_margin():
+    return pd.DataFrame(columns=oa.MARGIN_COLS).astype({"date": "datetime64[ns]"})
+
+
+def test_margin_candidates_skip_weekend():
+    assert oa.margin_candidates(date(2026, 10, 7)) == [date(2026, 10, 7), date(2026, 10, 6)]       # 週三：今天＋昨天
+    assert oa.margin_candidates(date(2026, 10, 5)) == [date(2026, 10, 5), date(2026, 10, 2)]       # 週一：前一個平日是週五
+    assert oa.margin_candidates(date(2026, 10, 3)) == [date(2026, 10, 2)]                          # 週六：只試週五
+
+
+def test_collect_twse_margin_added_then_not_refetched(monkeypatch):
+    calls = []
+
+    def fake(d):
+        calls.append(d)
+        return _margin_df(d) if d == date(2026, 10, 6) else pd.DataFrame(columns=_margin_df(d).columns)   # 今天還沒公布
+    _fake_chips(monkeypatch, fake)
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    assert ch and len(t) == 400 and set(t.src) == {oa.SRC_WEB_MARGN} and set(t.market) == {"TW"}
+    assert list(t.columns) == oa.MARGIN_COLS
+    calls.clear()
+    late = pd.Timestamp("2026-10-07 02:00:00")                       # 10/6 的資料在 10/7 台北 10:00 抓過（過了隔日 00:00 窗口）
+    t["fetched_at"] = late
+    t2, ch2 = oa.collect_twse_margin(date(2026, 10, 7), pd.Timestamp("2026-10-07 08:00:00"), t)
+    assert calls == [date(2026, 10, 7)] and not ch2 and len(t2) == 400                          # 過窗口的 10/6 不重打
+
+
+def test_collect_twse_margin_failure_and_thin_do_not_store(monkeypatch, capsys):
+    _fake_chips(monkeypatch, lambda d: None)
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    assert not ch and len(t) == 0 and "::warning::" in capsys.readouterr().err
+    _fake_chips(monkeypatch, lambda d: _margin_df(d, n=50))
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _empty_margin())
+    assert not ch and len(t) == 0                                                               # 殘缺不存
+
+
+def test_web_margin_does_not_collide_with_tpex_rows(monkeypatch):
+    _fake_chips(monkeypatch, lambda d: _margin_df(d) if d == date(2026, 10, 6) else pd.DataFrame())
+    tpex = oa.parse_margin([{"Date": "1151006", "SecuritiesCompanyCode": "1240", "MarginPurchaseBalance": "9"}],
+                           "TWO", date(2026, 10, 6), LM1, FETCHED)
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), FETCHED, _tbl(tpex))
+    assert ch and set(t.market) == {"TW", "TWO"}                                                # 同一天上櫃已存，上市仍會加（以市場分開）
+
+
+def test_collect_twse_margin_refetch_inside_window_replaces_only_on_change(monkeypatch):
+    d6 = date(2026, 10, 6)
+    first = lambda d: _margin_df(d) if d == d6 else pd.DataFrame()
+    _fake_chips(monkeypatch, first)
+    t, _ = oa.collect_twse_margin(date(2026, 10, 6), pd.Timestamp("2026-10-06 13:00:00"), _empty_margin())   # 台北 21:00 首次抓（窗口內）
+    # 窗口內重打：內容相同 → 只更新抓取時間
+    t, ch = oa.collect_twse_margin(date(2026, 10, 7), pd.Timestamp("2026-10-06 20:00:00"), t)                # 台北 04:00 那班
+    assert ch and len(t) == 400 and t.fetched_at.max() == pd.Timestamp("2026-10-06 20:00:00")
+    # 過了窗口（抓取時間 ≥ D 16:00 UTC）就不再打
+    calls = []
+    _fake_chips(monkeypatch, lambda d: calls.append(d) or pd.DataFrame())
+    oa.collect_twse_margin(date(2026, 10, 7), pd.Timestamp("2026-10-07 08:00:00"), t)
+    assert d6 not in calls
+    # 官方調帳：窗口內重打內容有差 → 整天替換
+    t["fetched_at"] = pd.Timestamp("2026-10-06 13:00:00")
+    changed = lambda d: _margin_df(d).assign(margin_prev=99.0) if d == d6 else pd.DataFrame()
+    _fake_chips(monkeypatch, changed)
+    t2, ch = oa.collect_twse_margin(date(2026, 10, 7), pd.Timestamp("2026-10-06 20:00:00"), t)
+    assert ch and len(t2) == 400 and (t2.margin_prev == 99.0).all()
+    # 重打縮水 → 不覆蓋
+    t["fetched_at"] = pd.Timestamp("2026-10-06 13:00:00")
+    _fake_chips(monkeypatch, lambda d: _margin_df(d, n=330) if d == d6 else pd.DataFrame())
+    t3, ch = oa.collect_twse_margin(date(2026, 10, 7), pd.Timestamp("2026-10-06 20:00:00"), t)
+    assert len(t3) == 400
+
+
+def test_margin_cols_match_selfhost_chips():
+    sys_path = str(Path(__file__).resolve().parents[1] / "scripts")
+    if sys_path not in _sys.path:
+        _sys.path.insert(0, sys_path)
+    _sys.modules.pop("selfhost_chips", None)
+    import selfhost_chips as sc
+    assert set(oa.MARGIN_COLS) - {"src", "last_modified", "fetched_at"} <= set(sc.MARGIN_COLS) | {"src"}
