@@ -4,18 +4,19 @@ name: 官方 OpenAPI 每日收集
 # 為什麼要每天：OpenAPI 沒有日期參數、只回最新一天，漏一天就補不回來（網站端點才補得回來）。
 # 為什麼多班：GitHub 排程實測會延遲 2～9 小時（created_at＝run_started_at，延遲在排程器建立 run 之前）；多班任一班成功即可，
 # 重複班次冪等（同一資料日、Last-Modified 沒比較新就略過；較新＝官方事後更正才覆蓋）。
-# 班次（UTC，平日）：08:00／10:00／12:00／15:00／20:00 ＝ 台北 16:00／18:00／20:00／23:00／隔日 04:00（不含延遲）。
+# 班次（UTC，平日）：08:02／10:02／12:02／15:02／20:02 ＝ 台北 16:02／18:02／20:02／23:02／隔日 04:02（不含延遲）。
+# 刻意不排整點：GitHub 排程在整點最擁擠、延遲最嚴重（使用者 2026-10-07 指定 16:00 → 16:02）；程式的請求時段只看台北「小時」，:02 不影響。
 # 資料日斷言、每次請求的 Last-Modified 記錄、缺交易日偵測見 scripts/selfhost_openapi_daily.py。
 # 資料放 DATA_REPO（私有）；沿用 selfhost_collect.yml 的 DATA_REPO／DATA_REPO_PAT 設定。
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8 * * 1-5"
-    - cron: "0 10 * * 1-5"
-    - cron: "0 12 * * 1-5"
-    - cron: "0 15 * * 1-5"
-    - cron: "0 20 * * 1-5"
+    - cron: "2 8 * * 1-5"
+    - cron: "2 10 * * 1-5"
+    - cron: "2 12 * * 1-5"
+    - cron: "2 15 * * 1-5"
+    - cron: "2 20 * * 1-5"
 
 permissions:
   contents: write            # 沒設 DATA_REPO_PAT 時退回內建 token，建立／上傳 Release 需要寫入權限

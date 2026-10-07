@@ -41,6 +41,9 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent))
+import _retry  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 SH = ROOT / "data" / "selfhost"
 OFFICIAL = SH / "ev_official.parquet"
@@ -56,7 +59,7 @@ FM_HOURLY = 560          # 免費註冊層 600/hr，留餘裕
 COLS = ["ticker", "market", "date", "type", "prev_close", "ref_price", "factor", "source", "detail"]
 
 
-def _http_json(url: str, retries: int = 3) -> dict:
+def _http_json(url: str, retries: int = _retry.TRIES) -> dict:
     """用 requests（certifi）——TPEx 憑證鏈缺中繼憑證，urllib 驗證會失敗。400／402 不重試。"""
     last = None
     for i in range(retries):
@@ -70,7 +73,7 @@ def _http_json(url: str, retries: int = 3) -> dict:
             raise
         except Exception as e:
             last = e
-        time.sleep(3 * (i + 1))
+        _retry.wait_after_failure(i)
     raise RuntimeError(f"請求失敗：{url[:90]} {last}")
 
 

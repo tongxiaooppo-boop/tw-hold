@@ -32,6 +32,9 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent))
+import _retry  # noqa: E402
+
 TWSE = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={d}&type=ALLBUT0999&response=json"
 TPEX = "https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?date={d}&response=json"
 OUT = Path(__file__).resolve().parents[1] / "data" / "selfhost" / "raw_prices.parquet"
@@ -54,7 +57,7 @@ REFMARK: list[dict] = []
 RM_COLS = ["ticker", "market", "date", "mark", "chg", "src"]
 
 
-def _get(url: str, retries: int = 3) -> dict | None:
+def _get(url: str, retries: int = _retry.TRIES) -> dict | None:
     """用 requests（certifi 憑證庫）——TPEx 憑證鏈缺中繼憑證，urllib 的系統憑證庫會驗證失敗。"""
     for i in range(retries):
         try:
@@ -63,7 +66,7 @@ def _get(url: str, retries: int = 3) -> dict | None:
             return r.json()
         except Exception as e:   # 網路／JSON 錯誤 → 退避重試
             print(f"  請求失敗（第 {i + 1} 次）：{str(e)[:80]}", file=sys.stderr)
-            time.sleep(3 * (i + 1))
+            _retry.wait_after_failure(i)
     return None
 
 

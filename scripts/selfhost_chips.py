@@ -34,6 +34,9 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent))     # 讓 `python scripts/x.py` 與測試都找得到同資料夾的 _retry
+import _retry  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 SH = ROOT / "data" / "selfhost"
 INST = SH / "inst.parquet"
@@ -51,7 +54,7 @@ MARGIN_COLS = ["date", "ticker", "market", "margin_balance", "margin_buy", "marg
                "short_balance", "short_buy", "short_sell", "short_redeem", "offset", "margin_prev", "short_prev", "note"]
 
 
-def _get(url: str, retries: int = 3) -> dict | None:
+def _get(url: str, retries: int = _retry.TRIES) -> dict | None:
     for i in range(retries):
         try:
             r = requests.get(url, headers=UA, timeout=40)
@@ -59,7 +62,7 @@ def _get(url: str, retries: int = 3) -> dict | None:
             return r.json()
         except Exception as e:
             print(f"  請求失敗（第 {i + 1} 次）：{str(e)[:80]}", file=sys.stderr)
-            time.sleep(3 * (i + 1))
+            _retry.wait_after_failure(i)
     return None
 
 
