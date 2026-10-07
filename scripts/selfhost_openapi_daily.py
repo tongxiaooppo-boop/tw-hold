@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -66,6 +67,8 @@ SHRINK_RATIO = 0.9
 SRC_TPEX_DC = "openapi_dc"   # 上櫃改用 daily_close_quotes 後的標記；舊端點（src=openapi）存下的同一天量額偏低，要能被它覆蓋
 SRC_WEB_MARGN = "web_mi_margn"
 MARGN_TODAY_AFTER_HOUR = 22     # 上市融資約台北 21:00～22:00 才公布：白天到 22:00 前整段不打（今天、前一天都不打）；實測輪詢後再調
+PRICE_FROM_HOUR = 16            # 日線（上市＋上櫃）官方約 14:00 起陸續出、使用者設定 16:00 起；之前不請求（官方還沒公布不去打）
+PRICE_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:00）仍收；08:00～16:00 一律不請求
 INST_FROM_HOUR = 18            # 三大法人約台北 16:15～17:00 才齊（使用者設定 18:00 起）；之前不請求
 INST_QUIET_FROM_HOUR = 8        # 隔日清晨班（04:00）補前一晚漏的；08:00～18:00 不請求
 INST_MAX_MISMATCH = 0.02        # 法人合計恆等式（外資＋外資自營＋投信＋自營＝合計）不符比例超過這個就不存（多半是欄位錯位）
@@ -214,22 +217,47 @@ def _log(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
 
+FETCH_TRIES = 3
+FETCH_BACKOFF = (5, 15)        # 第 1、2 次失敗後各等幾秒
+
+
 def fetch(url: str):
-    """回 (rows|None, last_modified_header|None, http_status|None, 錯誤字串)。"""
-    try:
-        r = requests.get(url, headers=UA, timeout=60)
-        lm = r.headers.get("Last-Modified")
-        r.raise_for_status()
-        j = r.json()
-        if not isinstance(j, list) or not j:
-            return None, lm, r.status_code, "回應不是非空列表"
-        return j, lm, r.status_code, ""
-    except Exception as e:      # noqa: BLE001
-        return None, None, getattr(getattr(e, "response", None), "status_code", None), str(e)[:120]
+    """回 (rows|None, last_modified_header|None, http_status|None, 錯誤字串)。
+    上櫃 daily_close_quotes 一次回 12,000 多列、約 4MB，官方偶爾回被截斷的 JSON（Response ended prematurely／JSON 解析失敗，
+    2026-10-07 實際發生）。OpenAPI 只回最新一天、漏了補不回來，所以截斷、連線錯誤、5xx 都重試；4xx 與「回應不是非空列表」不重試。"""
+    err, status, lm = "", None, None
+    for i in range(FETCH_TRIES):
+        try:
+            r = requests.get(url, headers=UA, timeout=60)
+            lm, status = r.headers.get("Last-Modified"), r.status_code
+            r.raise_for_status()
+            j = r.json()
+            if not isinstance(j, list) or not j:
+                return None, lm, status, "回應不是非空列表"
+            return j, lm, status, ""
+        except Exception as e:      # noqa: BLE001
+            status = getattr(getattr(e, "response", None), "status_code", None) or status
+            err = str(e)[:120]
+            if status is not None and 400 <= status < 500:
+                break
+            if i < FETCH_TRIES - 1:
+                print(f"[openapi] 請求失敗（第 {i + 1} 次）：{err}；{FETCH_BACKOFF[i]} 秒後重試", file=sys.stderr)
+                time.sleep(FETCH_BACKOFF[i])
+    return None, lm, status, err
 
 
 def _read(p: Path, cols: list[str]) -> pd.DataFrame:
     return pd.read_parquet(p) if p.exists() else pd.DataFrame(columns=cols).astype({"date": "datetime64[ns]"})
+
+
+def endpoint_window_ok(name: str, hour: int) -> bool:
+    """OpenAPI 端點該不該在這個台北小時請求（官方還沒公布就不去打）：
+    日線 16:00～隔日 08:00；上櫃融資與上市融資同窗口（MARGN_TODAY_AFTER_HOUR～隔日 08:00，起點待量測後再調）。"""
+    if name in ("twse_day", "tpex_day"):
+        return not (PRICE_QUIET_FROM_HOUR <= hour < PRICE_FROM_HOUR)
+    if name == "tpex_margin":
+        return not (MARGN_QUIET_FROM_HOUR <= hour < MARGN_TODAY_AFTER_HOUR)
+    return True
 
 
 def margin_candidates(today: date, hour: int = 24) -> list[date]:
@@ -466,6 +494,8 @@ def main() -> int:
     ok = 0
     changed = False
     for name, url, mk, parser, path, cols in jobs:
+        if not endpoint_window_ok(name, now.hour):
+            continue                                  # 官方還沒公布的時段：不請求、不記 log
         rows, lm_hdr, status, err = fetch(url)
         entry = {"fetched_at": str(fetched), "endpoint": name, "http": status, "last_modified": lm_hdr, "rows": len(rows) if rows else 0}
         if rows is None:

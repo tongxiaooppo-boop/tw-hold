@@ -494,3 +494,71 @@ def test_main_writes_inst_parquet_and_output(monkeypatch, tmp_path):
 def test_parse_prices_next_cols_are_float_even_when_all_none():
     df = oa.parse_prices([_tw()], "TW", date(2026, 10, 6), LM1, FETCHED)
     assert str(df.next_ref.dtype) == "float64"
+
+
+# ───────── fetch 重試（官方偶爾回截斷的大 JSON）─────────
+class _Bad:
+    status_code = 200
+    headers = {}
+    def raise_for_status(self): pass
+    def json(self): raise ValueError("Unterminated string")          # 截斷的 JSON
+
+
+class _Ok(_Resp):
+    headers = {}
+
+
+class _Http:
+    def __init__(self, code): self.status_code, self.headers = code, {}
+    def raise_for_status(self):
+        e = oa.requests.HTTPError(f"{self.status_code}")
+        e.response = self
+        raise e
+
+
+def test_fetch_retries_truncated_json_then_succeeds(monkeypatch):
+    seq = [_Bad(), _Bad(), _Ok([{"a": 1}])]
+    sleeps = []
+    monkeypatch.setattr(oa.requests, "get", lambda url, **kw: seq.pop(0))
+    monkeypatch.setattr(oa.time, "sleep", lambda n: sleeps.append(n))
+    rows, lm, st, err = oa.fetch("http://x")
+    assert rows == [{"a": 1}] and err == "" and sleeps == [5, 15]            # 前兩次截斷、第三次成功
+
+
+def test_fetch_gives_up_after_three_and_does_not_retry_4xx(monkeypatch):
+    n = []
+    monkeypatch.setattr(oa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(oa.requests, "get", lambda url, **kw: n.append(1) or _Bad())
+    rows, _, _, err = oa.fetch("http://x")
+    assert rows is None and len(n) == 3 and "Unterminated" in err
+    n.clear()
+    monkeypatch.setattr(oa.requests, "get", lambda url, **kw: n.append(1) or _Http(404))
+    rows, _, st, _ = oa.fetch("http://x")
+    assert rows is None and len(n) == 1 and st == 404                        # 4xx 不重試
+
+
+def test_endpoint_windows():
+    for h in (8, 12, 15):
+        assert not oa.endpoint_window_ok("twse_day", h) and not oa.endpoint_window_ok("tpex_day", h)          # 日線 16:00 前不請求
+    for h in (16, 18, 23, 0, 4, 7):
+        assert oa.endpoint_window_ok("twse_day", h) and oa.endpoint_window_ok("tpex_day", h)
+    for h in (8, 16, 20, 21):
+        assert not oa.endpoint_window_ok("tpex_margin", h)                                                    # 融資 22:00 前不請求（08:00～22:00）
+    for h in (22, 23, 0, 4, 7):
+        assert oa.endpoint_window_ok("tpex_margin", h)
+
+
+def test_main_skips_openapi_endpoints_outside_window(monkeypatch):
+    import datetime as _dt
+    class _FakeDT(_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt.datetime(2026, 10, 7, 12, 0, tzinfo=tz)                                                # 台北 12:00
+    monkeypatch.setattr(oa, "datetime", _FakeDT)
+    called = []
+    monkeypatch.setattr(oa, "fetch", lambda url: called.append(url) or (None, None, None, "x"))
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
+    oa.main()
+    assert called == []                                                                                       # 12:00：日線與上櫃融資一個都不請求
