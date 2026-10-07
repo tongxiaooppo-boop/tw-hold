@@ -44,7 +44,7 @@
 母表結構改成「**官方原始價＋因子表另存**」（同 tw-stock-data：存因子不存還原價；自建 `raw_prices`＋`corp_actions` 本來就是這樣，`adj_prices` 只是衍生）。tw-swing 母表原本存的是上游算好的還原價（沒有原始價與因子），所以每天被上游覆蓋時接縫就進來。
 | 資料 | 每天（尾巴） | 每週官方網站收集 | 備援 |
 | :-- | :-- | :-- | :-- |
-| 上市／上櫃日線 | **OpenAPI**（`STOCK_DAY_ALL`／`tpex_mainboard_quotes`，實測各 <1 秒、<1MB，官方原始價；OGDL 授權） | 整週重抓、覆蓋官方更正 | 上游 |
+| 上市／上櫃日線 | **OpenAPI**（`STOCK_DAY_ALL`／`tpex_mainboard_daily_close_quotes`（⚠️ 不是 `tpex_mainboard_quotes`：舊端點量額偏低，2026-10-07 實測 860／889 檔與網站不同），實測各 <1 秒、<1MB，官方原始價；OGDL 授權） | 整週重抓、覆蓋官方更正 | 上游 |
 | 上櫃融資券 | OpenAPI `tpex_mainboard_margin_balance` | 同上 | 上游 |
 | 上市融資券 | OpenAPI `MI_MARGN`（**無日期欄**，靠同批日線推定） | 同上 | 上游 |
 | 上市／上櫃三大法人 | **無可用 OpenAPI**（上市沒有；上櫃自營欄不可靠）→ 用上游，**尾巴要過恆等式守門**（上游籌碼歷史有過複本日、假資料、上櫃自營 8/27 起空白） | 網站端點 | 上游 |

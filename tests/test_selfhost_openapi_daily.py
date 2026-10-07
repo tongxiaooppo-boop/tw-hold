@@ -113,3 +113,63 @@ def test_atomic_parquet_roundtrip(tmp_path):
     p = tmp_path / "a.parquet"
     oa._atomic_parquet(pd.DataFrame({"x": [1, 2]}), p)
     assert list(pd.read_parquet(p).x) == [1, 2] and not (tmp_path / "a.tmp").exists()
+
+
+def test_tpex_endpoint_is_daily_close_and_old_src_gets_replaced():
+    assert oa.TPEX_DAY.endswith("tpex_mainboard_daily_close_quotes")                  # 舊端點量額偏低（2026-10-07 實測 860／889 檔）
+    row = {"Date": "1151006", "SecuritiesCompanyCode": "1240", "Close": "50", "Open": "49", "High": "51", "Low": "48",
+           "TradingShares": "31,000", "TransactionAmount": "1,665,700", "Change": "1"}
+    new = oa.parse_prices([row], "TWO", date(2026, 10, 6), LM1, FETCHED)
+    assert new.src.iloc[0] == oa.SRC_TPEX_DC
+    old = oa.parse_prices([{**row, "TradingShares": "30,000"}], "TWO", date(2026, 10, 6), LM2, FETCHED)
+    old["src"] = "openapi"                                                            # 舊端點存下的同一天，Last-Modified 還比較新
+    t, act = oa.merge_day(old, new, oa.PRICE_COLS)
+    assert act == "replaced" and t.volume.iloc[0] == 31000.0                          # 來源不同 → 不看 Last-Modified，用新端點覆蓋
+    t2, act = oa.merge_day(t, new, oa.PRICE_COLS)
+    assert act == "skipped"                                                           # 同來源重跑仍冪等
+
+
+def _tpex_row(code="1240", vol="31,000", close="50", chg="+0.11"):
+    return {"Date": "1151006", "SecuritiesCompanyCode": code, "Close": close, "Open": "49", "High": "51", "Low": "48",
+            "TradingShares": vol, "TransactionAmount": "1,665,700", "Change": chg}
+
+
+def _tbl(df):
+    return df.astype({"date": "datetime64[ns]"})
+
+
+def test_merge_cross_src_is_one_way_and_shrink_guard_applies():
+    rows = [_tpex_row(code=str(1000 + i)) for i in range(100)]
+    d = date(2026, 10, 6)
+    old = oa.parse_prices(rows, "TWO", d, LM2, FETCHED); old["src"] = "openapi"
+    # 新來源縮水 → 擋下（shrunk 不分來源）
+    half = oa.parse_prices(rows[:50], "TWO", d, LM1, FETCHED)
+    assert oa.merge_day(old, half, oa.PRICE_COLS)[1] == "shrunk"
+    # 新來源 Last-Modified 為空 → 仍是單向升級，可覆蓋（列數沒縮水）
+    full = oa.parse_prices(rows, "TWO", d, None, FETCHED)
+    assert oa.merge_day(old, full, oa.PRICE_COLS)[1] == "replaced"
+    # 反方向：舊碼的 openapi 不能蓋掉 openapi_dc
+    dc = oa.parse_prices(rows, "TWO", d, LM1, FETCHED)
+    assert oa.merge_day(dc, old.assign(last_modified=LM2), oa.PRICE_COLS)[1] == "skipped"
+
+
+def test_merge_old_src_nan_or_missing_column_is_safe():
+    rows = [_tpex_row(code=str(1000 + i)) for i in range(100)]
+    d = date(2026, 10, 6)
+    old = oa.parse_prices(rows, "TWO", d, LM2, FETCHED); old["src"] = None
+    half = oa.parse_prices(rows[:50], "TWO", d, LM1, FETCHED)
+    assert oa.merge_day(old, half, oa.PRICE_COLS)[1] == "shrunk"                      # NaN 不會繞過縮水保護
+    nosrc = old.drop(columns=["src"])
+    assert oa.merge_day(nosrc, oa.parse_prices(rows, "TWO", d, LM1, FETCHED), oa.PRICE_COLS)[1] == "replaced"   # 缺欄不拋 KeyError
+
+
+def test_src_markers_and_margin_unchanged():
+    assert oa.parse_prices([_tw()], "TW", date(2026, 10, 6), LM1, FETCHED).src.iloc[0] == "openapi"
+    m = {"Date": "1151006", "SecuritiesCompanyCode": "1240", "MarginPurchaseBalance": "9"}
+    assert oa.parse_margin([m], "TWO", date(2026, 10, 6), LM1, FETCHED).src.iloc[0] == "openapi"
+
+
+def test_tpex_real_shape_filters_no_trade_and_non_4digit():
+    rows = [_tpex_row(), _tpex_row(code="00411A"), _tpex_row(code="1241", close="---"), _tpex_row(code="030001")]
+    df = oa.parse_prices(rows, "TWO", date(2026, 10, 6), LM1, FETCHED)
+    assert list(df.ticker) == ["1240"] and df.chg.iloc[0] == 0.11
