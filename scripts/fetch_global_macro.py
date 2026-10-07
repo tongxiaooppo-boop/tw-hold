@@ -35,8 +35,8 @@
 **不搭台股那條 `rebuild.yml`**——那條是台股收盤觸發（台北午後），此時美股/日經
 以外的多數市場時段都對不上（日經恆生 KOSPI 其實台北時間下午就收了，但美股才是
 最晚收的一個，排程照美股收盤後排最保險，反正日經/恆生/KOSPI 資料早就到齊）。
-獨立開 `.github/workflows/global_macro.yml`，UTC 22:00 跑（美東 4pm 收盤最晚
-21:00 UTC，留 1 小時緩衝），對應台北時間隔天早上 6 點。
+獨立開 `.github/workflows/global_macro.yml`，UTC 22:37 跑（美東 4pm 收盤最晚
+21:00 UTC，留 1 小時緩衝），對應台北時間隔天早上約 6:37。
 
 用法：
     python scripts/fetch_global_macro.py

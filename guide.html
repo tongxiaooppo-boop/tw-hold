@@ -508,7 +508,7 @@
             </span>
           </li>
           <li>
-            <code>heartbeat.yml</code> 每週一 UTC 01:00 自動跑，檢查 <code>data/derived/_meta.json</code> 的 <code>rebuilt_at</code>
+            <code>heartbeat.yml</code> 平日 UTC 00:28（台北 08:28） 自動跑，檢查 <code>data/derived/_meta.json</code> 的 <code>rebuilt_at</code>
             是否超過 180 小時沒更新，超過就發告警（需要 <code>ALERT_WEBHOOK</code>，沒設就只留在 Actions 紀錄裡）。
             <span class="sub">這支自己絕不能失敗——檢查不過只是 warning，不會讓 workflow 顯示紅字。</span>
           </li>

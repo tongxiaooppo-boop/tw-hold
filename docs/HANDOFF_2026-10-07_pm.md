@@ -99,7 +99,7 @@
 ①DATAPACK_ADAPTER「匯入後緊接 apply_chips_baseline」vs PLAN「selfhost 必須略過」②PLAN §2.5 上市融資用 OpenAPI MI_MARGN 推定日期，實作已改帶日期的網站端點③night §8／PLAN §4-2「櫃買預告端點未找到」，現已在用 tpex_exright_prepost④PLAN「原始價＋因子表另存」vs 轉接層其實仍存還原價每次整份重算⑤HANDOFF 10-07 §5-6「10/12 起每日 OpenAPI 累積」，實際 10/7 起就在跑（排程尚未在真實交易日跑過）⑥selfhost_collect.yml 第 3 行與註解寫「每日收集」，實為每週⑦data-all.md recon「10/12 起每日」但沒有 workflow 在跑 recon⑧「2,148 vs 1,969 檔」其中 159 檔最後交易日早於 9/01 多為下市股，不是涵蓋變大。
 
 ### 7.7 建議 10/8～10/11 逐日（Opus）
-10/8 讀今晚兩份量測結果→修預告快照（已修）→Opus 審→使用者拍板 B1／B4／影子模式→寫每日法人（B5）＋存 NextReferencePrice→晚上看 openapi_daily 首次真排程與 23:59 週收集；10/9 查週收集、寫 CI 產 zip 並實跑量耗時（B3）、本機驗因子口徑（B7）、設計每日事件因子（B6）；10/10 寫 swing PACK_SOURCE／自動退回／略過 baseline（B2）、使用者建 PAT（B9）、產比對報告（B8）、寫 zip 驗收（B11）；10/11 Opus 全審、用 10/08 資料端到端乾跑＋退回演練（B13）、go/no-go 題目為「10/12 起影子雙跑」而非切換。
+10/8 讀今晚兩份量測結果→修預告快照（已修）→Opus 審→使用者拍板 B1／B4／影子模式→寫每日法人（B5）＋存 NextReferencePrice→晚上看 openapi_daily 首次真排程與 23:58 週收集；10/9 查週收集、寫 CI 產 zip 並實跑量耗時（B3）、本機驗因子口徑（B7）、設計每日事件因子（B6）；10/10 寫 swing PACK_SOURCE／自動退回／略過 baseline（B2）、使用者建 PAT（B9）、產比對報告（B8）、寫 zip 驗收（B11）；10/11 Opus 全審、用 10/08 資料端到端乾跑＋退回演練（B13）、go/no-go 題目為「10/12 起影子雙跑」而非切換。
 
 ## 8. 使用者 2026-10-07 下午拍板（針對 §7）
 1. **影子雙跑從 10/12 起、正式切換維持 10/24**（最早 10/16 晚 go/no-go 不採用，因 10/17–18 使用者外出）。B1 的舊決定（15 日規則、「維持舊管線、自建每週核對」、DATAPACK_ADAPTER「平時用上游」）視為改寫：以本節為準。
@@ -133,7 +133,7 @@
 ### 9.5 下一步（排序）
 1. 使用者決定是否 push 9.2 的重試修正（建議今晚 18:00 班次前 push，否則上櫃日線可能再被截斷而漏當天）。
 2. 18:00 後看 `openapi_daily` 的班次：`twse_inst`／`tpex_inst` 是否寫入、`openapi_inst.parquet` 是否出現在 Release。
-3. 10/8：讀量測結果；B6 事件因子設計（先驗證 TWT49U 當晚是否含當日事件、預告表公式對含配股／現增的準確度）；B7 因子口徑本機驗證；10/8 週四 23:59 第一次真正週收集（含 selfhost 閘門修正 `fa44379` 的實測）。
+3. 10/8：讀量測結果；B6 事件因子設計（先驗證 TWT49U 當晚是否含當日事件、預告表公式對含配股／現增的準確度）；B7 因子口徑本機驗證；10/8 週四 23:58 第一次真正週收集（含 selfhost 閘門修正 `fa44379` 的實測）。
 4. 10/9～10/11：B3 CI 產官方口徑 zip 並實測耗時／記憶體、B4 每日併入 raw 再 adjust、每日事件因子寫入（暫定因子 `provisional`，除權息日有官方價才啟用，官方結果出來覆蓋並記差異）；10/12 起影子雙跑；swing 側 B2 在影子期寫、10/19 乾跑。
 
 ## 10. 使用者原則（傍晚補充）：觸發只在規律時段
@@ -143,3 +143,40 @@
 - 使用者舉例：**20:00 手動觸發（日線／法人）→ 推薦除了依賴融資／券的全部重算**；依賴融資／券的短線掃描等融資到齊再跑一次（不跑兩次）。今晚 `trigger_swing_daily.py`（18:00／20:00／22:00／00:00 手動觸發 swing `daily.yml`）的結果，正好回答「20:00 是不是規律時間」。
 - 手動觸發的副作用要記得：我的手動 `openapi_daily` 把 Release 上 10/6 的上櫃日線／上櫃融資以官方 10/7 06:00 UTC（台北 14:00）重產版覆蓋（內容與網站 865 檔量額 0 筆不同，沒壞），**但官方 10/6 首次公布版已不在**，無法比較「首次版 vs 重產版」。櫃買會在隔天 14:00 左右重產前一天的檔案；Last-Modified 是「最後重產」不是首次公布，量公布時間只能靠輪詢首次看到。
 - 本機工作樹有兩項**未經 Opus 審、未 push** 的改動（`scripts/selfhost_openapi_daily.py`、`tests/test_selfhost_openapi_daily.py`，448 passed）：①`fetch()` 重試（上櫃 `daily_close_quotes` 約 4MB 偶爾被截斷）②端點時段限制：日線 16:00～隔日 08:00；上櫃融資 22:00～隔日 08:00（起點待量測後調整，使用者原話「融資券 0:30 開始」）。是否 push 待使用者決定（建議今晚 18:00 班次前）。
+
+## 11. 排程時間已全部錯開（2026-10-07 晚）
+
+為避開整點／半點（GitHub 排程在整點最擁擠、延遲 2～9 小時），所有 workflow 的 cron 分鐘已改（台北時間、平日；括號為 UTC cron）：
+
+| workflow | 舊 | 新 |
+|---|---|---|
+| tw-swing daily.yml 第一槍 | 21:00（UTC 13:00） | **21:07**（UTC 13:07） |
+| tw-swing daily.yml 第二槍 | 隔日 01:00（UTC 17:00） | **隔日 01:07**（UTC 17:07） |
+| tw-swing daily.yml 第三槍（--require-fresh） | 隔日 05:30（UTC 21:30，cron `30 21`） | **隔日 05:32**（UTC 21:32，cron `32 21`） |
+| tw-swing publish_bundle.yml 三條 cron | 06:00／07:00／08:30（UTC 22:00／23:00／00:30） | **06:09／07:09／08:38**（UTC 22:09／23:09／00:38） |
+| tw-swing fundamentals.yml | 週六 10:00（UTC 週六 02:00） | **週六 10:07**（UTC 週六 02:07） |
+| tw-hold rebuild.yml 備援 | 16:00（UTC 08:00） | **16:17**（UTC 08:17） |
+| tw-hold pcf_retry.yml | 17:00／19:00（UTC 09:00／11:00） | **17:13／19:13**（UTC 09:13／11:13） |
+| tw-hold chip_flow_evening.yml | 18:30（UTC 10:30） | **18:28**（UTC 10:28） |
+| tw-hold global_macro.yml | 06:00（UTC 22:00） | **06:37**（UTC 22:37） |
+| tw-hold heartbeat.yml | 08:30（UTC 00:30） | **08:28**（UTC 00:28） |
+| tw-hold selfhost_collect.yml | 23:59（UTC 15:59，cron `59 15`） | **23:58**（UTC 15:58，cron `58 15`） |
+| tw-hold openapi_daily.yml | 16:00／18:00／20:00／23:00／隔日 04:00 | **16:02／18:02／20:02／23:02／隔日 04:02**（UTC 08:02／10:02／12:02／15:02／20:02） |
+
+注意事項：
+- 各 workflow 之間間隔至少 15 分鐘。
+- swing 守門 `check_daily` 讀 workflow 的 cron 判斷「到期沒跑」，已有 `_cron_since`（版控時間）緩衝。Opus 以真實 git 時間模擬：10/8 08:16 只要 21:07 之後有任何一次排程觸發就是 OK（實測第一槍多在 01:49～04:04 才跑），不會假警報；10/9（國慶補假）、10/10（週六）08:16 仍會 WARN「一槍都沒跑」，這是對的（UTC 週四、五的槍照排）。小陷阱：之後若 commit `daily.yml` 的純註解改動，`cron_since` 會後移，極低機率出現假 WARN。
+- `selfhost_collect` 與 swing 第三槍的 `if`／EXTRA 以 cron 字串判斷，已同步改成 `58 15`／`32 21`。
+- swing 測試 `test_check_daily` 曾寫死 05:30 導致失敗，已改成只驗 05 點。
+- 現況文件（DATA_FLOW／data-all／PLAN_OFFICIAL_MASTER／PRD／swing PRD、guide、STATUS 現況段、各 yml 註解）已同步新時間；歷史交接文件維持舊時間不動。
+
+## 12. 排程最終版與防呆（晚間定案）
+- **swing publish_bundle 備援 2：08:38（UTC 00:38，cron `38 0`）**。使用者定；Opus 原建議 08:44（08:58 貼近開盤、2 分鐘內）。它必須留在 UTC 00 點那一小時＝台北週一～五早上**唯一**的排程路徑（`9 22`／`9 23` 的 `1-5` 是 UTC 週一～五＝台北週二～六）。與 tw-hold heartbeat（08:28）相隔 10 分鐘（跨 repo 最小間隔 = 10 分鐘，不是先前說的 15 分鐘）。
+- **防呆（自動測試，兩個 repo 各一份 `tests/test_workflow_schedules.py`，已用故意改壞的 workflow 驗證會抓到）**：①cron 分鐘不得是 :00／:30／:59 ②workflow 用 cron 字串做判斷的地方（`github.event.schedule == '…'`、`= "…"`）必須存在於同檔 cron 清單，否則該步驟（`--require-fresh`、每週收集）會**靜默永遠不跑** ③同 repo 任兩條 cron 至少相隔 10 分鐘 ④本機若兩個 repo 並排，跨 repo 也檢查（CI 環境自動 skip）。tw-swing 的這份會在 `daily.yml` 起點自我檢查裡跑：**改 cron 沒同步就會讓整班 skipped**——所以改 cron 一定要先在本機跑全套測試，且指令鏈不能在測試失敗後仍 push（10/7 那次我用 `&&` 串了 `pytest | tail`，tail 吞掉失敗碼，結果先 push 才發現）。
+- **改 cron 的檢查表**：①`grep -rn "event.schedule" .github` 看有哪些字串要同步 ②`tests/` 有沒有寫死分鐘（`test_check_daily` 曾寫死 05:30）③`check_daily.py` 讀 cron 的邏輯（`_cron_since`）④文件（DATA_FLOW、data-all、PRD、guide）⑤跑兩個 repo 全套測試。
+
+### 明天要做（使用者「排明天」）
+1. **`selfhost_collect.yml` 的 `date -u +%u = 5`（UTC 週五）判斷改掉**：這週最後交易日是週四（10/9 國慶補假），所以 10/8 23:58 那班的「減資輪詢」與「snap-* 週快照」會被跳過（除非延遲跨到 UTC 週五）。改成用 `last_trading_day_guard` 的輸出（是不是當週最後交易日）來判斷。先於 10/8 23:58 班次前處理（該班就是這週的第一次真正週收集）。
+2. 讀今晚兩份量測結果（官方公布時間、上游資料包幾點好），決定規律時段與是否在該時段手動觸發。
+3. **待使用者決定**：`openapi_daily` 清晨班（04:02）依實測延遲 3～6 小時，多半落在 08:00 後的「不請求」窗口而白跑；建議改成「取到就停」——目標日（16:00 後＝今天，其餘＝前一個平日）已存就跳過、沒存就請求，不再用寫死的小時窗口；同時保留官方首次公布版（不被隔天 14:00 重產版覆蓋）。
+4. 其他：B6 事件因子、B7 因子口徑、B3 CI 產 zip、B4 每日併入（見 §7、§9.5）。

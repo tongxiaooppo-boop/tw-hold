@@ -16,11 +16,11 @@ TAIFEX 官方 OpenAPI `https://openapi.taifex.com.tw/v1/DailyMarketReportFut`—
 
 ## 排程
 
-不用另開 workflow——TAIFEX 夜盤 05:00 收盤，跟 `global_macro.yml`（台北 06:00
+不用另開 workflow——TAIFEX 夜盤 05:00 收盤，跟 `global_macro.yml`（台北 06:37
 跑）的時間點本來就對得上，直接掛在同一個 job 裡當一個額外步驟。
 
 ⚠️ **這支 API 只回傳「目前最新一天」，`date` 查詢參數是裝飾用的**（實測帶任何
-日期都回傳同一天）——代表**沒有回補機制**：如果 06:00 那次抓取時夜盤資料剛好
+日期都回傳同一天）——代表**沒有回補機制**：如果 06:37 那次抓取時夜盤資料剛好
 還沒發布完成，當天的夜盤收盤就永久遺失，隔天再抓到的已經是下一個交易日。
 `main()` 因此會在夜盤缺席時寫一份 `tx_futures_meta.json` 給 workflow 告警用
 （2026-09-15 使用者要求「隔天更新務必帶入新資料」，這是唯一做得到的保證：
