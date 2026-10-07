@@ -32,3 +32,6 @@ data/selfhost/
 data/pcf/
 data/reference/
 data/.refdata_pulled.json
+
+# 已取消的方案 A 存檔（未進版控）
+_archive_plan_a_cancelled/
