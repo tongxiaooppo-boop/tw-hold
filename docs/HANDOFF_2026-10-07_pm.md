@@ -108,3 +108,30 @@
 
 > **更正（使用者指出）**：swing 實際改用自建來源是 **10/24**，不是 §7.7 逐日排程字面上的 10/10。§7.7 的「10/10 寫 swing PACK_SOURCE／自動退回」指的是**寫好開關與退回程式**，不是切換。影子雙跑（10/12 起）只在 tw-hold 側：自建官方口徑資料每天與上游比對，**swing 全程仍吃上游**。因此 PAT（§8-3）最早用在 swing 第一次用自建 zip 乾跑（原計畫 10/19 母表比對），建在那之前都行，非今天必須。
 > 時程維持：10/12～18 影子期、10/19 母表比對、10/23 go/no-go＋退回演練、10/24 切換；使用者 10/17–18 外出期間 swing 不動。tw-hold 側 10/8～10/11 的工作：B5 每日法人、存上櫃 NextReferencePrice、B3 CI 產 zip、B4 每日併入、B6 事件因子、B7 因子口徑驗證。
+
+## 9. 傍晚進度（15:50 更新）：誰做了什麼、下一步
+### 9.1 已 push（`d14edf6`）
+- **每日三大法人收集**：`collect_inst`（上市 T86＋上櫃 `insti/dailyTrade`，網站端點帶日期；重用 `selfhost_chips` 解析）。台北 18:00 起試今天、隔日清晨班補前一晚、08:00～18:00 不請求、取到就停；列數下限（上市 500／上櫃 300）＋法人合計恆等式（不符 >2% 不存；2015～2026 共 2,864 交易日回算 0 筆不符）。存 `openapi_inst.parquet`。Release 缺該檔但 fetch log 有寫入記錄時只設 `INST_DISABLED`（停用法人），**不拖垮日線／融資／預告表**。缺口檢查已納入法人（只警告，不自動回填；漏的日子由每週收集 14 天窗口補進 `selfhost-data` 的 `inst.parquet`）。→ **§5-1（每日法人）、§7.3 B5 完成**（尚待 18:00 後班次實際寫入驗證）。
+- **上櫃次日參考價**：`PRICE_COLS` 新增 `next_ref`／`next_limit_up`／`next_limit_down`（`daily_close_quotes` 的 NextReferencePrice／NextLimitUp／NextLimitDown；上市 NaN，固定 float）。→ B6 的上櫃當天因子可直接用官方次日參考價。
+- **PAT 完成（B9）**：tw-swing secret `TWHOLD_DATA_READ_PAT` 已建，tw-swing 新增手動 workflow `check_data_pat.yml`（`0dd7d28`、`8d96159`）驗證讀得到 `tw-hold-data` 私有 Release、且讀不到其他私有 repo。到期約 2027-10-07，記憶檔 `tw-hold-bundle-pat-expiry.md` ⑤。
+- 使用者三項決定見 §8（影子雙跑 10/12、方案 (a) 每天併入、唯讀 PAT）；swing 切換仍是 10/24。
+
+### 9.2 ⚠️ 今天線上實測發現：上櫃日線 OpenAPI 會被截斷
+`d14edf6` 之後手動跑 `openapi_daily.yml`（15:48）：**`tpex_day` 失敗「Response ended prematurely」**（`daily_close_quotes` 一次回 12,194 列約 4MB，官方偶爾回被截斷的 JSON；Opus 審查時本機也遇過）。`fetch()` 原本失敗就放棄，OpenAPI 只回最新一天、漏了補不回來。
+- **已修但尚未 commit／push**：`fetch()` 最多試 3 次（失敗後等 5、15 秒），截斷／連線錯誤／5xx 重試，4xx 與「回應不是非空列表」不重試；新增 2 個測試，全套 446 passed。**檔案在工作樹（`scripts/selfhost_openapi_daily.py`、`tests/test_selfhost_openapi_daily.py`），沒經 Opus 審，等使用者同意再 push。**
+- 仍可考慮：上櫃日線改用網站端點 `dailyQuotes`（帶日期、補得回來）當第二來源；重試仍失敗時整天缺資料（缺日偵測會警告，網站端點補得回來）。
+
+### 9.3 備援盤點（使用者問「自建上線有什麼備援」）
+- 已有：官方 OpenAPI↔官方網站端點（網站帶日期）、原上游（10/24 前就是正式來源，自建出問題不影響現行）、每日 5 班＋每週一次（補近 14 天）、寫入守門（新版不得比舊版差、縮水保護、缺檔中止、單向 src）、轉接層（本機版）。
+- **沒有**：swing 切換開關＋自動退回上游（B2，零實作；10/23 要演練）、zip 驗收（B11）、官方 zip 在 CI 產出（B3）、產出太晚的退回（B10）。
+- 單點：官方端點同時掛掉（無免費可靠第三來源）、上游本身（別人 repo 無 SLA）、私有 Release／PAT、GitHub 排程延遲 2～9 小時。
+- 結論：真正的備援是「退回上游」，而退回機制還沒寫；10/24 能不能切取決於 B2 與退回演練。
+
+### 9.4 今晚量測（§1）狀態
+兩支背景程式（官方輪詢 PID 32868、swing 觸發 PID 49660）仍在跑；15:48 時 `T86` 與上市日線尚未公布 10/7，上櫃法人已有 782 列（Opus 15:35 實打）。明早讀 `poll_log.jsonl`、`trigger_log.jsonl`。
+
+### 9.5 下一步（排序）
+1. 使用者決定是否 push 9.2 的重試修正（建議今晚 18:00 班次前 push，否則上櫃日線可能再被截斷而漏當天）。
+2. 18:00 後看 `openapi_daily` 的班次：`twse_inst`／`tpex_inst` 是否寫入、`openapi_inst.parquet` 是否出現在 Release。
+3. 10/8：讀量測結果；B6 事件因子設計（先驗證 TWT49U 當晚是否含當日事件、預告表公式對含配股／現增的準確度）；B7 因子口徑本機驗證；10/8 週四 23:59 第一次真正週收集（含 selfhost 閘門修正 `fa44379` 的實測）。
+4. 10/9～10/11：B3 CI 產官方口徑 zip 並實測耗時／記憶體、B4 每日併入 raw 再 adjust、每日事件因子寫入（暫定因子 `provisional`，除權息日有官方價才啟用，官方結果出來覆蓋並記差異）；10/12 起影子雙跑；swing 側 B2 在影子期寫、10/19 乾跑。
