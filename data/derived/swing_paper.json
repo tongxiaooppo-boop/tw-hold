@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-06T18:57:20+00:00",
+    "updated_at": "2026-10-07T16:09:33+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -112,17 +112,44 @@
       "exit_date": "2026-10-06",
       "exit_price": 1310.86,
       "ret_pct": 0.170411
+    },
+    {
+      "ticker": "9933",
+      "name": "中鼎",
+      "entry_date": "2026-10-02",
+      "entry_price": 48.75,
+      "exit_date": "2026-10-07",
+      "exit_price": 45.97,
+      "ret_pct": -0.057026
+    },
+    {
+      "ticker": "5274",
+      "name": "信驊",
+      "entry_date": "2026-09-30",
+      "entry_price": 18755.0,
+      "exit_date": "2026-10-07",
+      "exit_price": 17925.0,
+      "ret_pct": -0.044255
+    },
+    {
+      "ticker": "3653",
+      "name": "健策",
+      "entry_date": "2026-09-17",
+      "entry_price": 5520.0,
+      "exit_date": "2026-10-07",
+      "exit_price": 6800.71,
+      "ret_pct": 0.232013
     }
   ],
   "stats": {
-    "n": 12,
-    "win_rate": 0.5,
-    "avg_ret_gross": 0.010984666666666669,
-    "expectancy_net": 0.005134666666666667,
+    "n": 15,
+    "win_rate": 0.4666666666666667,
+    "avg_ret_gross": 0.0175032,
+    "expectancy_net": 0.0116532,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": 7.000000000000001,
+      "gap_pp": 3.666666666666668,
       "diverging": false
     },
     "by_month": [
@@ -134,9 +161,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 4,
-        "win_rate": 0.5,
-        "avg_ret_net": 0.0192135
+        "n": 7,
+        "win_rate": 0.42857142857142855,
+        "avg_ret_net": 0.027148000000000002
       }
     ]
   }
