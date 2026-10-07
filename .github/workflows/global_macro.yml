@@ -14,7 +14,7 @@ name: 國際總經快照
 on:
   workflow_dispatch:
   schedule:
-    - cron: "11 22 * * 1-5"
+    - cron: "37 22 * * 1-5"
 
 permissions:
   contents: write

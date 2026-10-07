@@ -23,7 +23,7 @@ on:
   schedule:
     # 每個平日台北 23:59（UTC 15:59）觸發，但**只有「當週最後交易日」才真的收集**（見 guard 步驟）。
     # 為什麼 23:59：官方當日資料收盤後會被更正、融資券要 20:30～22:30 才陸續出齊，這班拿到的是最完整的版本。
-    - cron: "59 15 * * 1-5"
+    - cron: "58 15 * * 1-5"
 
 permissions:
   contents: write
@@ -124,7 +124,7 @@ jobs:
       # FinMind 減資（逐檔）只當交叉驗證（2026-10-05 實測：FinMind 已查 345 件全部在官方表內、因子差中位數 0）；
       # 每週五輪詢 150 檔，避免占用與 tw-swing 共用的 FinMind 額度。
       - name: 減資事件輪詢（週五，交叉驗證）
-        if: (github.event_name == 'workflow_dispatch' || github.event.schedule == '59 15 * * 1-5') && steps.guard.outputs.run == 'true'
+        if: (github.event_name == 'workflow_dispatch' || github.event.schedule == '58 15 * * 1-5') && steps.guard.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 15
         run: |
