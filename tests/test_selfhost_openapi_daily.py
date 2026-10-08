@@ -625,3 +625,19 @@ def test_main_returns_0_when_targets_already_stored(monkeypatch):
     monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
     monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
     assert oa.main() == 0
+
+
+def test_main_returns_0_when_whole_run_outside_windows(monkeypatch, capsys):
+    """排程延遲：04:02 班延到 08:01 → 日線與上櫃融資都在請求時段外 → 不是錯誤，回傳 0（停滯交給 selfhost_freshness）。"""
+    import datetime as _dt
+    class _FakeDT(_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt.datetime(2026, 10, 8, 8, 1, tzinfo=tz)
+    monkeypatch.setattr(oa, "datetime", _FakeDT)
+    monkeypatch.setattr(oa, "fetch", lambda url: (_ for _ in ()).throw(AssertionError("不該請求")))
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
+    assert oa.main() == 0
+    assert "全部在時段外" in capsys.readouterr().out

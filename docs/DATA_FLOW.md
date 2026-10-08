@@ -3,6 +3,7 @@
 > 2026-10-03 盤點。目的：**確認未來任何時候，資料斷了都有辦法救**，並誠實標出「救不回來」與「目前沒有備案」的地方。
 > 時間一律台北時間（UTC+8）。`gh` 已登入 tongxiaooppo-boop，下面的救援指令都能直接跑。
 > 這份是**事實盤點**，不是設計文件；改了排程／來源請同步更新。
+> **2026-10-08 更新**：新增 §3.1「自建上游線」（openapi-daily → selfhost_datapack → datapack-selfhost，影子期只產不用）與 §4.3 對應救援指令；§4.4／§6 仍描述「上游單點、L2 未實作」的部分是 10/3 的事實，自建線的完整計畫、備援、切換流程見 [`updatePRD-opus.md`](updatePRD-opus.md)。
 
 ---
 
@@ -98,6 +99,25 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:13/19:
 
 **時間鏈（目標）**：data_pack 05:08 好 → daily 第三槍 05:32（實落 05:4x）→ publish ~05:50 → rebuild ~05:55 → 清單開盤前更新。
 ⚠️ **新時間鏈（workflow_run 接 daily＋閘門放行）尚未在真實環境驗過**，週一 10-05 才有第一輪（見 HANDOFF_2026-10-03 §3）。
+
+### 3.1 自建上游線（2026-10-08；影子期：只產、只比，tw-swing 不讀）
+
+```
+官方 TWSE/TPEx（OpenAPI + 網站帶日期端點）
+  ├─ openapi_daily.yml（平日 5 班，台北 16:02／18:02／20:02／23:02／隔日 04:02，實際延遲 2～9h、可能丟班）
+  │     → Release openapi-daily：openapi_prices／openapi_margin／openapi_inst／openapi_forecast／openapi_fetch_log
+  └─ selfhost_collect.yml（平日 23:58，只在當週最後交易日跑；補近 14 天帶日期端點、事件表、閘門）
+        → Release selfhost-data：raw_prices／inst／margin／notrade／refmark／stophalt／corp_actions／ev_*／snap-*
+                      │（兩支跑完 → workflow_run）
+                      ▼
+  selfhost_datapack.yml（不加排程；來源或併入結果雜湊沒變就跳過）
+     併入（週收集優先、只補週收集沒有的日子、只發佈「完整日」）→ 還原 → 產 zip → 閘門 → 發佈 → 影子比對
+        → Release datapack-selfhost：data_pack_selfhost.zip、merge_manifest.json（最後傳）、adjust_log.csv、shadow_compare.json、shadow_history.jsonl
+     停滯紅燈：已發佈完整日落後 ≥2 個交易日 → workflow 變紅（selfhost_freshness.py）
+```
+- **影子期（2026-10-12 起）只產不用**：tw-swing 全程仍吃上游 data_pack；切換預定 2026-10-24（見 updatePRD-opus.md §0.2、§7）。
+- 上市日線主來源＝官網 `MI_INDEX`（帶日期），OpenAPI 備援；日線「取到就停」；整班落在請求時段外（排程延遲）不算錯誤，停滯交給紅燈。
+- **救援**：①zip 沒更新／想重做：`gh workflow run selfhost_datapack.yml -f force=true`（來源沒變也重做）；②日線／法人／融資有洞：`gh workflow run selfhost_collect.yml`（手動＝全量補近 14 天；OpenAPI 只回最新一天，錯過當天只能靠這個帶日期補）；③閘門擋住（`::error::zip 閘門`）：看 `merge_manifest.json` 的 `gaps`／`last_dates`，補完資料後 ②→①；④回滾＝tw-swing 變數 `PACK_SOURCE=upstream`（B2 實作後；目前 tw-swing 本來就吃上游，無需動作）。
 
 ---
 
