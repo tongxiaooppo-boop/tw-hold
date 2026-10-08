@@ -5,6 +5,24 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "3037": {
+      "name": "欣興",
+      "status": "pending_entry",
+      "signal_date": "2026-10-07",
+      "risk_stop_ref": 1177.43
+    },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-10-07",
+      "risk_stop_ref": 47.59
+    },
+    "2535": {
+      "name": "達欣工",
+      "status": "pending_entry",
+      "signal_date": "2026-10-07",
+      "risk_stop_ref": 89.44
+    },
     "6491": {
       "name": "晶碩",
       "first_seen": "2026-10-06",
@@ -290,12 +308,6 @@
       "exit_date": null,
       "exit_price": null
     },
-    "3037": {
-      "name": "欣興",
-      "status": "pending_entry",
-      "signal_date": "2026-10-07",
-      "risk_stop_ref": 1177.43
-    },
     "3044": {
       "name": "健鼎",
       "first_seen": "2026-09-18",
@@ -430,18 +442,6 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-10-07",
-      "risk_stop_ref": 47.59
-    },
-    "2535": {
-      "name": "達欣工",
-      "status": "pending_entry",
-      "signal_date": "2026-10-07",
-      "risk_stop_ref": 89.44
     }
   }
 }
