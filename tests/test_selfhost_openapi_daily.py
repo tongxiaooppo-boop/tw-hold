@@ -577,3 +577,35 @@ def test_forecast_uses_same_retry_rule(monkeypatch):
     monkeypatch.setattr(oa.requests, "get", get)
     recs, ch = oa.collect_forecasts(pd.Timestamp("2026-10-07 08:00:00"), [])
     assert ch and {r["market"] for r in recs} == {"TW", "TWO"} and sleeps == [10, 20]              # 預告表也是 3 次、等 10／20 秒
+
+
+def test_price_target_與取到就停():
+    from datetime import date
+    assert oa.price_target(date(2026, 10, 8), 16) == date(2026, 10, 8)      # 平日 16:00 後＝今天
+    assert oa.price_target(date(2026, 10, 8), 4) == date(2026, 10, 7)       # 清晨班＝前一平日
+    assert oa.price_target(date(2026, 10, 12), 4) == date(2026, 10, 9)      # 週一清晨＝上週五
+    assert oa.price_target(date(2026, 10, 10), 20) == date(2026, 10, 9)     # 週末＝週五
+    t = pd.DataFrame({"market": ["TW", "TWO"], "date": [pd.Timestamp("2026-10-07")] * 2, "src": ["openapi", "openapi_dc"]})
+    assert not oa.price_stored(t, "TW", date(2026, 10, 7))                  # 上市 OpenAPI 來源要讓位給官網版
+    assert oa.price_stored(t, "TWO", date(2026, 10, 7))
+    t.loc[0, "src"] = oa.SRC_WEB_MI_INDEX
+    assert oa.price_stored(t, "TW", date(2026, 10, 7))
+    assert not oa.price_stored(t, "TWO", date(2026, 10, 8))
+
+
+def test_price_target_國定假日取最近交易日():
+    from datetime import date
+    closed = {date(2026, 10, 9)}                                              # 國慶補假
+    assert oa.price_target(date(2026, 10, 12), 4, closed) == date(2026, 10, 8)   # 週一清晨：跳過假日週五＝上週四
+    assert oa.price_target(date(2026, 10, 9), 20, closed) == date(2026, 10, 8)   # 假日當晚＝前一交易日，不是假日本身
+    assert oa.price_target(date(2026, 10, 12), 4, None) == date(2026, 10, 9)     # 休市表抓不到：退回只排除週末
+
+
+def test_fetch_twse_只有已知的沒有資料才算休市(monkeypatch):
+    import selfhost_raw_prices as rp
+    for stat in ("很抱歉，沒有符合條件的資料!", "查詢日期大於今日，請重新查詢!"):
+        monkeypatch.setattr(rp, "_get", lambda url, s=stat: {"stat": s})
+        out = rp.fetch_twse(date(2026, 10, 9))
+        assert out is not None and out.empty                                    # 休市／未來日期：空表、不退備援
+    monkeypatch.setattr(rp, "_get", lambda url: {"stat": "系統忙碌中，請稍後再試"})
+    assert rp.fetch_twse(date(2026, 10, 8)) is None                             # 不認得的 stat：當失敗（退備援＋警告），不可吞成休市

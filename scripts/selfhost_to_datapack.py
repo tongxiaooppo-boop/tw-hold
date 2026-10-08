@@ -154,12 +154,14 @@ def main(argv=None) -> int:
     ap.add_argument("--tickers", help="逗號分隔，只轉這幾檔（試跑用）")
     ap.add_argument("--since", help="YYYY-MM-DD，只轉這天之後（試跑用）")
     ap.add_argument("--all-codes", action="store_true", help="不限 4 碼（預設只轉 4 碼，與自建收集範圍一致）")
+    ap.add_argument("--in-dir", help="讀這個目錄的 adj_prices／raw_prices／inst／margin（每日併入版用 data/selfhost/merged）；預設 data/selfhost")
     a = ap.parse_args(argv)
-    adj = pd.read_parquet(SH / "adj_prices.parquet")
+    d = Path(a.in_dir) if a.in_dir else SH
+    adj = pd.read_parquet(d / "adj_prices.parquet")
     adj["date"] = pd.to_datetime(adj["date"])
-    raw = pd.read_parquet(SH / "raw_prices.parquet", columns=["ticker", "market", "date"])
-    inst = pd.read_parquet(SH / "inst.parquet")
-    margin = pd.read_parquet(SH / "margin.parquet")
+    raw = pd.read_parquet(d / "raw_prices.parquet", columns=["ticker", "market", "date"])
+    inst = pd.read_parquet(d / "inst.parquet")
+    margin = pd.read_parquet(d / "margin.parquet")
     stats = build(Path(a.out), adj, raw, inst, margin,
                   _read_any(Path(a.stock_list) if a.stock_list else None), _read_any(Path(a.universe)),
                   set(a.tickers.split(",")) if a.tickers else None, a.since, not a.all_codes)

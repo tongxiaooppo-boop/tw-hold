@@ -76,7 +76,8 @@ INST_FROM_HOUR = 18            # 三大法人約台北 16:15～17:00 才齊（�
 INST_QUIET_FROM_HOUR = 8        # 隔日清晨班（04:02）補前一晚漏的；08:00～18:00 不請求
 INST_MAX_MISMATCH = 0.02        # 法人合計恆等式（外資＋外資自營＋投信＋自營＝合計）不符比例超過這個就不存（多半是欄位錯位）
 MARGN_QUIET_FROM_HOUR = 8       # 隔日清晨班（04:02）仍收，用來補前一晚漏的與官方隔日調帳；08:00～22:00 之間一律不打
-SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
+SRC_WEB_MI_INDEX = "web_mi_index"   # 上市日線改走官網 MI_INDEX（帶日期、回應自述日期必須等於目標日、補得回來）；OpenAPI 上市日線 T+1 清晨約 05:20 才換檔，退為備援
+SRC_RANK = {"openapi": 0, SRC_TPEX_DC: 1, SRC_WEB_MI_INDEX: 1}   # 只准單向升級：等級高的可無視 Last-Modified 覆蓋等級低的，反方向一律略過
 GAP_WINDOW_DAYS = 14
 
 PRICE_COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg", "next_ref", "next_limit_up", "next_limit_down",
@@ -264,6 +265,44 @@ def endpoint_window_ok(name: str, hour: int) -> bool:
     if name == "tpex_margin":
         return not (MARGN_QUIET_FROM_HOUR <= hour < MARGN_TODAY_AFTER_HOUR)
     return True
+
+
+def price_target(today: date, hour: int, closed: set[date] | None = None) -> date:
+    """日線「取到就停」的目標日：交易日台北 16:00 後＝今天；其餘（清晨班、週末、國定假日）＝今天之前最近的交易日。
+    `closed`＝證交所休市日表；抓不到（None）時只排除週末——國定假日後的清晨班會以假日為目標（拿到空表就停），漏抓的交易日只能等週收集補。"""
+    def trading(d: date) -> bool:
+        return d.weekday() < 5 and not (closed and d in closed)
+    if hour >= PRICE_FROM_HOUR and trading(today):
+        return today
+    d = today - timedelta(days=1)
+    while not trading(d):
+        d -= timedelta(days=1)
+    return d
+
+
+def price_stored(table: pd.DataFrame, market: str, d: date) -> bool:
+    """目標日已存就不再請求。上市要是官網來源才算（OpenAPI 來源要讓位給官網版）；上櫃任何來源都算。"""
+    if not len(table):
+        return False
+    m = table[(table["market"] == market) & (table["date"] == pd.Timestamp(d))]
+    if m.empty:
+        return False
+    return market != "TW" or bool((m["src"] == SRC_WEB_MI_INDEX).any())
+
+
+def fetch_twse_web(d: date, fetched) -> pd.DataFrame | None:
+    """官網 MI_INDEX 上市日線（重用 selfhost_raw_prices 的解析與日期斷言）。None＝失敗；空表＝尚未公布或休市。"""
+    if str(Path(__file__).parent) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).parent))
+    import selfhost_raw_prices as rp  # noqa: PLC0415
+    df = rp.fetch_twse(d)
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    for c in ("next_ref", "next_limit_up", "next_limit_down"):
+        df[c] = float("nan")
+    df["src"], df["last_modified"], df["fetched_at"] = SRC_WEB_MI_INDEX, pd.NaT, fetched
+    return df[PRICE_COLS]
 
 
 def margin_candidates(today: date, hour: int = 24) -> list[date]:
@@ -499,9 +538,43 @@ def main() -> int:
     tables = {PRICES: _read(PRICES, PRICE_COLS), MARGIN: _read(MARGIN, MARGIN_COLS)}
     ok = 0
     changed = False
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import last_trading_day_guard as g  # noqa: PLC0415
+        closed = g.fetch_closed()
+    except Exception:       # noqa: BLE001
+        closed = None
     for name, url, mk, parser, path, cols in jobs:
         if not endpoint_window_ok(name, now.hour):
             continue                                  # 官方還沒公布的時段：不請求、不記 log
+        target = price_target(today, now.hour, closed)
+        if name in ("twse_day", "tpex_day") and price_stored(tables[PRICES], mk, target):
+            continue                                  # 取到就停：目標日已存，不再請求（也不會被隔天的重產版覆蓋）
+        if name == "twse_day":                        # 官網帶日期端點為主；失敗（None）才退回 OpenAPI 備援；空＝尚未公布，不退備援
+            wdf = fetch_twse_web(target, fetched)
+            wentry = {"fetched_at": str(fetched), "endpoint": "twse_day_web", "data_date": str(target)}
+            if wdf is None:
+                wentry["result"] = "失敗（連線／日期不符），退回 OpenAPI 備援"
+                print("::warning::上市日線官網 MI_INDEX 失敗，改用 OpenAPI 備援", file=sys.stderr)
+                _log(wentry)
+            elif wdf.empty:
+                wentry["result"] = "尚未公布或休市"
+                print(f"[openapi] twse_day_web：{target} 尚未公布或休市")
+                _log(wentry)
+                continue
+            elif len(wdf) < MIN_ROWS["twse_day"]:
+                wentry["result"] = f"失敗：只有 {len(wdf)} 列，不存"
+                print(f"::warning::上市日線官網只有 {len(wdf)} 列，不存", file=sys.stderr)
+                _log(wentry)
+                continue
+            else:
+                tables[path], action = merge_day(tables[path], wdf, cols)
+                changed = changed or action in ("added", "replaced")
+                wentry["rows"], wentry["result"] = len(wdf), f"{action} {len(wdf)} 列"
+                print(f"[openapi] twse_day_web：資料日 {target}、{len(wdf)} 列、{action}")
+                _log(wentry)
+                ok += 1
+                continue
         rows, lm_hdr, status, err = fetch(url)
         entry = {"fetched_at": str(fetched), "endpoint": name, "http": status, "last_modified": lm_hdr, "rows": len(rows) if rows else 0}
         if rows is None:
@@ -569,12 +642,6 @@ def main() -> int:
             f.write(f"changed={'true' if changed else 'false'}\n")
             f.write(f"forecast_changed={'true' if forecast_changed else 'false'}\n")
             f.write(f"inst_changed={'true' if inst_changed else 'false'}\n")
-    try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        import last_trading_day_guard as g  # noqa: PLC0415
-        closed = g.fetch_closed()
-    except Exception:       # noqa: BLE001
-        closed = None
     tables[INST] = inst_t
     for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO"), ("上市融資券", MARGIN, "TW"),
                            ("上市三大法人", INST, "TW"), ("上櫃三大法人", INST, "TWO")):

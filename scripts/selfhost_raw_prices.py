@@ -42,6 +42,9 @@ REFRESH_DAYS = 14
 RECHECK_DAYS = 3
 SLEEP = 2.0
 UA = {"User-Agent": "Mozilla/5.0"}
+# MI_INDEX 「沒有資料」的 stat（2026-10-08 實測）：休市日（10/4 週日、6/19 端午）回第一句；未來日期（10/9）回第二句。
+# 其他 stat 一律當失敗（回 None）——不可把不認得的回應當休市吞掉（tw-stock-data CLAUDE.md §二：靜默失敗都長成 200）。
+TWSE_NO_DATA = ("沒有符合條件的資料", "查詢日期大於今日")
 # chg：官方當日「漲跌價差」（有正負號；事件日標記為 X／除息 時為空）。close−chg＝官方當日參考價——
 # 跟我們「前一筆收盤」不同時（無成交後、事件日），只有它能說明價格跳動是否合乎漲跌幅限制。
 COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg"]
@@ -145,7 +148,10 @@ def fetch_twse(d: date) -> pd.DataFrame | None:
     if j is None:
         return None
     if j.get("stat") != "OK":
-        return pd.DataFrame(columns=COLS)           # 休市（非錯誤）
+        if any(s in str(j.get("stat")) for s in TWSE_NO_DATA):
+            return pd.DataFrame(columns=COLS)       # 休市／尚未公布／未來日期（非錯誤）
+        print(f"::warning::TWSE {ymd} 回應 stat={j.get('stat')!r}，不是已知的「沒有資料」，當失敗處理", file=sys.stderr)
+        return None
     if str(j.get("date")) != ymd:
         print(f"::warning::TWSE {ymd} 回應日期 {j.get('date')} 不符，丟棄", file=sys.stderr)
         return None

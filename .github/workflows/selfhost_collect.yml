@@ -122,15 +122,14 @@ jobs:
           python scripts/selfhost_events.py --official-act "$START" --build
 
       # FinMind 減資（逐檔）只當交叉驗證（2026-10-05 實測：FinMind 已查 345 件全部在官方表內、因子差中位數 0）；
-      # 每週五輪詢 150 檔，避免占用與 tw-swing 共用的 FinMind 額度。
-      - name: 減資事件輪詢（週五，交叉驗證）
+      # 每週最後交易日輪詢 150 檔，避免占用與 tw-swing 共用的 FinMind 額度。
+      - name: 減資事件輪詢（當週最後交易日，交叉驗證）
         if: (github.event_name == 'workflow_dispatch' || github.event.schedule == '58 15 * * 1-5') && steps.guard.outputs.run == 'true'
         continue-on-error: true
         timeout-minutes: 15
         run: |
-          if [ "$(date -u +%u)" = 5 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python scripts/selfhost_events.py --finmind-reduction --max-calls 150 --no-wait --build
-          fi
+          # guard 通過＝當週最後交易日（不再寫死 UTC 週五：週四是最後交易日的週會被跳過，如 2026-10-09 國慶補假）
+          python scripts/selfhost_events.py --finmind-reduction --max-calls 150 --no-wait --build
 
       # 除權除息預告表（TWT48U，只有未來、沒有歷史）每週存一份快照：量測各類事件實際預告提前多久、預掛下一週還原參數用。
       # 累積檔只增不減（腳本內有斷言）；每週 1 次官方請求，不增加頻率。不進閘門。
@@ -150,8 +149,8 @@ jobs:
           for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
           done
-          # 週五另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
-          if [ "$(date -u +%u)" = 5 ]; then
+          # 當週最後交易日（guard 通過的排程班）另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
+          if [ "${{ github.event_name }}" = "schedule" ]; then
             D=$(date -u +%Y%m%d)
             for f in raw_prices inst margin corp_actions; do
               [ -f data/selfhost/$f.parquet ] && cp data/selfhost/$f.parquet "data/selfhost/snap-$D-$f.parquet" \
