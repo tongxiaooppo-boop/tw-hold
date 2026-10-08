@@ -422,11 +422,11 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 - 上游 data_pack.zip 現在是 **495MB**（tw-swing `update_data.py` 註解寫 220MB，已過時）。
 - 測試：tw-hold 全套 **476 passed**（新增：假日目標日、stat 判斷、逐檔 drop_future、併入 4、閘門 4、影子比對 1）。
 
-**給 Sonnet 的 push 前確認清單**
+**給 Sonnet 的確認清單**（程式已於 2026-10-08 push，commit `1d71251`；第 1–3 項改為事後審查，有問題先回報不要直接改）
 1. `git diff` 全看：`selfhost_raw_prices.py`（TWSE_NO_DATA）、`selfhost_openapi_daily.py`（price_target 吃休市表、fetch_closed 提前）、`selfhost_adjust.py`（drop_future 逐檔、--in-dir）、`selfhost_to_datapack.py`（--in-dir）、`selfhost_collect.yml`（步驟名、週五判斷改跟 guard）。
 2. 新檔：`selfhost_daily_merge.py`、`selfhost_zip_gate.py`、`selfhost_shadow_compare.py`、`.github/workflows/selfhost_datapack.yml`、三個測試檔。
 3. workflow 檢查：`workflow_run` 的 workflows 名稱要與兩支收集 workflow 的 `name:` 逐字相同；沒有新增 cron；`get()` 失敗會 `exit 1`；發佈順序 zip → manifest 最後；`fetch_bundle.py` 失敗不擋（只少名稱）。用 `bash -n` 驗每段 shell。
-4. 兩 repo 全套測試（tw-swing 本次沒改，仍要跑）；指令鏈不可讓 `pytest | tail` 吞失敗碼。
-5. push 後手動觸發一次 `selfhost_datapack.yml`（force），確認 Release `datapack-selfhost` 產出 zip＋manifest＋shadow_compare.json。
+4. ✅ 已完成（Opus，2026-10-08）：兩 repo 全套測試 tw-hold 477 passed、tw-swing 834 passed。
+5. ✅ 已完成（Opus，2026-10-08）：手動觸發 `selfhost_datapack.yml`（force，run 37711598836）全步驟 success、約 3 分鐘；Release `datapack-selfhost` 已有 zip（202MB，完整日 10/7，sha256 寫入 manifest）＋shadow_compare.json（10/7 收盤 99.95%、法人／融資 100%）。
 
 **還沒做（10/23 前）**：B2（swing 開關＋退回）、B10（dispatch 鏈，等 10/8 公布時間結果決定 openapi_daily 班次）、B6（每日官方結果表）、B13（端到端乾跑＋退回演練）。
