@@ -430,3 +430,28 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 5. ✅ 已完成（Opus，2026-10-08）：手動觸發 `selfhost_datapack.yml`（force，run 37711598836）全步驟 success、約 3 分鐘；Release `datapack-selfhost` 已有 zip（202MB，完整日 10/7，sha256 寫入 manifest）＋shadow_compare.json（10/7 收盤 99.95%、法人／融資 100%）。
 
 **還沒做（10/23 前）**：B2（swing 開關＋退回）、B10（dispatch 鏈，等 10/8 公布時間結果決定 openapi_daily 班次）、B6（每日官方結果表）、B13（端到端乾跑＋退回演練）。
+
+---
+
+## 10. Sonnet 事後審查（2026-10-08，commit `1d71251` 之後）
+
+審查範圍：`1d71251` 全部 diff、四個新腳本、`selfhost_datapack.yml`（`workflow_run` 名稱與兩支收集 workflow 的 `name:` 逐字相同、無新增 cron、發佈順序 zip → adjust_log → manifest 最後、YAML 可解析）。
+
+| # | 發現 | 嚴重度 | 處理 |
+|---|---|---|---|
+| 1 | **「取到就停」讓 `selfhost_openapi_daily.py` 回傳 1**：目標日已存而 `continue` 沒計成功；20:02 班（上櫃融資窗口 22:00 才開）一個請求都沒發，`return 0 if ok else 1` → workflow 變紅（且會連帶觸發 `selfhost_datapack`）。上市「尚未公布或休市」同理 | 中（誤報紅，不傷資料） | ✅ 已修：已存、尚未公布／休市都計成功；新增測試 `test_main_returns_0_when_targets_already_stored`（修前失敗、修後通過） |
+| 2 | **併入沒檢查中間缺日**：完整日只看各項「最後日」取最小；某市場中間漏一天但後面日子齊，zip 會悄悄缺那天 | 中 | ✅ 已修：`find_gaps`（完整日前 14 天，以三張表兩市場日期聯集為交易日）寫進 manifest `gaps` 並警告；`selfhost_zip_gate` 有 `gaps` 即擋 |
+| 3 | **zip 閘門沒驗法人／融資最後日**，只驗檔數 >0 | 低 | ✅ 已修：錨點檔法人、融資最後日須等於完整日 |
+| 4 | 事件表只到週收集日（B6 未做）：manifest 與警告有講，但不擋 | 影子期可接受；**切換前必須解** | 維持（B6） |
+| 5 | 影子比對每次下載約 495MB 上游 zip、`curl` 無逾時 | 低 | 未改（`continue-on-error`、只在內容有變時跑） |
+| 6 | 閘門錨點只有 0050／2330／6488，抓不到個別股票被乘錯因子 | 低 | 由影子比對補；未改 |
+| 7 | `find_gaps` 以日期聯集當交易日：**整天所有表都沒有**的日子（例如整個交易日全漏）發現不了，需要交易日曆 | 低 | 未改；由 `openapi_daily` 缺日偵測與週收集補。可在 B2 一併用 `holidaySchedule` |
+
+測試：tw-hold 全套（`pytest` 於 repo 根）482 passed（含 `tests/` 內 472）。
+
+**Opus 對本次修正的審查（2026-10-08，有條件通過）與處理**
+- 驗證：本機週收集 2015-01～2026-10-05（三表×兩市場各 2864 個交易日），2018 年起每個交易日當一次完整日跑 `find_gaps`，2130 天 **0 誤報**；Release 最新資料（完整日 10/7）跑併入 `gaps={}`；zip 內 `institutional`／`margin` csv 日期欄名確為 `date`、無 BOM。
+- 必修（✅ 已做）：**資料停滯紅燈**。持續回「沒有資料」時整條鏈會永遠綠（完整日停住、併入雜湊不變、datapack 跳過、閘門只擋倒退）。新增 `scripts/selfhost_freshness.py`：已發佈完整日落後 ≥2 個交易日（吃休市表）→ `selfhost_datapack.yml` 變紅；落後 1 日只警告；放在「來源有沒有變」步驟裡，來源沒變也會跑。
+- 建議（✅ 已做）：閘門錨點的法人／融資檔全找不到時改報錯（原本靜默通過）；`.max()` 遇全 NaT 防呆；註解寫明用 `max(lasts)` 的原因（6488 法人只有 2686 列、0050 沒有融資檔）；補跨表缺日測試、錨點全缺測試、停滯紅燈測試。
+- 待決策（影子期維持現狀）：閘門 `gaps` 一律擋整包。週收集每平日 23:58 都跑、洞隔天會自癒；**B2 切換前**要決定政策——只有 raw_prices 的洞擋、inst／margin 的洞只警告，或維持全擋並在 DATA_FLOW 寫清楚手動處理。
+- §10 第 7 項補註：週收集每晚跑，洞一天內自癒；整天全表都沒有的日子要靠交易日曆（B2 時用 `holidaySchedule`）。

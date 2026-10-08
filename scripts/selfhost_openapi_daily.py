@@ -549,6 +549,7 @@ def main() -> int:
             continue                                  # 官方還沒公布的時段：不請求、不記 log
         target = price_target(today, now.hour, closed)
         if name in ("twse_day", "tpex_day") and price_stored(tables[PRICES], mk, target):
+            ok += 1                                   # 已存＝成功（不計的話，目標日都已存的班次會回傳 1、整個 workflow 變紅）
             continue                                  # 取到就停：目標日已存，不再請求（也不會被隔天的重產版覆蓋）
         if name == "twse_day":                        # 官網帶日期端點為主；失敗（None）才退回 OpenAPI 備援；空＝尚未公布，不退備援
             wdf = fetch_twse_web(target, fetched)
@@ -561,6 +562,7 @@ def main() -> int:
                 wentry["result"] = "尚未公布或休市"
                 print(f"[openapi] twse_day_web：{target} 尚未公布或休市")
                 _log(wentry)
+                ok += 1                               # 尚未公布／休市不是錯誤，不讓 workflow 變紅
                 continue
             elif len(wdf) < MIN_ROWS["twse_day"]:
                 wentry["result"] = f"失敗：只有 {len(wdf)} 列，不存"

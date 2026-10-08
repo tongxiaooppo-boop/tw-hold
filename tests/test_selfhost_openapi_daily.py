@@ -609,3 +609,19 @@ def test_fetch_twse_只有已知的沒有資料才算休市(monkeypatch):
         assert out is not None and out.empty                                    # 休市／未來日期：空表、不退備援
     monkeypatch.setattr(rp, "_get", lambda url: {"stat": "系統忙碌中，請稍後再試"})
     assert rp.fetch_twse(date(2026, 10, 8)) is None                             # 不認得的 stat：當失敗（退備援＋警告），不可吞成休市
+
+
+def test_main_returns_0_when_targets_already_stored(monkeypatch):
+    """取到就停：目標日都已存的班次（例：20:02，上櫃融資窗口還沒開）不可回傳 1 讓 workflow 變紅。"""
+    import datetime as _dt
+    class _FakeDT(_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt.datetime(2026, 10, 7, 20, 2, tzinfo=tz)
+    monkeypatch.setattr(oa, "datetime", _FakeDT)
+    monkeypatch.setattr(oa, "price_stored", lambda table, market, d: True)
+    monkeypatch.setattr(oa, "fetch", lambda url: (_ for _ in ()).throw(AssertionError("不該請求")))
+    monkeypatch.setattr(oa.requests, "get", _fake_get())
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
+    assert oa.main() == 0
