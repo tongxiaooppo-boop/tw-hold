@@ -6,6 +6,8 @@
   3. 日線檔數不比已發佈那包少超過 2%
   4. 錨點代號（0050、2330 上市；6488 上櫃）都在，且最後一列日期＝完整日、收盤＝官方未還原收盤（最新一天 F＝1）
   5. 法人、融資檔數 > 0
+  6. manifest 的 `gaps`（完整日前 14 天內的中間缺日）必須是空的
+  7. 法人、融資的最後日（取三個錨點檔）＝完整日——併入雖已用完整日截斷，這裡再驗 zip 本身
 
 通過後把 zip 的 sha256、檔數、完整日寫進 manifest（下游 tw-swing 要比對 sha256 才用，避免讀到傳到一半的 zip）。
 
@@ -61,6 +63,24 @@ def check(zip_path: Path, manifest: dict, raw: pd.DataFrame, published: dict | N
             r = raw[(raw["ticker"] == code) & (pd.to_datetime(raw["date"]) == cday)]
             if r.empty or abs(float(last["Close"]) / float(r["close"].iloc[0]) - 1) > 1e-9:
                 errs.append(f"錨點 {code} 最新收盤 {last['Close']} ≠ 官方未還原收盤 {None if r.empty else float(r['close'].iloc[0])}")
+    if manifest.get("gaps"):
+        errs.append(f"完整日前有中間缺日：{manifest['gaps']}")
+    with zipfile.ZipFile(zip_path) as zf:
+        names = set(zf.namelist())
+        for kind, pat, col in (("inst", "data/institutional/{c}_inst.csv", "date"), ("margin", "data/margin/{c}_margin.csv", "date")):
+            lasts = []
+            for code in ANCHORS:
+                n = pat.format(c=code)
+                if n in names:
+                    d = pd.read_csv(io.BytesIO(zf.read(n)), encoding="utf-8-sig", usecols=[col])[col]
+                    mx = pd.to_datetime(d, errors="coerce").max()
+                    if pd.notna(mx):
+                        lasts.append(str(mx.date()))
+            if not lasts:
+                errs.append(f"{kind} 錨點檔都找不到或沒有日期（檔名改版？）——不可靜默略過")
+            # 用 max 而非「每個都要等於完整日」：個別錨點本來就可能缺日（6488 法人 2686 列 vs 2330 的 2864 列、0050 沒有融資檔）
+            elif max(lasts) != str(cday.date()):
+                errs.append(f"{kind} 錨點最後日 {sorted(set(lasts))} 與完整日 {cday.date()} 不一致（最新者應等於完整日）")
     if stats["inst_files"] == 0 or stats["margin_files"] == 0:
         errs.append(f"法人／融資檔數為 0：{stats}")
     if published:

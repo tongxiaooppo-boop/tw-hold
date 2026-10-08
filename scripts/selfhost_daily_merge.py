@@ -38,6 +38,7 @@ TABLES = {  # 名稱: (週收集檔, 每日檔, 比對數值欄)
 }
 MARKETS = ("TW", "TWO")
 VAL_TOL = 1e-6
+GAP_WINDOW_DAYS = 14            # 完整日往前幾個日曆日內，檢查有沒有「別的表有、這張表沒有」的交易日
 
 
 def _norm(df: pd.DataFrame) -> pd.DataFrame:
@@ -95,6 +96,25 @@ def complete_day(lasts: dict[str, str | None]) -> pd.Timestamp | None:
     return pd.Timestamp(min(lasts.values()))
 
 
+def find_gaps(merged: dict[str, pd.DataFrame], cday: pd.Timestamp, window: int = GAP_WINDOW_DAYS) -> dict[str, list[str]]:
+    """完整日往前 `window` 個日曆日內的中間缺日：以三張表兩市場的日期聯集當交易日，哪張表哪個市場少了就是洞。
+    （只看最後日抓不到「中間漏一天」——例：上市 10/9 失敗但 10/12 已進來，完整日仍前進，zip 會悄悄缺一天。）
+    整天所有表都沒有的日子無法靠聯集發現（要交易日曆），由 selfhost_openapi_daily 的缺日偵測與週收集補。"""
+    lo = cday - pd.Timedelta(days=window)
+    days: set[pd.Timestamp] = set()
+    for df in merged.values():
+        d = df.loc[(df["date"] >= lo) & (df["date"] <= cday), "date"]
+        days |= set(d.unique())
+    gaps: dict[str, list[str]] = {}
+    for name, df in merged.items():
+        for mk in MARKETS:
+            have = set(df.loc[(df["market"] == mk) & (df["date"] >= lo) & (df["date"] <= cday), "date"].unique())
+            miss = sorted(days - have)
+            if miss:
+                gaps[f"{name}.{mk}"] = [str(pd.Timestamp(d).date()) for d in miss]
+    return gaps
+
+
 def _read(p: Path) -> pd.DataFrame | None:
     return pd.read_parquet(p) if p.exists() else None
 
@@ -132,6 +152,7 @@ def main(argv=None) -> int:
         merged[name] = df[df["date"] <= cday]
         merged[name].to_parquet(odir / f"{name}.parquet", index=False, compression="zstd")
 
+    gaps = find_gaps(merged, cday)
     ev = _read(wdir / "corp_actions.parquet")
     ev_through = None
     if ev is not None and len(ev):
@@ -151,7 +172,7 @@ def main(argv=None) -> int:
             h.update(pd.util.hash_pandas_object(pd.read_parquet(f), index=False).values.tobytes())
     manifest = {"complete_day": str(cday.date()), "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
-                "events_gap_days": gap_days,
+                "events_gap_days": gap_days, "gaps": gaps,
                 "appended_from_daily": {n: r["appended"] for n, r in reports.items()},
                 "overlap_check": {n: r["overlap"] for n, r in reports.items()}}
     (odir / "merge_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -159,6 +180,8 @@ def main(argv=None) -> int:
     print(f"[merge] 由每日表補入：{ {n: list(r['appended']) for n, r in reports.items()} }")
     if pending:
         print(f"[merge] 完整日之後、這一版不收：{pending}")
+    if gaps:
+        print(f"::warning::完整日前 {GAP_WINDOW_DAYS} 天內有中間缺日（zip 會缺這些天，閘門會擋）：{gaps}", file=sys.stderr)
     if gap_days:
         print(f"::warning::事件表只到 {ev_through.date()}（週收集），之後 {len(gap_days)} 個交易日 {gap_days} 的除權息／減資因子尚未進來（B6）——"
               "這幾天若有事件，該檔還原價在事件日會有假跳空", file=sys.stderr)

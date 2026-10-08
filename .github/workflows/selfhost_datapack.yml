@@ -67,6 +67,8 @@ jobs:
           else
             gh release create datapack-selfhost --title "自建資料包（官方口徑）" --notes "由 selfhost_datapack.yml 維護；影子期只產不用；勿手動覆蓋"
           fi
+          # 停滯紅燈（不管來源有沒有變都要跑）：已發佈完整日落後 ≥2 個交易日就讓這支變紅（沒設告警 webhook，紅燈是唯一訊號）
+          python scripts/selfhost_freshness.py --manifest "$P/merge_manifest.json" || echo "stale=true" >> "$GITHUB_OUTPUT"
           if [ "${{ inputs.force }}" != "true" ] && [ -f "$P/source_stamp.txt" ] && cmp -s "$M/source_stamp.txt" "$P/source_stamp.txt"; then
             echo "來源沒變，不重做"; echo "skip=true" >> "$GITHUB_OUTPUT"
           else
@@ -144,3 +146,8 @@ jobs:
           python -c "import json,sys; r=json.load(open(sys.argv[1],encoding='utf-8')); m=json.load(open(sys.argv[2],encoding='utf-8')); r['complete_day']=m['complete_day']; r['run']=sys.argv[3]; print(json.dumps(r,ensure_ascii=False))" \
             "$M/shadow_compare.json" "$M/merge_manifest.json" "${{ github.run_id }}" >> "$P/shadow_history.jsonl"
           gh release upload datapack-selfhost "$M/shadow_compare.json" "$P/shadow_history.jsonl" --clobber
+
+      - name: 停滯紅燈（資料沒進來）
+        if: always() && steps.stamp.outputs.stale == 'true'
+        run: |
+          echo "::error::自建資料包完整日停滯（見「來源有沒有變」步驟的訊息）"; exit 1
