@@ -1,9 +1,9 @@
 {
  "_meta": {
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
-  "anchor_date": "2026-10-07",
-  "market_date": "2026-10-07",
-  "fetched_at": "2026-10-08T00:58:25+00:00",
+  "anchor_date": "2026-10-08",
+  "market_date": "2026-10-08",
+  "fetched_at": "2026-10-08T15:40:00+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -12,88 +12,261 @@
   "funds": {
    "00981A": {
     "synced": true,
-    "date": "2026-10-07",
-    "prev_date": "2026-10-06",
+    "date": "2026-10-08",
+    "prev_date": "2026-10-07",
     "span_days": 1,
-    "moved_n": 0,
-    "aum": 292463627176.0,
+    "moved_n": 6,
+    "aum": 291243124865.0,
     "aum_prev": 292463627176.0,
-    "navps": 32.394423653240636,
+    "navps": 32.2699590519178,
     "navps_prev": 32.394423653240636,
-    "close": 32.26,
-    "close_date": "2026-10-07",
-    "premium_pct": -0.41495923705742827,
+    "close": 32.24,
+    "close_date": "2026-10-08",
+    "premium_pct": -0.09283882842739219,
     "premium_skipped": false
    },
    "00403A": {
     "synced": true,
-    "date": "2026-10-07",
-    "prev_date": "2026-10-06",
+    "date": "2026-10-08",
+    "prev_date": "2026-10-07",
     "span_days": 1,
-    "moved_n": 0,
-    "aum": 144791688427.0,
+    "moved_n": 4,
+    "aum": 143541256239.0,
     "aum_prev": 144791688427.0,
-    "navps": 11.407190710657567,
+    "navps": 11.330100321027224,
     "navps_prev": 11.407190710657567,
-    "close": 11.36,
-    "close_date": "2026-10-07",
-    "premium_pct": -0.41369265978412645,
+    "close": 11.29,
+    "close_date": "2026-10-08",
+    "premium_pct": -0.3539273253636065,
     "premium_skipped": false
    },
    "00991A": {
     "synced": true,
-    "date": "2026-10-07",
-    "prev_date": "2026-10-06",
+    "date": "2026-10-08",
+    "prev_date": "2026-10-07",
     "span_days": 1,
     "moved_n": 1,
-    "aum": 79266861481.0,
-    "aum_prev": 80581037892.0,
-    "navps": 19.284389093707304,
-    "navps_prev": 19.471468767760417,
-    "close": 19.19,
-    "close_date": "2026-10-07",
-    "premium_pct": -0.48945856282324757,
+    "aum": 77997090684.0,
+    "aum_prev": 79266861481.0,
+    "navps": 19.024070416076817,
+    "navps_prev": 19.284389093707304,
+    "close": 18.93,
+    "close_date": "2026-10-08",
+    "premium_pct": -0.4944810128400332,
     "premium_skipped": false
    },
    "00982A": {
     "synced": true,
-    "date": "2026-10-07",
-    "prev_date": "2026-10-06",
+    "date": "2026-10-08",
+    "prev_date": "2026-10-07",
     "span_days": 1,
-    "moved_n": 2,
-    "aum": 52358564268.0,
-    "aum_prev": 52942755274.0,
-    "navps": 24.64006646223698,
-    "navps_prev": 24.82735954279519,
-    "close": 24.52,
-    "close_date": "2026-10-07",
-    "premium_pct": -0.48728140575835244,
+    "moved_n": 1,
+    "aum": 51641366825.0,
+    "aum_prev": 52358564268.0,
+    "navps": 24.3311773947483,
+    "navps_prev": 24.64006646223698,
+    "close": 24.25,
+    "close_date": "2026-10-08",
+    "premium_pct": -0.3336352920011995,
     "premium_skipped": false
    },
    "00992A": {
     "synced": true,
-    "date": "2026-10-07",
-    "prev_date": "2026-10-06",
+    "date": "2026-10-08",
+    "prev_date": "2026-10-07",
     "span_days": 1,
-    "moved_n": 2,
-    "aum": 44776239610.0,
-    "aum_prev": 45103222840.0,
-    "navps": 20.06593886500064,
-    "navps_prev": 20.24422523794242,
-    "close": 20.14,
-    "close_date": "2026-10-07",
-    "premium_pct": 0.3690888101355682,
+    "moved_n": 0,
+    "aum": 44937001352.0,
+    "aum_prev": 44776239610.0,
+    "navps": 19.941379504804843,
+    "navps_prev": 20.06593886500064,
+    "close": 20.01,
+    "close_date": "2026-10-08",
+    "premium_pct": 0.3441110740539529,
     "premium_skipped": false
    }
   },
   "schema_ok": true
  },
  "flags": {
-  "5274": {
-   "name": "信驊科技",
+  "2330": {
+   "name": "台積電",
    "industry": null,
-   "net_shares": -30000,
-   "net_amount": -532500000,
+   "net_shares": 360000,
+   "net_amount": 918000000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00981A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00981A": 360000
+   },
+   "exit_notes": {}
+  },
+  "2368": {
+   "name": "金像電",
+   "industry": null,
+   "net_shares": 481000,
+   "net_amount": 618085000,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
+   "span_days": 1,
+   "buyers": [
+    "00403A",
+    "00981A"
+   ],
+   "sellers": [],
+   "kind": "consensus_buy",
+   "by_fund": {
+    "00981A": 321000,
+    "00403A": 160000
+   },
+   "exit_notes": {}
+  },
+  "2449": {
+   "name": "京元電子",
+   "industry": null,
+   "net_shares": -4482000,
+   "net_amount": -1364769000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00981A": -4482000
+   },
+   "exit_notes": {}
+  },
+  "3037": {
+   "name": "欣興",
+   "industry": null,
+   "net_shares": -579000,
+   "net_amount": -735330000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00981A": -579000
+   },
+   "exit_notes": {}
+  },
+  "3443": {
+   "name": "創意",
+   "industry": null,
+   "net_shares": 68000,
+   "net_amount": 568480000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00981A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00981A": 68000
+   },
+   "exit_notes": {}
+  },
+  "3711": {
+   "name": "日月光投控",
+   "industry": null,
+   "net_shares": -928000,
+   "net_amount": -690432000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00981A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00981A": -928000
+   },
+   "exit_notes": {}
+  },
+  "5274": {
+   "name": "信驊",
+   "industry": null,
+   "net_shares": 22000,
+   "net_amount": 384670000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00403A": 22000
+   },
+   "exit_notes": {}
+  },
+  "6274": {
+   "name": "台燿",
+   "industry": null,
+   "net_shares": 100000,
+   "net_amount": 174000000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00403A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00403A": 100000
+   },
+   "exit_notes": {}
+  },
+  "6488": {
+   "name": "環球晶",
+   "industry": null,
+   "net_shares": -800000,
+   "net_amount": -904000000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00403A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00403A": -800000
+   },
+   "exit_notes": {}
+  },
+  "2454": {
+   "name": "聯發科技",
+   "industry": null,
+   "net_shares": -50000,
+   "net_amount": -234500000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -104,36 +277,15 @@
    ],
    "kind": "sell",
    "by_fund": {
-    "00991A": -30000
+    "00991A": -50000
    },
    "exit_notes": {}
   },
-  "3529": {
-   "name": "力旺",
+  "8070": {
+   "name": "長華*",
    "industry": null,
-   "net_shares": -50000,
-   "net_amount": -149221908,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00982A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00982A": -50000
-   },
-   "exit_notes": {
-    "00982A": "僅剩1張"
-   }
-  },
-  "6672": {
-   "name": "騰輝電子-KY",
-   "industry": null,
-   "net_shares": 179000,
-   "net_amount": 90389793,
+   "net_shares": 600000,
+   "net_amount": 30294991,
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
@@ -144,49 +296,9 @@
    "sellers": [],
    "kind": "buy",
    "by_fund": {
-    "00982A": 179000
+    "00982A": 600000
    },
    "exit_notes": {}
-  },
-  "2360": {
-   "name": "致茂",
-   "industry": null,
-   "net_shares": 147000,
-   "net_amount": 352797828,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [
-    "00992A"
-   ],
-   "sellers": [],
-   "kind": "buy",
-   "by_fund": {
-    "00992A": 147000
-   },
-   "exit_notes": {}
-  },
-  "2455": {
-   "name": "全新",
-   "industry": null,
-   "net_shares": -1000000,
-   "net_amount": -566992614,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
-   "span_days": 1,
-   "buyers": [],
-   "sellers": [
-    "00992A"
-   ],
-   "kind": "sell",
-   "by_fund": {
-    "00992A": -1000000
-   },
-   "exit_notes": {
-    "00992A": "出清"
-   }
   }
  }
 }
