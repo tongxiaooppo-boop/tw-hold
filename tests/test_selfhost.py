@@ -500,6 +500,20 @@ def test_未來事件不套用_最新價等於未還原價():
     assert abs(adj["close"].iloc[0] - 19.0) < 1e-9             # 7/1 除息只乘在 7/1 之前
 
 
+def test_未來事件逐檔判斷_上櫃先到不可把上市當日事件乘到前一日():
+    # 每日併入：上櫃 10/12 先進來、上市 10/12 還沒到 → 全市場最後日＝10/12，但上市那檔最後實價日仍是 10/9
+    res = pd.DataFrame([
+        {"ticker": "2614", "date": _ts("2026-10-12"), "cls": "div", "type": "ex_div", "factor": 0.95, "source": "twse_ex"},
+        {"ticker": "6129", "date": _ts("2026-10-12"), "cls": "div", "type": "ex_div", "factor": 0.97, "source": "tpex_ex"},
+        {"ticker": "9999", "date": _ts("2026-10-01"), "cls": "red", "type": "reduction", "factor": 2.0, "source": "twse_red"}])
+    raw = pd.DataFrame({"ticker": ["2614", "6129", "6129"], "date": [_ts("2026-10-08"), _ts("2026-10-08"), _ts("2026-10-12")]})
+    ok, fut = sa.drop_future(res, raw.groupby("ticker")["date"].max())
+    assert list(ok["ticker"]) == ["6129"]                      # 上櫃當日收盤已到 → 套
+    assert set(fut["ticker"]) == {"2614", "9999"}             # 上市當日收盤未到、無實價代號 → 不套
+    ok2, _ = sa.drop_future(res, raw["date"].max())            # 舊行為（全市場最大日）會錯套 2614
+    assert "2614" in set(ok2["ticker"])
+
+
 # ───────── 2026-10-06 補測：重抓窗口、休市複本守門、週六日曆（agent 審查指出「有實作沒測試」）─────────
 def _fake_chips(monkeypatch, tmp_path, dataset, cal, mk_rows):
     """把 selfhost_chips.run 接到 tmp_path：假抓取器、假日曆。回傳 calls（被問過的 (市場, 日期)）。"""

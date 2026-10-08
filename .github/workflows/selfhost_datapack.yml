@@ -1,0 +1,146 @@
+name: 自建資料包（官方口徑 zip）
+
+# B3＋B4（docs/updatePRD-opus.md）：週收集（selfhost-data）＋每日收集（openapi-daily）→ 併到「完整日」→ 還原 → data_pack 格式 zip
+# → 閘門 → 發佈到 Release `datapack-selfhost`；同時跟上游 data_pack.zip 比最近 5 個交易日（影子期報告）。
+#
+# **不加排程**（使用者原則：不自行改頻率）：只在兩支收集 workflow 跑完後接著跑（workflow_run），或手動觸發。
+# 來源沒變（六個來源檔的更新時間一樣）就不重做——收集每天多班，大多數班次只改 fetch log。
+# 影子期（2026-10-12 起）：只產、只比，tw-swing 不讀；切換（B2）後 tw-swing 讀這個 Release。
+#
+# 發佈順序：zip 先、manifest 最後（manifest 是「這一版完成了」的標記，內含 zip 的 sha256；下游比對 sha256 才用）。
+# 單一寫入者：這支只寫 `datapack-selfhost`，不寫 `selfhost-data`／`openapi-daily`（那兩個各有自己的 workflow）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "來源沒變也重做"
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["官方 OpenAPI 每日收集", "自建上游收集"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: selfhost-datapack
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # 收集失敗也可能已上傳部分檔（例：法人失敗、日線成功）→ 只要不是取消就做；閘門把關
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.DATA_REPO_PAT || github.token }}
+      GH_REPO: ${{ vars.DATA_REPO || github.repository }}
+      PYTHONIOENCODING: utf-8
+      W: data/selfhost/_weekly
+      D: data/selfhost/_daily
+      M: data/selfhost/merged
+      P: data/selfhost/_published
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install pandas pyarrow requests
+
+      - name: 來源有沒有變（六個來源檔的更新時間）
+        id: stamp
+        run: |
+          mkdir -p "$W" "$D" "$M" "$P"
+          {
+            gh release view selfhost-data --json assets --jq '.assets[] | select(.name|test("^(raw_prices|inst|margin|corp_actions)\\.parquet$")) | "\(.name) \(.updatedAt)"'
+            gh release view openapi-daily --json assets --jq '.assets[] | select(.name|test("^openapi_(prices|inst|margin)\\.parquet$")) | "\(.name) \(.updatedAt)"'
+          } | sort > "$M/source_stamp.txt"
+          cat "$M/source_stamp.txt"
+          if gh release view datapack-selfhost >/dev/null 2>&1; then
+            gh release download datapack-selfhost -p merge_manifest.json -D "$P" --clobber || true
+            gh release download datapack-selfhost -p source_stamp.txt -D "$P" --clobber || true
+          else
+            gh release create datapack-selfhost --title "自建資料包（官方口徑）" --notes "由 selfhost_datapack.yml 維護；影子期只產不用；勿手動覆蓋"
+          fi
+          if [ "${{ inputs.force }}" != "true" ] && [ -f "$P/source_stamp.txt" ] && cmp -s "$M/source_stamp.txt" "$P/source_stamp.txt"; then
+            echo "來源沒變，不重做"; echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 下載來源
+        if: steps.stamp.outputs.skip == 'false'
+        run: |
+          get() {  # release 檔 目的地：重試 3 次，失敗就中止（不可用缺檔做出一包）
+            for try in 1 2 3; do gh release download "$1" -p "$2" -D "$3" --clobber && return 0; sleep $((try * 10)); done
+            echo "::error::下載 $1/$2 失敗——中止"; exit 1
+          }
+          for f in raw_prices.parquet inst.parquet margin.parquet corp_actions.parquet; do get selfhost-data "$f" "$W"; done
+          for f in openapi_prices.parquet openapi_inst.parquet openapi_margin.parquet; do get openapi-daily "$f" "$D"; done
+          ls -la "$W" "$D"
+
+      - name: 併入（週收集優先、只發佈完整日）
+        if: steps.stamp.outputs.skip == 'false'
+        run: python scripts/selfhost_daily_merge.py --weekly-dir "$W" --daily-dir "$D" --out-dir "$M"
+
+      # 來源檔有更新不代表內容有變：日線／法人先到、融資還沒到時完整日不前進，併出來跟上一版一樣 → 不重做還原與 zip。
+      # 完整日前進、舊日子被官方更正、週收集更新，雜湊都會變。
+      - name: 內容有沒有變（併入結果的雜湊）
+        id: same
+        if: steps.stamp.outputs.skip == 'false'
+        run: |
+          NEW=$(python -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8'))['input_hash'])" "$M/merge_manifest.json")
+          OLD=$(python -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8')).get('input_hash',''))" "$P/merge_manifest.json" 2>/dev/null || true)
+          echo "新 $NEW／已發佈 ${OLD:-（無）}"
+          if [ "${{ inputs.force }}" != "true" ] && [ -n "$OLD" ] && [ "$NEW" = "$OLD" ]; then
+            echo "內容沒變，不重做；只更新來源戳記"; echo "skip=true" >> "$GITHUB_OUTPUT"
+            gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 還原
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        run: python scripts/selfhost_adjust.py --in-dir "$M"
+
+      - name: 名稱／產業別（tw-swing bundle 的 universe；拿不到只是名稱留空）
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        continue-on-error: true
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: python fetch_bundle.py
+
+      - name: 產 zip
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        run: python scripts/selfhost_to_datapack.py --in-dir "$M" --out "$M/data_pack_selfhost.zip"
+
+      - name: 閘門（不比已發佈那包差）
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        run: |
+          PUB=""; [ -f "$P/merge_manifest.json" ] && PUB="--published $P/merge_manifest.json"
+          python scripts/selfhost_zip_gate.py --zip "$M/data_pack_selfhost.zip" --manifest "$M/merge_manifest.json" --raw "$M/raw_prices.parquet" $PUB
+
+      - name: 發佈（zip → 還原紀錄 → manifest 最後）
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        run: |
+          gh release upload datapack-selfhost "$M/data_pack_selfhost.zip" --clobber
+          gh release upload datapack-selfhost "$M/adjust_log.csv" --clobber
+          gh release upload datapack-selfhost "$M/merge_manifest.json" --clobber
+          gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+
+      # 影子期報告：失敗不影響已發佈的 zip。上游是公開 Release，匿名可下載。
+      - name: 影子比對（vs 上游 data_pack，最近 5 個交易日）
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        continue-on-error: true
+        run: |
+          curl -sSfL --retry 3 -o "$P/upstream.zip" https://github.com/maosof007-collab/tw-stock-scanner/releases/download/data-v1/data_pack.zip
+          python scripts/selfhost_shadow_compare.py --selfhost "$M/data_pack_selfhost.zip" --upstream "$P/upstream.zip" --json "$M/shadow_compare.json"
+          gh release download datapack-selfhost -p shadow_history.jsonl -D "$P" --clobber || touch "$P/shadow_history.jsonl"
+          python -c "import json,sys; r=json.load(open(sys.argv[1],encoding='utf-8')); m=json.load(open(sys.argv[2],encoding='utf-8')); r['complete_day']=m['complete_day']; r['run']=sys.argv[3]; print(json.dumps(r,ensure_ascii=False))" \
+            "$M/shadow_compare.json" "$M/merge_manifest.json" "${{ github.run_id }}" >> "$P/shadow_history.jsonl"
+          gh release upload datapack-selfhost "$M/shadow_compare.json" "$P/shadow_history.jsonl" --clobber

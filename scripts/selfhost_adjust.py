@@ -86,14 +86,20 @@ def resolve_events(ev: pd.DataFrame) -> pd.DataFrame:
     return res
 
 
-def drop_future(res: pd.DataFrame, last_day: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """事件日晚於最後一個實價日的事件還沒發生（官方預告表／減資公告會提前列出），不可套用：
+def drop_future(res: pd.DataFrame, last_day: pd.Series | pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """事件日晚於「該檔」最後一個實價日的事件還沒發生（或該日收盤還沒併進來），不可套用：
     套了之後「最新價」就不等於未還原價（最新價的 F 必須是 1，現價不動、被調整的是歷史）。
     實測 2026-10-06：6 件（2614、8021 除權息；2323、3085、4527、5301 減資），其中 2614 最後一列 close 被乘 0.8445。
-    回傳 (可套用, 被丟掉的)。"""
+    `last_day` 要逐檔（ticker→最後實價日的 Series）：每日併入時兩市場到達時間不同（上櫃先到），用全市場最大日期
+    會把上市當日事件乘到前一日收盤。停牌中（還沒恢復買賣）的減資同理：恢復日的收盤沒進來前不套。
+    傳單一 Timestamp 仍可用（全部事件同一個上界）。回傳 (可套用, 被丟掉的)。"""
     if res.empty:
         return res, res
-    fut = res["date"] > last_day
+    if isinstance(last_day, pd.Series):
+        lim = res["ticker"].map(last_day)
+        fut = lim.isna() | (res["date"] > lim)    # 沒有任何實價的代號：無從套用
+    else:
+        fut = res["date"] > last_day
     return res[~fut].copy(), res[fut].copy()
 
 
@@ -158,24 +164,28 @@ def adjust(raw: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
 
 
 def main(argv=None) -> int:
-    argparse.ArgumentParser().parse_args(argv)
-    raw = pd.read_parquet(RAW)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--in-dir", help="讀這個目錄的 raw_prices／corp_actions、輸出也寫這裡（每日併入版用 data/selfhost/merged）；預設 data/selfhost")
+    a = ap.parse_args(argv)
+    d = Path(a.in_dir) if a.in_dir else SH
+    raw_p, ev_p, out_p, log_p, rej_p = d / RAW.name, d / EV.name, d / OUT.name, d / LOG.name, d / "adjust_rejected.csv"
+    raw = pd.read_parquet(raw_p)
     raw["date"] = pd.to_datetime(raw["date"])
-    ev = pd.read_parquet(EV)
+    ev = pd.read_parquet(ev_p)
     ev["date"] = pd.to_datetime(ev["date"])
     res = resolve_events(ev)
     unknown = ev[~ev["type"].isin(CLASS)]
     print(f"事件：原始 {len(ev)} 列 → 去重後 {len(res)} 件；"
           f"conflict {int(res['conflict'].sum()) if len(res) else 0}；未知類型 {len(unknown)}")
-    res, future = drop_future(res, raw["date"].max())
+    res, future = drop_future(res, raw.groupby("ticker")["date"].max())
     if len(future):
-        print(f"  未來事件 {len(future)} 件不套用（事件日晚於最後實價日 {raw['date'].max().date()}）："
+        print(f"  未來事件 {len(future)} 件不套用（事件日晚於該檔最後實價日；全市場最後日 {raw['date'].max().date()}）："
               f"{future[['ticker', 'date']].assign(date=future['date'].dt.strftime('%m-%d')).values.tolist()}")
     res, gap_bad, gap_warn = stop_gap_gate(res, raw)
     if len(gap_bad):
         print(f"::warning::停牌缺口閘門拒收 {len(gap_bad)} 件（事件日前一交易日就有實價、且收盤對不上官方停止買賣前收盤）："
               f"{gap_bad[['ticker', 'date']].astype(str).values.tolist()[:10]}", file=sys.stderr)
-        gap_bad.to_csv(SH / "adjust_rejected.csv", index=False, encoding="utf-8-sig")
+        gap_bad.to_csv(rej_p, index=False, encoding="utf-8-sig")
     if len(gap_warn):
         print(f"  停牌缺口閘門警告 {len(gap_warn)} 件（有停牌缺口但收盤對不上官方前收，我方價格可能有問題）："
               f"{gap_warn[['ticker', 'date']].astype(str).values.tolist()[:10]}")
@@ -183,9 +193,9 @@ def main(argv=None) -> int:
     adj = adjust(raw[["ticker", "date", "open", "high", "low", "close", "volume"]], res)
     adj = adj.merge(raw[["ticker", "date", "close"]].rename(columns={"close": "raw_close"}), on=["ticker", "date"], how="left") \
         if "raw_close" not in adj.columns else adj
-    adj.to_parquet(OUT, index=False, compression="zstd")
-    res.to_csv(LOG, index=False, encoding="utf-8-sig")
-    print(f"→ {OUT.name}（{len(adj)} 列）、{LOG.name}")
+    adj.to_parquet(out_p, index=False, compression="zstd")
+    res.to_csv(log_p, index=False, encoding="utf-8-sig")
+    print(f"→ {out_p}（{len(adj)} 列）、{log_p.name}")
     return 0
 
 
