@@ -537,6 +537,7 @@ def main() -> int:
             ("tpex_margin", TPEX_MARGIN, "TWO", parse_margin, MARGIN, MARGIN_COLS)]
     tables = {PRICES: _read(PRICES, PRICE_COLS), MARGIN: _read(MARGIN, MARGIN_COLS)}
     ok = 0
+    in_window = 0                                     # 本班有幾個端點在請求時段內
     changed = False
     try:
         sys.path.insert(0, str(Path(__file__).parent))
@@ -547,6 +548,7 @@ def main() -> int:
     for name, url, mk, parser, path, cols in jobs:
         if not endpoint_window_ok(name, now.hour):
             continue                                  # 官方還沒公布的時段：不請求、不記 log
+        in_window += 1
         target = price_target(today, now.hour, closed)
         if name in ("twse_day", "tpex_day") and price_stored(tables[PRICES], mk, target):
             ok += 1                                   # 已存＝成功（不計的話，目標日都已存的班次會回傳 1、整個 workflow 變紅）
@@ -655,6 +657,10 @@ def main() -> int:
         gaps = [d for d in missing_trading_days(have, today, closed) if d >= min(have)]
         if gaps:
             print(f"::warning::OpenAPI {name} 累積檔缺交易日：{', '.join(map(str, gaps))}（網站端點補得回來；上市融資這支不會自動補，需手動）", file=sys.stderr)
+    if not in_window:
+        # 排程延遲（例：04:02 班延到 08:01）會讓整班落在請求時段外——這不是錯誤；資料停滯由 selfhost_freshness 紅燈負責，不靠這裡
+        print("[openapi] 本班全部在時段外（排程延遲？），沒有請求日線／上櫃融資")
+        return 0
     return 0 if ok else 1
 
 
