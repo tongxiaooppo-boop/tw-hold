@@ -14,7 +14,12 @@
 
 ## 事件因子（B6）
 `corp_actions`＝週收集的事件表 ∪ 每日收集的官方事件結果表窗口（`openapi_events.parquet`，每班抓 [今天−5, 今天]）。
-同鍵（代號、日期、類型、來源）**以週收集為準**（含官方事後更正、經過 build 驗證）；每日表只補週收集還沒有的事件。
+同鍵（代號、日期、類型、來源）值相同＝不動；**值不同＝官方事後更正，新者勝**（M1）：每日列的 `fetched_at`（該值第一次被看到的時間）
+晚於週收集事件表的資產更新時間（`--weekly-corp-updated`；沒給就用週收集日線最後一天 21:00 UTC 當代理）→ 每日列勝，否則週收集勝；
+同檔同日同類別但 type／source 不同（例：官方把「息」更正成「權息」）且兩邊都是官方來源（M2）→ 因子差 ≤0.5% 視為同一件（留週收集），
+否則同樣新者勝、輸的那筆丟掉，免得 `resolve_events` 只依字母序挑一筆。衝突筆數與範例進 manifest（`events_daily_conflicts`），不靜默。
+另掃「同檔同類別、14 天內、因子完全相同但日期不同」的官方事件對（M3，官方更正事件日時新舊兩筆都會留下、會套兩次），
+只警告並記進 manifest（`events_possible_date_shift`），不自動刪。
 manifest 的 `events_through`＝max(週收集日線最後一天, 每日事件最近一次成功抓取涵蓋到的日子)；
 完整日晚於 `events_through` 時，`events_gap_days` 會講出來，不靜默。
 
@@ -30,6 +35,9 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from selfhost_adjust import CLASS as EVENT_CLASS, CONFLICT_TOL, PRIORITY  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SH = ROOT / "data" / "selfhost"
@@ -122,29 +130,122 @@ def _read(p: Path) -> pd.DataFrame | None:
 
 
 EVENT_KEY = ["ticker", "date", "type", "source"]
+CMP_COLS = ["prev_close", "ref_price", "factor"]
+OFFICIAL_SOURCES = {src for src, pr in PRIORITY.items() if pr == 0}
+DATE_SHIFT_DAYS = 14
 
 
-def merge_events(weekly: pd.DataFrame | None, daily: pd.DataFrame | None) -> tuple[pd.DataFrame | None, int]:
-    """週收集事件表 ∪ 每日事件窗口。同鍵以週收集為準；欄位對齊週收集（每日表多的 fetched_at 丟掉、缺的欄補空）。
-    回傳 (合併表, 由每日表補入的事件數)。兩邊都沒有回 (None, 0)。"""
+def _num_equal(a, b, rel: float = 1e-9) -> bool:
+    if pd.isna(a) and pd.isna(b):
+        return True
+    if pd.isna(a) or pd.isna(b):
+        return False
+    return abs(float(a) - float(b)) <= rel * max(1.0, abs(float(a)), abs(float(b)))
+
+
+def _same_event_values(a, b) -> bool:
+    return all(_num_equal(a[c], b[c]) for c in CMP_COLS)
+
+
+def merge_events(weekly: pd.DataFrame | None, daily: pd.DataFrame | None,
+                 weekly_asof: pd.Timestamp | None = None) -> tuple[pd.DataFrame | None, dict]:
+    """週收集事件表 ∪ 每日事件窗口（B6）。回傳 (合併表, stats)。
+    stats：from_daily（由每日表補入的新事件數）、conflicts／daily_won／weekly_won、examples（最多 10 筆）。
+    欄位對齊週收集（每日表多的 fetched_at 丟掉、缺的欄補空）。`weekly_asof` 是週收集事件表的時間（UTC、無時區）；
+    沒給時每日列永遠不贏（＝週收集優先，舊行為）。"""
+    stats = {"from_daily": 0, "conflicts": 0, "daily_won": 0, "weekly_won": 0, "examples": []}
     if daily is None or daily.empty:
-        return weekly, 0
+        return weekly, stats
     d = daily.copy()
     d["date"] = pd.to_datetime(d["date"])
+    d["fetched_at"] = pd.to_datetime(d["fetched_at"]) if "fetched_at" in d.columns else pd.NaT
     if weekly is None or weekly.empty:
-        return d.drop(columns=[c for c in ("fetched_at",) if c in d.columns]), len(d)
+        stats["from_daily"] = len(d)
+        return d.drop(columns=["fetched_at"]), stats
+    if any(c not in weekly.columns for c in ("ticker", "date", "type", "source", "factor")):
+        print("::warning::週收集事件表缺必要欄位，每日事件窗口未併入", file=sys.stderr)
+        return weekly, stats
     w = weekly.copy()
     w["date"] = pd.to_datetime(w["date"])
-    for c in w.columns:
+    cols = list(w.columns)
+    for c in cols:
         if c not in d.columns:
             d[c] = pd.NA
-    d = d[list(w.columns)]
-    wk = set(map(tuple, w[EVENT_KEY].astype(str).values))
-    new = d[[tuple(r) not in wk for r in d[EVENT_KEY].astype(str).values]]
-    if new.empty:
-        return weekly, 0
-    out = pd.concat([w, new.astype(w.dtypes.to_dict(), errors="ignore")], ignore_index=True)
-    return out.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True), len(new)
+    w["_cls"] = w["type"].map(EVENT_CLASS)
+    d["_cls"] = d["type"].map(EVENT_CLASS)
+    idx: dict[tuple, list] = {}
+    for i, r in w.iterrows():
+        idx.setdefault((r["ticker"], r["date"], r["_cls"] if pd.notna(r["_cls"]) else None), []).append(i)
+    drop_w: set = set()
+    add_d: list = []
+
+    def daily_newer(row) -> bool:
+        return bool(weekly_asof is not None and pd.notna(row["fetched_at"]) and row["fetched_at"] > weekly_asof)
+
+    def note(kind: str, dr, wr, winner: str) -> None:
+        stats["conflicts"] += 1
+        stats["daily_won" if winner == "daily" else "weekly_won"] += 1
+        if len(stats["examples"]) < 10:
+            stats["examples"].append({"ticker": dr["ticker"], "date": str(dr["date"].date()), "kind": kind,
+                                      "weekly": f"{wr['type']}/{wr['source']} f={float(wr['factor']):.6f}",
+                                      "daily": f"{dr['type']}/{dr['source']} f={float(dr['factor']):.6f}", "winner": winner})
+
+    for _, r in d.iterrows():
+        cls = r["_cls"] if pd.notna(r["_cls"]) else None
+        cand = idx.get((r["ticker"], r["date"], cls), [])
+        exact = [i for i in cand if w.at[i, "type"] == r["type"] and w.at[i, "source"] == r["source"]]
+        if exact:                                                     # 同鍵：值相同不動；值不同＝官方事後更正，新者勝（M1）
+            wr = w.loc[exact[0]]
+            if _same_event_values(wr, r):
+                continue
+            if daily_newer(r):
+                note("same_key", r, wr, "daily")
+                drop_w.update(exact)
+                add_d.append(r)
+            else:
+                note("same_key", r, wr, "weekly")
+            continue
+        official_w = [i for i in cand if w.at[i, "source"] in OFFICIAL_SOURCES]
+        if cand and r["source"] in OFFICIAL_SOURCES and official_w:   # 同檔同日同類別、type／source 不同（M2）
+            wr = w.loc[official_w[0]]
+            wf, df_ = float(wr["factor"]), float(r["factor"])
+            if wf > 0 and abs(df_ / wf - 1) <= CONFLICT_TOL:
+                continue                                              # 因子相近＝同一件事，留週收集
+            if daily_newer(r):
+                note("same_class", r, wr, "daily")
+                drop_w.update(official_w)
+                add_d.append(r)
+            else:
+                note("same_class", r, wr, "weekly")
+            continue
+        stats["from_daily"] += 1                                      # 週收集完全沒有（或只有 FinMind 列，官方優先由 resolve_events 處理）
+        add_d.append(r)
+    out = w.drop(index=list(drop_w)).drop(columns=["_cls"])
+    if add_d:
+        add = pd.DataFrame(add_d)[cols]
+        out = pd.concat([out, add.astype(out.dtypes.to_dict(), errors="ignore")], ignore_index=True)
+    return out.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True), stats
+
+
+def date_shift_suspects(ev: pd.DataFrame | None, limit: int = 20) -> list[dict]:
+    """M3：同檔、同類別、官方來源、14 天內、因子完全相同但日期不同的事件對。官方更正事件日時，每日表只增不刪，
+    新舊兩筆都會留下並被套兩次。只回報，不刪。"""
+    if ev is None or ev.empty or any(c not in ev.columns for c in ("ticker", "date", "type", "source", "factor")):
+        return []
+    e = ev[ev["source"].isin(OFFICIAL_SOURCES)].copy()
+    e["_cls"] = e["type"].map(EVENT_CLASS)
+    e = e[e["_cls"].notna()].sort_values(["ticker", "_cls", "date"])
+    out = []
+    for (t, c), g in e.groupby(["ticker", "_cls"], sort=False):
+        rows = g.to_dict("records")
+        for a, b in zip(rows, rows[1:]):
+            gap = (pd.Timestamp(b["date"]) - pd.Timestamp(a["date"])).days
+            if 0 < gap <= DATE_SHIFT_DAYS and _num_equal(a["factor"], b["factor"]):
+                out.append({"ticker": t, "class": c, "dates": [str(pd.Timestamp(a["date"]).date()), str(pd.Timestamp(b["date"]).date())],
+                            "factor": float(a["factor"])})
+                if len(out) >= limit:
+                    return out
+    return out
 
 
 def main(argv=None) -> int:
@@ -152,6 +253,8 @@ def main(argv=None) -> int:
     ap.add_argument("--weekly-dir", default=str(SH))
     ap.add_argument("--daily-dir", default=str(SH))
     ap.add_argument("--out-dir", default=str(SH / "merged"))
+    ap.add_argument("--weekly-corp-updated", default="", help="週收集事件表（corp_actions.parquet）的資產更新時間 ISO（UTC）；"
+                    "用來判斷每日事件列與週收集誰較新。沒給就用週收集日線最後一天 21:00 UTC 當代理")
     a = ap.parse_args(argv)
     wdir, ddir, odir = Path(a.weekly_dir), Path(a.daily_dir), Path(a.out_dir)
     odir.mkdir(parents=True, exist_ok=True)
@@ -181,13 +284,25 @@ def main(argv=None) -> int:
         merged[name].to_parquet(odir / f"{name}.parquet", index=False, compression="zstd")
 
     gaps = find_gaps(merged, cday)
-    ev, ev_from_daily = merge_events(_read(wdir / "corp_actions.parquet"), _read(ddir / "openapi_events.parquet"))
-    ev_through = None
-    if ev is not None and len(ev):
-        ev.to_parquet(odir / "corp_actions.parquet", index=False, compression="zstd")
     wraw = _read(wdir / TABLES["raw_prices"][0])
+    ev_through = None
     if wraw is not None and len(wraw):
         ev_through = pd.to_datetime(wraw["date"]).max()           # 週收集日線最後一天＝週收集事件表涵蓋到的日子
+    weekly_asof, asof_src = None, None
+    if a.weekly_corp_updated:
+        try:
+            weekly_asof = pd.Timestamp(a.weekly_corp_updated)
+            weekly_asof = weekly_asof.tz_convert("UTC").tz_localize(None) if weekly_asof.tzinfo else weekly_asof
+            asof_src = "asset"
+        except (ValueError, TypeError):
+            weekly_asof = None
+    if weekly_asof is None and ev_through is not None:
+        weekly_asof, asof_src = ev_through.normalize() + pd.Timedelta(hours=21), "proxy"   # 週收集約在最後交易日 21:00 UTC（台北隔日 05:00）
+    ev, ev_stats = merge_events(_read(wdir / "corp_actions.parquet"), _read(ddir / "openapi_events.parquet"), weekly_asof)
+    ev_from_daily = ev_stats["from_daily"]
+    if ev is not None and len(ev):
+        ev.to_parquet(odir / "corp_actions.parquet", index=False, compression="zstd")
+    shifts = date_shift_suspects(ev)
     try:                                                          # 每日事件窗口最近一次成功抓取涵蓋到哪天（B6）
         dmeta = json.loads((ddir / "openapi_events_meta.json").read_text(encoding="utf-8"))
         dthrough = pd.Timestamp(dmeta["through"])
@@ -207,7 +322,10 @@ def main(argv=None) -> int:
     manifest = {"complete_day": str(cday.date()), "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
                 "events_gap_days": gap_days, "gaps": gaps,
-                "events_from_daily": ev_from_daily, "events_daily_fetched_at": (dmeta or {}).get("fetched_at"),
+                "events_from_daily": ev_from_daily,
+                "events_daily_conflicts": {k: v for k, v in ev_stats.items() if k != "from_daily"},
+                "events_possible_date_shift": shifts,
+                "events_weekly_asof": {"value": str(weekly_asof) if weekly_asof is not None else None, "source": asof_src}, "events_daily_fetched_at": (dmeta or {}).get("fetched_at"),
                 "appended_from_daily": {n: r["appended"] for n, r in reports.items()},
                 "overlap_check": {n: r["overlap"] for n, r in reports.items()}}
     (odir / "merge_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -219,6 +337,12 @@ def main(argv=None) -> int:
         print(f"::warning::完整日前 {GAP_WINDOW_DAYS} 天內有中間缺日（zip 會缺這些天，閘門會擋）：{gaps}", file=sys.stderr)
     if ev_from_daily:
         print(f"[merge] 由每日事件窗口補入週收集尚未有的事件：{ev_from_daily} 件")
+    if ev_stats["conflicts"]:
+        print(f"::warning::每日事件窗口與週收集有 {ev_stats['conflicts']} 筆同事件但值不同（每日較新勝 {ev_stats['daily_won']}、週收集勝 "
+              f"{ev_stats['weekly_won']}）：{ev_stats['examples'][:3]}", file=sys.stderr)
+    if shifts:
+        print(f"::warning::疑似官方更正事件日、新舊兩筆都留下（同檔同類別 {DATE_SHIFT_DAYS} 天內因子完全相同）：{shifts[:3]}"
+              f"（共 {len(shifts)}）——還原會套兩次，請人工檢視", file=sys.stderr)
     if gap_days:
         print(f"::warning::事件表只到 {ev_through.date()}，之後 {len(gap_days)} 個交易日 {gap_days} 的除權息／減資因子尚未進來（B6）——"
               "這幾天若有事件，該檔還原價在事件日會有假跳空", file=sys.stderr)
