@@ -79,7 +79,7 @@
 
 ## 4. 還沒有／待查
 
-1. TWSE 歷史的現金增資欄位（認購價、配股率）沒收：TWSE `TWT48U` 只有未來的預告，歷史要靠 `TWT49UDetail`（逐筆詳細資料，未接）。
+1. 〔2026-10-09 更正〕TWSE 歷史現金增資明細**已收進獨立檔、但沒有任何下游使用**：`scripts/selfhost_twse_ca_detail.py`（手動、可續跑，未入排程）逐件打 `rwd/zh/exRight/TWT49UDetail?STK_NO=&T1=`，產出 `data/selfhost/ev_twse_ca_detail.parquet`（1,546 列＝事件表上市除權(息)全數，504 件含現增；A 公式對上 99.6%）。2026-10-09 全 repo 搜尋：`selfhost_seam_check.py`、`selfhost_adjust.py`、`selfhost_events.py` 都**沒有讀這個檔**，它只是分析用的孤立產出；`corp_actions` 的 `cash_increase_*` 欄上市仍空，TWSE 現增事件因此仍落 `seam_factor_diff`、不訂正（不是算錯）。要不要把明細併進事件表＝待決定（排在 B8 清單重播之後）。
 2. ETF 分割／反分割的官方來源；公司分割減資的官方表。
 3. 5–6 碼 ETF 與上櫃 ETF 不在收集範圍（選股池不含 ETF，暫不處理）。
 4. 新上市前 5 日不查漲跌幅的規則、全額交割對基準價的影響：待查證（月檢查可附上提示詞）。
