@@ -12,6 +12,11 @@
 六項（日線／法人／融資券 × 上市／上櫃）各自的最後資料日取最小值＝完整日。完整日之後的列**整批不進這一版**
 （只發佈價、法人、融資都齊的日子；半新半舊不發佈），在 manifest 記為 pending。
 
+## 休市日（B2 配套）
+manifest 附 `closed_days`（證交所 holidaySchedule 的休市日，只留平日、排序的 ISO 日期）。tw-swing 的 `pack_source` 用它算
+「落後幾個交易日」；沒附時 swing 只當週末休市，連假後會多算 1 天落後（偏向退回上游／最後一槍誤判紅燈）。
+抓不到時 `closed_days` 是空陣列、`closed_days_source` 標 `unavailable`，不影響其他欄位（fail-open）。
+
 ## 事件因子（B6）
 `corp_actions`＝週收集的事件表 ∪ 每日收集的官方事件結果表窗口（`openapi_events.parquet`，每班抓 [今天−5, 今天]）。
 同鍵（代號、日期、類型、來源）值相同＝不動；**值不同＝官方事後更正，新者勝**（M1）：每日列的 `fetched_at`（該值第一次被看到的時間）
@@ -133,6 +138,22 @@ EVENT_KEY = ["ticker", "date", "type", "source"]
 CMP_COLS = ["prev_close", "ref_price", "factor"]
 OFFICIAL_SOURCES = {src for src, pr in PRIORITY.items() if pr == 0}
 DATE_SHIFT_DAYS = 14
+
+
+def closed_days_for_manifest(fetch=None) -> tuple[list[str], str]:
+    """證交所休市日 → (排序的 ISO 日期（只留平日）, 來源標記 'twse_holidaySchedule'|'unavailable')。
+    `fetch` 預設用 last_trading_day_guard.fetch_closed（抓不到回 None＝fail-open）；測試可注入。"""
+    try:
+        if fetch is None:
+            from last_trading_day_guard import fetch_closed as fetch  # noqa: PLC0415
+        closed = fetch()
+    except Exception as e:      # noqa: BLE001  休市表只是配套，任何失敗都不可擋資料包
+        print(f"::warning::休市日表取得失敗，manifest 不附 closed_days：{str(e)[:100]}", file=sys.stderr)
+        return [], "unavailable"
+    if not closed:
+        return [], "unavailable"
+    days = sorted(str(d) for d in closed if getattr(d, "weekday", lambda: 5)() < 5)
+    return days, "twse_holidaySchedule"
 
 
 def _num_equal(a, b, rel: float = 1e-9) -> bool:
@@ -319,7 +340,8 @@ def main(argv=None) -> int:
         if f.exists():
             h.update(n.encode())
             h.update(pd.util.hash_pandas_object(pd.read_parquet(f), index=False).values.tobytes())
-    manifest = {"complete_day": str(cday.date()), "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
+    closed_days, closed_src = closed_days_for_manifest()
+    manifest = {"complete_day": str(cday.date()), "closed_days": closed_days, "closed_days_source": closed_src, "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
                 "events_gap_days": gap_days, "gaps": gaps,
                 "events_from_daily": ev_from_daily,
