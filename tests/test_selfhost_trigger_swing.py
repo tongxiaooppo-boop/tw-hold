@@ -76,6 +76,9 @@ def test_trigger_only_when_complete_day_advances(tmp_path, old, new, expect_call
     assert r.returncode == 0, r.stderr
     called = log.exists() and "actions/workflows/daily.yml/dispatches" in log.read_text(encoding="utf-8")
     assert called == expect_call
+    if expect_call:                                                   # tw-swing 預設分支是 master，不可寫死 main（Opus 審查）
+        assert '"ref":"master"' in log.read_text(encoding="utf-8")
+        assert '"ref":"main"' not in log.read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(bash is None, reason="需要 bash")
