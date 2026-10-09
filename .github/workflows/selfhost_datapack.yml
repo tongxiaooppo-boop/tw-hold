@@ -92,7 +92,10 @@ jobs:
 
       - name: 併入（週收集優先、只發佈完整日）
         if: steps.stamp.outputs.skip == 'false'
-        run: python scripts/selfhost_daily_merge.py --weekly-dir "$W" --daily-dir "$D" --out-dir "$M"
+        run: |
+          # 週收集事件表的資產更新時間：每日事件列與它比新舊（同鍵值不同時新者勝）；查不到就空字串（程式改用代理值）
+          CU=$(gh release view selfhost-data --json assets --jq '.assets[] | select(.name=="corp_actions.parquet") | .updatedAt' 2>/dev/null || true)
+          python scripts/selfhost_daily_merge.py --weekly-dir "$W" --daily-dir "$D" --out-dir "$M" --weekly-corp-updated "$CU"
 
       # 來源檔有更新不代表內容有變：日線／法人先到、融資還沒到時完整日不前進，併出來跟上一版一樣 → 不重做還原與 zip。
       # 完整日前進、舊日子被官方更正、週收集更新，雜湊都會變。

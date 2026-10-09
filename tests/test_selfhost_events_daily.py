@@ -140,27 +140,27 @@ def test_fetch_recent_併三類事件_且已enrich(monkeypatch):
 
 
 # ───────────── daily_merge.merge_events／events_through ─────────────
-def test_daily_merge_events_週收集優先_每日只補沒有的():
+def test_daily_merge_events_沒有weekly_asof時週收集優先_每日只補沒有的():
     w = _ev([("2330", "TW", "2026-10-05", "ex_div", 100.0, 99.0, "twse_ex")], event="除息", div_ref=pd.NA)
-    d = _ev([("2330", "TW", "2026-10-05", "ex_div", 100.0, 50.0, "twse_ex"),        # 同鍵但值不同：以週收集為準
+    d = _ev([("2330", "TW", "2026-10-05", "ex_div", 100.0, 50.0, "twse_ex"),        # 同鍵但值不同、沒給週收集時間 → 週收集贏
              ("2412", "TW", "2026-10-08", "ex_div", 120.0, 119.0, "twse_ex")], event="除息", div_ref=pd.NA)
     d["fetched_at"] = pd.Timestamp("2026-10-08 20:00")                              # 每日表多的欄位要丟掉
-    out, n = dm.merge_events(w, d)
-    assert n == 1 and len(out) == 2
+    out, st = dm.merge_events(w, d)
+    assert st["from_daily"] == 1 and len(out) == 2 and st["conflicts"] == 1 and st["weekly_won"] == 1
     assert out[out["ticker"] == "2330"].iloc[0]["ref_price"] == 99.0
     assert list(out.columns) == list(w.columns)
 
 
 def test_daily_merge_events_沒有每日表_原樣():
     w = _ev([("2330", "TW", "2026-10-05", "ex_div", 100.0, 99.0, "twse_ex")])
-    out, n = dm.merge_events(w, None)
-    assert out is w and n == 0
-    out2, n2 = dm.merge_events(None, None)
-    assert out2 is None and n2 == 0
+    out, st = dm.merge_events(w, None)
+    assert out is w and st["from_daily"] == 0
+    out2, st2 = dm.merge_events(None, None)
+    assert out2 is None and st2["from_daily"] == 0
 
 
 def test_daily_merge_events_週收集沒有_全部取每日():
     d = _ev([("2412", "TW", "2026-10-08", "ex_div", 120.0, 119.0, "twse_ex")])
     d["fetched_at"] = pd.Timestamp("2026-10-08 20:00")
-    out, n = dm.merge_events(None, d)
-    assert n == 1 and "fetched_at" not in out.columns
+    out, st = dm.merge_events(None, d)
+    assert st["from_daily"] == 1 and "fetched_at" not in out.columns
