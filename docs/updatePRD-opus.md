@@ -271,7 +271,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | B5 | 每日法人收集 | ✅（10/7 17:21 實寫入 1083／782） | — |
 | B6 | 當日事件因子寫入點——〔審〕改為「每日抓官方結果表近幾日窗口」，取消暫定公式層 | ⬜（上市來源已證實事件日開盤前即有） | 低（只剩上櫃當日時點待量） |
 | B7 | 因子口徑三項驗證＋拍板 | ✅ 10/8 拍板：三項維持現行（§9） | — |
-| B8 | 10/19 母表比對報告（`selfhost_datapack_parity.py` 已有）。**〔使用者 10/8〕加「清單重播」**：同一天資料用兩種口徑（上游 data_pack／自建官方口徑）各跑一次 `daily_list`（掃描＋候選清單），列出清單差異（進榜／落榜／排序），**逐檔歸因**（還原因子差、成交量口徑、流動性門檻翻面、標的涵蓋差、籌碼來源…）；歸因不了的列為未歸因，供 10/23 go/no-go | ⬜ | **是** |
+| B8 | 10/19 母表比對報告（`selfhost_datapack_parity.py` 已有）。~~〔使用者 10/8〕加「清單重播」~~ **〔使用者 10/9 撤銷：只比兩包資料，不重播三清單〕**：影子比對（`selfhost_shadow_compare.py`，每次發佈自動跑、結果累積在 `shadow_history.jsonl`）＋`selfhost_datapack_parity.py` 的差異，**逐檔歸因**（還原因子差、成交量口徑、流動性門檻翻面、標的涵蓋差、籌碼來源…）；歸因不了的列為未歸因，供 10/23 go/no-go | ⬜ | **是** |
 | B9 | 唯讀 PAT | ✅ | — |
 | B10 | 兩 repo 時序——產 zip 時間受 GitHub 延遲影響不可控；dispatch 鏈（§2.6）；公布時間 10/8 重量中 | ⬜ 已拍板方向，待實作 | 中 |
 | B11 | zip 驗收／閘門（〔審〕加：只發佈完整日、manifest 各資料最後日、當日事件因子缺＝警告） | 🟡 起步版寫好（§9）；缺「當日事件因子缺」警告（隨 B6） | 低 |
@@ -299,7 +299,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | B2 swing 切換 | `tw-swing/scripts/update_data.py`、`daily.yml`、`publish_bundle.yml`、新 `fetch_selfhost_pack.py`、來源標示寫入 bundle meta、`_chips_guard`／`audit_chips` 在新來源下確認 | 1 天 |
 | B10 時序 | tw-hold 產完 zip → `repository_dispatch` swing（新 PAT，actions:write）或外部觸發；〔審〕不建議 swing 輪詢 | 小時～0.5 天 + 一顆 PAT |
 | B11 驗收 | 新 `selfhost_zip_gate.py`（最新日、各市場檔數、最後一列 raw＝官方收盤、0050 連續、chips 恆等式） | 0.5 天 |
-| B8 比對報告 | 執行既有 `selfhost_datapack_parity.py` + 補：檔數（159 檔最後交易日早於 9/01 多為下市股）、還原價變動分布、量／turnover 翻面、籌碼、0050；**清單重播**（同一天兩種口徑各跑一次清單、逐檔歸因，見 §4.2 B8）需在 tw-swing 暫存 store 各匯入一次（`import_data_pack` 會整份重建，見 §7.3），不碰線上 | 1～1.5 天 |
+| B8 比對報告 | 執行既有 `selfhost_datapack_parity.py` + 補：檔數（159 檔最後交易日早於 9/01 多為下市股）、還原價變動分布、量／turnover 翻面、籌碼、0050；~~清單重播~~（10/9 撤銷，不做）；只做兩包資料比對與逐檔歸因 | 約 0.5 天 |
 | B13 乾跑＋退回演練 | 用 10/8 資料跑兩 repo selfhost 模式 → 切回 upstream 驗恢復；故意弄壞 zip 驗自動退回 | 0.5 天 |
 | 監控補強 | 守門改判「完成了沒」＋固定 Python/套件；`heartbeat` `|| true`；`bundle_gate` 內容縮水檢查；上櫃日線第二來源；缺日自動補 | 1～1.5 天 |
 | 文件 | data-all／PRD／DATA_FLOW 收斂 | 0.5 天 |
@@ -386,6 +386,28 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
   - 待驗：上市 `MI_MARGN` 在 20:42 首見之後到午夜之間有沒有第二版。做法＝照 `poll_publish.py` 的方式，連續幾個交易日在 21:00／22:00／23:00／00:30 各存一份比對（會多打幾次上市官網，要你同意才做）。
 - **〔使用者 10/9 拍板〕融資券安全產出時間＝00:00 前後；新短線（hold 短線掃描）的自動計算時間不提前**：自動路徑維持現狀（跟著 swing bundle 發佈後的 rebuild，實測 00:10～05:33 之間算出當天）；不為了融資券新增或提前任何排程。想提早只能走上面的手動入口（10/24 後），且短線掃描要過 00:00 才會前進到當天。
 - **不做**：不自動排程這支（使用者原則不自行改頻率）；不做第二個全域旗標；app 不直接打官方或私有 repo。
+
+### 6.2 〔使用者 2026-10-09〕ETF 軌：要收 5～6 碼與上櫃 ETF，不進推薦，取代總經導航對 FinMind 的依賴
+
+> **〔使用者 10/9〕排 10/24 切換之後再討論，不一定要做**（價值＝總經掃描少幾件事、少依賴 FinMind）。10/24 後第一個 session 要主動提醒使用者（已記入記憶 `tw-hold-after-1024-deferred`）。
+
+**需求**：個股查詢、多軌體檢、總經導航（0050／006201 等）需要 ETF 的價量資料；推薦清單不含 ETF；總經導航不要再為 006201 向 FinMind 抓。
+
+**現況（2026-10-09 查程式）**
+- 自建收集硬過濾「純數字且剛好 4 碼」（`selfhost_raw_prices.py:122`、`selfhost_chips.py:100`、`selfhost_openapi_daily.py:143/158`），所以 5～6 碼與帶字母的 ETF 在收集階段就被丟掉；官方端點本身會回（PCF 的 `STOCK_DAY_ALL` 就抓得到 6 碼主動式 ETF）。
+- 006201 現在靠 `scripts/fetch_index_proxy.py` 向 FinMind 全量重抓（`rebuild.yml`，驗證在 `reference/price_series_guard.py`）；0050 靠 `scripts/promote_index_0050.py` 從 tw-swing bundle 搬。
+- FinMind 其他用途（`resolve_splits.py` 分割事件、`selfhost_events.py`／`selfhost_xsrc.py` 交叉驗證、`fetch_tx_futures.py` 標準庫呼叫）與 ETF 軌無關，不在此範圍。
+
+**建議做法：獨立 ETF 軌，不放寬共用過濾、不併進給 tw-swing 的資料包**
+1. 理由：資料包是 tw-swing 的 universe 來源，併進去 ETF 會讓推薦掃描範圍變大（要另外在 tw-swing 排除）、影響影子比對的檔數與相符率，也碰到 tw-swing 已知的 ETF 代碼 bug（`stock_list` 把 ETF 存成 '50'）。獨立一軌就不影響影子期口徑，**可以在 10/24 之前建置**（不碰線上資料包、不改既有收集的過濾）。
+2. 新增 `ETF 日線`收集（官方上市 `MI_INDEX`、上櫃 `dailyQuotes` 帶日期端點，只留 ETF 代碼）→ 還原（沿用事件表；ETF 除息在 `TWT49U`／`exDailyQ` 已有）→ 存成獨立資產（例如 `datapack-selfhost` Release 的 `etf_prices_adj.parquet`，或 `selfhost-data` 的獨立檔），hold 端的個股查詢、多軌體檢、總經導航改讀它。
+3. 退役：`fetch_index_proxy.py`（006201）與 `promote_index_0050.py` 改成讀 ETF 軌；`freshness_check`／`heartbeat` 的 006201、0050 檢查改指向新來源。
+4. 推薦不受影響：三清單、短線掃描、tw-swing 都不讀 ETF 軌。
+
+**要先查清楚的風險（尚未驗證）**
+- **ETF 分割**：官方事件表沒有 ETF 分割來源，目前只有 FinMind 提供（0050、0052 共 2 件，見 EVENTS.md §4）。若 ETF 軌完全不用 FinMind，0050 這類分割的還原要靠別的辦法（例如用官方未還原收盤的跳空偵測＋人工對照表 `reference/corporate_actions.py` 的 SPLITS），或接受該事件仍以 FinMind 交叉驗證。
+- **代碼規則**：帶字母的 ETF（如 00679B 債券 ETF、00981A 主動式）要定義收錄範圍；個股查詢要支援這類代碼的輸入。
+- **法人／融資券**：ETF 多數沒有融資券，法人資料格式是否相同未驗；先只收價量即可滿足總經導航，個股查詢／多軌體檢要不要法人由使用者決定。
 
 ---
 
