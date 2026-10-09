@@ -265,7 +265,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | # | 項目 | 狀態 | 結果未知？ |
 |---|---|---|---|
 | B1 | 舊決定撤銷 | ✅ 本檔 §0.3 + 使用者 10/7 拍板 | 否 |
-| B2 | **swing 開關＋自動退回＋略過 baseline＋來源標示** | ⬜ **零實作** | 低 |
+| B2 | **swing 開關＋自動退回＋略過 baseline＋來源標示** | 🟡 **10/9 本機寫好、測試 850 passed（含新增 16 項），未 push、待 Opus 審**：`tw-swing/src/twswing/data/pack_source.py`（純函式：`PACK_SOURCE` 解析、sha256 驗證、落後交易日計算、退回規則）、`scripts/update_data.py`（`PACK_SOURCE=selfhost` 時用 `gh`＋`DATA_REPO`／`DATA_GH_TOKEN` 下載 `datapack-selfhost`，任何異常整包退回上游；selfhost 模式略過 `apply_chips_baseline`；寫 `data/store/_pack_source.json`）、`make_bundle_meta.py`（bundle meta 加 `pack_source`）、`daily.yml`／`publish_bundle.yml`（帶 `vars.PACK_SOURCE`〔預設 upstream〕、`vars.DATA_REPO`、`secrets.TWHOLD_DATA_READ_PAT`）。**預設仍是上游，不影響線上。** 未做：模擬單口徑標記／重置、manifest 附休市表、切換日設定 repo 變數 | 低 |
 | B3 | **CI 產官方口徑 zip 並實測耗時／記憶體** | 🟡 workflow 寫好未 push；本機實跑 3.5 分鐘通過（§9） | 低 |
 | B4 | 每日併入 raw → adjust（方案 a）；〔審〕含 `drop_future` 改逐檔 | 🟡 寫好未 push；重疊日實測 0 差異（§9） | 低 |
 | B5 | 每日法人收集 | ✅（10/7 17:21 實寫入 1083／782） | — |
