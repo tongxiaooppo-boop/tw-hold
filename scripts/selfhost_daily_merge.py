@@ -12,9 +12,11 @@
 六項（日線／法人／融資券 × 上市／上櫃）各自的最後資料日取最小值＝完整日。完整日之後的列**整批不進這一版**
 （只發佈價、法人、融資都齊的日子；半新半舊不發佈），在 manifest 記為 pending。
 
-## 事件因子
-`corp_actions` 只來自週收集（截至週收集那天）。完整日晚於週收集日時，中間的事件因子還沒有（B6 待做）——
-manifest 的 `events_through` 與 `events_gap_days` 會講出來，不靜默。
+## 事件因子（B6）
+`corp_actions`＝週收集的事件表 ∪ 每日收集的官方事件結果表窗口（`openapi_events.parquet`，每班抓 [今天−5, 今天]）。
+同鍵（代號、日期、類型、來源）**以週收集為準**（含官方事後更正、經過 build 驗證）；每日表只補週收集還沒有的事件。
+manifest 的 `events_through`＝max(週收集日線最後一天, 每日事件最近一次成功抓取涵蓋到的日子)；
+完整日晚於 `events_through` 時，`events_gap_days` 會講出來，不靜默。
 
     python scripts/selfhost_daily_merge.py                       # 讀 data/selfhost/{raw_prices,inst,margin,openapi_*}.parquet
     python scripts/selfhost_daily_merge.py --weekly-dir A --daily-dir B --out-dir C
@@ -119,6 +121,32 @@ def _read(p: Path) -> pd.DataFrame | None:
     return pd.read_parquet(p) if p.exists() else None
 
 
+EVENT_KEY = ["ticker", "date", "type", "source"]
+
+
+def merge_events(weekly: pd.DataFrame | None, daily: pd.DataFrame | None) -> tuple[pd.DataFrame | None, int]:
+    """週收集事件表 ∪ 每日事件窗口。同鍵以週收集為準；欄位對齊週收集（每日表多的 fetched_at 丟掉、缺的欄補空）。
+    回傳 (合併表, 由每日表補入的事件數)。兩邊都沒有回 (None, 0)。"""
+    if daily is None or daily.empty:
+        return weekly, 0
+    d = daily.copy()
+    d["date"] = pd.to_datetime(d["date"])
+    if weekly is None or weekly.empty:
+        return d.drop(columns=[c for c in ("fetched_at",) if c in d.columns]), len(d)
+    w = weekly.copy()
+    w["date"] = pd.to_datetime(w["date"])
+    for c in w.columns:
+        if c not in d.columns:
+            d[c] = pd.NA
+    d = d[list(w.columns)]
+    wk = set(map(tuple, w[EVENT_KEY].astype(str).values))
+    new = d[[tuple(r) not in wk for r in d[EVENT_KEY].astype(str).values]]
+    if new.empty:
+        return weekly, 0
+    out = pd.concat([w, new.astype(w.dtypes.to_dict(), errors="ignore")], ignore_index=True)
+    return out.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True), len(new)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--weekly-dir", default=str(SH))
@@ -153,13 +181,19 @@ def main(argv=None) -> int:
         merged[name].to_parquet(odir / f"{name}.parquet", index=False, compression="zstd")
 
     gaps = find_gaps(merged, cday)
-    ev = _read(wdir / "corp_actions.parquet")
+    ev, ev_from_daily = merge_events(_read(wdir / "corp_actions.parquet"), _read(ddir / "openapi_events.parquet"))
     ev_through = None
     if ev is not None and len(ev):
         ev.to_parquet(odir / "corp_actions.parquet", index=False, compression="zstd")
     wraw = _read(wdir / TABLES["raw_prices"][0])
     if wraw is not None and len(wraw):
-        ev_through = pd.to_datetime(wraw["date"]).max()           # 週收集日線最後一天＝事件表涵蓋到的日子
+        ev_through = pd.to_datetime(wraw["date"]).max()           # 週收集日線最後一天＝週收集事件表涵蓋到的日子
+    try:                                                          # 每日事件窗口最近一次成功抓取涵蓋到哪天（B6）
+        dmeta = json.loads((ddir / "openapi_events_meta.json").read_text(encoding="utf-8"))
+        dthrough = pd.Timestamp(dmeta["through"])
+        ev_through = dthrough if ev_through is None else max(ev_through, dthrough)
+    except (OSError, ValueError, KeyError, TypeError):
+        dmeta = None
     cal = sorted(merged["raw_prices"]["date"].unique())
     gap_days = [str(pd.Timestamp(d).date()) for d in cal if ev_through is not None and pd.Timestamp(d) > ev_through]
 
@@ -173,6 +207,7 @@ def main(argv=None) -> int:
     manifest = {"complete_day": str(cday.date()), "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
                 "events_gap_days": gap_days, "gaps": gaps,
+                "events_from_daily": ev_from_daily, "events_daily_fetched_at": (dmeta or {}).get("fetched_at"),
                 "appended_from_daily": {n: r["appended"] for n, r in reports.items()},
                 "overlap_check": {n: r["overlap"] for n, r in reports.items()}}
     (odir / "merge_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -182,8 +217,10 @@ def main(argv=None) -> int:
         print(f"[merge] 完整日之後、這一版不收：{pending}")
     if gaps:
         print(f"::warning::完整日前 {GAP_WINDOW_DAYS} 天內有中間缺日（zip 會缺這些天，閘門會擋）：{gaps}", file=sys.stderr)
+    if ev_from_daily:
+        print(f"[merge] 由每日事件窗口補入週收集尚未有的事件：{ev_from_daily} 件")
     if gap_days:
-        print(f"::warning::事件表只到 {ev_through.date()}（週收集），之後 {len(gap_days)} 個交易日 {gap_days} 的除權息／減資因子尚未進來（B6）——"
+        print(f"::warning::事件表只到 {ev_through.date()}，之後 {len(gap_days)} 個交易日 {gap_days} 的除權息／減資因子尚未進來（B6）——"
               "這幾天若有事件，該檔還原價在事件日會有假跳空", file=sys.stderr)
     return 0
 
