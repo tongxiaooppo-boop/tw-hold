@@ -54,10 +54,17 @@ jobs:
 
       - run: pip install pandas pyarrow requests
 
+      # R2 自癒：已發佈的自建資料包 manifest 有 gaps 或完整日落後 → guard 讓今晚這班也跑（不新增 cron）。下載失敗不影響原判斷。
+      - name: 下載已發佈的資料包 manifest（自癒判斷用）
+        run: |
+          mkdir -p "$RUNNER_TEMP/pubman"
+          gh release download datapack-selfhost -p merge_manifest.json -D "$RUNNER_TEMP/pubman" --clobber || true
+
       - name: 今天是當週最後交易日嗎？
         id: guard
         env:
           EVENT_NAME: ${{ github.event_name }}
+          PUBLISHED_MANIFEST: ${{ runner.temp }}/pubman/merge_manifest.json
         run: python scripts/last_trading_day_guard.py
 
       - name: 下載上一版（保底基準）

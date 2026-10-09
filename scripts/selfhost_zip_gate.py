@@ -21,6 +21,7 @@ import hashlib
 import io
 import json
 import sys
+from datetime import datetime, timezone
 import zipfile
 from pathlib import Path
 
@@ -109,6 +110,7 @@ def main(argv=None) -> int:
             print(f"::error::zip 閘門：{e}", file=sys.stderr)
         return 1
     man["zip"] = {"name": zp.name, "sha256": sha256(zp), "bytes": zp.stat().st_size, **stats}
+    man["published_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")    # R4：影子期統計每個完整日的發佈時間
     mp.write_text(json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[gate] 通過：完整日 {man['complete_day']}、{stats}")
     return 0

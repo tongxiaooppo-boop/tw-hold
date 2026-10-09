@@ -88,3 +88,34 @@ def test_late_thursday_before_holiday_still_runs():
 
 def test_force_dates_cleared():
     assert not g.FORCE_RUN_DATES
+
+
+# ── R2 自癒：已發佈 manifest 有洞或落後 → 非週最後交易日也跑 ──
+
+def test_selfheal_gaps_runs_midweek():
+    run, why = g.decide(date(2026, 10, 7), CLOSED, published={"complete_day": "2026-10-06", "gaps": {"TWO": ["2026-10-02"]}})
+    assert run is True and "自建資料包有洞或落後" in why
+
+
+def test_selfheal_lagging_runs_midweek():
+    # 週四 10-15 23:58：今天之前最近交易日＝10-14，完整日 10-13 落後 1 → 補收
+    run, why = g.decide(date(2026, 10, 15), CLOSED, published={"complete_day": "2026-10-13", "gaps": {}})
+    assert run is True and "自建資料包有洞或落後" in why
+
+
+def test_selfheal_lag_skips_holiday():
+    # 週一 10-12 之前最近交易日＝10-08（10-09 補假、週末）；完整日 10-08 不算落後 → 維持原判斷（非週最後交易日）
+    assert g.decide(date(2026, 10, 12), CLOSED, published={"complete_day": "2026-10-08", "gaps": {}})[0] is False
+
+
+def test_selfheal_healthy_keeps_original_decision():
+    ok = {"complete_day": "2026-10-14", "gaps": {}}
+    assert g.decide(date(2026, 10, 15), CLOSED, published=ok)[0] is False
+    assert g.decide(date(2026, 10, 16), CLOSED, published=ok)[0] is True       # 週五照舊
+    assert g.decide(date(2026, 10, 15), CLOSED, published=None)[0] is False    # 沒下載到 manifest
+
+
+def test_selfheal_never_runs_on_closed_day():
+    bad = {"complete_day": "2026-10-01", "gaps": {"TW": ["2026-10-02"]}}
+    assert g.decide(date(2026, 10, 9), CLOSED, published=bad)[0] is False      # 休市日
+    assert g.decide(date(2026, 10, 10), CLOSED, published=bad)[0] is False     # 週六

@@ -63,6 +63,25 @@ def meta_trading_date() -> date | None:
         return None
 
 
+def pack_source_label(meta: dict | None) -> str:
+    """bundle `_meta.json` 的 `pack_source` → 頁尾一行文字；沒這欄（舊 bundle）回空字串。"""
+    ps = (meta or {}).get("pack_source")
+    used = ps.get("used") if isinstance(ps, dict) else None
+    if used == "selfhost":
+        return "資料來源：自建官方"
+    if used == "upstream":
+        return "資料來源：上游（退回）" if ps.get("level") == "fallback" else "資料來源：上游"
+    return ""
+
+
+def meta_pack_source_label() -> str:
+    p = REPO / "data" / "derived" / "_meta.json"
+    try:
+        return pack_source_label(json.loads(p.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return ""
+
+
 def _parquet_last_date(p: Path) -> date | None:
     if not p.exists():
         return None

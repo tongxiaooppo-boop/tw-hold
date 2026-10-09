@@ -77,3 +77,15 @@ def test_法人融資錨點檔全找不到不可靜默通過(tmp_path):
         z.writestr("data/margin/9999_margin.csv", "ticker,date,margin_balance\nx,2026-10-07,1\n")
     errs, _ = zg.check(p, MAN, RAW, None)
     assert sum("錨點檔都找不到" in e for e in errs) == 2
+
+
+def test_通過時manifest寫入published_at(tmp_path):
+    import json
+    import re
+    z, m, r = tmp_path / "a.zip", tmp_path / "m.json", tmp_path / "raw.parquet"
+    _zip(z)
+    m.write_text(json.dumps(MAN), encoding="utf-8")
+    RAW.to_parquet(r)
+    assert zg.main(["--zip", str(z), "--manifest", str(m), "--raw", str(r)]) == 0
+    out = json.loads(m.read_text(encoding="utf-8"))
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", out["published_at"])
