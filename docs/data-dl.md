@@ -328,3 +328,86 @@
 - **取代不了**：上市三大法人、減資／面額變更／上市除權息結果、漲跌標記。這幾項仍得打網站端點，或改用第三方（FinMind，授權條款未查）。
 - 副作用：失去「補抓指定日期」與「近 3 天重抓更正」，要用「多班排程＋隔天清晨再抓一次（端點在新交易日資料出來前一直回前一日）」模擬；漏跑一天＝永久缺。
 - 工作量：新增一組 OpenAPI 收集器＋與現有網站版並行對帳（至少 15 個交易日）才能切；法人與事件表仍留網站版（但呼叫量從每天上千次降到每天個位數）。
+
+
+## 12. Workflow 端點與啟動時間對照（2026-10-09）
+
+> 目的：每個 workflow 打哪些端點、排程幾點起跑、官方資料幾點才產生，放在同一張表，看「有沒有在官方公布前去打、公布後多久才抓到」。時間一律**台北時間**（UTC+8；cron 是 UTC）。
+> 證據標記：【實測】＝2026-10-08 用 `data/selfhost/_measure_20261008/poll_publish.py` 輪詢，欄位是「該來源首次出現 10/8 當日資料」的時間（輪詢間隔 ≤2 小時，是**上界**，真正公布可能更早）；【碼】＝程式或 workflow 註解寫的；【文】＝常識／官方網站說法，我們沒實測；【未驗】＝還沒量過。
+> 排程延遲：GitHub 排程實測會晚 4～9 小時才起跑，下面「cron」是**名義**時間。
+
+### 12.1 自建上游線（3 支 workflow，產出放私有 repo `tw-hold-data` 的 Release）
+
+| Workflow | cron（UTC → 台北，名義） | 實際落點（10/8 實測） | 產出 |
+| :-- | :-- | :-- | :-- |
+| `openapi_daily.yml`<br>官方 OpenAPI 每日收集 | 平日 08:02／10:02／12:02／15:02／20:02 → 台北 16:02／18:02／20:02／23:02／隔日 04:02 | 延遲約 7.4／7.3／6.8／5.4／4.1 小時（15:24Z、17:17Z、18:47Z、20:24Z、隔日 00:09Z 各一次，皆成功）；台北約 23:24／01:17／02:47／04:24／08:09 | Release `openapi-daily`：openapi_prices／margin／inst／forecast／fetch_log |
+| `selfhost_collect.yml`<br>自建上游收集 | 平日 15:58 → 台北 23:58，**只在「當週最後交易日」才真的收集**（`last_trading_day_guard.py` 查休市表） | 10/8 是當週最後交易日（10/9 國慶補假）；實落 20:59Z（台北隔日 04:59），成功 | Release `selfhost-data`：raw_prices／inst／margin／corp_actions／notrade／refmark／stophalt／ev_*／snap-* |
+| `selfhost_datapack.yml`<br>自建資料包 | **無 cron**：上面兩支任一跑完（`workflow_run`）就接著跑；來源沒變就跳過 | 每次收集後約 1 分鐘內接跑 | Release `datapack-selfhost`：data_pack_selfhost.zip、merge_manifest.json（完整日） |
+
+#### 12.1.1 端點與官方產生時間
+
+| 資料 | 端點（**主**＝網站帶日期端點；OpenAPI 另列） | 哪支打 | 官方資料產生時間 | 我們的請求窗口【碼】 |
+| :-- | :-- | :-- | :-- | :-- |
+| 上市日線（未還原） | **主**：TWSE `rwd/zh/afterTrading/MI_INDEX?date=&type=ALLBUT0999`<br>OpenAPI：`openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL` | 主：selfhost_collect<br>OpenAPI：openapi_daily | 官網 **14:00** 首見【實測】；OpenAPI 在 10/8 整個窗口（到 20:00）都沒出現，上市 `Last-Modified` 是**隔天 05:20**【碼】 | 日線 16:00～隔日 08:00；08:00～16:00 不請求 |
+| 上櫃日線 | **主**：TPEx `www/zh-tw/afterTrading/dailyQuotes?date=`<br>OpenAPI：`www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes` | 同上 | 官網 **15:01**、OpenAPI **16:02** 首見【實測】 | 同上 |
+| 上市三大法人 | TWSE `rwd/zh/fund/T86?date=&selectType=ALLBUT0999`（**OpenAPI 沒有**） | 同上 | **16:32** 首見【實測】（10/7 在 18:00 輪已有） | 18:00 起；隔日清晨班補前一晚；08:00～18:00 不請求 |
+| 上櫃三大法人 | TPEx `www/zh-tw/insti/dailyTrade?type=Daily&sect=AL&date=`<br>（OpenAPI `tpex_3insti_daily_trading` 欄名有 bug，不用） | 同上 | **15:10** 首見【實測】（10/7 在 18:00 輪還沒有，每天不同） | 同上 |
+| 上市融資融券 | TWSE `rwd/zh/marginTrading/MI_MARGN?date=&selectType=STOCK`（OpenAPI 版沒有日期欄，不用） | 同上 | **20:42** 首見【實測】 | 22:00～隔日 08:00（白天整段不打） |
+| 上櫃融資融券 | **主**：TPEx `www/zh-tw/margin/balance?date=`<br>OpenAPI：`tpex_mainboard_margin_balance` | 同上 | 官網 **20:52**、OpenAPI **22:03** 首見【實測】 | 同上 |
+| 除權息結果（上市） | TWSE `rwd/zh/exRight/TWT49U?startDate=&endDate=`（日期區間）；現增明細 `exRight/TWT49UDetail?STK_NO=&T1=`（逐件，手動腳本） | selfhost_collect（近兩個月重抓） | 【未驗】當晚是否已含「當日」事件（B6 待驗） | 每週一次 |
+| 除權息結果（上櫃） | TPEx `www/zh-tw/bulletin/exDailyQ?startDate=&endDate=` | 同上 | 【未驗】同上（OpenAPI `tpex_exright_daily` 只回當天，8 列） | 每週一次 |
+| 減資 | TWSE `rwd/zh/reducation/TWTAUU`；TPEx `bulletin/revivt`（日期區間，近兩年重抓） | 同上 | 【未驗】（事件公告日不固定） | 每週一次 |
+| 面額變更 | TWSE `rwd/zh/change/TWTB8U`；TPEx `bulletin/pvChgRslt` | 同上 | 【未驗】 | 每週一次 |
+| 除權息預告表 | OpenAPI `openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL`（網站版 `exRight/TWT48U` 內容相同）；上櫃 `tpex_exright_prepost` | openapi_daily（同市場至少間隔 3 小時）；selfhost_collect 每週存快照 | 只有未來事件、沒有歷史，漏存就補不回來 | 每班 |
+| 停止買賣中名單（上市） | TWSE `rwd/zh/violation/stop`（`date=` 被官方忽略，只回當天） | selfhost_collect | 當天名單，無歷史 | 每週一天（無下游使用，可接受） |
+| 休市日曆 | OpenAPI `openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule` | selfhost_collect 的 guard | 年度表 | 每次 |
+| 減資交叉驗證 | FinMind `api.finmindtrade.com/api/v4/data`（非官方，只做交叉驗證） | selfhost_collect | — | 每週 150 檔 |
+
+**結論**
+1. 官網端點比 OpenAPI 早出（上櫃日線早約 1 小時；上市日線 OpenAPI 10/8 整個窗口都沒出現，隔天 05:20 才更新）。所以**上市日線以官網為主、OpenAPI 只當備援**。
+2. 最晚的是融資券（官網 20:42～20:52、OpenAPI 22:03）。名義的 16:02／18:02／20:02 三班就算準時，抓不到當天融資券，請求窗口（22:00 起）也不讓它們去打；實際因為延遲，第一班在 23:24 才起跑，剛好落在窗口內。
+3. GitHub 延遲 4～7 小時，實際起跑多在 23:00 之後，**反而都在官方公布之後**。真正的風險是 OpenAPI 只回最新一天：若某天所有班次都晚到隔日官方新資料出來之後，前一天的 OpenAPI 日線補不回來（網站帶日期端點仍補得回）。
+4. 官方事後會更正當日資料（10/5 實測投信 14 檔、成交量 17 檔被改過），所以收集器對近 3 個日曆日重抓覆蓋；週收集在最後交易日 23:58 之後才拿最完整的版本。
+
+#### 12.1.2 一天時間軸（台北，平日）
+
+| 台北時間 | 官方產生（10/8 實測首見） | 我們的動作 |
+| :-- | :-- | :-- |
+| 14:00 | 上市日線（官網） | 不請求（窗口 16:00 起） |
+| 15:01～15:10 | 上櫃日線、上櫃法人（官網） | 不請求 |
+| 16:02（名義） | 上櫃日線 OpenAPI 16:02 | openapi_daily 第 1 班名義時間（實落約 23:24） |
+| 16:32 | 上市法人（官網） | 18:00 起才請求法人 |
+| 18:02／20:02（名義） | — | 第 2、3 班名義時間（實落約次日 01:17、02:47） |
+| 20:42～20:52 | 上市／上櫃融資券（官網） | 22:00 起才請求融資 |
+| 22:03 | 上櫃融資 OpenAPI | — |
+| 23:02（名義） | — | 第 4 班名義時間（實落約次日 04:24） |
+| 23:58（名義） | — | selfhost_collect（只在週最後交易日；實落約次日 04:59） |
+| 隔日 04:02（名義） | 上市 OpenAPI 日線隔日 05:20 才更新 | 第 5 班名義時間（實落約次日 08:09） |
+| 收集完成後 | — | selfhost_datapack 接跑，產出 data_pack_selfhost.zip |
+
+> 「實落」是用 10/8 五班的延遲量推出來的（7.4／7.3／6.8／5.4／4.1 小時）。Actions 紀錄只有建立時間、看不出屬於哪一班，所以是推論；每天延遲不同。
+
+### 12.2 其他 workflow（tw-hold 自己的 6 支＋依賴的 tw-swing 上游）
+
+| Workflow | cron（UTC → 台北，名義） | 觸發鏈 | 主要端點 | 資料產生時間 | 產出 |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| `rebuild.yml`<br>每日重算三清單 | 平日 08:17 → 16:17（備援）；**主路徑**是 tw-swing publish 完發的 `repository_dispatch: bundle-published` | tw-swing `daily.yml` → `publish_bundle.yml` → dispatch → 本支 | GitHub API 下載 tw-swing Release `data-latest`（bundle）；私有 Release `refdata-latest`；FinMind `TaiwanStockPrice`（006201 代理）；投信 PCF（見 pcf_retry） | 日線來自上游 `data_pack.zip`，約 05:08 才好【碼，DATA_FLOW.md】 | `data/derived/*`（三清單、active_etf_flags、short_scan）、`derived-latest` |
+| `chip_flow_evening.yml`<br>籌碼流向（傍晚） | 平日 10:28 → 18:28 | 獨立排程 | TAIFEX `www.taifex.com.tw/cht/3/futContractsDateDown`（CSV）＋`openapi.taifex.com.tw/v1/`（外資台指期）；TWSE `rwd/zh/fund/BFI82U?type=day&dayDate=`（三大法人買賣金額） | 兩者「盤後下午才公布」【碼註解】；**18:30 TAIFEX 當天資料是否已出【未驗】**（沒出會退回前一天，不會錯）；隔天 06:37 那班當補漏 | `data/reference/foreign_futures.parquet`、`inst_flow.parquet` |
+| `global_macro.yml`<br>國際總經快照 | 平日 22:37 → 隔日 06:37 | 獨立排程，與 chip_flow 共用 concurrency | yfinance（Yahoo，非官方）：美股指數／VIX／美元／美債／個股、日經／恆生／KOSPI；`openapi.taifex.com.tw/v1/DailyMarketReportFut`（台指期日盤＋夜盤）；另重跑 foreign_futures、inst_flow | 美股常規盤 16:00 ET 收，夏令＝台北 04:00、冬令＝05:00【文】，排 06:37 留緩衝；日經等亞洲指數台北下午就收【文】 | `global_macro.parquet`、`tx_futures.parquet` 等 |
+| `pcf_retry.yml`<br>主動式 ETF PCF 補跑 | 平日 09:13、11:13 → 17:13、19:13 | 排在 rebuild 備援 16:17 之後；只在 `missing` 非空或今天完全沒資料才重抓 | 投信官網：統一 `www.ezmoney.com.tw/ETF/Transaction/PCF`（cookie＋GetPCF）、群益 `www.capitalfund.com.tw/CFWeb/api/etf/buyback`、復華 `www.fhtrust.com.tw` assets；收盤價 TWSE `exchangeReport/STOCK_DAY_ALL` | **只給「當天」、沒有歷史**，漏一天永久缺；各家幾點更新【未驗】（非官方承諾，會改版） | `data/pcf/<代號>/<日期>.parquet`、`active_etf_flags.json` |
+| `heartbeat.yml`<br>心跳（開盤前新鮮度守門） | 平日 00:28 → 08:28 | 獨立排程 | **不打外部端點**，只讀 `_meta.json`、`index_0050.parquet`、`index_006201.parquet` 的日期 | 實測 GitHub 常延遲到 13:00～14:00 才跑 | 只檢查不修；沒設告警 webhook |
+| `check_secrets.yml` | 無（手動） | `workflow_dispatch` | — | — | 檢查 secrets |
+
+**tw-swing 端 workflow（tw-hold 依賴的上游，不在本 repo；取自 DATA_FLOW.md §3，這次沒重新核對）**
+
+| Workflow | 台北時間 | 備註 |
+| :-- | :-- | :-- |
+| `daily.yml` | 21:07／01:07／05:32（三槍，平日） | 讀別人 repo 的 `data_pack.zip`（約 05:08 才好），產日線、模擬單、share-latest.json |
+| `publish_bundle.yml` | daily 完成即接（`workflow_run`）＋cron 06:09／07:09／08:38 | 有閘門（沒新資料跳過）；發 Release `data-latest` 並 dispatch 給 tw-hold |
+| `fundamentals.yml` | 週六 10:07 | 財報五表／TDCC／月營收歷史 |
+
+### 12.3 兩條線的差別
+
+- **自建上游**：直接打官方 TWSE／TPEx（網站帶日期端點為主、OpenAPI 補強），自己存原始價、自己還原。目前是影子期（10/12 起只產只比，tw-swing 不讀；go/no-go 看 10/23）。
+- **其他 workflow**：日線仍靠 tw-swing 讀的上游 `data_pack.zip`（約 05:08 才好）；籌碼／總經／PCF 是各自直接打 TAIFEX、TWSE、Yahoo、投信官網的小資料源，與自建上游互不相依。
+- **還沒量的官方時間**（別當成已知）：事件類（TWT49U／exDailyQ／TWTAUU／TWTB8U）、TAIFEX 盤後、BFI82U、三家投信 PCF 各自的更新時間。要量就沿用 `poll_publish.py` 的做法（官方還沒公布的時段不請求）。

@@ -58,6 +58,19 @@ hr{border:0;border-top:1px solid var(--line);margin:2em 0}
 </ul>
 </li>
 <li><a href="#9">9. 局限</a></li>
+<li><a href="#10-tw-stock-datatsdpermops2026-10-06">10. 與 tw-stock-data（TSD）對照：月營收／財報／PER／集保／MOPS（2026-10-06，只記錄，未改程式）</a><ul>
+<li><a href="#101">10.1 逐類對照</a></li>
+<li><a href="#102">10.2 我們「無法計算」或「沒抓」的清單（依影響排序）</a></li>
+<li><a href="#103">10.3 參考價值判斷</a></li>
+</ul>
+</li>
+<li><a href="#11-openapi-2026-10-06">11. OpenAPI 增量涵蓋度探測（2026-10-06，唯讀實測）</a></li>
+<li><a href="#12-workflow-2026-10-09">12. Workflow 端點與啟動時間對照（2026-10-09）</a><ul>
+<li><a href="#121-3-workflow-repo-tw-hold-data-release">12.1 自建上游線（3 支 workflow，產出放私有 repo tw-hold-data 的 Release）</a></li>
+<li><a href="#122-workflowtw-hold-6-tw-swing">12.2 其他 workflow（tw-hold 自己的 6 支＋依賴的 tw-swing 上游）</a></li>
+<li><a href="#123">12.3 兩條線的差別</a></li>
+</ul>
+</li>
 </ul>
 </div>
 </div></nav><main><h1 id="data-dlmd-books-repo">data-dl.md — 免費股票數據／清洗修正／新聞：books 全部 repo 盤點總整理</h1>
@@ -68,7 +81,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 原始盤點稿（逐 repo、逐檔案:行號）：<code>C:\Users\Max\AppData\Local\Temp\claude\...\scratchpad\datadl\A.md</code>、<code>B.md</code>（暫存；要長期保存請說）。</p>
 </blockquote>
 <h2 id="0">0. 怎麼讀這份文件</h2>
-<p><strong>我們的狀態</strong>：<span class="b ok">✅</span> 已建｜<span class="b part">🔶</span> 部分｜<span class="b no">⬜</span> 未建
+<p><strong>我們的狀態</strong>：✅ 已建｜🔶 部分｜⬜ 未建
 <strong>價值</strong>：★★★ 高（補現有缺口或影響資料正確性）｜★★ 中（有用、可排進之後）｜★ 低（有則好）｜✗ 無意義／過時／有風險（不要做）
 <strong>證據等級</strong>（很重要，別混用）：
 - <span class="ev ev-t">【實測】</span>2026-10-05 我們自己打過官方端點／用我們自己的資料驗證過
@@ -104,7 +117,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>rwd/zh/afterTrading/MI_INDEX?date&amp;type=ALLBUT0999</code></td>
 <td style="text-align: left;">上市全市場日 OHLCV（未還原）；可帶日期</td>
 <td style="text-align: left;">多數 repo</td>
-<td style="text-align: left;"><span class="b ok">✅</span> 自建上游</td>
+<td style="text-align: left;">✅ 自建上游</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>≥2015、回應 <code>date</code> 可斷言；官方下限 2004-02-11<span class="ev ev-d">【文 TD】</span>。個股表依標題「每日收盤行情」找，不寫死 <code>tables[8]</code></td>
 </tr>
@@ -112,7 +125,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TPEx <code>www/zh-tw/afterTrading/dailyQuotes?date=YYYY/MM/DD</code></td>
 <td style="text-align: left;">上櫃全市場日 OHLCV；<strong>西元斜線</strong>；可帶日期</td>
 <td style="text-align: left;">db-master、AI、TP</td>
-<td style="text-align: left;"><span class="b ok">✅</span> 自建上游</td>
+<td style="text-align: left;">✅ 自建上游</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>≥2015、回應 <code>date</code> 可斷言；官方下限 2007-07-02<span class="ev ev-d">【文 TD】</span>；<code>type</code> 參數被忽略、ETF／權證／股票混在同表</td>
 </tr>
@@ -128,7 +141,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>exchangeReport/STOCK_DAY_ALL</code></td>
 <td style="text-align: left;">上市當日全部個股；只回最新日</td>
 <td style="text-align: left;">scanner</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（PCF 抓收盤價用）</td>
+<td style="text-align: left;">✅（PCF 抓收盤價用）</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">當日用，不可回補</td>
 </tr>
@@ -136,7 +149,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>STOCK_DAY</code>／TPEx <code>st43_result.php</code>／<code>tradingStock</code>（單檔月表）</td>
 <td style="text-align: left;">單檔月度成交；TPEx 月表量是「千股」要 ×1000</td>
 <td style="text-align: left;">checkup、dashboard、TP</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">已有全市場逐日，不需要；st43 為舊 php</td>
 </tr>
@@ -144,7 +157,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE MIS <code>getStockInfo.jsp</code></td>
 <td style="text-align: left;">即時／盤中</td>
 <td style="text-align: left;">MM、APP、TP、AI</td>
-<td style="text-align: left;"><span class="b no">⬜</span>（刻意不做）</td>
+<td style="text-align: left;">⬜（刻意不做）</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">與「一天一次」定位無關；官方限流 5 秒 3 次</td>
 </tr>
@@ -152,7 +165,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">yfinance／Yahoo chart（台股 <code>.TW/.TWO</code>）</td>
 <td style="text-align: left;">還原價（auto_adjust）；備援</td>
 <td style="text-align: left;">多數 repo</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（只用於國際指數／總經；台股日線上游 data_pack 的來源）</td>
+<td style="text-align: left;">🔶（只用於國際指數／總經；台股日線上游 data_pack 的來源）</td>
 <td style="text-align: left;">✗（台股）</td>
 <td style="text-align: left;">見 §4：Yahoo 對現金增資／權息事件的因子本身會錯，不能當裁判；<code>yf.download(timeout)</code> 不是硬逾時</td>
 </tr>
@@ -160,7 +173,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">興櫃日行情（TPEx 興櫃表）</td>
 <td style="text-align: left;">興櫃價（無開收盤、均價代替）</td>
 <td style="text-align: left;">TD</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">我們宇宙不含興櫃；若要，需處理「無價」與 <code>price_basis</code></td>
 </tr>
@@ -181,77 +194,77 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tr>
 <td style="text-align: left;">TWSE <code>fund/T86?date&amp;selectType=ALLBUT0999</code></td>
 <td style="text-align: left;">三大法人個股買賣超（股）</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>≥2015；<strong>2015～至少 2017-12 只有 16 欄</strong>（「外資買賣超股數」，不拆外資自營商），之後 19 欄。欄名互相包含（「自營商買賣超股數」vs「外資自營商…」）→ 必須整欄名完全相等比對；用「包含」比對曾讓 16,833 列中 16,394 列驗算不符<span class="ev ev-c">【碼 TD】</span></td>
 </tr>
 <tr>
 <td style="text-align: left;">TPEx <code>insti/dailyTrade?type=Daily&amp;sect=AL&amp;date</code></td>
 <td style="text-align: left;">上櫃三大法人</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span><strong>兩種格式</strong>：≥2018-03 在 <code>tables[0]</code>、24 欄；≤2018-01（至少 2017-06）在 <strong><code>tables[1]</code></strong>、16 欄。只看 <code>tables[0]</code> 會把 2018 前誤判成「回空」</td>
 </tr>
 <tr>
 <td style="text-align: left;">TPEx 舊 <code>3itrade_hedge_result.php</code>（上游用）</td>
 <td style="text-align: left;">同上</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（上游在用）</td>
+<td style="text-align: left;">✅（上游在用）</td>
 <td style="text-align: left;">—</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>到 2026-10-02 仍有資料（母表上櫃法人每天 ~780 檔不斷）；<code>stat</code> 恆為 <code>ok</code>，失效會變成「成功但空」→ 要靠檔數守門偵測</td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>MI_MARGN?selectType=STOCK</code>／TPEx <code>margin/balance</code></td>
 <td style="text-align: left;">融資融券個股（張）</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>≥2015；個股表在 <code>tables[1]</code>，<strong>用欄數==16 辨識</strong>；TWSE 的 <code>note</code> 說的是「次一營業日」，與同列餘額不是同一天<span class="ev ev-d">【文 TD】</span>；表頭有兩代（2026-09-09 起）<span class="ev ev-d">【文 TD】</span></td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>fund/MI_QFIIS?date&amp;selectType=ALLBUT0999</code></td>
 <td style="text-align: left;">外資持股比重、<strong>逐日發行股數</strong></td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;"><span class="ev ev-d">【文 TD】</span>上市逐日股本的唯一來源（日線表沒有發行股數）；代號欄用「結尾是代號」避開 <code>ISIN代號</code></td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>marginTrading/TWT93U</code>／TPEx <code>margin/sbl</code></td>
 <td style="text-align: left;">借券賣出／餘額</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;"><span class="ev ev-d">【文 TD】</span>note 符號集不可跨表共用，可多符號連寫（用「包含」判斷）</td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>exchangeReport/TWTB4U</code>、<code>SBL/TWT96U</code></td>
 <td style="text-align: left;">當沖標的及統計、可借券賣出股數</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">當沖比對短線清單可能有用；OpenAPI 只回最新，需每日累積</td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>marginTrading/BFIB9U</code></td>
 <td style="text-align: left;">融資融券成數調整</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">融資維持率估算的輸入之一</td>
 </tr>
 <tr>
 <td style="text-align: left;">融資維持率（估算）</td>
 <td style="text-align: left;">以餘額增量×價格估成本</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">TWSE 只有餘額加總、沒有個別部位成本；我們 B1 規則「未實作」的原因</td>
 </tr>
 <tr>
 <td style="text-align: left;">券商分點（BSR、富邦 e 洽、TPEx broker）</td>
 <td style="text-align: left;">分點買賣</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">圖形驗證碼、一次一檔、無日期；FinMind 分點為 Sponsor 付費。免費自動化不可行<span class="ev ev-d">【文 TD】</span>；hub 的 OCR＋<code>verify=False</code> 做法未驗證</td>
 </tr>
 <tr>
 <td style="text-align: left;">TDCC <code>opendata.tdcc.com.tw/getOD.ashx?id=1-5</code></td>
 <td style="text-align: left;">集保股權分散（週）；<strong>只回最新一週</strong></td>
-<td style="text-align: left;"><span class="b ok">✅</span>（週快照）</td>
+<td style="text-align: left;">✅（週快照）</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;">代號 6 碼右補空白要 strip；級距 12＝400~600 張、15＝千張以上、17＝合計（三個 repo 一致）；三道恆等式（股數合計＝Σ(1~15)−差異調整；人數合計＝Σ(1~15)；每檔 17 級）可當守門；官方只保存一年，斷週永久缺</td>
 </tr>
@@ -274,7 +287,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>exRight/TWT49U?startDate&amp;endDate</code></td>
 <td style="text-align: left;">除權息計算結果（前收、參考價、權值+息值、<strong>減除股利參考價</strong>）</td>
 <td style="text-align: left;">2003-05-05<span class="ev ev-d">【文】</span></td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>2015 起；<code>date</code> 參數被忽略但會<strong>回音</strong>（只看回音欄會被騙）</td>
 </tr>
@@ -282,7 +295,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TPEx <code>bulletin/exDailyQ?startDate&amp;endDate</code></td>
 <td style="text-align: left;">除權息（權值、息值、現金股利、每仟股無償配股、現金增資欄）</td>
 <td style="text-align: left;">~2008-01-10<span class="ev ev-d">【文】</span></td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>2015 起；0 筆不報錯</td>
 </tr>
@@ -290,7 +303,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>exRight/TWT49UDetail?STK_NO&amp;T1</code></td>
 <td style="text-align: left;">單一事件明細（現金股利、配股率、現增）</td>
 <td style="text-align: left;">同上</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">每事件 1 次請求；唯一能拆出現金／配股／現增</td>
 </tr>
@@ -298,7 +311,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>exRight/TWT48U</code>、<code>TWT48U_ALL</code></td>
 <td style="text-align: left;">除權息<strong>預告</strong>（只有未來）</td>
 <td style="text-align: left;">—</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">不可當歷史；可做「即將除息」提醒</td>
 </tr>
@@ -306,7 +319,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;"><strong>TWSE <code>reducation/TWTAUU?startDate&amp;endDate</code></strong>（拼字如此）</td>
 <td style="text-align: left;"><strong>減資恢復買賣參考價</strong>：最後交易日收盤、恢復買賣參考價、漲跌停、開盤競價基準、原因</td>
 <td style="text-align: left;">2011-01-01<span class="ev ev-d">【文 TD】</span></td>
-<td style="text-align: left;"><strong><span class="b no">⬜</span>→本週接入</strong></td>
+<td style="text-align: left;"><strong>⬜→本週接入</strong></td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>2025：17 件、2015：26 件；有 2 組重複 <code>(3536,104/03/20)</code>、<code>(5906,105/07/14)</code> 要 dedup<span class="ev ev-d">【文 TD】</span>；備註夾「除息併案減資」自由文字</td>
 </tr>
@@ -314,7 +327,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;"><strong>TPEx <code>bulletin/revivt?startDate&amp;endDate</code></strong></td>
 <td style="text-align: left;">上櫃減資（含官方「換股比例」欄）</td>
 <td style="text-align: left;">~2013-01-16<span class="ev ev-d">【文】</span></td>
-<td style="text-align: left;"><strong><span class="b no">⬜</span>→本週接入</strong></td>
+<td style="text-align: left;"><strong>⬜→本週接入</strong></td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>2025：10 件；日期是民國 7 碼 <code>1140113</code></td>
 </tr>
@@ -322,7 +335,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;"><strong>TWSE <code>change/TWTB8U?startDate&amp;endDate</code></strong></td>
 <td style="text-align: left;">面額變更恢復買賣</td>
 <td style="text-align: left;">實質 2020-08-17<span class="ev ev-d">【文 TP】</span></td>
-<td style="text-align: left;"><strong><span class="b no">⬜</span>→本週接入</strong></td>
+<td style="text-align: left;"><strong>⬜→本週接入</strong></td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><span class="ev ev-t">【實測】</span>2019 起 10 件（8070 長華 2020-08-17 … 6949 沛爾生醫 2026-09-07）</td>
 </tr>
@@ -330,7 +343,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TPEx <code>bulletin/pvChgRslt</code>（POST）</td>
 <td style="text-align: left;">上櫃面額變更</td>
 <td style="text-align: left;">—</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">TD 找到、TP 七種路徑探測全 302；<strong>只有 TD 走通，需實測</strong></td>
 </tr>
@@ -338,7 +351,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">TWSE <code>split/TWTCAU</code></td>
 <td style="text-align: left;">ETF 分割</td>
 <td style="text-align: left;">—</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（FinMind SplitPrice 含 ETF）</td>
+<td style="text-align: left;">🔶（FinMind SplitPrice 含 ETF）</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">TD 獨有</td>
 </tr>
@@ -346,7 +359,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">FinMind <code>TaiwanStockSplitPrice</code>／<code>ParValueChange</code>／<code>CapitalReductionReferencePrice</code>／<code>DividendResult</code>／<code>PriceAdj</code></td>
 <td style="text-align: left;">同上事件；PriceAdj 為付費層</td>
 <td style="text-align: left;">2015 起</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（事件表第二來源）</td>
+<td style="text-align: left;">✅（事件表第二來源）</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">減資需逐檔（全市場是付費層）；<code>DividendResult</code> 的參考價欄是 <code>after_price</code>，不是 <code>reference_price</code>（後者在「權」時等於前收、因子=1 → 配股完全不還原且不報錯）<span class="ev ev-d">【文 TD】</span>；超額回 402 後退避無效，必須事前節流 550/小時</td>
 </tr>
@@ -367,70 +380,70 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tr>
 <td style="text-align: left;">FinMind 財報三表／月營收／股利／PER（免費層）</td>
 <td style="text-align: left;">逐檔</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"><code>date</code> 是期別結束日不是公告日（直接回測是未來函數）</td>
 </tr>
 <tr>
 <td style="text-align: left;">OpenAPI <code>t187ap05_L</code>／<code>mopsfin_t187ap05_O</code></td>
 <td style="text-align: left;">月營收（最新一期；參數被無視）</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（每日快照累積）</td>
+<td style="text-align: left;">✅（每日快照累積）</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">單位千元；路徑不要多一層 <code>opendata/</code>（會回 HTML）</td>
 </tr>
 <tr>
 <td style="text-align: left;">OpenAPI <code>t187ap06/07_L_{ci,basi,bd,fh,ins,mim}</code></td>
 <td style="text-align: left;">損益表／資產負債表（六業別，最新一期）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">損益表是<strong>年初至本季累計</strong>，單季＝累計−前幾季；前幾季不齊就整筆略過（否則 TTM EPS 放大 2–4 倍）<span class="ev ev-c">【碼 HUB <code>ytd.py:23</code>】</span></td>
 </tr>
 <tr>
-<td style="text-align: left;">MOPS 歷史月營收靜態頁 <code>mopsov.twse.com.tw/nas/t21/{sii|otc}/t21sc03_&lt;民國年&gt;_&lt;月&gt;_0.html</code></td>
+<td style="text-align: left;">MOPS 歷史月營收靜態頁 <code>mopsov.twse.com.tw/nas/t21/{sii\|otc}/t21sc03_&lt;民國年&gt;_&lt;月&gt;_0.html</code></td>
 <td style="text-align: left;">月營收歷史（第二來源）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">網域是 <strong>mopsov</strong>（<code>mops</code> 回 404）；big5 宣告但要 <strong>cp950</strong>；<strong>完全不含 -KY 外國發行人</strong>（實測 104 檔查無）；robots.txt disallow<span class="ev ev-c">【碼 TD】</span>；regex 曾因備註欄 <code>align=left</code> 漏列</td>
 </tr>
 <tr>
 <td style="text-align: left;">MOPS 財報歷史 POST <code>ajax_t163sb04/05</code>、新 JSON <code>mops/api/t164sb03</code>（body 須五鍵含空字串）</td>
 <td style="text-align: left;">財報原始、公告時點</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">我們用 FinMind；MOPS 新站直接 requests 可能被 WAF 擋（有 repo 說擋、有 repo 說可用）→ <span class="ev ev-g">【推】</span></td>
 </tr>
 <tr>
 <td style="text-align: left;">OpenAPI <code>t187ap03_L</code>／<code>mopsfin_t187ap03_O</code>／<code>_R</code></td>
 <td style="text-align: left;"><strong>公司基本資料：產業別代碼、實收資本額、已發行股數、上市日</strong></td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;">產業代碼是子類（13 電子工業＝24~31）；特別股（1101B）要去尾碼用母公司查；91＝DR 不是類股；32／33 中文名由 ISIN 頁補、<strong>不覆蓋</strong> MI_INDEX 用字（「代碼對、名稱錯」是安靜的錯）</td>
 </tr>
 <tr>
-<td style="text-align: left;">ISIN <code>isin.twse.com.tw/isin/C_public.jsp?strMode=2|4</code></td>
+<td style="text-align: left;">ISIN <code>isin.twse.com.tw/isin/C_public.jsp?strMode=2\|4</code></td>
 <td style="text-align: left;">證券主檔、產業別文字、CFI 碼（ES*＝普通股）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;"><strong>必須 cp950</strong>（big5 codec 會把「碁」等 13 檔靜默變 U+FFFD）；代號與名稱以全形空格 U+3000 分隔；區塊順序不固定要用標題比對</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>ic.tpex.org.tw 產業價值鏈</strong>（<code>introduce.php?ic=&lt;code&gt;</code>）</td>
 <td style="text-align: left;">產業鏈節點→公司</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">官方免費、靜態 HTML；葉節點取法見 db-master <code>industry_chain.py</code>；結構穩定性未知；既有分析文件幾乎沒提</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>t187ap47_L</code> ETF 基金基本資料</td>
 <td style="text-align: left;">ETF 清單</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;"></td>
 </tr>
 <tr>
 <td style="text-align: left;">每日 PER／PBR／殖利率：TWSE <code>BWIBBU_d</code>、TPEx <code>peQryDate</code></td>
 <td style="text-align: left;">逐日估值</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（每日快照）</td>
+<td style="text-align: left;">✅（每日快照）</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;"><code>stocks_per</code> 的 close 欄不能當價格；TWSE 早年欄位順序不同 → 按欄名取</td>
 </tr>
@@ -451,49 +464,49 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tr>
 <td style="text-align: left;">TWSE <code>holidaySchedule/holidaySchedule</code></td>
 <td style="text-align: left;">休市日清單（csv big5，前 2 行標題）</td>
-<td style="text-align: left;"><span class="b no">⬜</span>（我們靠「官方實價有／沒有」）</td>
+<td style="text-align: left;">⬜（我們靠「官方實價有／沒有」）</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">可用來<strong>預判</strong>該日該不該有資料，區分「休市」與「來源當機」；注意：有 repo 自述它只給圖表用</td>
 </tr>
 <tr>
 <td style="text-align: left;">TWSE <code>FMTQIK</code>（整月一次）</td>
 <td style="text-align: left;">大盤成交金額／股數／指數</td>
-<td style="text-align: left;"><span class="b part">🔶</span></td>
+<td style="text-align: left;">🔶</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">比 yfinance <code>^TWII</code> 成交量可靠（Yahoo 大盤成交量長期不可靠）；<strong>週六補班日</strong>要納入交易日候選（只跳六日會漏補班日）</td>
 </tr>
 <tr>
 <td style="text-align: left;">終止上市清單 TWSE <code>company/suspendListing</code>（回應鍵是 <code>status</code> 不是 <code>stat</code>；csv 是 ms950）／TPEx <code>company/deListed</code>（只回當年）</td>
 <td style="text-align: left;">下市名單</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;">存活者偏誤的外部判準：我方 <code>last_seen</code> 應 ≤ 官方終止上市日；snapshot 沒出現≠下市（2358/2443 在正式下市前就停牌）；TPEx「終止上櫃」≠下市（5236 轉上市）<span class="ev ev-d">【文 TP】</span></td>
 </tr>
 <tr>
-<td style="text-align: left;">處置／注意／停牌：TWSE <code>announcement/punish|notice|notetrans</code>、<code>TWTAWU</code>、TPEx <code>bulletin/disposal|attention|sprc|sprcHis</code></td>
+<td style="text-align: left;">處置／注意／停牌：TWSE <code>announcement/punish\|notice\|notetrans</code>、<code>TWTAWU</code>、TPEx <code>bulletin/disposal\|attention\|sprc\|sprcHis</code></td>
 <td style="text-align: left;">處置、注意、暫停交易</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（處置股快照）</td>
+<td style="text-align: left;">✅（處置股快照）</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">四個靜默坑：日期格式相反（TWSE 西元／TPEx 民國斜線）寫錯不報錯；「本日無處置資料」是一列不是空陣列；<code>sprc</code> 反而空陣列；證券名稱欄夾連結要清</td>
 </tr>
 <tr>
 <td style="text-align: left;">長期停止買賣 <code>t187ap26_L</code>／<code>mopsfin_t187ap26_O</code>／<code>tpex_cmode</code></td>
 <td style="text-align: left;">只有當日快照</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">每天不抓即永久損失；無案件時回「一列全空」佔位</td>
 </tr>
 <tr>
 <td style="text-align: left;">變更交易 <code>TWT85U</code>、<code>violation/stop</code></td>
 <td style="text-align: left;">變更交易、停止買賣</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;"></td>
 </tr>
 <tr>
 <td style="text-align: left;">颱風假 <code>dgpa.gov.tw/typh/daily/nds.html</code></td>
 <td style="text-align: left;">停班停課公告</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">TD 做單向（台北市＋停止上班同時命中才標休市）避免誤判；我們靠實價日曆即可</td>
 </tr>
@@ -512,37 +525,37 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tbody>
 <tr>
 <td style="text-align: left;">TAIFEX 官方（期貨三大法人、日夜盤）、TWSE <code>BFI82U</code></td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;">TAIFEX 會讓端點在 JSON 與 CSV 間來回切換（MCP 一天內觀察到 5 個）→ 以表頭契約驗證的 CSV 退路；OpenAPI 授權：預設禁止再散布，data.gov.tw OGDL 豁免</td>
 </tr>
 <tr>
 <td style="text-align: left;">TAIFEX OpenAPI 擴充（大額交易人、PCR）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">我們已拿掉 TXO 量比</td>
 </tr>
 <tr>
 <td style="text-align: left;">Yahoo chart/yfinance（國際指數、美股、匯率、商品）</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★</td>
 <td style="text-align: left;">S&amp;P500 <code>^GSPC</code> 要帶 <code>period1=0&amp;period2=&lt;未來&gt;</code>，只給 <code>range=max</code> 會被降頻成季線；單 ticker 瞬時失敗要重試（<code>^SOX</code> 曾讓總分少 2.5 分）；"possibly delisted" 多半暫時性（116 檔失敗 92% 重試成功）</td>
 </tr>
 <tr>
 <td style="text-align: left;">FRED <code>fredgraph.csv?id=</code></td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">★</td>
 <td style="text-align: left;">免 key；Python urllib 會被斷連、曾 read timeout；備援層才需要</td>
 </tr>
 <tr>
 <td style="text-align: left;">國發會景氣／主計總處 CPI／財政部出口／經濟部外銷訂單／PMI</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">總經頁面已有 Yahoo 層；M1B/M2 要用「貨幣總計數」dataset 6024，<strong>不要用「變動因素分析」</strong>（會出現單月 1000%+）；ZIP 內檔名 big5 要 <code>name.encode('cp437').decode('big5')</code>；PMI 掛 Cloudflare 攔截——repo 自己也放棄</td>
 </tr>
 <tr>
 <td style="text-align: left;">Stooq、金十 <code>jin10.com</code>、TradingView 經濟日曆、<code>r.jina.ai</code></td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">Stooq 已加 JS proof-of-work；其餘非官方、授權不明、要 Worker 補 header 或第三方轉譯</td>
 </tr>
@@ -561,19 +574,19 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tbody>
 <tr>
 <td style="text-align: left;">主動式 ETF 官網 PCF（統一／群益／復華）</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 <td style="text-align: left;"></td>
 </tr>
 <tr>
 <td style="text-align: left;">MoneyDJ ETF 成分（<code>Basic0007b.xdjhtm</code>）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">非官方 HTML，只有 top10</td>
 </tr>
 <tr>
 <td style="text-align: left;">FinLab（<code>finlab-ai-main</code>）</td>
-<td style="text-align: left;"><span class="b no">⬜</span></td>
+<td style="text-align: left;">⬜</td>
 <td style="text-align: left;">✗</td>
 <td style="text-align: left;">文件型、token 制（免費 500MB/日）；唯一可參考：<code>deadline()</code>（法定公告截止日）vs <code>index_str_to_date()</code>（實際揭露日）的 look-ahead 規則</td>
 </tr>
@@ -596,126 +609,126 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">1</td>
 <td style="text-align: left;"><strong>回應日期必須等於請求日</strong></td>
 <td style="text-align: left;">逐日端點把「靜默回今天」當最危險的錯：TD <code>fetch.py:1235 _same_day</code>（連 <code>title/strDate/endDate</code> 自述日都核，不能只看會被回音的欄）、db-master <code>live_momentum.py:67</code>；2026-09-03 TD 因此事故把 2026-09-02 的 980 檔寫成 2015-01-01</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（實價、法人、融資收集器）</td>
+<td style="text-align: left;">✅（實價、法人、融資收集器）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">2</td>
 <td style="text-align: left;"><strong>候選端點清單不得放「只回今天」的 openapi</strong></td>
 <td style="text-align: left;">TD <code>backfill.py:140-148</code>、<code>feeds.py</code> 檔頭</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">3</td>
 <td style="text-align: left;"><strong>欄名完全相等、不用位置、不用包含</strong></td>
 <td style="text-align: left;">TD <code>backfill.py:898-960</code>、<code>feeds.py:_exact</code>；反例：AI／HUB 全用位置索引 → 欄數改版靜默錯位</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（法人用名稱＋別名；融資券用「欄數==16」＋位置，上櫃用位置——有欄數守門）</td>
+<td style="text-align: left;">🔶（法人用名稱＋別名；融資券用「欄數==16」＋位置，上櫃用位置——有欄數守門）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">4</td>
 <td style="text-align: left;"><strong>免費恆等式守門</strong></td>
 <td style="text-align: left;">外資(兩欄相加)＋投信＋自營＝合計（容差 1）；自營自行＋避險＝合計；不符整列丟棄並回報（TD <code>backfill.py:944-975</code>；stocker <code>update_all.py:341-353</code>）；集保三道恆等式</td>
-<td style="text-align: left;"><span class="b no">⬜</span>（gate 只管列數／檔數／日期）</td>
+<td style="text-align: left;">⬜（gate 只管列數／檔數／日期）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">5</td>
 <td style="text-align: left;"><strong>日檔量守門（硬下限＋相對）</strong></td>
 <td style="text-align: left;">TWSE≥1000／TPEx≥700／最新日必須等於目標日（stocker）；列數&lt;前後 ±10 交易日中位數 70% 標「不可判定」（TD <code>margin_universe.py</code>）；OHLC 一致性 <code>0&lt;min≤min(o,c)≤max(o,c)≤max</code>（db-master <code>live_momentum.py:79-80</code>）；有效股票&lt;500 raise</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（有相對 90% 與絕對 900/700；<strong>沒有 OHLC 一致性、法人合計校驗</strong>）</td>
+<td style="text-align: left;">🔶（有相對 90% 與絕對 900/700；<strong>沒有 OHLC 一致性、法人合計校驗</strong>）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">6</td>
 <td style="text-align: left;"><strong>0 列有兩義：休市 vs 抓壞</strong></td>
 <td style="text-align: left;">以官方月表／實價日曆當外部判準；空 payload 一律 unresolved（TP <code>trading_day_evidence.py</code>）；只在交易日上問（TD <code>early_backfill.py</code>）；TWSE <code>stat != OK</code> 才當休市</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（實價日曆＋unavailable 分流）</td>
+<td style="text-align: left;">✅（實價日曆＋unavailable 分流）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">7</td>
 <td style="text-align: left;"><strong>週六補班日要納入交易日候選</strong></td>
 <td style="text-align: left;">TD <code>backfill.py:700 daterange(saturdays=)</code>；TP 實跑補上 8 個週六（2016-01-30 等）；AI／HUB 只跳六日會漏</td>
-<td style="text-align: left;"><span class="b no">⬜</span>（<strong>我們全歷史回補用 <code>weekday()&lt;5</code>，會漏補班日</strong>）</td>
+<td style="text-align: left;">⬜（<strong>我們全歷史回補用 <code>weekday()&lt;5</code>，會漏補班日</strong>）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">8</td>
 <td style="text-align: left;"><strong>缺值不等於 0</strong></td>
 <td style="text-align: left;"><code>_num()</code>：<code>X/N/A/--/-</code> 回空字串不填 0；TPEx 漲跌寫成「- 0.35」（號與數字間有空白）先去所有空白，否則上櫃所有下跌日漲跌被清空（TD <code>fetch.py:481-500</code>）；官方「--」價格＝有觀測無價格 bar</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（無成交列丟棄；<strong>空白符號未處理</strong>）</td>
+<td style="text-align: left;">✅（無成交列丟棄；<strong>空白符號未處理</strong>）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">9</td>
 <td style="text-align: left;"><strong>單位</strong>（股／張／千股／千元）</td>
 <td style="text-align: left;">TPEx 月表千股×1000；MIS <code>v</code> 為張；OpenAPI 金額千元；官方日檔 volume 含零股（非千倍數）；AI 存「張」取整會丟零股</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（存股）</td>
+<td style="text-align: left;">✅（存股）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">10</td>
 <td style="text-align: left;"><strong>編碼／憑證／反爬</strong></td>
 <td style="text-align: left;">一律 cp950（big5 codec 缺「碁」等 13 字）；TDCC BOM；T86 宣告 UTF-8 但要 <code>content.decode</code> 再 <code>json.loads</code>；TPEx 漏送中間憑證（TD <code>ca_chain.py</code> 補鏈、不降驗證；HUB <code>verify=False</code> 是<strong>錯誤做法</strong>）</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（requests＋certifi 已解 TPEx）</td>
+<td style="text-align: left;">✅（requests＋certifi 已解 TPEx）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">11</td>
 <td style="text-align: left;"><strong>重試退避與限流</strong></td>
 <td style="text-align: left;">TD：一般 3s/6s、3xx 無 Location 或 429＝限流 60s/120s，並讓呼叫端分得出「被擋」與「端點壞」；<code>IncompleteRead</code> 同位置＝決定性、不同＝偶發。db-master <code>_http.py</code>：同 bucket ≥1.7s、5/20/60s 退避。TP：每主機 token bucket（TWSE/TPEx 16rpm、MOPS 12rpm、FinMind 5/10rpm）</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（固定 2s 間隔、3 次重試；FinMind 550/小時）</td>
+<td style="text-align: left;">🔶（固定 2s 間隔、3 次重試；FinMind 550/小時）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">12</td>
 <td style="text-align: left;"><strong>回補完成度報告</strong></td>
 <td style="text-align: left;">回補腳本輸出「應有幾檔／實有幾檔」、失敗非零退出；tw_stock-master 曾 1098 檔失敗卻被當成已補完（<code>backfill_tpex_history_gap.py:2-14</code>）；放寬範圍後 log 只記「抓過」不記範圍 → 舊範圍殘留</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（有失敗計數與非零退出；<strong>沒有「應有／實有」報告</strong>）</td>
+<td style="text-align: left;">🔶（有失敗計數與非零退出；<strong>沒有「應有／實有」報告</strong>）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">13</td>
 <td style="text-align: left;"><strong>累積檔不可整份覆蓋、低水位檔</strong></td>
 <td style="text-align: left;">TD：逐鍵合併、一天一檔、coverage 依寫入者拆檔（共用索引檔被兩寫入者整份重寫＝git 衝突白跑 35 分鐘）；資料檔列數不得掉；AI：<code>--backfill</code> 會覆蓋成更短的現有檔時拒絕（曾把 478 天蓋成 3 天）、<code>mtime=0</code> 確定性壓縮讓 no-op 不誤 commit</td>
-<td style="text-align: left;"><span class="b ok">✅</span>（健檢閘門＝列數不減、日期不倒退；狀態檔無時間戳）</td>
+<td style="text-align: left;">✅（健檢閘門＝列數不減、日期不倒退；狀態檔無時間戳）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">14</td>
 <td style="text-align: left;"><strong>每個守門都要證明「會紅」</strong></td>
 <td style="text-align: left;">TD <code>selftest_*</code>＋突變驗：故意弄壞確認守門會失敗；斷言驗終點不驗中間（「中間那一步成功了就被當成整件事成功」）</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（有測試，無突變驗）</td>
+<td style="text-align: left;">🔶（有測試，無突變驗）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">15</td>
 <td style="text-align: left;"><strong>存活者偏誤對策</strong></td>
 <td style="text-align: left;">不以現況 allowlist 過濾歷史（TP 實測會把歷史下市股整批丟掉）；<code>observed_universe</code> 只記官方 snapshot 當日有沒有出現；終止上市清單當外部判準</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（實價回補不過濾現況清單；<strong>減資查詢清單改用「實價出現過的代號」含已下市</strong>；尚無終止上市清單對帳）</td>
+<td style="text-align: left;">🔶（實價回補不過濾現況清單；<strong>減資查詢清單改用「實價出現過的代號」含已下市</strong>；尚無終止上市清單對帳）</td>
 <td style="text-align: left;">★★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">16</td>
 <td style="text-align: left;"><strong>讀取契約／基準日</strong></td>
 <td style="text-align: left;">基準日讀 manifest 的 <code>date_max</code> 不推算；用精確日期 join <code>adj/</code> 會漏事件（要用「第一個事件日 &gt; d」）；切近 N 日窗要依日曆不是 <code>rows[-N:]</code></td>
-<td style="text-align: left;"><span class="b part">🔶</span></td>
+<td style="text-align: left;">🔶</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">17</td>
 <td style="text-align: left;"><strong>OpenAPI「回 0 筆＝上游故障」</strong></td>
 <td style="text-align: left;">MCP <code>ALWAYS_POPULATED</code>：主檔回 0 筆一律當故障、不當查無資料</td>
-<td style="text-align: left;"><span class="b part">🔶</span>（處置股／估值有；未逐一確認）</td>
+<td style="text-align: left;">🔶（處置股／估值有；未逐一確認）</td>
 <td style="text-align: left;">★★</td>
 </tr>
 <tr>
 <td style="text-align: left;">18</td>
 <td style="text-align: left;"><strong>FinMind 額度節流</strong></td>
 <td style="text-align: left;">滑動視窗 550/小時、<code>FinMindTierError</code> 區分權限不足與網路錯、402/403 立停並把進度寫進表（<code>finmind_client.py</code>、<code>build_valuation.py</code>）；超額後退避無效</td>
-<td style="text-align: left;"><span class="b ok">✅</span></td>
+<td style="text-align: left;">✅</td>
 <td style="text-align: left;">★★</td>
 </tr>
 </tbody>
@@ -737,19 +750,19 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <td style="text-align: left;">除息／除權／權息</td>
 <td style="text-align: left;">TWT49U、exDailyQ</td>
 <td style="text-align: left;">DividendResult（逐檔）</td>
-<td style="text-align: left;"><span class="b ok">✅</span> 已在事件表</td>
+<td style="text-align: left;">✅ 已在事件表</td>
 </tr>
 <tr>
 <td style="text-align: left;">面額變更／分割</td>
 <td style="text-align: left;">TWTB8U（TWSE，2020-08 起）；TPEx pvChgRslt（POST，待驗）；TWTCAU（ETF）</td>
 <td style="text-align: left;">SplitPrice／ParValueChange</td>
-<td style="text-align: left;"><span class="b ok">✅</span> TWTB8U 已接入（<code>twse_par</code>，10 件）；TPEx 面額變更仍缺（FinMind 補）</td>
+<td style="text-align: left;">✅ TWTB8U 已接入（<code>twse_par</code>，10 件）；TPEx 面額變更仍缺（FinMind 補）</td>
 </tr>
 <tr>
 <td style="text-align: left;">減資</td>
 <td style="text-align: left;">TWTAUU（TWSE，2011 起）、revivt（TPEx，2013 起）</td>
 <td style="text-align: left;">CapitalReductionReferencePrice（逐檔）</td>
-<td style="text-align: left;"><span class="b ok">✅</span> <strong>已接入並與 FinMind 交叉驗證</strong>（2026-10-05）：官方 2011→今 686 件（TWSE 396、TPEx 290）；FinMind 已查到的 345 件<strong>全部</strong>在官方表內（0 件僅 FinMind 有）、因子相對差中位數 0、僅 2 件 &gt;0.5%（3312、3536：減資併現金增資，官方「除權參考價」＝FinMind <code>ExrightReferencePrice</code>，FinMind 收集器原本取了另一欄，已對齊）。FinMind 降為交叉驗證（CI 每週 150 檔）；本機輪詢已停止</td>
+<td style="text-align: left;">✅ <strong>已接入並與 FinMind 交叉驗證</strong>（2026-10-05）：官方 2011→今 686 件（TWSE 396、TPEx 290）；FinMind 已查到的 345 件<strong>全部</strong>在官方表內（0 件僅 FinMind 有）、因子相對差中位數 0、僅 2 件 &gt;0.5%（3312、3536：減資併現金增資，官方「除權參考價」＝FinMind <code>ExrightReferencePrice</code>，FinMind 收集器原本取了另一欄，已對齊）。FinMind 降為交叉驗證（CI 每週 150 檔）；本機輪詢已停止</td>
 </tr>
 </tbody>
 </table></div>
@@ -866,7 +879,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tr>
 <td style="text-align: left;">FinMind <code>TaiwanStockNews</code></td>
 <td style="text-align: left;">逐檔查；不接受 <code>end_date</code></td>
-<td style="text-align: left;"><code>url||title</code> 去重</td>
+<td style="text-align: left;"><code>url\|\|title</code> 去重</td>
 <td style="text-align: left;">免費層額度（1,943 檔在 600/小時下要 3+ 小時）；情緒是詞表</td>
 <td style="text-align: left;">★（額度與我們共用，不建議）</td>
 </tr>
@@ -990,7 +1003,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <tbody>
 <tr>
 <td style="text-align: left;">1</td>
-<td style="text-align: left;"><span class="b ok">✅</span> <strong>（2026-10-05 已完成）接入官方減資／面額變更表</strong>（TWTAUU、revivt、TWTB8U）當事件表來源，FinMind 降為交叉驗證</td>
+<td style="text-align: left;">✅ <strong>（2026-10-05 已完成）接入官方減資／面額變更表</strong>（TWTAUU、revivt、TWTB8U）當事件表來源，FinMind 降為交叉驗證</td>
 <td style="text-align: left;">免逐檔、可日期區間、2011/2013/2020 起；與 FinMind 交叉驗證 345／345 吻合</td>
 </tr>
 <tr>
@@ -1000,7 +1013,7 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 </tr>
 <tr>
 <td style="text-align: left;">3</td>
-<td style="text-align: left;"><span class="b ok">✅</span> <strong>（2026-10-05 已改）週六補班日納入候選</strong>：實價收集器含週六（上市空表即跳過上櫃）、法人融資只在實價日曆有該週六時才問；全歷史實價回補跑完後要再跑一次補週六</td>
+<td style="text-align: left;">✅ <strong>（2026-10-05 已改）週六補班日納入候選</strong>：實價收集器含週六（上市空表即跳過上櫃）、法人融資只在實價日曆有該週六時才問；全歷史實價回補跑完後要再跑一次補週六</td>
 <td style="text-align: left;">原用 <code>weekday()&lt;5</code> 會漏補班日（2016-01-30、2017-09-30、2018-03-31、2018-12-22 等；我們自己的 <code>known_data_issues.yaml</code> 也記過母表漏這些日子）</td>
 </tr>
 <tr>
@@ -1067,4 +1080,510 @@ tw-stock-scanner（上游 data_pack 產生者）直接引用 <code>tw-swing/docs
 <li>組 B 對既有分析的抽驗涵蓋 14 個說法，不是全部。</li>
 <li>新聞授權（Google News、鉅亨、Yahoo、MoneyDJ）與 MOPS WAF 行為<strong>未打網站驗證</strong>。</li>
 <li>本文不涉及策略或回測績效。</li>
+</ul>
+<hr />
+<h2 id="10-tw-stock-datatsdpermops2026-10-06">10. 與 tw-stock-data（TSD）對照：月營收／財報／PER／集保／MOPS（2026-10-06，只記錄，未改程式）</h2>
+<blockquote>
+<p>範圍：只比「有沒有、涵蓋期間、能算什麼」，<strong>沒有逐列核對內容正確性</strong>（價量／法人／融資券／還原的核對見 data-qu.md §6.9 與 data-fix.md）。TSD 側為檔案清單與表頭實測；我們側為 <code>tw-swing/data/fundamentals/*</code>、<code>tw-swing/data/tdcc</code>、<code>tw-hold/data/selfhost/*</code>。</p>
+</blockquote>
+<h3 id="101">10.1 逐類對照</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">類別</th>
+<th style="text-align: left;">我們有</th>
+<th style="text-align: left;">TSD 有</th>
+<th style="text-align: left;">差距</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">月營收</td>
+<td style="text-align: left;"><code>revenue_history</code>：2014-12～2026-08、含 <code>announced</code>（公告日）、24.5 萬列</td>
+<td style="text-align: left;"><code>mops/revenue_hist</code>：2015-01～2026-08，上市／上櫃各一檔，含上月／去年同月／累計及增減%</td>
+<td style="text-align: left;">基本打平。TSD 多「累計營收」「產業別」欄（我們可自算）；兩邊都不含 -KY（MOPS 靜態頁限制，TSD 實測）</td>
+</tr>
+<tr>
+<td style="text-align: left;">財報（損益／資產負債／現金流）</td>
+<td style="text-align: left;">FinMind：<code>income</code>（eps、營收、毛利、營業利益、稅前、淨利、母公司權益）、<code>balance</code>（股本、現金、流動資產／負債、總負債、總資產、權益）、<code>cashflow</code>（ocf、icf、capex），約 4.2 萬列／表</td>
+<td style="text-align: left;"><code>mops/fs_hist</code>＋<code>bs_hist</code>：2015Q1～2026Q2，<strong>六個業別各自的完整報表欄位</strong>（含金融業的利息淨收益、呆帳提存等）</td>
+<td style="text-align: left;">我們是<strong>精簡欄位</strong>，金融／保險／證券業專屬欄位沒有；完整科目沒有</td>
+</tr>
+<tr>
+<td style="text-align: left;">研發費用</td>
+<td style="text-align: left;">❌ 無</td>
+<td style="text-align: left;"><code>mops/rd_hist</code>、<code>fin_hist</code>：2013Q1 起</td>
+<td style="text-align: left;">缺（研發費用率算不出來）</td>
+</tr>
+<tr>
+<td style="text-align: left;">財報<strong>公告日</strong></td>
+<td style="text-align: left;">❌ tw-hold 一律「期末＋45 天」；營收有 <code>announced</code></td>
+<td style="text-align: left;">TSD 有 <code>filing_dates.py</code>／<code>filing_probe.py</code>（公告時點，細節未讀）</td>
+<td style="text-align: left;">缺：Q4／金融業法定期限較晚，+45 天會<strong>提早</strong>看見財報（輕微前視偏差）</td>
+</tr>
+<tr>
+<td style="text-align: left;">PER／PBR／殖利率</td>
+<td style="text-align: left;"><code>per.parquet</code>：2015-01-05～2026-08-28，473 萬列（每日快照另累積）</td>
+<td style="text-align: left;"><code>stocks_per</code>：2015 起逐檔；<code>early/per</code>、<code>otcper</code> 另有 2012 起</td>
+<td style="text-align: left;">我們短 3 年（2012–2014 對選股回測用不到）；<code>per.parquet</code> 最後日 08-28，之後靠 <code>data/valuation/</code> 每日快照（最新 2026-10-03）接續，不算缺；但兩段合併的銜接沒查</td>
+</tr>
+<tr>
+<td style="text-align: left;">集保股權分散</td>
+<td style="text-align: left;">週快照，<strong>只有 4 週</strong>（2026-09-11 起）</td>
+<td style="text-align: left;"><code>tdcc_hist</code>：<strong>2017～2026 年檔</strong>（來源與完整度未查）</td>
+<td style="text-align: left;">缺 9 年歷史；官方只回最新一週、補不回，TSD 的歷史來源值得查</td>
+</tr>
+<tr>
+<td style="text-align: left;">重大訊息（MOPS news）</td>
+<td style="text-align: left;">❌</td>
+<td style="text-align: left;"><code>mops/news</code>：1998 起逐年（日期、時間、代號、主旨）</td>
+<td style="text-align: left;">缺；data-dl.md §5 已列「新聞完全沒建」</td>
+</tr>
+<tr>
+<td style="text-align: left;">股本／發行股數</td>
+<td style="text-align: left;">季資料（<code>capital_stock</code>，balance、universe）</td>
+<td style="text-align: left;">日線每列有 <code>shares</code>；<code>latest/*_capital.csv</code>（OrdinarySharet 季）</td>
+<td style="text-align: left;">我們的日線<strong>沒有逐日股數</strong>：市值、週轉率只能用季股本近似</td>
+</tr>
+<tr>
+<td style="text-align: left;">公司基本資料／產業</td>
+<td style="text-align: left;"><code>industry</code>、<code>universe</code>（1,968 檔）</td>
+<td style="text-align: left;"><code>meta/</code>、<code>universe/</code>（含覆蓋、下市、停牌探測）</td>
+<td style="text-align: left;">打平；下市清單、長期停牌我們沒有（data-dl §2.5 已列）</td>
+</tr>
+<tr>
+<td style="text-align: left;">借券、庫藏股、券商分點</td>
+<td style="text-align: left;">❌</td>
+<td style="text-align: left;"><code>sbl_probe</code>、<code>treasury</code>、<code>broker_probe</code></td>
+<td style="text-align: left;">借券／庫藏股缺；券商分點免費不可行（data-dl §2.2）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="102">10.2 我們「無法計算」或「沒抓」的清單（依影響排序）</h3>
+<ol>
+<li><strong>財報公告日（PIT）</strong>：無法精確判斷「某天能不能看到某季財報」。影響：價值軌／長波段的基本面條件有輕微前視。</li>
+<li><strong>集保歷史 2017–2026-09</strong>：無法算大戶持股變化的長期走勢、也無法回測任何集保規則。官方補不回，只有 TSD 的歷史可能補。</li>
+<li><strong>研發費用率</strong>：沒抓，無法算。</li>
+<li><strong>金融／保險／證券業專屬科目</strong>（利息淨收益、呆帳提存、承保損益等）：我們的精簡欄位算不出金融股專屬指標；目前金融股走四道門檻的替代判準（見 tw-hold 定存線金融軌設計）。</li>
+<li><strong>逐日發行股數</strong>：無法精確算歷史市值、週轉率（%）、外資持股比。官方來源 <code>MI_QFIIS</code>（data-dl §2.2）未建。</li>
+<li><strong>重大訊息</strong>：沒有事件層的基本面／公司行動訊號（減資、增資、處分資產公告的原文）。</li>
+<li><strong>借券賣出／庫藏股／當沖</strong>：空方壓力只剩融券（TSD 實測借券是融券的 77.5 倍），庫藏股買回無資料。</li>
+<li><strong>2012–2014 早期 PER／法人</strong>：回測用不到，列低優先。</li>
+</ol>
+<h3 id="103">10.3 參考價值判斷</h3>
+<ul>
+<li><strong>直接有價值（建議之後評估是否補）</strong>：集保歷史（查 TSD <code>tdcc_hist</code> 的來源與完整度）、財報公告日、逐日股數。這三項是「補現有缺口」，不是新功能。</li>
+<li><strong>有價值但要先有用途</strong>：研發費用、金融業完整科目、重大訊息。目前沒有規則會用，屬地基，等需求出現再接。</li>
+<li><strong>打平不用動</strong>：月營收、PER、基本資料。</li>
+<li><strong>不要抄</strong>：TSD 的 MOPS 財報走 POST 頁面／新站 JSON，有 repo 說會被 WAF 擋（data-dl §2.4），我們用 FinMind 取得財報足夠。</li>
+<li><strong>本節未驗證</strong>：<code>tdcc_hist</code> 的來源與每週完整度、<code>filing_dates</code> 的實際做法與涵蓋、TSD 財報內容與 FinMind 是否一致。要引用前先實查。</li>
+</ul>
+<hr />
+<h2 id="11-openapi-2026-10-06">11. OpenAPI 增量涵蓋度探測（2026-10-06，唯讀實測）</h2>
+<blockquote>
+<p>目的：往後每日增量改走 OpenAPI（OGDL v1，可合法再散布、顯名即可），能不能取代我們現在打的網站端點。方法：讀兩邊 swagger（TWSE 143 條、TPEx 225 條路徑）＋逐一實打。<strong>不是已採用的設計</strong>，只是涵蓋度結論。</p>
+</blockquote>
+<p><strong>共通限制（最關鍵）</strong>：swagger 上這些端點<strong>全部沒有任何查詢參數</strong>，只回「最新一個交易日」。所以①不能補抓某一天（漏跑一天＝永久缺一天）②不能照現在的「近 3 日曆日重抓覆蓋官方更正」做，只能靠「最新日一直掛著、多跑幾班」模擬③歷史完全沒有（歷史維持用現有資料）。</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">我們需要的</th>
+<th style="text-align: left;">OpenAPI 端點</th>
+<th style="text-align: left;">能不能</th>
+<th style="text-align: left;">備註</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">上市日線 OHLCV＋漲跌價差</td>
+<td style="text-align: left;">TWSE <code>exchangeReport/STOCK_DAY_ALL</code></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">1,381 列、有 Date／OHLC／Change／成交量值／筆數；含 ETF 等，需濾 4 碼</td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃日線</td>
+<td style="text-align: left;">TPEx <code>tpex_mainboard_quotes</code>（1,012 列）、<code>tpex_mainboard_daily_close_quotes</code>（12,060 列含權證）</td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">另有買賣揭示價、<strong>次日參考價與次日漲跌停</strong>（<code>NextReferencePrice</code>／<code>NextLimitUp</code>／<code>NextLimitDown</code>）——比現在更直接解決「無成交日參考價」</td>
+</tr>
+<tr>
+<td style="text-align: left;">上市融資融券</td>
+<td style="text-align: left;">TWSE <code>exchangeReport/MI_MARGN</code></td>
+<td style="text-align: left;">⚠️</td>
+<td style="text-align: left;">欄位齊全（含前日餘額、註記），但<strong>回應沒有日期欄</strong>，無法自己斷言是哪一天（違反 data-fix A1），要靠同批 STOCK_DAY_ALL 的日期推定；含 ETF（1,297 列）</td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃融資融券</td>
+<td style="text-align: left;">TPEx <code>tpex_mainboard_margin_balance</code></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">有 Date、前日餘額、Note</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>上市三大法人個股</strong></td>
+<td style="text-align: left;">（無）</td>
+<td style="text-align: left;">❌</td>
+<td style="text-align: left;">TWSE OpenAPI 沒有 T86；只有外資持股比率類彙總。<strong>這是最大缺口（日資料 100 萬列級）</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃三大法人</td>
+<td style="text-align: left;">TPEx <code>tpex_3insti_daily_trading</code></td>
+<td style="text-align: left;">⚠️</td>
+<td style="text-align: left;">有 Date，但欄名有空白／重複的 bug（<code>Dealers -TotalSell</code>、前導空白），自營拆分欄不可靠（先前實測 148／780 檔對不上）</td>
+</tr>
+<tr>
+<td style="text-align: left;">除權息結果（含參考價）</td>
+<td style="text-align: left;">上市：無（只有 <code>TWT48U_ALL</code> 預告表）；上櫃：<code>tpex_exright_daily</code></td>
+<td style="text-align: left;">⚠️</td>
+<td style="text-align: left;">上櫃只回當天事件（8 列）、含現增欄；上市結果表無，可用已驗證的官方公式（A，99.6% 相符）自算</td>
+</tr>
+<tr>
+<td style="text-align: left;">減資、面額變更</td>
+<td style="text-align: left;">（無）</td>
+<td style="text-align: left;">❌</td>
+<td style="text-align: left;">TWSE <code>TWTAUU</code>／<code>TWTB8U</code>、TPEx <code>revivt</code>／<code>pvChgRslt</code> 都不在 OpenAPI；每年約百件，量小</td>
+</tr>
+<tr>
+<td style="text-align: left;">停止買賣／變更交易</td>
+<td style="text-align: left;">上市 <code>TWTAWU</code>（暫停交易）、<code>BFI84U</code>；上櫃 <code>tpex_cmode</code>、<code>tpex_spendi_today</code></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">上櫃終於有來源（現在的 <code>selfhost_stophalt</code> 只有上市）</td>
+</tr>
+<tr>
+<td style="text-align: left;">處置／注意股、估值</td>
+<td style="text-align: left;"><code>announcement/punish</code>／<code>notice</code>、<code>BWIBBU_d</code>；上櫃對應端點</td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">tw-swing 已在用</td>
+</tr>
+<tr>
+<td style="text-align: left;">漲跌標記 <code>refmark</code>（X／除息）</td>
+<td style="text-align: left;">無對應欄位</td>
+<td style="text-align: left;">❌</td>
+<td style="text-align: left;">事件日對帳基準會少一個獨立來源</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>結論</strong>
+- 價量＋融資券＋停止買賣＋處置：<strong>可以用 OpenAPI 取代每日增量</strong>（約佔現在請求量的一半以上）。
+- <strong>取代不了</strong>：上市三大法人、減資／面額變更／上市除權息結果、漲跌標記。這幾項仍得打網站端點，或改用第三方（FinMind，授權條款未查）。
+- 副作用：失去「補抓指定日期」與「近 3 天重抓更正」，要用「多班排程＋隔天清晨再抓一次（端點在新交易日資料出來前一直回前一日）」模擬；漏跑一天＝永久缺。
+- 工作量：新增一組 OpenAPI 收集器＋與現有網站版並行對帳（至少 15 個交易日）才能切；法人與事件表仍留網站版（但呼叫量從每天上千次降到每天個位數）。</p>
+<h2 id="12-workflow-2026-10-09">12. Workflow 端點與啟動時間對照（2026-10-09）</h2>
+<blockquote>
+<p>目的：每個 workflow 打哪些端點、排程幾點起跑、官方資料幾點才產生，放在同一張表，看「有沒有在官方公布前去打、公布後多久才抓到」。時間一律<strong>台北時間</strong>（UTC+8；cron 是 UTC）。
+證據標記：<span class="ev ev-t">【實測】</span>＝2026-10-08 用 <code>data/selfhost/_measure_20261008/poll_publish.py</code> 輪詢，欄位是「該來源首次出現 10/8 當日資料」的時間（輪詢間隔 ≤2 小時，是<strong>上界</strong>，真正公布可能更早）；<span class="ev ev-c">【碼】</span>＝程式或 workflow 註解寫的；<span class="ev ev-d">【文】</span>＝常識／官方網站說法，我們沒實測；<span class="ev ev-g">【未驗】</span>＝還沒量過。
+排程延遲：GitHub 排程實測會晚 4～9 小時才起跑，下面「cron」是<strong>名義</strong>時間。</p>
+</blockquote>
+<h3 id="121-3-workflow-repo-tw-hold-data-release">12.1 自建上游線（3 支 workflow，產出放私有 repo <code>tw-hold-data</code> 的 Release）</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">Workflow</th>
+<th style="text-align: left;">cron（UTC → 台北，名義）</th>
+<th style="text-align: left;">實際落點（10/8 實測）</th>
+<th style="text-align: left;">產出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>openapi_daily.yml</code><br>官方 OpenAPI 每日收集</td>
+<td style="text-align: left;">平日 08:02／10:02／12:02／15:02／20:02 → 台北 16:02／18:02／20:02／23:02／隔日 04:02</td>
+<td style="text-align: left;">延遲約 7.4／7.3／6.8／5.4／4.1 小時（15:24Z、17:17Z、18:47Z、20:24Z、隔日 00:09Z 各一次，皆成功）；台北約 23:24／01:17／02:47／04:24／08:09</td>
+<td style="text-align: left;">Release <code>openapi-daily</code>：openapi_prices／margin／inst／forecast／fetch_log</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>selfhost_collect.yml</code><br>自建上游收集</td>
+<td style="text-align: left;">平日 15:58 → 台北 23:58，<strong>只在「當週最後交易日」才真的收集</strong>（<code>last_trading_day_guard.py</code> 查休市表）</td>
+<td style="text-align: left;">10/8 是當週最後交易日（10/9 國慶補假）；實落 20:59Z（台北隔日 04:59），成功</td>
+<td style="text-align: left;">Release <code>selfhost-data</code>：raw_prices／inst／margin／corp_actions／notrade／refmark／stophalt／ev_<em>／snap-</em></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>selfhost_datapack.yml</code><br>自建資料包</td>
+<td style="text-align: left;"><strong>無 cron</strong>：上面兩支任一跑完（<code>workflow_run</code>）就接著跑；來源沒變就跳過</td>
+<td style="text-align: left;">每次收集後約 1 分鐘內接跑</td>
+<td style="text-align: left;">Release <code>datapack-selfhost</code>：data_pack_selfhost.zip、merge_manifest.json（完整日）</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="1211">12.1.1 端點與官方產生時間</h4>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">資料</th>
+<th style="text-align: left;">端點（<strong>主</strong>＝網站帶日期端點；OpenAPI 另列）</th>
+<th style="text-align: left;">哪支打</th>
+<th style="text-align: left;">官方資料產生時間</th>
+<th style="text-align: left;">我們的請求窗口<span class="ev ev-c">【碼】</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">上市日線（未還原）</td>
+<td style="text-align: left;"><strong>主</strong>：TWSE <code>rwd/zh/afterTrading/MI_INDEX?date=&amp;type=ALLBUT0999</code><br>OpenAPI：<code>openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL</code></td>
+<td style="text-align: left;">主：selfhost_collect<br>OpenAPI：openapi_daily</td>
+<td style="text-align: left;">官網 <strong>14:00</strong> 首見<span class="ev ev-t">【實測】</span>；OpenAPI 在 10/8 整個窗口（到 20:00）都沒出現，上市 <code>Last-Modified</code> 是<strong>隔天 05:20</strong><span class="ev ev-c">【碼】</span></td>
+<td style="text-align: left;">日線 16:00～隔日 08:00；08:00～16:00 不請求</td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃日線</td>
+<td style="text-align: left;"><strong>主</strong>：TPEx <code>www/zh-tw/afterTrading/dailyQuotes?date=</code><br>OpenAPI：<code>www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes</code></td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;">官網 <strong>15:01</strong>、OpenAPI <strong>16:02</strong> 首見<span class="ev ev-t">【實測】</span></td>
+<td style="text-align: left;">同上</td>
+</tr>
+<tr>
+<td style="text-align: left;">上市三大法人</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/fund/T86?date=&amp;selectType=ALLBUT0999</code>（<strong>OpenAPI 沒有</strong>）</td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><strong>16:32</strong> 首見<span class="ev ev-t">【實測】</span>（10/7 在 18:00 輪已有）</td>
+<td style="text-align: left;">18:00 起；隔日清晨班補前一晚；08:00～18:00 不請求</td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃三大法人</td>
+<td style="text-align: left;">TPEx <code>www/zh-tw/insti/dailyTrade?type=Daily&amp;sect=AL&amp;date=</code><br>（OpenAPI <code>tpex_3insti_daily_trading</code> 欄名有 bug，不用）</td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><strong>15:10</strong> 首見<span class="ev ev-t">【實測】</span>（10/7 在 18:00 輪還沒有，每天不同）</td>
+<td style="text-align: left;">同上</td>
+</tr>
+<tr>
+<td style="text-align: left;">上市融資融券</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/marginTrading/MI_MARGN?date=&amp;selectType=STOCK</code>（OpenAPI 版沒有日期欄，不用）</td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><strong>20:42</strong> 首見<span class="ev ev-t">【實測】</span></td>
+<td style="text-align: left;">22:00～隔日 08:00（白天整段不打）</td>
+</tr>
+<tr>
+<td style="text-align: left;">上櫃融資融券</td>
+<td style="text-align: left;"><strong>主</strong>：TPEx <code>www/zh-tw/margin/balance?date=</code><br>OpenAPI：<code>tpex_mainboard_margin_balance</code></td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;">官網 <strong>20:52</strong>、OpenAPI <strong>22:03</strong> 首見<span class="ev ev-t">【實測】</span></td>
+<td style="text-align: left;">同上</td>
+</tr>
+<tr>
+<td style="text-align: left;">除權息結果（上市）</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/exRight/TWT49U?startDate=&amp;endDate=</code>（日期區間）；現增明細 <code>exRight/TWT49UDetail?STK_NO=&amp;T1=</code>（逐件，手動腳本）</td>
+<td style="text-align: left;">selfhost_collect（近兩個月重抓）</td>
+<td style="text-align: left;"><span class="ev ev-g">【未驗】</span>當晚是否已含「當日」事件（B6 待驗）</td>
+<td style="text-align: left;">每週一次</td>
+</tr>
+<tr>
+<td style="text-align: left;">除權息結果（上櫃）</td>
+<td style="text-align: left;">TPEx <code>www/zh-tw/bulletin/exDailyQ?startDate=&amp;endDate=</code></td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><span class="ev ev-g">【未驗】</span>同上（OpenAPI <code>tpex_exright_daily</code> 只回當天，8 列）</td>
+<td style="text-align: left;">每週一次</td>
+</tr>
+<tr>
+<td style="text-align: left;">減資</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/reducation/TWTAUU</code>；TPEx <code>bulletin/revivt</code>（日期區間，近兩年重抓）</td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><span class="ev ev-g">【未驗】</span>（事件公告日不固定）</td>
+<td style="text-align: left;">每週一次</td>
+</tr>
+<tr>
+<td style="text-align: left;">面額變更</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/change/TWTB8U</code>；TPEx <code>bulletin/pvChgRslt</code></td>
+<td style="text-align: left;">同上</td>
+<td style="text-align: left;"><span class="ev ev-g">【未驗】</span></td>
+<td style="text-align: left;">每週一次</td>
+</tr>
+<tr>
+<td style="text-align: left;">除權息預告表</td>
+<td style="text-align: left;">OpenAPI <code>openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL</code>（網站版 <code>exRight/TWT48U</code> 內容相同）；上櫃 <code>tpex_exright_prepost</code></td>
+<td style="text-align: left;">openapi_daily（同市場至少間隔 3 小時）；selfhost_collect 每週存快照</td>
+<td style="text-align: left;">只有未來事件、沒有歷史，漏存就補不回來</td>
+<td style="text-align: left;">每班</td>
+</tr>
+<tr>
+<td style="text-align: left;">停止買賣中名單（上市）</td>
+<td style="text-align: left;">TWSE <code>rwd/zh/violation/stop</code>（<code>date=</code> 被官方忽略，只回當天）</td>
+<td style="text-align: left;">selfhost_collect</td>
+<td style="text-align: left;">當天名單，無歷史</td>
+<td style="text-align: left;">每週一天（無下游使用，可接受）</td>
+</tr>
+<tr>
+<td style="text-align: left;">休市日曆</td>
+<td style="text-align: left;">OpenAPI <code>openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule</code></td>
+<td style="text-align: left;">selfhost_collect 的 guard</td>
+<td style="text-align: left;">年度表</td>
+<td style="text-align: left;">每次</td>
+</tr>
+<tr>
+<td style="text-align: left;">減資交叉驗證</td>
+<td style="text-align: left;">FinMind <code>api.finmindtrade.com/api/v4/data</code>（非官方，只做交叉驗證）</td>
+<td style="text-align: left;">selfhost_collect</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">每週 150 檔</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>結論</strong>
+1. 官網端點比 OpenAPI 早出（上櫃日線早約 1 小時；上市日線 OpenAPI 10/8 整個窗口都沒出現，隔天 05:20 才更新）。所以<strong>上市日線以官網為主、OpenAPI 只當備援</strong>。
+2. 最晚的是融資券（官網 20:42～20:52、OpenAPI 22:03）。名義的 16:02／18:02／20:02 三班就算準時，抓不到當天融資券，請求窗口（22:00 起）也不讓它們去打；實際因為延遲，第一班在 23:24 才起跑，剛好落在窗口內。
+3. GitHub 延遲 4～7 小時，實際起跑多在 23:00 之後，<strong>反而都在官方公布之後</strong>。真正的風險是 OpenAPI 只回最新一天：若某天所有班次都晚到隔日官方新資料出來之後，前一天的 OpenAPI 日線補不回來（網站帶日期端點仍補得回）。
+4. 官方事後會更正當日資料（10/5 實測投信 14 檔、成交量 17 檔被改過），所以收集器對近 3 個日曆日重抓覆蓋；週收集在最後交易日 23:58 之後才拿最完整的版本。</p>
+<h4 id="1212">12.1.2 一天時間軸（台北，平日）</h4>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">台北時間</th>
+<th style="text-align: left;">官方產生（10/8 實測首見）</th>
+<th style="text-align: left;">我們的動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">14:00</td>
+<td style="text-align: left;">上市日線（官網）</td>
+<td style="text-align: left;">不請求（窗口 16:00 起）</td>
+</tr>
+<tr>
+<td style="text-align: left;">15:01～15:10</td>
+<td style="text-align: left;">上櫃日線、上櫃法人（官網）</td>
+<td style="text-align: left;">不請求</td>
+</tr>
+<tr>
+<td style="text-align: left;">16:02（名義）</td>
+<td style="text-align: left;">上櫃日線 OpenAPI 16:02</td>
+<td style="text-align: left;">openapi_daily 第 1 班名義時間（實落約 23:24）</td>
+</tr>
+<tr>
+<td style="text-align: left;">16:32</td>
+<td style="text-align: left;">上市法人（官網）</td>
+<td style="text-align: left;">18:00 起才請求法人</td>
+</tr>
+<tr>
+<td style="text-align: left;">18:02／20:02（名義）</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">第 2、3 班名義時間（實落約次日 01:17、02:47）</td>
+</tr>
+<tr>
+<td style="text-align: left;">20:42～20:52</td>
+<td style="text-align: left;">上市／上櫃融資券（官網）</td>
+<td style="text-align: left;">22:00 起才請求融資</td>
+</tr>
+<tr>
+<td style="text-align: left;">22:03</td>
+<td style="text-align: left;">上櫃融資 OpenAPI</td>
+<td style="text-align: left;">—</td>
+</tr>
+<tr>
+<td style="text-align: left;">23:02（名義）</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">第 4 班名義時間（實落約次日 04:24）</td>
+</tr>
+<tr>
+<td style="text-align: left;">23:58（名義）</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">selfhost_collect（只在週最後交易日；實落約次日 04:59）</td>
+</tr>
+<tr>
+<td style="text-align: left;">隔日 04:02（名義）</td>
+<td style="text-align: left;">上市 OpenAPI 日線隔日 05:20 才更新</td>
+<td style="text-align: left;">第 5 班名義時間（實落約次日 08:09）</td>
+</tr>
+<tr>
+<td style="text-align: left;">收集完成後</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">selfhost_datapack 接跑，產出 data_pack_selfhost.zip</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>「實落」是用 10/8 五班的延遲量推出來的（7.4／7.3／6.8／5.4／4.1 小時）。Actions 紀錄只有建立時間、看不出屬於哪一班，所以是推論；每天延遲不同。</p>
+</blockquote>
+<h3 id="122-workflowtw-hold-6-tw-swing">12.2 其他 workflow（tw-hold 自己的 6 支＋依賴的 tw-swing 上游）</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">Workflow</th>
+<th style="text-align: left;">cron（UTC → 台北，名義）</th>
+<th style="text-align: left;">觸發鏈</th>
+<th style="text-align: left;">主要端點</th>
+<th style="text-align: left;">資料產生時間</th>
+<th style="text-align: left;">產出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>rebuild.yml</code><br>每日重算三清單</td>
+<td style="text-align: left;">平日 08:17 → 16:17（備援）；<strong>主路徑</strong>是 tw-swing publish 完發的 <code>repository_dispatch: bundle-published</code></td>
+<td style="text-align: left;">tw-swing <code>daily.yml</code> → <code>publish_bundle.yml</code> → dispatch → 本支</td>
+<td style="text-align: left;">GitHub API 下載 tw-swing Release <code>data-latest</code>（bundle）；私有 Release <code>refdata-latest</code>；FinMind <code>TaiwanStockPrice</code>（006201 代理）；投信 PCF（見 pcf_retry）</td>
+<td style="text-align: left;">日線來自上游 <code>data_pack.zip</code>，約 05:08 才好<span class="ev ev-c">【碼，DATA_FLOW.md】</span></td>
+<td style="text-align: left;"><code>data/derived/*</code>（三清單、active_etf_flags、short_scan）、<code>derived-latest</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>chip_flow_evening.yml</code><br>籌碼流向（傍晚）</td>
+<td style="text-align: left;">平日 10:28 → 18:28</td>
+<td style="text-align: left;">獨立排程</td>
+<td style="text-align: left;">TAIFEX <code>www.taifex.com.tw/cht/3/futContractsDateDown</code>（CSV）＋<code>openapi.taifex.com.tw/v1/</code>（外資台指期）；TWSE <code>rwd/zh/fund/BFI82U?type=day&amp;dayDate=</code>（三大法人買賣金額）</td>
+<td style="text-align: left;">兩者「盤後下午才公布」<span class="ev ev-c">【碼註解】</span>；<strong>18:30 TAIFEX 當天資料是否已出<span class="ev ev-g">【未驗】</span></strong>（沒出會退回前一天，不會錯）；隔天 06:37 那班當補漏</td>
+<td style="text-align: left;"><code>data/reference/foreign_futures.parquet</code>、<code>inst_flow.parquet</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>global_macro.yml</code><br>國際總經快照</td>
+<td style="text-align: left;">平日 22:37 → 隔日 06:37</td>
+<td style="text-align: left;">獨立排程，與 chip_flow 共用 concurrency</td>
+<td style="text-align: left;">yfinance（Yahoo，非官方）：美股指數／VIX／美元／美債／個股、日經／恆生／KOSPI；<code>openapi.taifex.com.tw/v1/DailyMarketReportFut</code>（台指期日盤＋夜盤）；另重跑 foreign_futures、inst_flow</td>
+<td style="text-align: left;">美股常規盤 16:00 ET 收，夏令＝台北 04:00、冬令＝05:00<span class="ev ev-d">【文】</span>，排 06:37 留緩衝；日經等亞洲指數台北下午就收<span class="ev ev-d">【文】</span></td>
+<td style="text-align: left;"><code>global_macro.parquet</code>、<code>tx_futures.parquet</code> 等</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>pcf_retry.yml</code><br>主動式 ETF PCF 補跑</td>
+<td style="text-align: left;">平日 09:13、11:13 → 17:13、19:13</td>
+<td style="text-align: left;">排在 rebuild 備援 16:17 之後；只在 <code>missing</code> 非空或今天完全沒資料才重抓</td>
+<td style="text-align: left;">投信官網：統一 <code>www.ezmoney.com.tw/ETF/Transaction/PCF</code>（cookie＋GetPCF）、群益 <code>www.capitalfund.com.tw/CFWeb/api/etf/buyback</code>、復華 <code>www.fhtrust.com.tw</code> assets；收盤價 TWSE <code>exchangeReport/STOCK_DAY_ALL</code></td>
+<td style="text-align: left;"><strong>只給「當天」、沒有歷史</strong>，漏一天永久缺；各家幾點更新<span class="ev ev-g">【未驗】</span>（非官方承諾，會改版）</td>
+<td style="text-align: left;"><code>data/pcf/&lt;代號&gt;/&lt;日期&gt;.parquet</code>、<code>active_etf_flags.json</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>heartbeat.yml</code><br>心跳（開盤前新鮮度守門）</td>
+<td style="text-align: left;">平日 00:28 → 08:28</td>
+<td style="text-align: left;">獨立排程</td>
+<td style="text-align: left;"><strong>不打外部端點</strong>，只讀 <code>_meta.json</code>、<code>index_0050.parquet</code>、<code>index_006201.parquet</code> 的日期</td>
+<td style="text-align: left;">實測 GitHub 常延遲到 13:00～14:00 才跑</td>
+<td style="text-align: left;">只檢查不修；沒設告警 webhook</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>check_secrets.yml</code></td>
+<td style="text-align: left;">無（手動）</td>
+<td style="text-align: left;"><code>workflow_dispatch</code></td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">—</td>
+<td style="text-align: left;">檢查 secrets</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>tw-swing 端 workflow（tw-hold 依賴的上游，不在本 repo；取自 DATA_FLOW.md §3，這次沒重新核對）</strong></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th style="text-align: left;">Workflow</th>
+<th style="text-align: left;">台北時間</th>
+<th style="text-align: left;">備註</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>daily.yml</code></td>
+<td style="text-align: left;">21:07／01:07／05:32（三槍，平日）</td>
+<td style="text-align: left;">讀別人 repo 的 <code>data_pack.zip</code>（約 05:08 才好），產日線、模擬單、share-latest.json</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>publish_bundle.yml</code></td>
+<td style="text-align: left;">daily 完成即接（<code>workflow_run</code>）＋cron 06:09／07:09／08:38</td>
+<td style="text-align: left;">有閘門（沒新資料跳過）；發 Release <code>data-latest</code> 並 dispatch 給 tw-hold</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>fundamentals.yml</code></td>
+<td style="text-align: left;">週六 10:07</td>
+<td style="text-align: left;">財報五表／TDCC／月營收歷史</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="123">12.3 兩條線的差別</h3>
+<ul>
+<li><strong>自建上游</strong>：直接打官方 TWSE／TPEx（網站帶日期端點為主、OpenAPI 補強），自己存原始價、自己還原。目前是影子期（10/12 起只產只比，tw-swing 不讀；go/no-go 看 10/23）。</li>
+<li><strong>其他 workflow</strong>：日線仍靠 tw-swing 讀的上游 <code>data_pack.zip</code>（約 05:08 才好）；籌碼／總經／PCF 是各自直接打 TAIFEX、TWSE、Yahoo、投信官網的小資料源，與自建上游互不相依。</li>
+<li><strong>還沒量的官方時間</strong>（別當成已知）：事件類（TWT49U／exDailyQ／TWTAUU／TWTB8U）、TAIFEX 盤後、BFI82U、三家投信 PCF 各自的更新時間。要量就沿用 <code>poll_publish.py</code> 的做法（官方還沒公布的時段不請求）。</li>
 </ul></main></div></body></html>
