@@ -58,7 +58,7 @@ jobs:
           mkdir -p "$W" "$D" "$M" "$P"
           {
             gh release view selfhost-data --json assets --jq '.assets[] | select(.name|test("^(raw_prices|inst|margin|corp_actions)\\.parquet$")) | "\(.name) \(.updatedAt)"'
-            gh release view openapi-daily --json assets --jq '.assets[] | select(.name|test("^openapi_(prices|inst|margin)\\.parquet$")) | "\(.name) \(.updatedAt)"'
+            gh release view openapi-daily --json assets --jq '.assets[] | select(.name|test("^openapi_(prices|inst|margin|events)\\.parquet$|^openapi_events_meta\\.json$")) | "\(.name) \(.updatedAt)"'
           } | sort > "$M/source_stamp.txt"
           cat "$M/source_stamp.txt"
           if gh release view datapack-selfhost >/dev/null 2>&1; then
@@ -84,6 +84,10 @@ jobs:
           }
           for f in raw_prices.parquet inst.parquet margin.parquet corp_actions.parquet; do get selfhost-data "$f" "$W"; done
           for f in openapi_prices.parquet openapi_inst.parquet openapi_margin.parquet; do get openapi-daily "$f" "$D"; done
+          # B6：每日事件窗口與 meta：Release 上**沒有**就略過（第一次部署）；**有列出卻下載失敗＝中止**（get 內 exit 1，與其他來源一致，
+          # 避免用「meta 有、事件檔沒有」的不一致資料做出一包）
+          gh release view openapi-daily --json assets --jq '.assets[].name' > "$D/_assets.txt"
+          for f in openapi_events.parquet openapi_events_meta.json; do grep -qx "$f" "$D/_assets.txt" && get openapi-daily "$f" "$D" || true; done
           ls -la "$W" "$D"
 
       - name: 併入（週收集優先、只發佈完整日）

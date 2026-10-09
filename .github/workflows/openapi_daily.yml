@@ -54,7 +54,7 @@ jobs:
                 grep -qx "$f" data/selfhost/_oa_assets.txt || { echo "::error::Release 上有 fetch log 卻缺 $f——疑似上次上傳中斷，請人工處理"; exit 1; }
               done
             fi
-            for f in openapi_prices.parquet openapi_margin.parquet openapi_inst.parquet openapi_forecast.jsonl openapi_fetch_log.jsonl; do
+            for f in openapi_prices.parquet openapi_margin.parquet openapi_inst.parquet openapi_forecast.jsonl openapi_events.parquet openapi_events_meta.json openapi_fetch_log.jsonl; do
               if grep -qx "$f" data/selfhost/_oa_assets.txt; then
                 ok=0
                 for try in 1 2 3; do
@@ -97,6 +97,16 @@ jobs:
           # 三大法人：失敗只警告（網站端點帶日期、補得回來），不擋其他上傳
           if [ "${{ steps.collect.outputs.inst_changed }}" = "true" ] && [ -f data/selfhost/openapi_inst.parquet ]; then
             gh release upload openapi-daily data/selfhost/openapi_inst.parquet --clobber || echo "::warning::三大法人上傳失敗（檔可能已被刪；下一班會偵測並停用法人收集，需人工回補）"
+          fi
+          # B6 官方事件結果表窗口：失敗只警告（週收集仍會補事件；只是切換後每日還原會晚一點拿到當天事件）
+          # ev_ok：事件表有變動卻上傳失敗時，**這班不傳 meta**（Opus 審 H3）——否則 Release 上會是「舊事件表＋新的 through」，
+          # daily_merge 會誤判事件已涵蓋到今天。下一班會再抓、再傳（同鍵冪等）。
+          ev_ok=1
+          if [ "${{ steps.collect.outputs.events_changed }}" = "true" ] && [ -f data/selfhost/openapi_events.parquet ]; then
+            gh release upload openapi-daily data/selfhost/openapi_events.parquet --clobber || { ev_ok=0; echo "::warning::事件表上傳失敗，這班不傳 meta，下一班會再傳"; }
+          fi
+          if [ "${{ steps.collect.outputs.events_meta_changed }}" = "true" ] && [ "$ev_ok" = 1 ] && [ -f data/selfhost/openapi_events_meta.json ]; then
+            gh release upload openapi-daily data/selfhost/openapi_events_meta.json --clobber || echo "::warning::事件 meta 上傳失敗，下一班會再傳"
           fi
           # 預告快照放最後、失敗只警告：不能因為它擋掉當班日線／融資的上傳（OpenAPI 只回最新一天，漏傳就補不回來）
           if [ "${{ steps.collect.outputs.forecast_changed }}" = "true" ] && [ -f data/selfhost/openapi_forecast.jsonl ]; then

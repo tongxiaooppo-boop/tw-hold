@@ -56,6 +56,9 @@ MARGIN = SH / "openapi_margin.parquet"
 LOG = SH / "openapi_fetch_log.jsonl"
 FORECAST = SH / "openapi_forecast.jsonl"
 INST = SH / "openapi_inst.parquet"
+EVENTS = SH / "openapi_events.parquet"            # B6：官方除權息／減資／面額變更結果表近幾日窗口（每班抓、同鍵冪等）
+EVENTS_META = SH / "openapi_events_meta.json"      # 最近一次成功抓取：through＝事件已涵蓋到哪一天（給 daily_merge 的 events_through）
+EVENTS_WINDOW_DAYS = 5                             # 每班抓 [今天−5, 今天]（吃週末與官方延後公告；舊事件週收集會再覆蓋）
 UA = {"User-Agent": "Mozilla/5.0"}
 TWSE_DAY = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
 TPEX_DAY = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
@@ -529,6 +532,105 @@ def collect_inst(today: date, fetched, table: pd.DataFrame, hour: int = 24) -> t
     return table, changed
 
 
+# ───────────────────────── B6：官方事件結果表（每日窗口）─────────────────────────
+EVENT_KEY = ["ticker", "market", "date", "type", "source"]
+EVENT_CMP = ["prev_close", "ref_price", "factor", "detail"]
+
+
+def events_window_ok(hour: int) -> bool:
+    """事件結果表有日期區間，不看小時也能問；但為了不多打官方，只在日線窗口（16:00～隔日 08:00）內抓，與日線同班。"""
+    return not (PRICE_QUIET_FROM_HOUR <= hour < PRICE_FROM_HOUR)
+
+
+def events_through(today: date, hour: int) -> date:
+    """這次抓取讓事件表涵蓋到哪一天：16:00 後抓＝今天（事件日 E 的結果表開盤前即有，今天的事件已在）；
+    隔日清晨班（hour<8）保守算到昨天——上櫃當日結果表首次出現時間還沒量。"""
+    return today if hour >= PRICE_FROM_HOUR else today - timedelta(days=1)
+
+
+def _same_val(a, b) -> bool:
+    if pd.isna(a) and pd.isna(b):
+        return True
+    if isinstance(a, float) and isinstance(b, float):
+        return abs(a - b) <= 1e-12 * max(1.0, abs(a), abs(b))
+    return a == b
+
+
+def merge_events(old: pd.DataFrame | None, new: pd.DataFrame, fetched) -> tuple[pd.DataFrame, dict]:
+    """把這班抓到的事件併進累積表：同鍵＝官方事後更正才覆蓋（值有變），新鍵新增，沒出現的舊列保留（只增不刪）。
+    回傳 (表, {added, replaced})；沒有任何變化時表原樣回傳（呼叫端據此不重傳檔）。"""
+    new = new.copy()
+    new["fetched_at"] = fetched
+    if old is None or old.empty:
+        return new, {"added": len(new), "replaced": 0}
+    oi, ni = old.set_index(EVENT_KEY), new.set_index(EVENT_KEY)
+    added = ni.index.difference(oi.index)
+    changed = [k for k in ni.index.intersection(oi.index)
+               if not all(_same_val(oi.at[k, c], ni.at[k, c]) for c in EVENT_CMP if c in oi.columns and c in ni.columns)]
+    if len(added) == 0 and not changed:
+        return old, {"added": 0, "replaced": 0}
+    keep = oi[~oi.index.isin(changed)].reset_index()
+    add = ni.loc[list(added) + changed].reset_index()
+    out = pd.concat([keep, add], ignore_index=True)
+    return out.sort_values(EVENT_KEY).reset_index(drop=True), {"added": len(added), "replaced": len(changed)}
+
+
+def collect_events(today: date, fetched, table: pd.DataFrame | None, hour: int = 24) -> tuple[pd.DataFrame | None, bool, dict | None]:
+    """抓官方事件結果表 [今天−N, 今天] 併進累積表。回傳 (表, 表有變, meta 或 None＝本班不在時段／沒抓成功)。
+    抓取例外只警告；`selfhost_events` 單一來源失敗已各自警告。"""
+    if not events_window_ok(hour):
+        return table, False, None
+    a, b = pd.Timestamp(today - timedelta(days=EVENTS_WINDOW_DAYS)), pd.Timestamp(today)
+    entry = {"fetched_at": str(fetched), "endpoint": "events", "window": f"{a.date()}~{b.date()}"}
+    try:
+        import selfhost_events as se  # noqa: PLC0415
+        df = se.fetch_recent(a, b)
+    except Exception as e:      # noqa: BLE001  事件抓取失敗不拖垮日線／融資／法人（週收集仍會補）
+        entry["result"] = f"失敗：{str(e)[:120]}"
+        print(f"::warning::官方事件結果表抓取例外：{str(e)[:120]}", file=sys.stderr)
+        _log(entry)
+        return table, False, None
+    table2, rep = merge_events(table, df, fetched) if len(df) else (table, {"added": 0, "replaced": 0})
+    changed = bool(rep["added"] or rep["replaced"])
+    entry["rows"], entry["result"] = len(df), f"added {rep['added']}／replaced {rep['replaced']}"
+    print(f"[openapi] events：窗口 {a.date()}～{b.date()}、{len(df)} 件、新增 {rep['added']}、更正 {rep['replaced']}")
+    healthy = df.attrs.get("healthy", True)
+    if not healthy:
+        # 疑似抓壞（stat 異常／欄名對不上／有來源抓取失敗）：抓到的列照存（是真的官方資料），但**不前進 through**，
+        # 免得謊報「事件已涵蓋到今天」（Opus 審 H2）。
+        entry["result"] += "；不健康：" + "；".join(df.attrs.get("problems", []))[:200]
+        print(f"::warning::官方事件結果表疑似抓壞，不前進 events_through：{df.attrs.get('problems')}", file=sys.stderr)
+        _log(entry)
+        return table2, changed, None
+    _log(entry)
+    meta = {"through": str(events_through(today, hour)), "fetched_at": str(fetched), "window": entry["window"], "rows": int(len(df))}
+    return table2, changed, meta
+
+
+def run_events(today: date, fetched, hour: int) -> tuple[bool, bool]:
+    """抓事件、寫檔，回傳 (events_changed, events_meta_changed)。任何例外只警告、不拖垮 workflow。
+    meta 只在 through 前進或事件表有變時才重寫（Opus 審 M4：否則每班 meta 的 updatedAt 都變，datapack 每班都重做）。"""
+    events_changed, events_meta_changed = False, False
+    try:
+        ev_old = pd.read_parquet(EVENTS) if EVENTS.exists() else None
+        ev_t, events_changed, ev_meta = collect_events(today, fetched, ev_old, hour)
+        if events_changed:
+            SH.mkdir(parents=True, exist_ok=True)
+            _atomic_parquet(ev_t, EVENTS)
+        if ev_meta is not None:                       # 抓成功且健康才更新「事件涵蓋到哪天」（即使沒有新事件，through 也會前進）
+            try:
+                old_through = json.loads(EVENTS_META.read_text(encoding="utf-8")).get("through") if EVENTS_META.exists() else None
+            except (OSError, ValueError, AttributeError):
+                old_through = None
+            if events_changed or old_through != ev_meta["through"]:
+                SH.mkdir(parents=True, exist_ok=True)
+                _atomic_text(EVENTS_META, json.dumps(ev_meta, ensure_ascii=False))
+                events_meta_changed = True
+    except Exception as e:      # noqa: BLE001  事件失敗不拖垮其他端點（週收集會補）
+        print(f"::warning::官方事件收集例外：{str(e)[:120]}", file=sys.stderr)
+    return events_changed, events_meta_changed
+
+
 def main() -> int:
     now = datetime.now(TZ)
     today, fetched = now.date(), pd.Timestamp(now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None))
@@ -646,6 +748,14 @@ def main() -> int:
             f.write(f"changed={'true' if changed else 'false'}\n")
             f.write(f"forecast_changed={'true' if forecast_changed else 'false'}\n")
             f.write(f"inst_changed={'true' if inst_changed else 'false'}\n")
+    # B6 官方事件結果表窗口：**刻意排在日線／融資 parquet 寫檔與 GITHUB_OUTPUT 之後**（Opus 審 H1）——
+    # 日線／融資 OpenAPI 只回最新一天、補不回來；事件抓取萬一卡住（官方公告區逾時）超過 job timeout，
+    # 前面已落地的檔與 output 不受影響（週收集仍會補事件）。
+    events_changed, events_meta_changed = run_events(today, fetched, now.hour)
+    if out:
+        with open(out, "a", encoding="utf-8") as f:
+            f.write(f"events_changed={'true' if events_changed else 'false'}\n")
+            f.write(f"events_meta_changed={'true' if events_meta_changed else 'false'}\n")
     tables[INST] = inst_t
     for name, path, mk in (("上市日線", PRICES, "TW"), ("上櫃日線", PRICES, "TWO"), ("上櫃融資券", MARGIN, "TWO"), ("上市融資券", MARGIN, "TW"),
                            ("上市三大法人", INST, "TW"), ("上櫃三大法人", INST, "TWO")):

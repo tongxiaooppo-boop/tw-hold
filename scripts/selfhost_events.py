@@ -137,39 +137,65 @@ def _official_extra(fields: list[str], r: list) -> dict:
 
 
 # ───────────────────────── 官方除權息 ─────────────────────────
-def fetch_official(start: str, end: str) -> pd.DataFrame:
+_TWSE_EX_FIELDS = ("權/息", "除權息前收盤價", "除權息參考價", "權值+息值")
+_TPEX_EX_FIELDS = _TWSE_EX_FIELDS + ("現金股利", "每仟股無償配股", "現金增資股數", "現金增資認購價")
+
+
+def _stat_problem(source: str, j: dict) -> str | None:
+    """TWSE 風格回應的 stat：OK 或「沒有符合條件」都是正常；其他（被擋、改版的錯誤 JSON）回問題描述。"""
+    st = str(j.get("stat"))
+    if st == "OK" or "沒有符合條件" in st:
+        return None
+    return f"{source} stat={st[:60]}"
+
+
+def _ex_rows(a: pd.Timestamp, b: pd.Timestamp, problems: list | None = None, retries: int | None = None) -> list[tuple]:
+    """官方除權息結果（上市 TWT49U＋上櫃 exDailyQ）在 [a, b] 精確區間的原始列。月切段與每日近幾日窗口共用。
+    `problems`：給每日窗口模式用——疑似抓壞（stat 異常、必要欄名不在）時把原因記進去，讓呼叫端不要宣稱「已涵蓋」。
+    `retries`：每個請求的重試次數（每日窗口用 1，免得官方卡住時拖垮同班其他收集）；None＝預設。"""
+    kw = {} if retries is None else {"retries": retries}
+    problems = problems if problems is not None else []
     rows = []
-    for p in pd.period_range(start, end, freq="M"):
-        a, b = p.start_time, p.end_time.normalize()
-        time.sleep(1.5)
-        j = _http_json("https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={}&endDate={}&response=json"
-                       .format(a.strftime("%Y%m%d"), b.strftime("%Y%m%d")))
-        _record_meta("twse_ex", a.strftime("%Y%m%d"), b.strftime("%Y%m%d"), j)
-        f = j.get("fields") or []
-        for r in j.get("data", []) if j.get("stat") == "OK" else []:
-            try:
-                rows.append(("TW", str(r[1]).strip(), _roc(r[0]), str(r[f.index("權/息")]).strip(),
-                             _f(r[f.index("除權息前收盤價")]), _f(r[f.index("除權息參考價")]),
-                             {"value": r[f.index("權值+息值")], "src": "twse_ex", **_official_extra(f, r)}))
-            except (ValueError, IndexError):
-                continue
-        time.sleep(1.5)
-        j = _http_json("https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={}&endDate={}&response=json"
-                       .format(a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d")))
-        _record_meta("tpex_ex", a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d"), j)
-        t = (j.get("tables") or [{}])[0]
-        f = t.get("fields") or []
-        for r in t.get("data", []):
-            try:
-                rows.append(("TWO", str(r[1]).strip(), _roc(r[0]), str(r[f.index("權/息")]).strip(),
-                             _f(r[f.index("除權息前收盤價")]), _f(r[f.index("除權息參考價")]),
-                             {"value": r[f.index("權值+息值")], "cash_div": r[f.index("現金股利")],
-                              "stock_div_per_1000": r[f.index("每仟股無償配股")],
-                              "cash_increase_shares": r[f.index("現金增資股數")],
-                              "cash_increase_price": r[f.index("現金增資認購價")], "src": "tpex_ex", **_official_extra(f, r)}))
-            except (ValueError, IndexError):
-                continue
-        print(f"  {p} 累計 {len(rows)} 件", flush=True)
+    time.sleep(1.5)
+    j = _http_json("https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={}&endDate={}&response=json"
+                   .format(a.strftime("%Y%m%d"), b.strftime("%Y%m%d")), **kw)
+    _record_meta("twse_ex", a.strftime("%Y%m%d"), b.strftime("%Y%m%d"), j)
+    f = j.get("fields") or []
+    if (pr := _stat_problem("twse_ex", j)):
+        problems.append(pr)
+    elif j.get("stat") == "OK" and j.get("data") and any(n not in f for n in _TWSE_EX_FIELDS):
+        problems.append(f"twse_ex 欄名對不上：{f}")
+    for r in j.get("data", []) if j.get("stat") == "OK" else []:
+        try:
+            rows.append(("TW", str(r[1]).strip(), _roc(r[0]), str(r[f.index("權/息")]).strip(),
+                         _f(r[f.index("除權息前收盤價")]), _f(r[f.index("除權息參考價")]),
+                         {"value": r[f.index("權值+息值")], "src": "twse_ex", **_official_extra(f, r)}))
+        except (ValueError, IndexError):
+            continue
+    time.sleep(1.5)
+    j = _http_json("https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={}&endDate={}&response=json"
+                   .format(a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d")), **kw)
+    _record_meta("tpex_ex", a.strftime("%Y/%m/%d"), b.strftime("%Y/%m/%d"), j)
+    t = (j.get("tables") or [{}])[0]
+    f = t.get("fields") or []
+    if not j.get("tables"):
+        problems.append("tpex_ex 回應沒有 tables")
+    elif t.get("data") and any(n not in f for n in _TPEX_EX_FIELDS):
+        problems.append(f"tpex_ex 欄名對不上：{f}")
+    for r in t.get("data", []):
+        try:
+            rows.append(("TWO", str(r[1]).strip(), _roc(r[0]), str(r[f.index("權/息")]).strip(),
+                         _f(r[f.index("除權息前收盤價")]), _f(r[f.index("除權息參考價")]),
+                         {"value": r[f.index("權值+息值")], "cash_div": r[f.index("現金股利")],
+                          "stock_div_per_1000": r[f.index("每仟股無償配股")],
+                          "cash_increase_shares": r[f.index("現金增資股數")],
+                          "cash_increase_price": r[f.index("現金增資認購價")], "src": "tpex_ex", **_official_extra(f, r)}))
+        except (ValueError, IndexError):
+            continue
+    return rows
+
+
+def _ex_rows_to_events(rows: list[tuple]) -> pd.DataFrame:
     kind = {"息": "ex_div", "權": "ex_rights", "權息": "ex_both", "除息": "ex_div", "除權": "ex_rights", "除權息": "ex_both"}
     out = []
     for mk, code, d, k, pre, ref, det in rows:
@@ -179,6 +205,15 @@ def fetch_official(start: str, end: str) -> pd.DataFrame:
                     "prev_close": pre, "ref_price": ref, "factor": ref / pre,
                     "source": det.pop("src"), "detail": json.dumps(det, ensure_ascii=False)})
     return pd.DataFrame(out, columns=COLS)
+
+
+def fetch_official(start: str, end: str) -> pd.DataFrame:
+    rows = []
+    for p in pd.period_range(start, end, freq="M"):
+        a, b = p.start_time, p.end_time.normalize()
+        rows += _ex_rows(a, b)
+        print(f"  {p} 累計 {len(rows)} 件", flush=True)
+    return _ex_rows_to_events(rows)
 
 
 # ───────────────────────── 官方減資／面額變更 ─────────────────────────
@@ -197,7 +232,8 @@ _ACT_SOURCES = [
 _TPEX_BULLETIN = ("tpex_red", "tpex_par")
 
 
-def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols: tuple[str, ...]) -> list[dict]:
+def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols: tuple[str, ...],
+                        problems: list | None = None) -> list[dict]:
     """把官方減資／面額變更表轉成事件列。前收＝『停止買賣前收盤價格』或『最後交易日之收盤價格』；
     參考價取 price_cols 第一個「有數字且 >0」的欄（減資併現金增資時『除權參考價』才是恢復買賣當天實際適用的價，
     其餘為 `--`／`0.00`）。欄名找不到 → 整張表丟棄並警告（改版時明確失敗，不靜默錯位）。"""
@@ -208,10 +244,14 @@ def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols:
         i_pre = next(i for i, n in enumerate(f) if n in ("停止買賣前收盤價格", "最後交易日之收盤價格"))
     except (ValueError, StopIteration):
         print(f"::warning::{source} 欄名對不上：{f}", file=sys.stderr)
+        if problems is not None and t.get("data"):          # 沒有資料列時 fields 可能是空的，不算抓壞
+            problems.append(f"{source} 欄名對不上")
         return []
     i_prices = [f.index(c) for c in price_cols if c in f]
     if not i_prices:
         print(f"::warning::{source} 找不到參考價欄 {price_cols}：{f}", file=sys.stderr)
+        if problems is not None and t.get("data"):
+            problems.append(f"{source} 找不到參考價欄")
         return []
     i_reason = f.index("減資原因") if "減資原因" in f else None
     out = []
@@ -229,26 +269,62 @@ def _parse_action_table(t: dict, source: str, typ: str, market: str, price_cols:
     return out
 
 
+def _act_rows(a: pd.Timestamp, b: pd.Timestamp, label: str, problems: list | None = None,
+              retries: int | None = None) -> list[dict]:
+    """官方減資／面額變更四張表在 [a, b] 精確區間的事件列（年切段與每日窗口共用）。單一來源失敗只警告、不擋其他；
+    有傳 `problems` 時，抓取失敗／stat 異常／欄名對不上都會記進去（每日窗口據此不宣稱「已涵蓋」）。"""
+    kw = {} if retries is None else {"retries": retries}
+    rows: list[dict] = []
+    for source, url, fmt, typ, market, price_cols in _ACT_SOURCES:
+        time.sleep(1.5)
+        try:
+            j = _http_json(url.format(a=a.strftime(fmt), b=b.strftime(fmt)), **kw)
+        except (HTTPError, RuntimeError) as e:
+            print(f"::warning::{source} {label} 抓取失敗：{e}", file=sys.stderr)
+            if problems is not None:
+                problems.append(f"{source} 抓取失敗")
+            continue
+        _record_meta(source, a.strftime(fmt), b.strftime(fmt), j)
+        t = (j.get("tables") or [j])[0] if source in _TPEX_BULLETIN else j
+        if source not in _TPEX_BULLETIN and j.get("stat") != "OK":
+            if problems is not None and (pr := _stat_problem(source, j)):
+                problems.append(pr)                         # 「沒有符合條件」是正常的空；其他 stat 才是疑似被擋／改版
+            continue                                        # 該區間無資料（非錯誤）
+        rows += _parse_action_table(t, source, typ, market, price_cols, problems)
+    return rows
+
+
 def fetch_official_actions(start: str, end: str) -> pd.DataFrame:
     """官方減資／面額變更。年切段（單次區間過長的行為未驗，故保守）。"""
     rows: list[dict] = []
     for yr in range(int(start[:4]), int(end[:4]) + 1):
         a, b = pd.Timestamp(yr, 1, 1), pd.Timestamp(yr, 12, 31)
-        for source, url, fmt, typ, market, price_cols in _ACT_SOURCES:
-            time.sleep(1.5)
-            try:
-                j = _http_json(url.format(a=a.strftime(fmt), b=b.strftime(fmt)))
-            except (HTTPError, RuntimeError) as e:
-                print(f"::warning::{source} {yr} 抓取失敗：{e}", file=sys.stderr)
-                continue
-            _record_meta(source, a.strftime(fmt), b.strftime(fmt), j)
-            t = (j.get("tables") or [j])[0] if source in _TPEX_BULLETIN else j
-            if source not in _TPEX_BULLETIN and j.get("stat") != "OK":
-                continue                                    # 該年無資料（非錯誤）
-            rows += _parse_action_table(t, source, typ, market, price_cols)
+        rows += _act_rows(a, b, str(yr))
         print(f"  {yr} 累計 {len(rows)} 件", flush=True)
     df = pd.DataFrame(rows, columns=COLS)
     return df.drop_duplicates(["ticker", "date", "type", "source"], keep="last") if len(df) else df
+
+
+def fetch_recent(a: pd.Timestamp, b: pd.Timestamp, retries: int | None = 1) -> pd.DataFrame:
+    """每日窗口模式（B6）：官方除權息／減資／面額變更結果表在 [a, b] 的事件，併成與 `corp_actions` 同欄位的表（已 enrich）。
+
+    給 `selfhost_openapi_daily.py` 每班呼叫：事件日 E 的因子要在「E 的收盤併入 raw」時就已在表裡，
+    週收集（每週一次）趕不上。上市結果表事件日開盤前即有；上櫃時點影子期量。單一來源失敗只警告，
+    整批都沒抓到（兩邊除權息都 0 列且減資面額也 0 列）仍回空表——呼叫端用「抓取成功」與否判斷，不把空當錯。
+    """
+    problems: list[str] = []
+    ex = _ex_rows_to_events(_ex_rows(a, b, problems, retries))
+    act_rows = _act_rows(a, b, f"{a:%Y-%m-%d}~{b:%Y-%m-%d}", problems, retries)
+    act = pd.DataFrame(act_rows, columns=COLS)
+    ev = pd.concat([ex, act], ignore_index=True)
+    ev["date"] = pd.to_datetime(ev["date"])
+    ev = ev.drop_duplicates(["ticker", "date", "type", "source"], keep="last")
+    ev = enrich(ev.sort_values(["ticker", "date", "type", "source"]).reset_index(drop=True)) if len(ev) else ev
+    # 健康旗標：疑似抓壞（stat 異常、欄名對不上、任一來源抓取失敗）時 False——呼叫端不可據此宣稱「事件已涵蓋到今天」。
+    # 「官方真的沒有事件」＝healthy 且 0 列，與「抓壞」要分得開（Opus 審 H2）。
+    ev.attrs["healthy"] = not problems
+    ev.attrs["problems"] = problems
+    return ev
 
 
 # ───────────────────────── FinMind ─────────────────────────
