@@ -411,3 +411,4 @@
 - **自建上游**：直接打官方 TWSE／TPEx（網站帶日期端點為主、OpenAPI 補強），自己存原始價、自己還原。目前是影子期（10/12 起只產只比，tw-swing 不讀；go/no-go 看 10/23）。
 - **其他 workflow**：日線仍靠 tw-swing 讀的上游 `data_pack.zip`（約 05:08 才好）；籌碼／總經／PCF 是各自直接打 TAIFEX、TWSE、Yahoo、投信官網的小資料源，與自建上游互不相依。
 - **還沒量的官方時間**（別當成已知）：事件類（TWT49U／exDailyQ／TWTAUU／TWTB8U）、TAIFEX 盤後、BFI82U、三家投信 PCF 各自的更新時間。要量就沿用 `poll_publish.py` 的做法（官方還沒公布的時段不請求）。
+- **ETF 範圍**（使用者 2026-10-09）：5～6 碼與上櫃 ETF **要收**但**不進推薦**，只供個股查詢、多軌體檢、總經導航，並取代總經導航對 FinMind（006201）的依賴。現況自建收集只收純數字 4 碼（`selfhost_raw_prices.py:122` 等四處過濾），不是來源限制；官方日線端點本來會回這些代碼。做法見 `updatePRD-opus.md` §6.2。
