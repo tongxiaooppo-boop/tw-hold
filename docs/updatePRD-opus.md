@@ -273,7 +273,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | B7 | 因子口徑三項驗證＋拍板 | ✅ 10/8 拍板：三項維持現行（§9） | — |
 | B8 | 10/19 母表比對報告（`selfhost_datapack_parity.py` 已有）。~~〔使用者 10/8〕加「清單重播」~~ **〔使用者 10/9 撤銷：只比兩包資料，不重播三清單〕**：影子比對（`selfhost_shadow_compare.py`，每次發佈自動跑、結果累積在 `shadow_history.jsonl`）＋`selfhost_datapack_parity.py` 的差異，**逐檔歸因**（還原因子差、成交量口徑、流動性門檻翻面、標的涵蓋差、籌碼來源…）；歸因不了的列為未歸因，供 10/23 go/no-go | ⬜ | **是** |
 | B9 | 唯讀 PAT | ✅ | — |
-| B10 | 兩 repo 時序——產 zip 時間受 GitHub 延遲影響不可控；dispatch 鏈（§2.6）；公布時間 10/8 重量中 | ⬜ 已拍板方向，待實作 | 中 |
+| B10 | 兩 repo 時序——產 zip 時間受 GitHub 延遲影響不可控；dispatch 鏈（§2.6）；公布時間 10/8 重量中 | 🟡 **10/9 已實作（預設關閉）**：token `TWSWING_DISPATCH_PAT` 已建並驗證（到期 2027-10-09）；`selfhost_datapack.yml` 發佈後加步驟「觸發 tw-swing daily」——僅在 repo 變數 `TRIGGER_SWING=true` 時啟用、僅「完整日前進」時打 API、失敗只警告不擋資料包；測試 `tests/test_selfhost_trigger_swing.py`（7 項，含假 curl 實跑 bash）。**切換日要開的變數：tw-hold `TRIGGER_SWING=true`**。未做：swing 端被觸發後與既有三槍／publish_bundle 的並行行為實測（B13） | 中 |
 | B11 | zip 驗收／閘門（〔審〕加：只發佈完整日、manifest 各資料最後日、當日事件因子缺＝警告） | 🟡 起步版寫好（§9）；缺「當日事件因子缺」警告（隨 B6） | 低 |
 | B12 | 同日兩來源不一致以誰為準 | ⬜ 建議：週收集網站端點（帶日期、含官方更正）> 每日官網端點（MI_INDEX 等）> OpenAPI 快照 > 上游；延伸 `merge_day` 的 src 等級；〔審〕每日表不收同日更正，週收集覆蓋時記差異列數 | 低 |
 | B13 | 端到端乾跑＋退回演練 | ⬜（10/9 補假、10/10–11 週末無新交易日，第一個真實增量日是 10/12） | **是** |
