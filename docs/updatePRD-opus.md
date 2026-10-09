@@ -44,12 +44,69 @@
 8. 使用者原則：**官方還沒公布不請求（不偷跑）**；手動觸發也限制在規律時段；GitHub 排程延遲 2～9 小時是常態，拿不準先問、不自行改頻率；Opus 審 → 問使用者 → 才 push；改 cron／程式後兩 repo 全套測試先過再 push，指令鏈不得讓 `pytest | tail` 吞失敗碼。
 
 ### 0.4 一句話現況
-**資料收集端已就緒**（每日 OpenAPI／網站端點收集、每週官方收集、事件表、閘門、轉接層都已上線並在 CI 實跑），hold-data 已補到 10/7。**真正的缺口在「產 zip → swing 讀取 → 自動退回」這段下游**：B2（swing 開關＋自動退回）、B3（CI 產 zip）、B4（每日併入 raw）、B6（當日事件因子）、B7（因子口徑）、B11（zip 驗收）、B13（端到端乾跑＋退回演練）**幾乎零實作**。「退回上游」才是真備援，目前沒有。
+> **〔2026-10-09 下午更新，Sonnet〕** 下面這段（10/8 上午寫的）已過時：B2、B3、B4、B6、B10、B11（起步版）、B12 都已實作並 push，B7 已拍板；**仍未做的只剩 B13（端到端乾跑＋退回演練，10/12 起才有真實增量日）、B8 的 10/19 正式報告、B11 的「當日事件因子缺」警告**。請以 §0.5 完成進度總表為準。
+
+**〔以下為 10/8 上午原文，保留作歷史〕** **資料收集端已就緒**（每日 OpenAPI／網站端點收集、每週官方收集、事件表、閘門、轉接層都已上線並在 CI 實跑），hold-data 已補到 10/7。**真正的缺口在「產 zip → swing 讀取 → 自動退回」這段下游**：B2（swing 開關＋自動退回）、B3（CI 產 zip）、B4（每日併入 raw）、B6（當日事件因子）、B7（因子口徑）、B11（zip 驗收）、B13（端到端乾跑＋退回演練）**幾乎零實作**。「退回上游」才是真備援，目前沒有。
 
 **〔審〕三個最大的風險（依嚴重度）**
 1. **B10 時序**：GitHub 排程延遲 2～9 小時下，產 zip 的時間不可控；只有「產完 zip 就觸發 swing」不吃延遲（§2.6）。〔訂正 10/8〕原稿推論「完整日要 00:30 後才齊」不成立——10/7 量測的首見時間全是第一次輪詢的時間（2 小時一格、第一格就排在 16:00／18:00／00:30），只是上限；網站端點可能比 OpenAPI 早。10/8 重新量測中（§2.7）。
 2. **退回門檻「>10 天」太鬆、而「落後就退」又會讓口徑天天切換**（§2.6）。
 3. **`drop_future` 用全市場最後日**，每日併入後上市晚到時會把當日事件因子乘到前一日收盤（§2.5b）。
+
+### 0.5 完成進度總表（2026-10-09 下午，**Sonnet 填寫、待 Opus 審核確認**）
+
+> 填寫規則：「Sonnet 狀態」只寫我（Sonnet 5.5）**這個 session 實際做過或實際核對過**的事。
+> ✅＝Sonnet 完成並有 commit／測試佐證；🔎＝先前（10/7–10/8）已完成、**Sonnet 10/9 重新核對現況**（寫明核對了什麼）；⬜＝未做（寫原因）；⏸＝使用者決定延後。
+> 「Opus 審核」欄一律先留 ⬜，由 Opus 逐項確認後改成 ✅／❌＋意見。commit 皆為 `tw-hold` 除非標 `swing`（`tongxiaooppo-boop/tw-swing`）。
+> **push 狀態**：B2 swing 端 `6ce24a8`、B6 `453d49b`／`ffe0bd9`、B10 `5926161`／`62f580c`／`3798950` 已 push；**B2+（`closed_days`，`2ea0733`）與本檔更新尚未 push，等 Opus 審核後再推**。
+> 測試現況：**tw-hold 538 passed、tw-swing 861 passed**（10/9 下午，全套）。tw-hold 全套曾有一次 `1 failed, 483 passed`（耗時 24 分，當時機器同時在跑別的事），**重跑多次全過、沒抓到是哪一項**，疑負載造成的偶發，列為觀察。
+
+#### 0.5.1 上線阻擋項 B1–B13
+
+| # | 項目 | Sonnet 狀態 | 佐證（commit／檔／測試／核對結果） | 未做或限制 | Opus 審核 |
+|---|---|---|---|---|---|
+| B1 | 舊決定撤銷 | 🔎 | 使用者 10/7 拍板、本檔 §0.3；Sonnet 核對 §0.3 與現況一致 | — | ⬜ |
+| B2 | swing 開關＋自動退回＋略過 baseline＋來源標示 | ✅ | swing `6ce24a8`：`src/twswing/data/pack_source.py`、`scripts/update_data.py`、`scripts/make_bundle_meta.py`、`daily.yml`／`publish_bundle.yml`；測試 `test_pack_source.py`／`test_update_data_source.py`／`test_update_data_source_more.py`（+27，swing 全套 861）；**Opus 審查 agent 已審並已修**（`--require-fresh` 落後 ≥1 日必須變紅、`fetch_selfhost_pack` 不拋例外＋timeout＋先清舊檔、快取排除 selfhost、token 用完即丟…）；審查實測本機自建包 `import_data_pack`＋`import_chips`＋`audit_chips` 全通過（2147/2147 檔、守門 0%） | ①**沒在 GitHub Actions 真環境跑過 selfhost 分支**（測試用替身）→ B13；②模擬單口徑標記／重置：**使用者 10/9 判定「不重要」，不做**；③切換日要設變數（見 §0.5.3） | ⬜ |
+| B2+ | manifest 附休市表 `closed_days`（B2 配套，避免連假後多算一天落後） | ✅ | `2ea0733`：`selfhost_daily_merge.closed_days_for_manifest`（證交所 holidaySchedule、只留平日、fail-open、不進 `input_hash`）；`tests/test_manifest_closed_days.py`（5 項）；`tests/conftest.py` autouse 擋掉真的休市表請求 | 為什麼要做：沒休市表時 10/27（光復節補假後第一個交易日）05:32 最後一槍會算出落後 1 日→`--require-fresh` 誤判紅燈 | ⬜ |
+| B3 | CI 產官方口徑 zip | 🔎 | 10/8 `1d71251` 已 push（§9「未 push」字樣已過時）。Sonnet 核對：`selfhost_datapack` 每次收集後 `workflow_run` 接跑，近期 run 全 success、時長 0.3～5.7 分；Release `datapack-selfhost` 的 `merge_manifest.json` `complete_day=2026-10-08`、`gaps={}`、zip 201,948,228 bytes（價 2148／法人 2147／融資 1998 檔） | 發佈後的 `gh run` 實跑耗時只看過 `gh run list`，**記憶體用量沒量** | ⬜ |
+| B4 | 每日併入 raw → adjust；`drop_future` 逐檔 | 🔎 | 10/8 `1d71251`；Sonnet 核對 manifest `appended_from_daily`／`overlap_check`（重疊日 `only_weekly=0／only_daily=0／value_diff=0`）、影子比對最新日 `close_match=1.0` | — | ⬜ |
+| B5 | 每日法人收集 | 🔎 | 10/7 起；Sonnet 核對 fetch log：10/7、10/8 `twse_inst`／`tpex_inst` 皆有寫入（1083／782、1076／770） | — | ⬜ |
+| B6 | 當日事件因子寫入點（每日官方事件結果表窗口） | ✅ | `453d49b`＋`ffe0bd9`：`selfhost_events.fetch_recent`（精確窗口、`healthy`／`problems`）、`selfhost_openapi_daily.collect_events`／`run_events`、`selfhost_daily_merge.merge_events`（M1 新者勝／M2 同類別衝突／M3 日期位移警告）、兩支 workflow 接線；測試 +57（`test_selfhost_events_daily*.py`、`test_b6_*.py`）；**Opus 審查 agent 已審 B6 主體（無阻擋項）並已修 H1／H2／H3／M4／L1／L3** | ①**M1／M2／M3 是審查後新增，沒再送審**；②**線上還沒跑過**（要看下一班 `openapi_daily` 是否多出 `openapi_events.parquet`／meta）；③L4（窗口起點晚於週收集 through＋1 時不採用每日 through）⬜；④L5（上櫃 exDailyQ 事件日當天何時出現）⬜ 影子期量；⑤B11「當日事件因子缺」警告 ⬜ | ⬜ |
+| B7 | 因子口徑三項 | 🔎 | 10/8 拍板、本檔 §9 第 3 項；Sonnet 10/9 另確認「現增明細 `TWT49UDetail` 不併進事件表」與此一致（`EVENTS.md` §4、HANDOFF_2026-10-09 §6） | — | ⬜ |
+| B8 | 10/19 母表比對（兩包資料） | 🟡 Sonnet 完成一部分 | ✅「只有一邊有」歸因（`bdf3627`，本檔 §9 末）：上游多 27 檔全是補的成交量 0 平盤假列、自建多 26 檔＝25 新掛牌＋5236 上游斷更，**無一檔自建錯**；✅ 成交量口徑拍板用官方（`e215edb`）；✅ 清單重播撤銷（使用者 10/9） | ⬜ **10/19 正式報告**（要影子期 10/12～10/18 資料）；上游多的 27 檔是用本機 tw-swing store 推算、非上游 pack 本身 | ⬜ |
+| B9 | 唯讀 PAT `TWHOLD_DATA_READ_PAT` | 🔎 | Sonnet 核對 `gh secret list`：存在（2026-10-07）；B2 審查 agent 亦確認 | — | ⬜ |
+| B10 | tw-hold 產完 zip → 觸發 tw-swing | ✅（預設關閉） | `5926161`＋`62f580c`＋`3798950`：新 secret `TWSWING_DISPATCH_PAT`（fine-grained、只選 tw-swing、Actions 讀寫，到期 2027-10-09）、`check_swing_dispatch_pat.yml`（只讀檢查，**已實跑通過**：讀得到 swing `daily.yml`、碰不到 `tw-hold-data`）、`selfhost_datapack.yml` 新步驟（`vars.TRIGGER_SWING=='true'` 才啟用、完整日前進才打 API、失敗只警告）；測試 `test_selfhost_trigger_swing.py`（7，含假 curl 實跑 bash）；**Opus 審查抓到 `ref: main` 錯（swing 預設分支是 master）已修** | ①**沒真的 dispatch 過 swing**（只有假 curl 測試）；②被觸發後與既有三槍／`publish_bundle` 的並行行為 → B13；③`TRIGGER_SWING` 變數現在沒設 | ⬜ |
+| B11 | zip 驗收／閘門 | 🔎＋⬜ | 起步版 10/8 `1d71251`（`selfhost_zip_gate.py`：完整日、檔數、錨點、gaps、sha256）；Sonnet 核對 CI 上閘門通過 | ⬜「當日事件因子缺＝警告」未做（不擋切換，使用者 10/9 同意放後） | ⬜ |
+| B12 | 同日兩來源不一致以誰為準 | ✅（原表標 ⬜ 為過時） | 價／法人／融資：`selfhost_daily_merge.merge_table` 週收集優先、只補週收集沒有的 (市場,日)、重疊日記差異（10/8 `1d71251`）；事件：`ffe0bd9` M1「新者勝」＋manifest `events_daily_conflicts`。Sonnet 核對 manifest `overlap_check` 全 0 差異 | — | ⬜ |
+| B13 | 端到端乾跑＋退回演練 | ⬜ | — | **未做**：10/9 補假、10/10–11 週末，**10/12 才有第一個真實增量日**；要驗：①用「融資券落後一天」的資料包跑 swing 匯入 ②故意弄壞 zip／斷 PAT／過舊 zip 驗自動退回 ③B10 觸發與三槍並行 ④`--require-fresh` 在 05:32 前自建包能否齊全（**未驗證**） | ⬜ |
+
+#### 0.5.2 其他項目
+
+| 項目 | Sonnet 狀態 | 佐證／說明 | Opus 審核 |
+|---|---|---|---|
+| §4.1 上市日線改官網 `MI_INDEX`＋取到就停（原標 `[~]`） | 🔎 ✅ | `1d71251` 已 push；Sonnet 核對 `openapi_fetch_log.jsonl`：10/8 23:24 起 `twse_day_web` 成功寫入 1091 列；上市 OpenAPI 日線 10/8 窗口內始終未出現（`Last-Modified` 隔日 05:20），符合「上市日線以官網為主」 | ⬜ |
+| §4.1 量測官方公布時間 | ✅ 先前＋Sonnet 整理 | `_measure_20261008/poll_publish.py` 結果整理成 `data-dl.md` §12.1.1／§12.1.2（`d466046`）；仍**未量**：事件類端點、TAIFEX 盤後、BFI82U、三家投信 PCF | ⬜ |
+| §4.1 修 `poll_openapi.py` stat 大小寫 | ⬜ 不需要 | 量測已用 `poll_publish.py` 完成，舊腳本是一次性 | ⬜ |
+| §4.1 上櫃日線第二來源／法人與上市融資缺日自動補／預告表以誰為準 | ⬜ | 改善項，不擋切換；預告表兩份並存（每日 `openapi_forecast.jsonl`、每週 `forecast_twt48u.jsonl`）是重複儲存，之後可併 | ⬜ |
+| §6 備援 A（swing 自動退回） | ✅ | = B2 | ⬜ |
+| §6 監控 A／B、備援 B、永久缺資料線、其他 | ⬜ | 切換後再做（§0.2 工作切分「切換後」） | ⬜ |
+| §6 第 6 項「openapi_daily 5 班只起 3 班」 | ✅ 更正 | Sonnet 10/9 以 `gh run list`＋fetch log 核對：10/8 五班**全部起跑且成功**（15:24Z／17:17Z／18:47Z／20:24Z／隔日 00:09Z，延遲約 7.4／7.3／6.8／5.4／4.1 小時），**不是丟班**；10/7 的「只起 3 班」是當時還沒起跑。第五班延遲 >4 小時會落進「08:00 不請求」窗口（只抓預告表）。不改 cron | ⬜ |
+| §4.3 文件 | ✅ | `data-dl.md` §12 workflow 端點／啟動時間對照＋html（`d466046`）；`DATA_FLOW.md` data_pack 到達時間改實測範圍；`EVENTS.md` §4 更正（`TWT49UDetail` 明細已收、無下游讀取、**不併事件表**）；`HANDOFF_2026-10-09.md`（更正＋下午決定）。**未做**：`PRD.md` 內文資料管線章節仍過期 | ⬜ |
+| §6.1 手動更新入口＋已有當日檢查＋完整日拆開 | ⏸ | 使用者 10/9：**10/24 前不改**，切換後再做；設計已寫在 §6.1；融資券 00:00 後納入、新短線自動時間不提前 | ⬜ |
+| §6.2 ETF 軌（5～6 碼與上櫃 ETF，不進推薦，總經不再向 FinMind 抓 006201） | ⏸ | 使用者 10/9：**10/24 後再討論，不一定要做**；已記入記憶 `tw-hold-after-1024-deferred`（切換後我要主動提醒） | ⬜ |
+
+#### 0.5.3 10/24 切換日要設定的變數（尚未設，預設全是上游／關閉）
+- tw-swing repo 變數：`DATA_REPO=tongxiaooppo-boop/tw-hold-data`、`PACK_SOURCE=selfhost`（secret `TWHOLD_DATA_READ_PAT` 已有）
+- tw-hold repo 變數：`TRIGGER_SWING=true`（secret `TWSWING_DISPATCH_PAT` 已有且已驗證）
+- 回滾：`PACK_SOURCE` 改回 `upstream`、`TRIGGER_SWING` 刪掉或設 false；不需要 revert 程式
+
+#### 0.5.4 請 Opus 特別確認的地方
+1. **B2**：`update_data.py` 的 selfhost 分支只有替身測試，沒在真實 runner 跑過；`daily.yml` 沒傳 zip 路徑時的行為（已改固定下載到 `store.CACHE_DIR/pack/selfhost`）。
+2. **B6 後半（M1／M2／M3）與 B2+（`closed_days`）**是 Opus 審查之後才加的，**沒有第二次審**。
+3. **`--require-fresh` 與自建包新鮮度**：最後一槍（05:32）自建包 T 日資料（價、法人、融資券齊）能否按時到齊**未驗證**；若常晚到，最後一槍會天天變紅（這是刻意的，避免靜默綠燈）。融資券「00:00 後才是安全版本」的使用者決定與這點互相牽動，**請一起看**。
+4. **B10** 觸發步驟只驗過假 curl；真實 `workflow_dispatch` 到 swing 後，`daily.yml` 沒有「已有當日就跳過」的邏輯（手動重跑會完整跑 ~3 分鐘、結果相同）。
+5. **tw-hold 全套測試那次偶發失敗**沒查出是哪一項。
+6. 影子期尚無真實增量日資料；§7.1 No-Go 各條（連續 5 個交易日全綠、完整日發佈時間早於 05:32、事件日還原價逐件對過）**都還沒有證據**。
 
 ---
 
@@ -81,15 +138,15 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 ### 2.1 日線（價）
 | | 內容 | 狀態 |
 |---|---|---|
-| 主要（上市） | **官網 `rwd/zh/afterTrading/MI_INDEX?date=&type=ALLBUT0999`**（帶日期、回應自述日期必須等於目標日）。**2026-10-08 剛改，本機測試過、尚未 push** | 🟡 |
+| 主要（上市） | **官網 `rwd/zh/afterTrading/MI_INDEX?date=&type=ALLBUT0999`**（帶日期、回應自述日期必須等於目標日）。**〔10/9 Sonnet 核對〕已於 10/8 `1d71251` push；`openapi_fetch_log.jsonl` 10/8 23:24 起 `twse_day_web` 成功** | ✅ |
 | 主要（上櫃） | OpenAPI `tpex_mainboard_daily_close_quotes`（16:00 起即有當日；含 `NextReferencePrice`／次日漲跌停；約 4MB 偶被截斷，已 3 次重試） | ✅ |
 | 備援 | 上市：OpenAPI `STOCK_DAY_ALL`（**實測 T+1 清晨約 05:20 才換成前一日，當日價值低**）；上櫃：尚無網站端點備援（`dailyQuotes` 帶日期，`selfhost_raw_prices` 已有、每週收集在用，**每日版未接**）；最終備援＝退回上游 | 🟡 |
 | 補洞 | 每週收集用帶日期網站端點補近 14 天 | ✅ |
 | 監控 | 回應日期斷言、列數下限（上市 500／上櫃 400）、縮水保護、`openapi_fetch_log.jsonl`、缺交易日警告、`selfhost_gate`、`selfhost_status.json` | ✅ |
-| 取到就停 | 目標日（平日 16:00 後＝今天，其餘＝前一平日）已存就不再請求；**2026-10-08 剛寫，未 push** | 🟡 |
+| 取到就停 | 目標日（平日 16:00 後＝今天，其餘＝前一平日）已存就不再請求；**〔10/9 Sonnet 核對〕已 push（`1d71251`）；10/8 之後的班次目標日已存即略過（log 無重複請求）** | ✅ |
 | 公布時間 | **〔審〕MI_INDEX 首次可取時間未量**（§2.7 沒有這一項）；10/8 晚各班 fetch log 的 `twse_day_web` 首次成功時間即可補上 | ❓ |
 
-**〔審〕未 push 改動的待修項（push 前處理）**
+**〔審〕未 push 改動的待修項（〔10/9 Sonnet 更正〕項 1、2 已於 `1d71251` 前處理並 push，見 §9「10/8 已完成的前置」；項 3、4 維持）**
 1. `selfhost_raw_prices.fetch_twse:147`：任何 `stat != "OK"` 都當休市回空表 → 每日路徑走「尚未公布或休市」直接 `continue`，**不退備援、也不警告**（tw-stock-data `CLAUDE.md` §二「靜默失敗都長成 stat:OK」同型）。改為：只有已知的「很抱歉，沒有符合條件的資料」當未公布／休市，其他 stat 回 `None`（退備援＋`::warning::`）。
 2. `price_target` 不認國定假日：假日後清晨班的目標日是假日本身（例：10/12（一）04:02 目標＝10/9 休市）→ 空表即停，假日前最後交易日若漏抓，每日不再補、只能等週收集；B4 上線後會讓 zip 缺日而觸發退回。改用休市表（`*_closed.csv` 或 TWSE `holidaySchedule`）取「最近交易日」。
 3. 官網來源 `last_modified=NaT` 且與既有同等級 → 同日官方更正永遠蓋不進每日表。設計上可接受（取到就停），但 B12 要明寫「每日表不收更正，由週收集覆蓋並記差異列數」。
@@ -128,9 +185,9 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | | 內容 | 狀態 |
 |---|---|---|
 | 主要 | `selfhost_adjust`（raw × 因子）→ `selfhost_to_datapack`（zip 格式同現行 data_pack，tw-swing 匯入不用改）。本機驗收：2,147 檔 0 解析失敗，融資 100% 相符，法人 99.4–99.95% | 🟡 本機 |
-| CI 產出 | **從沒在 CI 跑過**（B3）：耗時、記憶體（全表 + 202MB zip）未知。〔訂正〕Actions 分鐘數不是問題：tw-hold 是公開 repo，分鐘數無限（`selfhost_collect.yml` 檔頭）。〔10/8〕本機實測整條線約 3.5 分鐘（併入 49 秒、還原 19 秒、產 zip 131 秒、閘門 5 秒），zip 202MB；`selfhost_collect.yml` 沒接 adjust／to_datapack；`datapack-selfhost` Release 不存在 | ⬜ ❓ |
-| 備援 | 退回上游（B2，未實作） | ⬜ |
-| 監控 | zip 驗收（B11）：最新日、各市場檔數、最後一列 raw＝官方收盤、0050 連續、籌碼恆等式；現有 `selfhost_gate` 只涵蓋 `selfhost-data`，不含每日 OpenAPI／法人／zip | ⬜ |
+| CI 產出 | **〔10/9 Sonnet 更正：已在 CI 實跑，見 §0.5 B3〕以下為 10/8 上午原文**：從沒在 CI 跑過（B3）：耗時、記憶體（全表 + 202MB zip）未知。〔訂正〕Actions 分鐘數不是問題：tw-hold 是公開 repo，分鐘數無限（`selfhost_collect.yml` 檔頭）。〔10/8〕本機實測整條線約 3.5 分鐘（併入 49 秒、還原 19 秒、產 zip 131 秒、閘門 5 秒），zip 202MB；`selfhost_collect.yml` 沒接 adjust／to_datapack；`datapack-selfhost` Release 不存在 | ⬜ ❓ |
+| 備援 | 退回上游（B2）**〔10/9〕已實作並 push（swing `6ce24a8`），預設仍是上游** | ✅ |
+| 監控 | zip 驗收（B11）：最新日、各市場檔數、最後一列 raw＝官方收盤、0050 連續、籌碼恆等式；〔10/9〕`selfhost_zip_gate.py` 起步版已上線（缺「當日事件因子缺」警告） | 🟡 |
 
 ### 2.5b 事件因子與還原日線：怎麼算（實作對照 `EVENTS.md`、`selfhost_adjust.py`）
 
@@ -154,7 +211,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 
 **官方對帳（已驗證）**：事件日有實價的 18,027 筆，收盤全落在官方漲停與跌停價內（0 例外）；官方行情「參考價被重設」標記（上市漲跌欄 `X`／上櫃寫除息除權）16,967 個，事件表對上 16,941 個，其餘 26 個全是轉板首日。
 
-**切換後每日怎麼算（目標，B4／B6 尚未實作）**
+**切換後每日怎麼算（目標；〔10/9〕B4、B6 已實作並 push，見 §0.5）**
 1. 當日收盤併入 raw（官方未還原價）。
 2. **〔訂正〕需求是「事件日 E 的收盤併入 raw 時，E 的因子要已在」，不是「事件日前一晚」**。因子只作用在 E 之前的列；E 的收盤沒進來前，套不套都不影響歷史報酬，提前套反而會讓最新收盤被乘因子（`drop_future` 正是為此存在，見第 3 點）。
    **〔審〕做法改為兩層（取消原「預告表＋公式暫定因子」層）**：
@@ -182,9 +239,9 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | | 內容 | 狀態 |
 |---|---|---|
 | 現況 | `update_data.py:76` URL 寫死、`download_pack` 匿名 GET（私有 Release 沒匿名網址）、`--require-fresh` 看上游 Last-Modified、`apply_chips_baseline` 寫死 | — |
-| 要做 | `PACK_SOURCE`（repo 變數，預設 `upstream`）；`gh`＋PAT 下載私有 Release；新鮮度改看 zip 內最新交易日；失敗／過舊（>10 天）／驗收不過 → 自動退回上游並 `::warning::`＋來源標示；selfhost 模式**略過** `apply_chips_baseline`（DATAPACK_ADAPTER 與 PLAN 兩文件矛盾，以「略過」為準，理由：FinMind 底稿非官方、投信上櫃 2018–2020 有誤） | ⬜ |
+| 要做 | `PACK_SOURCE`（repo 變數，預設 `upstream`）；`gh`＋PAT 下載私有 Release；新鮮度改看 zip 內最新交易日；失敗／過舊（>10 天）／驗收不過 → 自動退回上游並 `::warning::`＋來源標示；selfhost 模式**略過** `apply_chips_baseline`（DATAPACK_ADAPTER 與 PLAN 兩文件矛盾，以「略過」為準，理由：FinMind 底稿非官方、投信上櫃 2018–2020 有誤）。**〔10/9 Sonnet〕已實作（swing `6ce24a8`），退回規則採下方〔審〕版（落後 ≥2 交易日整包退回、=1 照用＋警告）；`--require-fresh` 搭配自建包落後 ≥1 日會變紅** | ✅ |
 | 回滾 | 變數改回 `upstream`，下一班即恢復，不用 revert；**〔審〕回滾／自動退回時模擬單要標記口徑或重置**（口徑一換，已持部位停損價對不上） | 設計 |
-| 兩 repo 時序（B10） | 見下方〔審〕 | ⬜ |
+| 兩 repo 時序（B10） | 見下方〔審〕；**〔10/9〕已實作、預設關閉**（§0.5 B10） | ✅ |
 
 **〔審〕B10 時序：問題是常態，不是邊緣**
 - 一整天何時才齊：**10/7 的量測不能用**——每 2 小時一格、第一格就排在預期時間（16:00／18:00／00:30），量到的「首見」全是第一次去查的時間，只是上限；上櫃融資也只量了 OpenAPI。網站端點可能比 OpenAPI 早（使用者 10/8 指出）。
@@ -208,8 +265,8 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 ### 2.7 排程與觸發
 | 項目 | 現況 |
 |---|---|
-| `openapi_daily` | cron 台北 16:02／18:02／20:02／23:02／隔日 04:02（UTC 08:02／10:02／12:02／15:02／20:02，週一至五）。**10/7 晚首次真排程：5 班只啟動 3 班**（實際台北 01:21／02:50／04:21，全成功），16:02／18:02 兩班無 run（疑 GitHub 延遲／丟棄，未證實） |
-| `selfhost_collect` | cron 23:58（UTC `58 15`，週一至五）+ `last_trading_day_guard`（當週最後交易日才跑；LATE_CUTOFF_HOUR=12 處理跨午夜）；**內部兩處 `date -u +%u = 5` 的寫死週五判斷 2026-10-08 剛改為跟 guard 走，未 push** |
+| `openapi_daily` | cron 台北 16:02／18:02／20:02／23:02／隔日 04:02（UTC 08:02／10:02／12:02／15:02／20:02，週一至五）。**10/7 晚首次真排程：5 班只啟動 3 班**（實際台北 01:21／02:50／04:21，全成功），16:02／18:02 兩班無 run（疑 GitHub 延遲／丟棄，未證實）。**〔10/9 Sonnet 更正〕10/8 五班全部起跑且成功**（延遲約 7.4／7.3／6.8／5.4／4.1 小時），10/7 的「少 2 班」是班次還沒起跑、不是丟班；實際落點見 `data-dl.md` §12 |
+| `selfhost_collect` | cron 23:58（UTC `58 15`，週一至五）+ `last_trading_day_guard`（當週最後交易日才跑；LATE_CUTOFF_HOUR=12 處理跨午夜）；**內部兩處 `date -u +%u = 5` 的寫死週五判斷 2026-10-08 已改為跟 guard 走並 push（`1d71251`）；〔10/9 Sonnet 核對〕10/8 週四 guard 判斷「當週最後交易日，執行」成功** |
 | 觸發原則 | 手動／外部 dispatch 不經排程器、會準時，但只在規律時段；防呆測試 `tests/test_workflow_schedules.py`（兩 repo 各一份）：cron 不在 :00/:30/:59、`event.schedule ==` 字串須存在於同檔 cron、同 repo cron ≥10 分鐘 |
 | 官方公布時間實測（10/7→10/8） | 〔訂正〕以下全是**上限**（第一次輪詢時間）：上櫃日線 ≤16:00；上市 T86 ≤18:00；上櫃法人 ≤17:21（原「06:00 仍無」為量測腳本大小寫 bug）；上市／上櫃融資 ≤00:30；**上市 OpenAPI 日線 06:00 才換成 10/7（Last-Modified 05:20）**；上市 MI_INDEX **未量**；上市 TWT49U 當日事件於事件日 07:37 前即有；上游資料包約 00:00 前後才好 |
 
@@ -255,8 +312,8 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 - [x] 10/7 資料已補齊（日線 TW 1089／TWO 873、法人 1083／782、融資 1059／802；gate OK）
 - [x] 唯讀 PAT 建立並驗證（`check_data_pat.yml`）
 - [x] 10/7–10/8 量測：官方各資料首次公布時間、上游資料包好的時間（見 §2.7）
-- [~] 上市日線改官網 `MI_INDEX` 為主＋日線取到就停＋`selfhost_collect` 週快照改跟 guard（**本機寫完、兩 repo 全套測試過；Opus 已審，push 前先修 §2.1〔審〕待修項 1、2**）
-- [ ] 〔審〕修 `poll_openapi.py` 的 `stat` 大小寫判斷（若還要再量公布時間）；量上市 MI_INDEX 與上櫃法人首次公布時間
+- [x] 上市日線改官網 `MI_INDEX` 為主＋日線取到就停＋`selfhost_collect` 週快照改跟 guard（**〔10/9 Sonnet 核對〕已於 10/8 `1d71251` push 並在線上實跑**，見 §0.5.2）
+- [x] 〔審〕量上市 MI_INDEX 與上櫃法人首次公布時間：**已量**（`poll_publish.py`，上市 MI_INDEX 14:00、上櫃法人 15:10；見 `data-dl.md` §12.1.1）；`poll_openapi.py` 大小寫 bug 因量測已完成而不需再修
 - [ ] 上櫃日線第二來源（網站 `dailyQuotes` 帶日期）
 - [ ] 每日法人缺日自動補（目前只警告）；上市融資缺日自動補
 - [ ] 指定預告表以誰為準（每日 vs 週收集）——〔審〕建議每日為準、只當對帳清單
@@ -266,21 +323,22 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 |---|---|---|---|
 | B1 | 舊決定撤銷 | ✅ 本檔 §0.3 + 使用者 10/7 拍板 | 否 |
 | B2 | **swing 開關＋自動退回＋略過 baseline＋來源標示** | ✅ **10/9 Opus 審過、已 push（tw-swing `6ce24a8`；預設 upstream）、tw-swing 全套 861 passed**；審查修掉：`--require-fresh`＋自建包落後 ≥1 日必須變紅（否則最後一槍靜默綠燈）、`fetch_selfhost_pack` 不拋例外＋timeout＋先清舊檔、下載位置固定在 `store.CACHE_DIR/pack/selfhost`、publish_bundle 快取排除 selfhost、下載後丟掉 `DATA_GH_TOKEN`、補 11 項測試。原記錄：`tw-swing/src/twswing/data/pack_source.py`（純函式：`PACK_SOURCE` 解析、sha256 驗證、落後交易日計算、退回規則）、`scripts/update_data.py`（`PACK_SOURCE=selfhost` 時用 `gh`＋`DATA_REPO`／`DATA_GH_TOKEN` 下載 `datapack-selfhost`，任何異常整包退回上游；selfhost 模式略過 `apply_chips_baseline`；寫 `data/store/_pack_source.json`）、`make_bundle_meta.py`（bundle meta 加 `pack_source`）、`daily.yml`／`publish_bundle.yml`（帶 `vars.PACK_SOURCE`〔預設 upstream〕、`vars.DATA_REPO`、`secrets.TWHOLD_DATA_READ_PAT`）。**預設仍是上游，不影響線上。** 未做：模擬單口徑標記／重置、manifest 附休市表、切換日設定 repo 變數 | 低 |
-| B3 | **CI 產官方口徑 zip 並實測耗時／記憶體** | 🟡 workflow 寫好未 push；本機實跑 3.5 分鐘通過（§9） | 低 |
-| B4 | 每日併入 raw → adjust（方案 a）；〔審〕含 `drop_future` 改逐檔 | 🟡 寫好未 push；重疊日實測 0 差異（§9） | 低 |
+| B3 | **CI 產官方口徑 zip 並實測耗時／記憶體** | ✅ **〔10/9 Sonnet 核對〕已 push（`1d71251`）並在 CI 實跑成功**（見 §0.5 B3；記憶體未量） | 低 |
+| B4 | 每日併入 raw → adjust（方案 a）；〔審〕含 `drop_future` 改逐檔 | ✅ **〔10/9 Sonnet 核對〕已 push（`1d71251`）；manifest 重疊日 0 差異**（見 §0.5 B4） | 低 |
 | B5 | 每日法人收集 | ✅（10/7 17:21 實寫入 1083／782） | — |
-| B6 | 當日事件因子寫入點——〔審〕改為「每日抓官方結果表近幾日窗口」，取消暫定公式層 | 🟡 **10/9 本機寫好、Opus 審過（無阻擋項）、高優先三項已修，未 push**：`selfhost_events.fetch_recent`（精確窗口、已 enrich、帶 `healthy`／`problems` 健康旗標；每日模式每個請求只試 1 次）→ `selfhost_openapi_daily.collect_events`／`run_events`（每班在日線窗口 16:00～隔日 08:00 內抓 [今天−5, 今天]，存 `openapi_events.parquet`＋`openapi_events_meta.json`；**抓壞（stat 異常／欄名對不上／來源抓取失敗）時 through 不前進**；排在日線／融資寫檔與 GITHUB_OUTPUT 之後；meta 只在 through 前進或事件有變時重寫）→ `selfhost_daily_merge.merge_events`（同鍵週收集優先；manifest `events_through`＝max(週收集日線最後日, 每日 meta through)、`events_from_daily`）→ 兩支 workflow 的下載／上傳／來源戳記（事件表上傳失敗不傳 meta）。測試 +42（tw-hold 全套通過）。**M1／M2／M3 已做（10/9）**：同鍵值不同＝新者勝（每日列 `fetched_at` 對週收集事件表資產更新時間，`--weekly-corp-updated`；沒給用週收集日線最後日 21:00 UTC 代理）；同檔同日同類別 type／source 不同且兩邊官方＝因子差 ≤0.5% 留週收集、否則新者勝並丟掉輸的（免得 `resolve_events` 只靠字母序挑）；manifest 新增 `events_daily_conflicts`、`events_weekly_asof`、`events_possible_date_shift`（同檔同類別 14 天內因子完全相同日期不同＝疑似官方更正事件日、兩筆都留會套兩次，只警告）。**仍未做**：L4 窗口起點晚於週收集 through＋1 時不採用每日 through、L5 上櫃 exDailyQ 事件日當天何時出現（影子期量）、B11「當日事件因子缺」警告 | 低 |
+| B6 | 當日事件因子寫入點——〔審〕改為「每日抓官方結果表近幾日窗口」，取消暫定公式層 | ✅ **〔10/9 Sonnet 完成，已 push：`453d49b`、`ffe0bd9`；Opus 審查 agent 審過主體（無阻擋項）、高優先三項已修〕**以下為實作說明：`selfhost_events.fetch_recent`（精確窗口、已 enrich、帶 `healthy`／`problems` 健康旗標；每日模式每個請求只試 1 次）→ `selfhost_openapi_daily.collect_events`／`run_events`（每班在日線窗口 16:00～隔日 08:00 內抓 [今天−5, 今天]，存 `openapi_events.parquet`＋`openapi_events_meta.json`；**抓壞（stat 異常／欄名對不上／來源抓取失敗）時 through 不前進**；排在日線／融資寫檔與 GITHUB_OUTPUT 之後；meta 只在 through 前進或事件有變時重寫）→ `selfhost_daily_merge.merge_events`（同鍵週收集優先；manifest `events_through`＝max(週收集日線最後日, 每日 meta through)、`events_from_daily`）→ 兩支 workflow 的下載／上傳／來源戳記（事件表上傳失敗不傳 meta）。測試 +42（tw-hold 全套通過）。**M1／M2／M3 已做（10/9）**：同鍵值不同＝新者勝（每日列 `fetched_at` 對週收集事件表資產更新時間，`--weekly-corp-updated`；沒給用週收集日線最後日 21:00 UTC 代理）；同檔同日同類別 type／source 不同且兩邊官方＝因子差 ≤0.5% 留週收集、否則新者勝並丟掉輸的（免得 `resolve_events` 只靠字母序挑）；manifest 新增 `events_daily_conflicts`、`events_weekly_asof`、`events_possible_date_shift`（同檔同類別 14 天內因子完全相同日期不同＝疑似官方更正事件日、兩筆都留會套兩次，只警告）。**仍未做**：L4 窗口起點晚於週收集 through＋1 時不採用每日 through、L5 上櫃 exDailyQ 事件日當天何時出現（影子期量）、B11「當日事件因子缺」警告 | 低 |
 | B7 | 因子口徑三項驗證＋拍板 | ✅ 10/8 拍板：三項維持現行（§9） | — |
-| B8 | 10/19 母表比對報告（`selfhost_datapack_parity.py` 已有）。~~〔使用者 10/8〕加「清單重播」~~ **〔使用者 10/9 撤銷：只比兩包資料，不重播三清單〕**：影子比對（`selfhost_shadow_compare.py`，每次發佈自動跑、結果累積在 `shadow_history.jsonl`）＋`selfhost_datapack_parity.py` 的差異，**逐檔歸因**（還原因子差、成交量口徑、流動性門檻翻面、標的涵蓋差、籌碼來源…）；歸因不了的列為未歸因，供 10/23 go/no-go | ⬜ | **是** |
+| B8 | 10/19 母表比對報告（`selfhost_datapack_parity.py` 已有）。~~〔使用者 10/8〕加「清單重播」~~ **〔使用者 10/9 撤銷：只比兩包資料，不重播三清單〕**：影子比對（`selfhost_shadow_compare.py`，每次發佈自動跑、結果累積在 `shadow_history.jsonl`）＋`selfhost_datapack_parity.py` 的差異，**逐檔歸因**（還原因子差、成交量口徑、流動性門檻翻面、標的涵蓋差、籌碼來源…）；歸因不了的列為未歸因，供 10/23 go/no-go | 🟡 兩項歸因 ✅（Sonnet 10/9）；**10/19 正式報告 ⬜** | **是** |
 | B9 | 唯讀 PAT | ✅ | — |
 | B10 | 兩 repo 時序——產 zip 時間受 GitHub 延遲影響不可控；dispatch 鏈（§2.6）；公布時間 10/8 重量中 | 🟡 **10/9 已實作（預設關閉）**：token `TWSWING_DISPATCH_PAT` 已建並驗證（到期 2027-10-09）；`selfhost_datapack.yml` 發佈後加步驟「觸發 tw-swing daily」——僅在 repo 變數 `TRIGGER_SWING=true` 時啟用、僅「完整日前進」時打 API、失敗只警告不擋資料包；測試 `tests/test_selfhost_trigger_swing.py`（7 項，含假 curl 實跑 bash）。**切換日要開的變數：tw-hold `TRIGGER_SWING=true`**。**〔Opus 審 10/9〕原本寫死 `ref: main`，但 tw-swing 預設分支是 `master`，會被 GitHub 拒絕、靜默不觸發——已改成先問 API 取預設分支、問不到退回 master，測試斷言 `ref` 為 master。**未做：swing 端被觸發後與既有三槍／publish_bundle 的並行行為實測（B13） | 中 |
-| B11 | zip 驗收／閘門（〔審〕加：只發佈完整日、manifest 各資料最後日、當日事件因子缺＝警告） | 🟡 起步版寫好（§9）；缺「當日事件因子缺」警告（隨 B6） | 低 |
-| B12 | 同日兩來源不一致以誰為準 | ⬜ 建議：週收集網站端點（帶日期、含官方更正）> 每日官網端點（MI_INDEX 等）> OpenAPI 快照 > 上游；延伸 `merge_day` 的 src 等級；〔審〕每日表不收同日更正，週收集覆蓋時記差異列數 | 低 |
-| B13 | 端到端乾跑＋退回演練 | ⬜（10/9 補假、10/10–11 週末無新交易日，第一個真實增量日是 10/12） | **是** |
+| B11 | zip 驗收／閘門（〔審〕加：只發佈完整日、manifest 各資料最後日、當日事件因子缺＝警告） | 🟡 起步版 ✅（`1d71251`，CI 上閘門通過）；⬜ 缺「當日事件因子缺」警告（使用者 10/9 同意放後、不擋切換） | 低 |
+| B12 | 同日兩來源不一致以誰為準 | ✅ **〔10/9 Sonnet 更正〕價／法人／融資已於 `1d71251` 實作（週收集優先、只補沒有的日子、重疊日記差異）；事件於 `ffe0bd9` 實作 M1「新者勝」**。原建議：週收集網站端點 > 每日官網端點 > OpenAPI 快照 > 上游 | 低 |
+| B13 | 端到端乾跑＋退回演練 | ⬜ **Sonnet 未做**（10/9 補假、10/10–11 週末無新交易日，第一個真實增量日是 10/12） | **是** |
 
 ### 4.3 文件
 - [x] `data-all.html／md`：10/8 補階段 2 的 6 項、階段 3 方案 A 時程作廢標註、測試數 486；（階段 1「已上線」vs 手動腳本要區分仍未做）
-- [~] `PRD.md`：頂端已加註「資料層以本檔為準」；內文資料管線章節仍過期，待系統性核對
+- [~] `PRD.md`：頂端已加註「資料層以本檔為準」；內文資料管線章節仍過期，待系統性核對（**Sonnet 10/9 未做**）
+- [x] 〔10/9 Sonnet〕`data-dl.md` §12／`data-dl.html`（workflow 端點與啟動時間對照）、`DATA_FLOW.md`（data_pack 到達時間實測）、`EVENTS.md` §4、`HANDOFF_2026-10-09.md`；本檔 §0.5 完成進度總表
 - [~] 文件矛盾 8 項（見 HANDOFF_2026-10-07_pm §7.6）收斂到本檔；`DATA_FLOW.md` 已加 §3.1 自建上游線與救援指令；`updataPRD.md` 已註明被本檔取代
 
 ---
@@ -306,7 +364,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 | **合計** | | **約 7～10 工作天**（Opus 10/7 估 4～5 天為「必要阻擋項」，不含監控補強與文件） |
 
 ### 5.2 測試
-現況：tw-hold 454 passed、tw-swing 834 passed。新增需求（每項都要有）：
+現況：**〔10/9 Sonnet 更新〕tw-hold 538 passed、tw-swing 861 passed**（原 10/8 上午：454／834）。新增需求（每項都要有）：
 - **單元**：zip 驗收各檢查項的通過／失敗案例；`PACK_SOURCE` 路徑（upstream／selfhost 成功／失敗整包退回／落後 1 日照用＋警告／落後 ≥2 交易日退回）；`drop_future` 逐檔（兩市場到達時間不同）；當日事件因子缺時的對帳警告；`fetch_twse` 非「無資料」的 stat 要回 None；`price_target` 遇國定假日取最近交易日；每日併入的冪等、src 等級、縮水保護；日線取到就停＋`price_target` 邊界（週末／週一清晨／國定假日）；`fetch_twse_web` 日期不符丟棄、空表＝未公布不退備援、失敗退備援。
 - **契約**：轉接層 zip 能被 tw-swing 的 `import_data_pack.parse_one`／`chips.normalize_*` 解析（已有 parity，需納入 CI 或固定樣本）。
 - **防呆**：cron／`event.schedule` 字串同步測試（已有）；新增「workflow 讀的 Release 資產名稱存在」靜態檢查。
@@ -323,7 +381,7 @@ tw-swing update_data.py（PACK_SOURCE=selfhost）
 3. **監控 B**：zip 驗收（B11）＋`bundle_gate` 加內容縮水檢查（擋壞資料覆蓋好 bundle；`data-latest` 目前無歷史版本）。
 4. **備援 B**：上櫃日線網站端點第二來源；每日法人／上市融資缺日自動補。
 5. **永久缺資料線**（§3 #5–8、#10）：目前只靠多班；可評估是否把 daily 三槍之外再加一條獨立備援，但這些多數 2029 前用不到，優先度低。
-6. 排程可靠度：openapi_daily 5 班只起 3 班（10/7 晚）——先觀察 10/8 晚是否重現，再決定是否加班或改外部觸發；**使用者原則：不自行改頻率**。〔審〕這與 B10 是同一題：融資公布後的那一班若被吞，當天就沒有完整日。
+6. 排程可靠度：openapi_daily 5 班只起 3 班（10/7 晚）——先觀察 10/8 晚是否重現，再決定是否加班或改外部觸發；〔**10/9 Sonnet 更正：10/8 五班全起跑且成功（延遲 4.1～7.4 小時），不是丟班；不改頻率**〕**使用者原則：不自行改頻率**。〔審〕這與 B10 是同一題：融資公布後的那一班若被吞，當天就沒有完整日。
 - 〔審〕「完成了沒」判準定義：台北 08:00 前 ① swing bundle 資料日＝最新交易日 ② tw-hold 三清單資料日＝同一日 ③ bundle meta 來源＝預期來源（selfhost 或已知的退回）。三條都成立才算完成；不看中途有沒有 failure。
 7. 其他：`prices_raw_close`（填息率）改官方 raw；tw-swing stock_list ETF 存成 '50'（8 檔）；`import_data_pack` 先刪再寫非原子（本機風險）；上市日線端點變動後 `data-all`／DATA_FLOW 同步。
 
