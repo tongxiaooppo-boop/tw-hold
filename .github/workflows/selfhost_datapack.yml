@@ -135,6 +135,31 @@ jobs:
           gh release upload datapack-selfhost "$M/merge_manifest.json" --clobber
           gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
 
+      # B10：資料包發佈後觸發 tw-swing 的 daily.yml（不吃 GitHub 排程延遲：資料一好就叫 swing）。
+      # **預設關閉**：repo 變數 `TRIGGER_SWING` 不是 'true' 就不做任何事（影子期 swing 仍吃上游、不讀這包，10/24 切換時才一起打開）。
+      # 只在「完整日前進」時觸發（跟已發佈的 manifest 比；已發佈沒有就當前進）：同一天內容更正的重發不觸發，避免空跑。
+      # 失敗只警告、不擋資料包（已經發佈完成）；swing 那邊有自己的排程備援。手動 dispatch（不帶 --require-fresh）。
+      # token：TWSWING_DISPATCH_PAT（fine-grained，只給 tw-swing 的 Actions 讀寫；到期 2027-10-09，見記憶 tw-hold-bundle-pat-expiry）。
+      - name: 觸發 tw-swing daily（完整日前進時；變數 TRIGGER_SWING=true 才啟用）
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false' && vars.TRIGGER_SWING == 'true'
+        continue-on-error: true
+        env:
+          SWING_PAT: ${{ secrets.TWSWING_DISPATCH_PAT }}
+        run: |
+          NEW=$(python -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8'))['complete_day'])" "$M/merge_manifest.json")
+          OLD=$(python -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8')).get('complete_day',''))" "$P/merge_manifest.json" 2>/dev/null || true)
+          echo "完整日：新 $NEW／已發佈 ${OLD:-（無）}"
+          if [ -n "$OLD" ] && [[ ! "$NEW" > "$OLD" ]]; then
+            echo "完整日沒有前進，不觸發 tw-swing"; exit 0
+          fi
+          [ -n "$SWING_PAT" ] || { echo "::warning::TWSWING_DISPATCH_PAT 沒設，無法觸發 tw-swing"; exit 0; }
+          code=$(curl -s -o /tmp/d.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $SWING_PAT" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/tongxiaooppo-boop/tw-swing/actions/workflows/daily.yml/dispatches \
+            -d '{"ref":"main"}')
+          if [ "$code" = 204 ]; then echo "已觸發 tw-swing daily.yml（完整日 $NEW）"; else
+            echo "::warning::觸發 tw-swing 失敗 HTTP $code：$(head -c 200 /tmp/d.json)"; fi
+
       # 影子期報告：失敗不影響已發佈的 zip。上游是公開 Release，匿名可下載。
       - name: 影子比對（vs 上游 data_pack，最近 5 個交易日）
         if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
