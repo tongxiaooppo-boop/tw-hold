@@ -3248,6 +3248,10 @@ def main() -> None:
     st.divider()
     st.caption(ATTRIBUTION)
     st.caption(_refdata_status(_res))
+    from reference.freshness import meta_pack_source_label
+    _src = meta_pack_source_label()
+    if _src:
+        st.caption(_src)
     st.caption("價值 / 定存 / 長波段三清單 + 短線（tw-swing 轉呈）+ 個股查詢。**候選 + 為什麼，不是建議。**"
                + ("　·　本地進階模式" if LOCAL_ADVANCED else "　·　雲端唯讀模式"))
 

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import date, datetime, timedelta
@@ -85,13 +86,33 @@ def effective_date(now: datetime, event: str = "schedule") -> date:
     return now.date()
 
 
-def decide(today: date, closed: set[date] | None, event: str = "schedule") -> tuple[bool, str]:
+def published_needs_repair(manifest: dict | None, today: date, closed: set[date]) -> bool:
+    """已發佈的自建資料包 manifest 有洞（gaps 非空），或完整日落後「今天之前最近一個交易日」≥1 個交易日。
+    updatePRD-opus §11 R2：週收集一週只跑一次，洞不處理會卡到下週五；這裡讓那天當晚多收一次（不加 cron、不改頻率）。"""
+    if not manifest:
+        return False
+    if manifest.get("gaps"):
+        return True
+    try:
+        cday = date.fromisoformat(str(manifest.get("complete_day")))
+    except ValueError:
+        return False
+    d = today - timedelta(days=1)
+    while not is_trading_day(d, closed) and d > cday:       # 今天之前最近的交易日
+        d -= timedelta(days=1)
+    return cday < d
+
+
+def decide(today: date, closed: set[date] | None, event: str = "schedule",
+           published: dict | None = None) -> tuple[bool, str]:
     if event == "workflow_dispatch":
         return True, "手動觸發，一律執行"
     if today in FORCE_RUN_DATES:
         return True, f"{today} 是指定補跑日，執行"
     if closed is None:
         return True, "沒有休市日表，fail-open 執行"
+    if is_trading_day(today, closed) and published_needs_repair(published, today, closed):
+        return True, f"{today} 自建資料包有洞或落後，當晚補收"
     if is_last_trading_day_of_week(today, closed):
         return True, f"{today}（週{'一二三四五六日'[today.weekday()]}）是當週最後交易日，執行"
     if not is_trading_day(today, closed):
@@ -108,7 +129,15 @@ def main(argv=None) -> int:
     today = date.fromisoformat(a.date) if a.date else effective_date(now, event)
     if not a.date and today != now.date():
         print(f"[guard] 現在台北 {now:%Y-%m-%d %H:%M}，排程延遲跨午夜 → 以前一天 {today} 判斷")
-    run, why = decide(today, fetch_closed(), event)
+    published = None
+    pm = os.environ.get("PUBLISHED_MANIFEST")
+    if pm and os.path.exists(pm):
+        try:
+            with open(pm, encoding="utf-8") as f:
+                published = json.load(f)
+        except (OSError, ValueError):
+            published = None        # 讀不到＝不啟動自癒，維持原判斷
+    run, why = decide(today, fetch_closed(), event, published)
     print(f"[guard] run={'true' if run else 'false'}：{why}")
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
