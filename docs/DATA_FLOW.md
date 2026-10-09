@@ -119,6 +119,7 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:13/19:
 ```
 - **影子期（2026-10-12 起）只產不用**：tw-swing 全程仍吃上游 data_pack；切換預定 2026-10-24（見 updatePRD-opus.md §0.2、§7）。
 - 上市日線主來源＝官網 `MI_INDEX`（帶日期），OpenAPI 備援；日線「取到就停」；整班落在請求時段外（排程延遲）不算錯誤，停滯交給紅燈。
+- **自癒（2026-10-09）**：datapack 紅燈＋manifest `gaps`（或完整日落後）→ 下一個平日 23:58 那班 `selfhost_collect` 的 guard 讀已發佈 manifest，有洞或落後就當晚補收（不加 cron）。**急的話手動 dispatch `selfhost_collect`**（`gh workflow run selfhost_collect.yml`）。
 - **救援**：①zip 沒更新／想重做：`gh workflow run selfhost_datapack.yml -f force=true`（來源沒變也重做）；②日線／法人／融資有洞：`gh workflow run selfhost_collect.yml`（手動＝全量補近 14 天；OpenAPI 只回最新一天，錯過當天只能靠這個帶日期補）；③閘門擋住（`::error::zip 閘門`）：看 `merge_manifest.json` 的 `gaps`／`last_dates`，補完資料後 ②→①；④回滾＝tw-swing 變數 `PACK_SOURCE=upstream`（B2 實作後；目前 tw-swing 本來就吃上游，無需動作）。
 
 ---
