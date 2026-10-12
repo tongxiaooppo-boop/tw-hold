@@ -23,6 +23,18 @@
       "signal_date": "2026-10-08",
       "risk_stop_ref": 560.57
     },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-10-08",
+      "risk_stop_ref": 47.71
+    },
+    "2535": {
+      "name": "達欣工",
+      "status": "pending_entry",
+      "signal_date": "2026-10-08",
+      "risk_stop_ref": 89.54
+    },
     "3037": {
       "name": "欣興",
       "first_seen": "2026-10-07",
@@ -427,18 +439,6 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-10-08",
-      "risk_stop_ref": 47.71
-    },
-    "2535": {
-      "name": "達欣工",
-      "status": "pending_entry",
-      "signal_date": "2026-10-08",
-      "risk_stop_ref": 89.54
     }
   }
 }
