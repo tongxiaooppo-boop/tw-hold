@@ -30,6 +30,8 @@ from pathlib import Path
 
 SWING_REPO = "tongxiaooppo-boop/tw-swing"
 SWING_WORKFLOW = "daily.yml"
+RELAY_SOURCE = "tw-hold-relay"       # tw-swing daily.yml 的 inputs.source：它的 run-name／check_daily 靠這個把接力算成「自己在跑」（G-5）；
+                                     # ⚠️ 該 input 必須已經在 tw-swing 的 workflow 宣告（2026-10-13 d36ac9b），否則 GitHub 回 422
 FALLBACK_BRANCH = "master"          # tw-swing 的預設分支是 master（2026-10-09 寫死 main 被 GitHub 拒絕、靜默不觸發）
 _API = "https://api.github.com"
 
@@ -73,7 +75,7 @@ def dispatch(pat: str, opener=_request) -> tuple[bool, str]:
     branch = default_branch(pat, opener)
     url = f"{_API}/repos/{SWING_REPO}/actions/workflows/{SWING_WORKFLOW}/dispatches"
     try:
-        with opener(url, pat, "POST", json.dumps({"ref": branch}).encode("utf-8")) as r:
+        with opener(url, pat, "POST", json.dumps({"ref": branch, "inputs": {"source": RELAY_SOURCE}}).encode("utf-8")) as r:
             return (r.status == 204), f"HTTP {r.status}（分支 {branch}）"
     except urllib.error.HTTPError as e:
         return False, f"HTTP {e.code}：{e.read().decode('utf-8', errors='replace')[:200]}"

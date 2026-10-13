@@ -85,7 +85,7 @@ def test_dispatch_success_uses_default_branch_from_api():
     ok, msg = st.dispatch("pat", _opener(b'{"default_branch": "trunk"}', record=rec))
     assert ok and "trunk" in msg
     method, url, data = rec[-1]
-    assert method == "POST" and url.endswith("/actions/workflows/daily.yml/dispatches") and json.loads(data) == {"ref": "trunk"}
+    assert method == "POST" and url.endswith("/actions/workflows/daily.yml/dispatches") and json.loads(data) == {"ref": "trunk", "inputs": {"source": "tw-hold-relay"}}   # 帶接力標記：tw-swing 才分得出接力與人手動（G-5）
 
 
 def test_default_branch_falls_back_to_master_when_api_fails():
