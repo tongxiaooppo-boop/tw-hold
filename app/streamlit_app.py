@@ -2708,9 +2708,18 @@ def _industry_rotation_table(rows: list[dict], mode: str = "漲跌幅") -> str:
 
 
 _GH_REPO = "tongxiaooppo-boop/tw-hold"
-#: 這頁的資料源分兩條獨立排程——手動重整按鈕兩條都觸發，使用者不用自己判斷
-#: 卡片過期是哪一條的責任（見 [[tw-hold-macro-staleness-badge]]）。
-_REFRESH_WORKFLOWS = [("rebuild.yml", "三清單/台股/族群動向"), ("global_macro.yml", "國際總經")]
+#: 按鈕一次叫起的雲端 workflow（全在 tw-hold repo、同一把 PAT 就夠）。分兩側：
+#: ① 重算側（三清單／國際總經）② 收集側（2026-10-13 加：GitHub 排程常晚數小時，卡片過期時要能直接叫收集）。
+#: 收集側「官方日線／融資」跑完會自動接著跑「自建資料包」（workflow_run），不用另外列。
+#: 不含 tw-swing 的掃描／bundle（另一個 repo、要另一把有權限的 PAT；之後用事件接力處理，見交接 HANDOFF_2026-10-13）。
+#: 並行群組：rebuild／pcf_retry 同組、global_macro／chip_flow_evening 同組，各組最多兩條，GitHub 會排隊不會互相取消。
+_REFRESH_WORKFLOWS = [
+    ("rebuild.yml", "三清單/台股/族群動向"),
+    ("global_macro.yml", "國際總經"),
+    ("openapi_daily.yml", "官方日線／融資收集（自建上游）"),
+    ("pcf_retry.yml", "主動式 ETF 持股（PCF）"),
+    ("chip_flow_evening.yml", "籌碼流向"),
+]
 
 
 def _latest_run(workflow_file: str, token: str) -> dict | None:
@@ -2768,6 +2777,26 @@ def _trigger_workflow(workflow_file: str, token: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+def _refresh_all(token: str, workflows=None, latest_run=None, trigger=None) -> dict:
+    """逐條觸發：上一輪還在跑的**只略過那一條**，其餘照觸發（以前只有兩條、任一條在跑就整個不動；現在五條，
+    一條卡住不該擋掉其他）。`latest_run`／`trigger` 可注入（測試用）。回 {busy:[label], ok:[label], failed:[(label, err)]}。"""
+    workflows = _REFRESH_WORKFLOWS if workflows is None else workflows
+    latest_run = latest_run or _latest_run
+    trigger = trigger or _trigger_workflow
+    out: dict = {"busy": [], "ok": [], "failed": []}
+    for wf, label in workflows:
+        run = latest_run(wf, token)
+        if run and run.get("status") in ("in_progress", "queued"):
+            out["busy"].append(label)
+            continue
+        ok, err = trigger(wf, token)
+        if ok:
+            out["ok"].append(label)
+        else:
+            out["failed"].append((label, err))
+    return out
+
+
 @st.cache_resource
 def _refresh_gate() -> dict:
     """按鈕冷卻的存放處——刻意用 `cache_resource`（同一個 Streamlit 行程內
@@ -2781,8 +2810,7 @@ def _refresh_gate() -> dict:
 
 
 def _macro_refresh_button() -> None:
-    """頁尾手動重整——使用者發現卡片過期時按下去，觸發 rebuild.yml +
-    global_macro.yml 雲端重跑，不用等排程時間到或自己去 GitHub Actions 點按鈕
+    """頁尾手動重整——使用者發現卡片過期時按下去，觸發 rebuild.yml／global_macro.yml／收集側（`_REFRESH_WORKFLOWS`）雲端重跑，不用等排程時間到或自己去 GitHub Actions 點按鈕
     （2026-09-22 使用者要求）。
 
     需要 `st.secrets["GH_DISPATCH_PAT"]`：一顆只給 `actions: write` 權限的
@@ -2812,33 +2840,22 @@ def _macro_refresh_button() -> None:
     if st.button("🔄 立即重新整理資料", key="macro_refresh_btn"):
         _ensure_refdata.clear()             # 下一次 rerun 重拉私有參考資料（否則要等 30 分鐘 TTL）
         gate["until"] = time.time() + 900   # 15 分鐘，行程級、任何人按都算數
-        # 觸發前先問 GitHub 這兩條最近一輪跑完了沒——這層判斷在 GitHub 端，
-        # 任何 client（不管是不是這個按鈕）都繞不過，比單純的本地冷卻更權威，
-        # 也順便擋掉「連點兩次放大 push race 機率」（2026-09-22 Opus 審出）。
-        busy = []
-        for wf, label in _REFRESH_WORKFLOWS:
-            run = _latest_run(wf, token)
-            if run and run.get("status") in ("in_progress", "queued"):
-                busy.append(label)
-        if busy:
-            st.info(f"「{'／'.join(busy)}」上一輪還在跑，這次先不重複觸發，"
-                    "等它跑完（通常幾分鐘）再按。")
-            return
-
-        results = [(label, *_trigger_workflow(wf, token)) for wf, label in _REFRESH_WORKFLOWS]
-        failed = [(label, err) for label, ok, err in results if not ok]
+        # 觸發前先問 GitHub 各條最近一輪跑完了沒——這層判斷在 GitHub 端，任何 client 都繞不過，
+        # 比單純的本地冷卻更權威，也順便擋掉「連點兩次放大 push race 機率」（2026-09-22 Opus 審出）。
+        res = _refresh_all(token)
         actions_url = f"https://github.com/{_GH_REPO}/actions"
-        if not failed:
-            st.success(f"已觸發雲端重跑（三清單 + 國際總經），幾分鐘後重新整理頁面看看。"
-                       f"想看執行進度可以開 [GitHub Actions]({actions_url})。")
-        else:
-            ok_labels = [label for label, ok, _err in results if ok]
-            if ok_labels:
-                st.warning(f"「{'／'.join(ok_labels)}」觸發成功；"
-                           + "、".join(f"「{label}」失敗（{err}）" for label, err in failed)
+        busy_txt = f"（略過還在跑的：{'／'.join(res['busy'])}）" if res["busy"] else ""
+        if res["ok"]:
+            st.success(f"已觸發雲端重跑：{'、'.join(res['ok'])}{busy_txt}。幾分鐘後重新整理頁面看看；"
+                       f"想看執行進度可以開 [GitHub Actions]({actions_url})。"
+                       "（官方日線要 16:00 後才有當天資料，白天按只會重算現有的。）")
+            if res["failed"]:
+                st.warning("以下觸發失敗：" + "、".join(f"「{label}」{err}" for label, err in res["failed"])
                            + f" [GitHub Actions]({actions_url})")
-            else:
-                st.error("觸發失敗：" + "、".join(f"「{label}」{err}" for label, err in failed))
+        elif res["failed"]:
+            st.error("觸發失敗：" + "、".join(f"「{label}」{err}" for label, err in res["failed"]))
+        else:
+            st.info(f"「{'／'.join(res['busy'])}」上一輪都還在跑，這次先不重複觸發，等它跑完（通常幾分鐘）再按。")
 
 
 def _macro_compass_page() -> None:
