@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-13T03:34:04+00:00",
+    "updated_at": "2026-10-13T15:58:59+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -193,17 +193,80 @@
       "exit_date": "2026-10-12",
       "exit_price": 3337.14,
       "ret_pct": -0.00235
+    },
+    {
+      "ticker": "2535",
+      "name": "達欣工",
+      "entry_date": "2026-10-08",
+      "entry_price": 91.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 89.54,
+      "ret_pct": -0.016044
+    },
+    {
+      "ticker": "3037",
+      "name": "欣興",
+      "entry_date": "2026-10-07",
+      "entry_price": 1280.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 1177.43,
+      "ret_pct": -0.080133
+    },
+    {
+      "ticker": "6197",
+      "name": "佳必琪",
+      "entry_date": "2026-10-02",
+      "entry_price": 346.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 379.29,
+      "ret_pct": 0.096214
+    },
+    {
+      "ticker": "6239",
+      "name": "力成",
+      "entry_date": "2026-09-24",
+      "entry_price": 285.5,
+      "exit_date": "2026-10-13",
+      "exit_price": 293.71,
+      "ret_pct": 0.028757
+    },
+    {
+      "ticker": "1560",
+      "name": "中砂",
+      "entry_date": "2026-09-17",
+      "entry_price": 855.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 976.57,
+      "ret_pct": 0.142187
+    },
+    {
+      "ticker": "2455",
+      "name": "全新",
+      "entry_date": "2026-09-17",
+      "entry_price": 545.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 536.29,
+      "ret_pct": -0.015982
+    },
+    {
+      "ticker": "3081",
+      "name": "聯亞",
+      "entry_date": "2026-09-17",
+      "entry_price": 2780.0,
+      "exit_date": "2026-10-13",
+      "exit_price": 2762.86,
+      "ret_pct": -0.006165
     }
   ],
   "stats": {
-    "n": 21,
-    "win_rate": 0.38095238095238093,
-    "avg_ret_gross": 0.017715619047619046,
-    "expectancy_net": 0.011865619047619047,
+    "n": 28,
+    "win_rate": 0.39285714285714285,
+    "avg_ret_gross": 0.018602214285714284,
+    "expectancy_net": 0.012752214285714287,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": -4.904761904761906,
+      "gap_pp": -3.7142857142857144,
       "diverging": false
     },
     "by_month": [
@@ -215,9 +278,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 13,
-        "win_rate": 0.3076923076923077,
-        "avg_ret_net": 0.020339692307692312
+        "n": 20,
+        "win_rate": 0.35,
+        "avg_ret_net": 0.018615
       }
     ]
   }
