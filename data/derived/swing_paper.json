@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-12T21:49:45+00:00",
+    "updated_at": "2026-10-13T00:44:18+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -139,17 +139,71 @@
       "exit_date": "2026-10-07",
       "exit_price": 6800.71,
       "ret_pct": 0.232013
+    },
+    {
+      "ticker": "6491",
+      "name": "晶碩",
+      "entry_date": "2026-10-06",
+      "entry_price": 402.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 396.0,
+      "ret_pct": -0.014925
+    },
+    {
+      "ticker": "2476",
+      "name": "鉅祥",
+      "entry_date": "2026-10-06",
+      "entry_price": 132.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 127.93,
+      "ret_pct": -0.030833
+    },
+    {
+      "ticker": "2330",
+      "name": "台積電",
+      "entry_date": "2026-10-05",
+      "entry_price": 2575.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 2515.72,
+      "ret_pct": -0.023021
+    },
+    {
+      "ticker": "2404",
+      "name": "漢唐",
+      "entry_date": "2026-09-23",
+      "entry_price": 1255.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 1252.43,
+      "ret_pct": -0.002048
+    },
+    {
+      "ticker": "6196",
+      "name": "帆宣",
+      "entry_date": "2026-09-21",
+      "entry_price": 542.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 641.0,
+      "ret_pct": 0.182657
+    },
+    {
+      "ticker": "3017",
+      "name": "奇鋐",
+      "entry_date": "2026-09-17",
+      "entry_price": 3345.0,
+      "exit_date": "2026-10-12",
+      "exit_price": 3337.14,
+      "ret_pct": -0.00235
     }
   ],
   "stats": {
-    "n": 15,
-    "win_rate": 0.4666666666666667,
-    "avg_ret_gross": 0.0175032,
-    "expectancy_net": 0.0116532,
+    "n": 21,
+    "win_rate": 0.38095238095238093,
+    "avg_ret_gross": 0.017715619047619046,
+    "expectancy_net": 0.011865619047619047,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": 3.666666666666668,
+      "gap_pp": -4.904761904761906,
       "diverging": false
     },
     "by_month": [
@@ -161,9 +215,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 7,
-        "win_rate": 0.42857142857142855,
-        "avg_ret_net": 0.027148000000000002
+        "n": 13,
+        "win_rate": 0.3076923076923077,
+        "avg_ret_net": 0.020339692307692312
       }
     ]
   }
