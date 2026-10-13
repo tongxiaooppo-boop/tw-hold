@@ -1,12 +1,11 @@
 """B10：selfhost_datapack.yml 發佈後觸發 tw-swing 的步驟——預設關閉、只在完整日前進時打 API、失敗不擋資料包。
 
-做法：把 workflow 裡該步驟的 bash 取出，用假的 `curl` 放在 PATH 前面實際跑一遍（不碰網路）。
+判斷邏輯已搬進 scripts/swing_trigger.py（見 test_swing_trigger.py）；這裡驗 workflow 步驟的守門條件與接線。
 """
 import json
 import os
 import shutil
 import subprocess
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -45,48 +44,26 @@ bash = shutil.which("bash")
 
 
 @pytest.mark.skipif(bash is None, reason="需要 bash")
-@pytest.mark.parametrize("old,new,expect_call", [
-    (None, "2026-10-08", True),            # 已發佈沒有 manifest → 視為前進
-    ("2026-10-07", "2026-10-08", True),    # 前進
-    ("2026-10-08", "2026-10-08", False),   # 同日更正重發 → 不觸發
-    ("2026-10-09", "2026-10-08", False),   # 倒退 → 不觸發
+@pytest.mark.parametrize("old,new,expect_decision", [
+    (None, "2026-10-08", "觸發"),          # 已發佈沒有 manifest → 視為前進
+    ("2026-10-07", "2026-10-08", "觸發"),  # 前進
+    ("2026-10-08", "2026-10-08", "不觸發"),  # 同日更正重發
 ])
-def test_trigger_only_when_complete_day_advances(tmp_path, old, new, expect_call):
+def test_workflow_command_is_wired_to_swing_trigger_script(tmp_path, old, new, expect_decision):
+    """判斷邏輯在 scripts/swing_trigger.py（test_swing_trigger.py 逐案測過）；這裡只驗 workflow 那一行的接線——
+    用 workflow 裡真正的 run 指令跑一遍（不給 PAT，所以絕不會碰網路）：參數名稱對、路徑變數對、沒 PAT 也不會讓步驟變紅。"""
     _, _, st = _step()
+    assert st["run"].startswith("python scripts/swing_trigger.py") and "--dispatch" in st["run"]
     M, P = tmp_path / "M", tmp_path / "P"
     M.mkdir(); P.mkdir()
-    (M / "merge_manifest.json").write_text(json.dumps({"complete_day": new}), encoding="utf-8")
+    (M / "merge_manifest.json").write_text(json.dumps({"complete_day": new, "events_gap_days": []}), encoding="utf-8")
     if old:
-        (P / "merge_manifest.json").write_text(json.dumps({"complete_day": old}), encoding="utf-8")
-    log = tmp_path / "curl.log"
-    fake = tmp_path / "bin"
-    fake.mkdir()
-    (fake / "curl").write_text(textwrap.dedent(f"""\
-        #!/bin/bash
-        echo "$@" >> "{log.as_posix()}"
-        out=""
-        while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done
-        [ -n "$out" ] && echo '{{}}' > "$out"
-        printf 204
-        """), encoding="utf-8")
-    script = st["run"].replace("/tmp/d.json", (tmp_path / "d.json").as_posix())
-    env = {**os.environ, "PATH": fake.as_posix() + os.pathsep + os.environ["PATH"],
-           "M": M.as_posix(), "P": P.as_posix(), "SWING_PAT": "dummy"}
-    r = subprocess.run([bash, "-ec", script], env=env, capture_output=True, text=True, encoding="utf-8")
+        (P / "merge_manifest.json").write_text(json.dumps({"complete_day": old, "events_gap_days": []}), encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k != "SWING_PAT"}
+    env.update({"M": M.as_posix(), "P": P.as_posix(), "PYTHONIOENCODING": "utf-8"})
+    r = subprocess.run([bash, "-ec", st["run"]], env=env, capture_output=True, text=True, encoding="utf-8",
+                       cwd=Path(__file__).resolve().parents[1])
     assert r.returncode == 0, r.stderr
-    called = log.exists() and "actions/workflows/daily.yml/dispatches" in log.read_text(encoding="utf-8")
-    assert called == expect_call
-    if expect_call:                                                   # tw-swing 預設分支是 master，不可寫死 main（Opus 審查）
-        assert '"ref":"master"' in log.read_text(encoding="utf-8")
-        assert '"ref":"main"' not in log.read_text(encoding="utf-8")
-
-
-@pytest.mark.skipif(bash is None, reason="需要 bash")
-def test_missing_pat_is_warning_not_failure(tmp_path):
-    _, _, st = _step()
-    M, P = tmp_path / "M", tmp_path / "P"
-    M.mkdir(); P.mkdir()
-    (M / "merge_manifest.json").write_text(json.dumps({"complete_day": "2026-10-08"}), encoding="utf-8")
-    env = {**os.environ, "M": M.as_posix(), "P": P.as_posix(), "SWING_PAT": ""}
-    r = subprocess.run([bash, "-ec", st["run"]], env=env, capture_output=True, text=True, encoding="utf-8")
-    assert r.returncode == 0 and "沒設" in r.stdout
+    assert f"[swing_trigger] {expect_decision}" in r.stdout
+    if expect_decision == "觸發":
+        assert "TWSWING_DISPATCH_PAT 沒設" in r.stdout                # 有決定要觸發、但沒給 PAT：只警告
