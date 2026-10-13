@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-10-13",
-    "rebuilt_at": "2026-10-13T16:01:54+00:00",
+    "rebuilt_at": "2026-10-13T21:55:40+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：609 檔",
@@ -488,7 +488,7 @@
       "eps_yoy_low_base": false,
       "roe": 0.7005071126565143,
       "f_score": 6.0,
-      "revenue_yoy": 0.5905041299460161,
+      "revenue_yoy": 0.1256088926786263,
       "c_rev_yoy": true,
       "revenue_accel": false,
       "inst_net20": 4751818.0,
@@ -537,7 +537,6 @@
       ],
       "support": [
         "季 EPS YoY +169%（遠超 25% 門檻）",
-        "月營收 YoY +59%（成長明確）",
         "法人 20 日淨買超 4,752 張",
         "距 50MA 僅 +1%（進場點貼近支撐）",
         "距 52 週高 -15%（尚有空間）"
@@ -1319,9 +1318,9 @@
       "eps_yoy_low_base": false,
       "roe": 0.16041143918270614,
       "f_score": 6.0,
-      "revenue_yoy": 0.4565918579706578,
+      "revenue_yoy": 0.45522289368410584,
       "c_rev_yoy": true,
-      "revenue_accel": true,
+      "revenue_accel": false,
       "inst_net20": 19038347.0,
       "c_inst": true,
       "trend_cnt": 8,
@@ -1369,10 +1368,10 @@
       "support": [
         "季 EPS YoY +176%（遠超 25% 門檻）",
         "月營收 YoY +46%（成長明確）",
-        "月營收 YoY 較上月加速",
         "法人 20 日淨買超 19,038 張"
       ],
       "oppose": [
+        "月營收 YoY 較上月減速",
         "距 52 週高僅 -3%（追高風險）"
       ],
       "invalidation": [
@@ -1386,7 +1385,7 @@
         },
         {
           "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（YoY 仍加速）"
+          "目前": "未觸發（但 YoY 已較上月減速）"
         },
         {
           "條件": "季 EPS YoY 轉負",
@@ -1956,11 +1955,7 @@
     }
   ],
   "changes": {
-    "added": [
-      "2421"
-    ],
-    "removed": [
-      "2535"
-    ]
+    "added": [],
+    "removed": []
   }
 }

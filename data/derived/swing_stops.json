@@ -5,6 +5,36 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "6491": {
+      "name": "晶碩",
+      "status": "pending_entry",
+      "signal_date": "2026-10-13",
+      "risk_stop_ref": 384.36
+    },
+    "2476": {
+      "name": "鉅祥",
+      "status": "pending_entry",
+      "signal_date": "2026-10-13",
+      "risk_stop_ref": 122.34
+    },
+    "2404": {
+      "name": "漢唐",
+      "status": "pending_entry",
+      "signal_date": "2026-10-13",
+      "risk_stop_ref": 1133.2
+    },
+    "6196": {
+      "name": "帆宣",
+      "status": "pending_entry",
+      "signal_date": "2026-10-13",
+      "risk_stop_ref": 585.0
+    },
+    "2421": {
+      "name": "建準",
+      "status": "pending_entry",
+      "signal_date": "2026-10-13",
+      "risk_stop_ref": 158.67
+    },
     "2377": {
       "name": "微星",
       "first_seen": "2026-10-12",
@@ -139,18 +169,6 @@
       "dropped_date": null,
       "exit_date": "2026-10-13",
       "exit_price": 1177.43
-    },
-    "6491": {
-      "name": "晶碩",
-      "status": "pending_entry",
-      "signal_date": "2026-10-13",
-      "risk_stop_ref": 384.36
-    },
-    "2476": {
-      "name": "鉅祥",
-      "status": "pending_entry",
-      "signal_date": "2026-10-13",
-      "risk_stop_ref": 122.34
     },
     "1714": {
       "name": "和桐",
@@ -347,12 +365,6 @@
       "exit_date": null,
       "exit_price": null
     },
-    "2404": {
-      "name": "漢唐",
-      "status": "pending_entry",
-      "signal_date": "2026-10-13",
-      "risk_stop_ref": 1133.2
-    },
     "3711": {
       "name": "日月光投控",
       "first_seen": "2026-09-21",
@@ -367,12 +379,6 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
-    },
-    "6196": {
-      "name": "帆宣",
-      "status": "pending_entry",
-      "signal_date": "2026-10-13",
-      "risk_stop_ref": 585.0
     },
     "3044": {
       "name": "健鼎",
@@ -494,11 +500,11 @@
       "exit_date": "2026-10-05",
       "exit_price": 136.36
     },
-    "2421": {
-      "name": "建準",
+    "2027": {
+      "name": "大成鋼",
       "status": "pending_entry",
       "signal_date": "2026-10-13",
-      "risk_stop_ref": 158.67
+      "risk_stop_ref": 47.91
     }
   }
 }
