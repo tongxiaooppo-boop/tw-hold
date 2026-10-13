@@ -3,7 +3,7 @@
   "source": "自建 PCF（統一／復華／群益官網每日揭露）",
   "anchor_date": "2026-10-12",
   "market_date": "2026-10-12",
-  "fetched_at": "2026-10-13T00:44:40+00:00",
+  "fetched_at": "2026-10-13T03:17:42+00:00",
   "total_etfs": 5,
   "synced_etfs": 5,
   "stale_etfs": 0,
@@ -18,7 +18,7 @@
   "funds": {
    "00981A": {
     "synced": true,
-    "date": "2026-10-11",
+    "date": "2026-10-12",
     "prev_date": "2026-10-08",
     "span_days": 2,
     "moved_n": 5,
@@ -28,12 +28,12 @@
     "navps_prev": 32.2699590519178,
     "close": 32.3,
     "close_date": "2026-10-12",
-    "premium_pct": null,
-    "premium_skipped": true
+    "premium_pct": -0.01064408337472273,
+    "premium_skipped": false
    },
    "00403A": {
     "synced": true,
-    "date": "2026-10-11",
+    "date": "2026-10-12",
     "prev_date": "2026-10-08",
     "span_days": 2,
     "moved_n": 4,
@@ -43,8 +43,8 @@
     "navps_prev": 11.330100321027224,
     "close": 11.29,
     "close_date": "2026-10-12",
-    "premium_pct": null,
-    "premium_skipped": true
+    "premium_pct": -0.22128488598826532,
+    "premium_skipped": false
    },
    "00991A": {
     "synced": true,
