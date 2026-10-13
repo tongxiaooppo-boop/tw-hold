@@ -179,7 +179,7 @@ def merge_notrade_day(old: pd.DataFrame, new: pd.DataFrame, market: str, d: date
     ts = pd.Timestamp(d)
     keep = old[~((old["market"] == market) & (old["date"] == ts))] if len(old) else old
     cur = old[(old["market"] == market) & (old["date"] == ts)] if len(old) else old
-    key = lambda x: sorted(zip(x["ticker"].astype(str), x["volume"].astype(float))) if len(x) else []   # noqa: E731
+    key = lambda x: sorted(zip(x["ticker"].astype(str), x["volume"].astype(float), x["value"].astype(float))) if len(x) else []   # noqa: E731
     if key(cur) == key(new):
         return old, False
     return pd.concat([keep, new], ignore_index=True)[NT_COLS], True
@@ -692,12 +692,17 @@ def main() -> int:
             ("tpex_day", TPEX_DAY, "TWO", parse_prices, PRICES, PRICE_COLS),
             ("tpex_margin", TPEX_MARGIN, "TWO", parse_margin, MARGIN, MARGIN_COLS)]
     tables = {PRICES: _read(PRICES, PRICE_COLS), MARGIN: _read(MARGIN, MARGIN_COLS)}
-    try:
-        nt_table = _read(NOTRADE, NT_COLS)[NT_COLS]
-    except Exception as e:      # noqa: BLE001  旁表壞了（檔案損毀）就當沒有，日線照收
-        print(f"::warning::讀無成交旁表失敗，本班不更新旁表：{str(e)[:120]}", file=sys.stderr)
-        nt_table = pd.DataFrame(columns=NT_COLS).astype({"date": "datetime64[ns]"})
+    nt_table = pd.DataFrame(columns=NT_COLS).astype({"date": "datetime64[ns]"})
     nt_changed = False
+    nt_disabled = bool(os.environ.get("NOTRADE_DISABLED"))   # workflow 偵測到「log 有寫入記錄、Release 卻缺檔」時設（見 openapi_daily.yml）
+    if nt_disabled:
+        print("::warning::無成交旁表已停用（Release 缺 openapi_notrade.parquet 但 fetch log 有寫入記錄）——日線照收，旁表本班不更新，請人工處理", file=sys.stderr)
+    else:
+        try:
+            nt_table = _read(NOTRADE, NT_COLS)[NT_COLS]
+        except Exception as e:      # noqa: BLE001  檔案損毀：**停用**旁表（不能拿空表繼續，下一個新日子會寫出只含一天的檔並蓋掉累積）；日線照收
+            nt_disabled = True
+            print(f"::warning::讀無成交旁表失敗，本班停用旁表（日線照收）：{str(e)[:120]}", file=sys.stderr)
     ok = 0
     in_window = 0                                     # 本班有幾個端點在請求時段內
     changed = False
@@ -737,7 +742,7 @@ def main() -> int:
             else:
                 tables[path], action = merge_day(tables[path], wdf, cols)
                 changed = changed or action in ("added", "replaced")
-                if action in ("added", "replaced"):
+                if action in ("added", "replaced") and not nt_disabled:
                     nt_table, c3 = _try_merge_notrade(nt_table, lambda: wnt, mk, target)
                     nt_changed = nt_changed or c3
                 wentry["rows"], wentry["result"] = len(wdf), f"{action} {len(wdf)} 列"
@@ -770,7 +775,7 @@ def main() -> int:
         tables[path], action = merge_day(tables[path], df, cols)
         if action in ("added", "replaced"):
             changed = True
-            if name in ("twse_day", "tpex_day"):      # 日線被接受時，同一天的無成交列一起換掉（同一份回應，不另外請求）
+            if name in ("twse_day", "tpex_day") and not nt_disabled:      # 日線被接受時，同一天的無成交列一起換掉（同一份回應，不另外請求）
                 nt_table, c3 = _try_merge_notrade(nt_table, lambda: parse_notrade(rows, mk, d), mk, d)
                 nt_changed = nt_changed or c3
         if action == "shrunk":
@@ -812,6 +817,7 @@ def main() -> int:
     if nt_changed:
         try:
             _atomic_parquet(nt_table.sort_values(["date", "market", "ticker"]).reset_index(drop=True), NOTRADE)
+            _log({"fetched_at": str(fetched), "endpoint": "notrade", "rows": len(nt_table), "result": "written"})   # workflow 靠這筆判斷「該有檔」
         except Exception as e:      # noqa: BLE001  寫不出旁表不能影響日線／融資的輸出與 GITHUB_OUTPUT
             nt_changed = False
             print(f"::warning::無成交旁表寫檔失敗（不影響日線）：{str(e)[:120]}", file=sys.stderr)

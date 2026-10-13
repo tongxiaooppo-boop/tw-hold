@@ -103,8 +103,10 @@ def _isodate(v: Any) -> str:
     if s.startswith("/Date("):
         try:
             ms = int(s[6:].split(")")[0].split("+")[0].split("-")[0] or 0)
-            return (datetime(1970, 1, 1, tzinfo=timezone.utc)
-                    + timedelta(milliseconds=ms)).strftime("%Y-%m-%d")
+            # 統一 ezmoney 的 `/Date(ms)/` 是「台北當天 00:00」的 epoch 毫秒（＝前一天 16:00 UTC）：
+            # 一定要換成台北時間再取日期，用 UTC 會少一天（2026-10-13 發現：10/12 被存成 10/11，週一變週日）。
+            return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(milliseconds=ms)
+                    + timedelta(hours=8)).strftime("%Y-%m-%d")
         except Exception:
             return ""
     if "T" in s or (len(s) >= 10 and s[4] == "-"):

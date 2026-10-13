@@ -16,12 +16,16 @@
 **停牌不補**：官方當天根本沒有列（停止買賣、減資換股停牌、終止上市）→ 不在旁表 → 不補；原因看事件簿（`ledger` 的 gap／halt／event）。
 
 口徑差（已知、已接受）：
+  - **成交量**：自建＝官方成交股數，含零股、盤後定價、鉅額；上游（Yahoo）只算一般盤整股。全市場中位數高約 1.2～1.4%，台積電約 +14%，
+    少數股票有大單時差數十倍到上千倍（例 3709 10/8 官方 6,263,225 股／198 筆 vs Yahoo 259,100；2024 2025-10-07 官方 31,055,267 vs Yahoo 8,001）。
+    用量比、爆量、20 日均成交值門檻的規則會被少數大單灌爆，**不是資料錯**；tw-swing 端要不要扣鉅額／標註「疑似鉅額」尚未決定。
   - 還原價用官方因子，上游 data_pack 用 Yahoo 還原；兩者在接縫與官方參考價捨入處有差（見 docs/data-fix.md C6、C9）
   - 日線沒有成交金額（data_pack 本來就沒有）
   - 融資融券限額（margin_quota／short_quota）自建沒有，不輸出該欄（tw-swing 匯入也不讀）
   - 不輸出集保（data_pack 的集保已停更；tw-swing 自己有集保週快照）
 
-⚠️ tw-swing 匯入後仍要緊接 `apply_chips_baseline.py`（FinMind 修好的籌碼歷史底稿疊回），順序不變。
+⚠️ 籌碼歷史底稿：tw-swing 的 selfhost 模式**刻意略過** `apply_chips_baseline.py`（官方資料不可被 FinMind 底稿蓋掉，見 updatePRD-opus §2.6）；
+   上游模式才要緊接 apply_chips_baseline。
 
 名稱與產業別：自建沒有，用 `--stock-list`（tw-swing 的 `data/store/stock_list.csv|parquet`，欄位 ticker/code/name/market/sector）
 或 `--universe`（bundle 的 `data/upstream/fundamentals/universe.parquet`）補；都沒有就留空（匯入不會失敗，只是產業別為空）。
@@ -110,13 +114,14 @@ def fill_no_trade(adj: pd.DataFrame, notrade: pd.DataFrame | None) -> tuple[pd.D
         return adj, 0
     nt = notrade[["ticker", "date", "volume"]].copy()
     nt["ticker"] = nt["ticker"].astype(str)
-    nt["date"] = pd.to_datetime(nt["date"])
-    have = set(zip(adj["ticker"].astype(str), pd.to_datetime(adj["date"])))
+    nt["date"] = pd.to_datetime(nt["date"]).astype("datetime64[us]")       # merge_asof 兩邊精度不同（ns／us）會直接 MergeError
+    have = set(zip(adj["ticker"].astype(str), pd.to_datetime(adj["date"]).astype("datetime64[us]")))
     nt = nt[[(t, d) not in have for t, d in zip(nt["ticker"], nt["date"])]].drop_duplicates(["ticker", "date"])
     if nt.empty:
         return adj, 0
     prev = adj[["ticker", "date", "close", "raw_close"]].copy()
     prev["ticker"] = prev["ticker"].astype(str)
+    prev["date"] = pd.to_datetime(prev["date"]).astype("datetime64[us]")
     prev = prev.rename(columns={"close": "_pc", "raw_close": "_prc"}).sort_values("date")
     m = pd.merge_asof(nt.sort_values("date"), prev, on="date", by="ticker", direction="backward", allow_exact_matches=False)
     m = m.dropna(subset=["_pc"])

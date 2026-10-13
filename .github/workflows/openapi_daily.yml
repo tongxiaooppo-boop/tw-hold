@@ -65,6 +65,12 @@ jobs:
                 [ "$ok" = 1 ] || { echo "::error::下載 $f 失敗（Release 上有）——中止"; exit 1; }
               fi
             done
+            # 無成交旁表：fetch log 已有寫入記錄卻缺檔＝上次上傳可能傳到一半（--clobber 先刪再傳）；不可從空表重來（下一個新日子會寫出只含一天的檔、蓋掉累積）。
+            # 只停旁表（週收集會把近 14 天的無成交列補回 notrade.parquet），不拖垮日線／融資／預告表
+            if grep -q '"endpoint": "notrade"' data/selfhost/openapi_fetch_log.jsonl 2>/dev/null && ! grep -qx openapi_notrade.parquet data/selfhost/_oa_assets.txt; then
+              echo "::error::Release 上缺 openapi_notrade.parquet，但 fetch log 已有寫入記錄——疑似上傳中斷，無成交旁表已停用，其他照跑，請人工處理"
+              echo "NOTRADE_DISABLED=1" >> "$GITHUB_ENV"
+            fi
             # 預告快照：fetch log 已有「成功記錄」卻缺檔＝上次上傳可能傳到一半；預告表只有未來事件、補不回來，不可從空檔重來
             if grep -q '"endpoint": "forecast_[A-Z]*", "rows"' data/selfhost/openapi_fetch_log.jsonl 2>/dev/null && ! grep -qx openapi_forecast.jsonl data/selfhost/_oa_assets.txt; then
               echo "::error::Release 上缺 openapi_forecast.jsonl，但 fetch log 已有預告表成功記錄——疑似上傳中斷，請人工處理"; exit 1
@@ -96,7 +102,7 @@ jobs:
           fi
           # 無成交旁表：失敗只警告（官方日線表只回最新一天，但週收集會把近 14 天的無成交列補回 notrade.parquet），不擋其他上傳
           if [ "${{ steps.collect.outputs.notrade_changed }}" = "true" ] && [ -f data/selfhost/openapi_notrade.parquet ]; then
-            gh release upload openapi-daily data/selfhost/openapi_notrade.parquet --clobber || echo "::warning::無成交旁表上傳失敗，下一班會再傳"
+            gh release upload openapi-daily data/selfhost/openapi_notrade.parquet --clobber || echo "::warning::無成交旁表上傳失敗——不會自動重傳（目標日已存不再請求）；週收集會把近 14 天補回 notrade.parquet，之後最多少補幾天的列"
           fi
           # 三大法人：失敗只警告（網站端點帶日期、補得回來），不擋其他上傳
           if [ "${{ steps.collect.outputs.inst_changed }}" = "true" ] && [ -f data/selfhost/openapi_inst.parquet ]; then

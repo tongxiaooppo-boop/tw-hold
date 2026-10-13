@@ -208,6 +208,8 @@ def test_merge_notrade_day_replaces_whole_day_and_detects_no_change():
     assert ch and len(t) == 1
     t2, ch2 = oa.merge_notrade_day(t, d1, "TWO", date(2026, 10, 8))
     assert not ch2 and len(t2) == 1                                             # 同內容再來一次＝沒變（workflow 才不重傳）
+    d1b = d1.assign(value=d1["value"] + 1.0)                                    # 官方只更正成交值（量不變）也要算有變
+    assert oa.merge_notrade_day(t, d1b, "TWO", date(2026, 10, 8))[1] is True
     d2 = oa.parse_notrade([_tpex_row(code="1242", close="---")], "TWO", date(2026, 10, 8))
     t3, ch3 = oa.merge_notrade_day(t, d2, "TWO", date(2026, 10, 8))
     assert ch3 and list(t3.ticker) == ["1242"]                                  # 官方更正：原本無成交的變有成交 → 舊列要消失
@@ -230,6 +232,64 @@ def test_notrade_errors_never_break_price_collection(capsys):
     t, ch = oa._try_merge_notrade(empty, boom, "TWO", date(2026, 10, 8))
     assert ch is False and t is empty                                           # 出錯：原表原樣、不報變更
     assert "不影響日線" in capsys.readouterr().err
+
+
+# ───────── main() 整合：日線新增時旁表一起寫、已存日不再請求、旁表停用不影響日線 ─────────
+def _tpex_rows(n_trade=3, n_nt=2):
+    rows = [_tpex_row(code=str(1240 + i)) for i in range(n_trade)]
+    for i in range(n_nt):
+        r = _tpex_row(code=str(5270 + i), close=" ---")
+        r["TradingShares"], r["TransactionAmount"] = str(100 + i), "9,999"
+        rows.append(r)
+    rows.append(_tpex_row(code="00411A", close=" ---"))                       # 非 4 碼：不收
+    return rows
+
+
+def _run_main(monkeypatch, tmp_path, tpex_rows, twse_rows):
+    import types
+    guard = types.ModuleType("last_trading_day_guard")
+    guard.fetch_closed = lambda: None
+    monkeypatch.setitem(_sys.modules, "last_trading_day_guard", guard)
+    out = tmp_path / "gh_out.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setattr(oa, "endpoint_window_ok", lambda n, h: True)
+    monkeypatch.setattr(oa, "price_target", lambda today, hour, closed=None: date(2026, 10, 6))
+    monkeypatch.setattr(oa, "MIN_ROWS", {k: 1 for k in oa.MIN_ROWS})
+    monkeypatch.setattr(oa, "fetch_twse_web", lambda d, fetched: None)       # 官網失敗 → 退回 OpenAPI 備援路徑
+    monkeypatch.setattr(oa, "collect_twse_margin", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_inst", lambda today, fetched, table, hour=24: (table, False))
+    monkeypatch.setattr(oa, "collect_forecasts", lambda fetched, recs: (recs, False))
+    monkeypatch.setattr(oa, "run_events", lambda today, fetched, hour: (False, False))
+    resp = {oa.TWSE_DAY: twse_rows, oa.TPEX_DAY: tpex_rows, oa.TPEX_MARGIN: []}
+    monkeypatch.setattr(oa, "fetch", lambda url: (resp[url], "Mon, 05 Oct 2026 15:30:05 GMT", 200, None))
+    rc = oa.main()
+    return rc, dict(x.split("=") for x in out.read_text().split()) if out.exists() else {}
+
+
+def test_main_writes_notrade_with_prices_and_skips_when_day_already_stored(monkeypatch, tmp_path):
+    tw = [_tw(date_s="1151006", code="2330"), _tw(date_s="1151006", code="2884", close="")]
+    rc, o = _run_main(monkeypatch, tmp_path, _tpex_rows(), tw)
+    assert rc == 0 and o["changed"] == "true" and o["notrade_changed"] == "true"
+    px, nt = pd.read_parquet(oa.PRICES), pd.read_parquet(oa.NOTRADE)
+    assert sorted(px.ticker) == ["1240", "1241", "1242", "2330"]
+    assert sorted(zip(nt.market, nt.ticker)) == [("TW", "2884"), ("TWO", "5270"), ("TWO", "5271")]
+    assert nt[nt.ticker == "5270"].volume.iloc[0] == 100.0
+    rc2, o2 = _run_main(monkeypatch, tmp_path, _tpex_rows(), tw)             # 同一天再跑：日線已存＝不再請求、旁表也不動
+    assert rc2 == 0 and o2["changed"] == "false" and o2["notrade_changed"] == "false"
+
+
+def test_main_notrade_disabled_by_env_or_corrupt_file_never_blocks_prices(monkeypatch, tmp_path):
+    tw = [_tw(date_s="1151006", code="2330")]
+    monkeypatch.setenv("NOTRADE_DISABLED", "1")
+    rc, o = _run_main(monkeypatch, tmp_path, _tpex_rows(), tw)
+    assert rc == 0 and o["changed"] == "true" and o["notrade_changed"] == "false"
+    assert len(pd.read_parquet(oa.PRICES)) == 4 and not oa.NOTRADE.exists()  # 停用＝旁表檔完全不寫
+    monkeypatch.delenv("NOTRADE_DISABLED")
+    oa.PRICES.unlink()
+    oa.NOTRADE.write_bytes(b"not a parquet")                                  # 檔案損毀：停用旁表、日線照收、**不能把壞檔蓋成只含一天的檔**
+    rc, o = _run_main(monkeypatch, tmp_path, _tpex_rows(), tw)
+    assert rc == 0 and o["changed"] == "true" and o["notrade_changed"] == "false"
+    assert oa.NOTRADE.read_bytes() == b"not a parquet"
 
 
 # ───────── 上市融資 MI_MARGN（網站端點，帶日期）─────────

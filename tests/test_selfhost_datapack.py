@@ -169,7 +169,7 @@ def test_fill_no_trade_after_event_uses_adjusted_level_not_raw():
     adj = pd.DataFrame({"ticker": ["3085"], "date": [D1], "open": [15.59], "high": [15.59], "low": [15.59],
                         "close": [15.59], "volume": [100.0], "raw_close": [12.1]})
     out, n = dp.fill_no_trade(adj, _nt([("3085", "TWO", D4, 1855.0, 27917.0, "official")]))
-    assert n == 1 and out.iloc[-1]["close"] == 15.59 and out.iloc[-1]["raw_close"] == 12.1
+    assert n == 1 and out.iloc[-1]["close"] == 15.59            # zip 不輸出 raw_close，只看還原水位
 
 
 def test_build_writes_filled_rows_into_csv_and_reports_count(tmp_path):
@@ -181,3 +181,16 @@ def test_build_writes_filled_rows_into_csv_and_reports_count(tmp_path):
     (tmp_path / "b").mkdir()
     _, st0 = _build(tmp_path / "b")
     assert st0["no_trade_filled"] == 0                                                          # 不給旁表＝跟舊行為一樣
+
+
+def test_fill_no_trade_tolerates_mixed_datetime_precision():
+    # merge_asof 兩邊 ns／us 精度不同會直接 MergeError（pandas 3）；兩種輸入都要能補
+    adj, _, _, _ = _frames()
+    adj["date"] = adj["date"].astype("datetime64[ns]")
+    nt = _nt([("2330", "TW", D3, 10.0, 0.0, "official")])
+    nt["date"] = nt["date"].astype("datetime64[us]")
+    out, n = dp.fill_no_trade(adj, nt)
+    assert n == 1 and out[(out["ticker"] == "2330") & (out["date"] == D3)]["close"].iloc[0] == 102.0
+    nt["date"] = nt["date"].astype("datetime64[ns]")
+    adj["date"] = adj["date"].astype("datetime64[us]")
+    assert dp.fill_no_trade(adj, nt)[1] == 1

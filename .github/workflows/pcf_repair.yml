@@ -1,0 +1,88 @@
+name: PCF 統一快照日期修補（手動）
+
+# 統一 00981A／00403A 的 PCF 快照日期標早一天、部分交易日被覆蓋（根因與做法見 scripts/pcf_repair_tongyi.py 檔頭；2026-10-13）。
+# 只能手動觸發；**預設只試算（印計畫、不寫、不推）**，確認計畫後再用 apply=true 重跑。
+# 與 rebuild.yml／pcf_retry.yml 共用 concurrency 群組 refdata-pcf：Release 上的 pcf__*.zip 是「整包打包再覆蓋」，
+# 本機或另一支 workflow 同時推會互相蓋掉（Opus 審核 2026-10-13）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "true＝真的修補並推上私有 Release；預設 false＝只試算"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refdata-pcf
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # --strict＝還原不完整就中止（每檔基金一個 zip，從殘缺目錄重打包再推上去會把 Release 上的歷史蓋掉）
+      - name: 還原私有參考資料（pcf）
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only pcf --strict
+
+      - name: 備份修補前的快照（留在 workflow artifact 7 天）
+        run: tar czf pcf_before_repair.tgz data/pcf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pcf_before_repair
+          path: pcf_before_repair.tgz
+          retention-days: 7
+
+      - name: 試算／修補
+        env:
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [ "$APPLY" = "true" ]; then python scripts/pcf_repair_tongyi.py --apply; else python scripts/pcf_repair_tongyi.py; fi
+
+      - name: 重算主動式 ETF 認養旗標
+        if: inputs.apply
+        run: python build_active_etf_flags.py
+
+      - name: 推到私有 Release
+        if: inputs.apply
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py push data/pcf
+
+      - name: commit（旗標有變才 commit）
+        if: inputs.apply
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/derived/active_etf_flags.json
+          git diff --cached --quiet -- data/derived/active_etf_flags.json && { echo "旗標沒變——跳過 commit"; exit 0; }
+          git commit -m "PCF 統一快照日期修補 $(date -u +%F)"
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            echo "push 被拒（第 $i 次），rebase 後重試"
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- data/derived/active_etf_flags.json 2>/dev/null || true
+              git add -A data/derived/active_etf_flags.json 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
+          done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，旗標沒有推上 main"; exit 1; }
