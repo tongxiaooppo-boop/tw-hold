@@ -223,6 +223,15 @@ def test_drain_web_notrade_takes_and_clears_global_list():
     assert oa._drain_web_notrade().empty
 
 
+def test_notrade_errors_never_break_price_collection(capsys):
+    empty = pd.DataFrame(columns=oa.NT_COLS).astype({"date": "datetime64[ns]"})
+    def boom():
+        raise ValueError("官方改欄名")
+    t, ch = oa._try_merge_notrade(empty, boom, "TWO", date(2026, 10, 8))
+    assert ch is False and t is empty                                           # 出錯：原表原樣、不報變更
+    assert "不影響日線" in capsys.readouterr().err
+
+
 # ───────── 上市融資 MI_MARGN（網站端點，帶日期）─────────
 import sys as _sys
 import types as _types

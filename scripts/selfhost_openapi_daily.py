@@ -185,14 +185,27 @@ def merge_notrade_day(old: pd.DataFrame, new: pd.DataFrame, market: str, d: date
     return pd.concat([keep, new], ignore_index=True)[NT_COLS], True
 
 
+def _try_merge_notrade(table: pd.DataFrame, build_new, market: str, d: date) -> tuple[pd.DataFrame, bool]:
+    """無成交旁表是**附屬資料**：解析或併入出任何錯，只警告、保持原表，絕不能拖垮日線收集（官方日線表只回最新一天，那天沒存就補不回來）。"""
+    try:
+        return merge_notrade_day(table, build_new(), market, d)
+    except Exception as e:      # noqa: BLE001
+        print(f"::warning::無成交旁表 {market} {d} 處理失敗（不影響日線）：{str(e)[:120]}", file=sys.stderr)
+        return table, False
+
+
 def _drain_web_notrade() -> pd.DataFrame:
     """取走 selfhost_raw_prices 解析官網 MI_INDEX 時順手記下的無成交列（它是全域清單，不取走會一直累積）。"""
-    import selfhost_raw_prices as rp  # noqa: PLC0415
-    rows, rp.NOTRADE[:] = list(rp.NOTRADE), []
-    df = pd.DataFrame(rows, columns=NT_COLS) if rows else pd.DataFrame(columns=NT_COLS)
-    if len(df):
-        df["src"] = SRC_WEB_MI_INDEX
-    return df[NT_COLS]
+    try:
+        import selfhost_raw_prices as rp  # noqa: PLC0415
+        rows, rp.NOTRADE[:] = list(rp.NOTRADE), []
+        df = pd.DataFrame(rows, columns=NT_COLS) if rows else pd.DataFrame(columns=NT_COLS)
+        if len(df):
+            df["src"] = SRC_WEB_MI_INDEX
+        return df[NT_COLS]
+    except Exception as e:      # noqa: BLE001  附屬資料，不拖垮日線
+        print(f"::warning::取走官網無成交列失敗（不影響日線）：{str(e)[:120]}", file=sys.stderr)
+        return pd.DataFrame(columns=NT_COLS)
 
 
 def parse_margin(rows: list[dict], market: str, d: date, lm, fetched) -> pd.DataFrame:
@@ -679,7 +692,12 @@ def main() -> int:
             ("tpex_day", TPEX_DAY, "TWO", parse_prices, PRICES, PRICE_COLS),
             ("tpex_margin", TPEX_MARGIN, "TWO", parse_margin, MARGIN, MARGIN_COLS)]
     tables = {PRICES: _read(PRICES, PRICE_COLS), MARGIN: _read(MARGIN, MARGIN_COLS)}
-    nt_table, nt_changed = _read(NOTRADE, NT_COLS)[NT_COLS], False
+    try:
+        nt_table = _read(NOTRADE, NT_COLS)[NT_COLS]
+    except Exception as e:      # noqa: BLE001  旁表壞了（檔案損毀）就當沒有，日線照收
+        print(f"::warning::讀無成交旁表失敗，本班不更新旁表：{str(e)[:120]}", file=sys.stderr)
+        nt_table = pd.DataFrame(columns=NT_COLS).astype({"date": "datetime64[ns]"})
+    nt_changed = False
     ok = 0
     in_window = 0                                     # 本班有幾個端點在請求時段內
     changed = False
@@ -720,7 +738,7 @@ def main() -> int:
                 tables[path], action = merge_day(tables[path], wdf, cols)
                 changed = changed or action in ("added", "replaced")
                 if action in ("added", "replaced"):
-                    nt_table, c3 = merge_notrade_day(nt_table, wnt, mk, target)
+                    nt_table, c3 = _try_merge_notrade(nt_table, lambda: wnt, mk, target)
                     nt_changed = nt_changed or c3
                 wentry["rows"], wentry["result"] = len(wdf), f"{action} {len(wdf)} 列"
                 print(f"[openapi] twse_day_web：資料日 {target}、{len(wdf)} 列、{action}")
@@ -753,7 +771,7 @@ def main() -> int:
         if action in ("added", "replaced"):
             changed = True
             if name in ("twse_day", "tpex_day"):      # 日線被接受時，同一天的無成交列一起換掉（同一份回應，不另外請求）
-                nt_table, c3 = merge_notrade_day(nt_table, parse_notrade(rows, mk, d), mk, d)
+                nt_table, c3 = _try_merge_notrade(nt_table, lambda: parse_notrade(rows, mk, d), mk, d)
                 nt_changed = nt_changed or c3
         if action == "shrunk":
             print(f"::warning::OpenAPI {name} 資料日 {d}：較新的檔案列數縮水（{len(df)} 列），不覆蓋已存的完整版", file=sys.stderr)
@@ -792,7 +810,11 @@ def main() -> int:
             if len(t):
                 _atomic_parquet(t, p)
     if nt_changed:
-        _atomic_parquet(nt_table.sort_values(["date", "market", "ticker"]).reset_index(drop=True), NOTRADE)
+        try:
+            _atomic_parquet(nt_table.sort_values(["date", "market", "ticker"]).reset_index(drop=True), NOTRADE)
+        except Exception as e:      # noqa: BLE001  寫不出旁表不能影響日線／融資的輸出與 GITHUB_OUTPUT
+            nt_changed = False
+            print(f"::warning::無成交旁表寫檔失敗（不影響日線）：{str(e)[:120]}", file=sys.stderr)
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         with open(out, "a", encoding="utf-8") as f:
