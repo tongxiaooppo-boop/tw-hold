@@ -10,6 +10,11 @@
     data/margin/{code}_margin.csv                 date, margin_*/short_*/offset（單位：張）＋ margin_prev, short_prev, note
     data/stock_list.csv                           ticker, code, name, market(上市/上櫃), sector
 
+無成交日（2026-10-13 起）：官方行情表「有列、但收盤欄是 ---」的日子（冷門股當天沒成交，只有零股或完全沒量）不在 `raw_prices`，
+改記在旁表 `notrade`。輸出 zip 時這些日子**沿用前一個還原收盤**（O=H=L=C，量用官方零股量），與官方「無成交 → 次日參考價沿用前收」同義，也與
+上游（Yahoo）延續舊價的行為一致，tw-swing 的日線就不會少列。沿用的是「前一筆**還原**收盤」，所以跨減資／除權息事件也自然接上（等於事件參考價）。
+**停牌不補**：官方當天根本沒有列（停止買賣、減資換股停牌、終止上市）→ 不在旁表 → 不補；原因看事件簿（`ledger` 的 gap／halt／event）。
+
 口徑差（已知、已接受）：
   - 還原價用官方因子，上游 data_pack 用 Yahoo 還原；兩者在接縫與官方參考價捨入處有差（見 docs/data-fix.md C6、C9）
   - 日線沒有成交金額（data_pack 本來就沒有）
@@ -98,9 +103,34 @@ def stock_list_frame(codes_market: dict[str, str], stock_list: pd.DataFrame | No
     return pd.DataFrame(rows, columns=["ticker", "code", "name", "market", "sector"])
 
 
+def fill_no_trade(adj: pd.DataFrame, notrade: pd.DataFrame | None) -> tuple[pd.DataFrame, int]:
+    """把「官方有列、無成交價」的日子補進還原日線：O=H=L=C＝該檔前一筆**還原**收盤，量＝官方零股量。
+    回 (新的 adj, 補了幾列)。補不了的（旁表那天已有實價、該檔之前沒有任何實價）直接略過。"""
+    if notrade is None or notrade.empty:
+        return adj, 0
+    nt = notrade[["ticker", "date", "volume"]].copy()
+    nt["ticker"] = nt["ticker"].astype(str)
+    nt["date"] = pd.to_datetime(nt["date"])
+    have = set(zip(adj["ticker"].astype(str), pd.to_datetime(adj["date"])))
+    nt = nt[[(t, d) not in have for t, d in zip(nt["ticker"], nt["date"])]].drop_duplicates(["ticker", "date"])
+    if nt.empty:
+        return adj, 0
+    prev = adj[["ticker", "date", "close", "raw_close"]].copy()
+    prev["ticker"] = prev["ticker"].astype(str)
+    prev = prev.rename(columns={"close": "_pc", "raw_close": "_prc"}).sort_values("date")
+    m = pd.merge_asof(nt.sort_values("date"), prev, on="date", by="ticker", direction="backward", allow_exact_matches=False)
+    m = m.dropna(subset=["_pc"])
+    if m.empty:
+        return adj, 0
+    add = pd.DataFrame({"ticker": m["ticker"], "date": m["date"], "open": m["_pc"], "high": m["_pc"], "low": m["_pc"],
+                        "close": m["_pc"], "volume": m["volume"].fillna(0.0), "raw_close": m["_prc"]})
+    return pd.concat([adj, add.astype(adj.dtypes.to_dict(), errors="ignore")], ignore_index=True), len(add)
+
+
 def build(out_zip: Path, adj: pd.DataFrame, raw: pd.DataFrame, inst: pd.DataFrame | None, margin: pd.DataFrame | None,
           stock_list: pd.DataFrame | None = None, universe: pd.DataFrame | None = None,
-          tickers: set[str] | None = None, since: str | None = None, four_digit_only: bool = True) -> dict:
+          tickers: set[str] | None = None, since: str | None = None, four_digit_only: bool = True,
+          notrade: pd.DataFrame | None = None) -> dict:
     """組 zip。回傳統計 dict。tickers／since 只給小量試跑用。"""
     mk = latest_market(raw)
     if four_digit_only:
@@ -108,9 +138,11 @@ def build(out_zip: Path, adj: pd.DataFrame, raw: pd.DataFrame, inst: pd.DataFram
     if tickers:
         mk = {t: m for t, m in mk.items() if t in tickers}
     adj = adj[adj["ticker"].isin(mk)]
+    adj, n_filled = fill_no_trade(adj, notrade)
+    adj = adj[adj["ticker"].isin(mk)]
     if since:
         adj = adj[adj["date"] >= pd.Timestamp(since)]
-    stats = {"price_files": 0, "inst_files": 0, "margin_files": 0, "tickers": len(mk)}
+    stats = {"price_files": 0, "inst_files": 0, "margin_files": 0, "tickers": len(mk), "no_trade_filled": n_filled}
     out_zip.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_zip.with_suffix(out_zip.suffix + ".part")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
@@ -162,9 +194,10 @@ def main(argv=None) -> int:
     raw = pd.read_parquet(d / "raw_prices.parquet", columns=["ticker", "market", "date"])
     inst = pd.read_parquet(d / "inst.parquet")
     margin = pd.read_parquet(d / "margin.parquet")
+    notrade = pd.read_parquet(d / "notrade.parquet") if (d / "notrade.parquet").exists() else None   # 沒有就不補（舊流程相容）
     stats = build(Path(a.out), adj, raw, inst, margin,
                   _read_any(Path(a.stock_list) if a.stock_list else None), _read_any(Path(a.universe)),
-                  set(a.tickers.split(",")) if a.tickers else None, a.since, not a.all_codes)
+                  set(a.tickers.split(",")) if a.tickers else None, a.since, not a.all_codes, notrade)
     print("[datapack]", stats)
     if stats["price_files"] == 0:
         print("::error::沒有轉出任何日線檔", file=sys.stderr)

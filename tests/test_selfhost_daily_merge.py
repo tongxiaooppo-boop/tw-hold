@@ -109,3 +109,39 @@ def test_跨表缺日_raw有inst沒有要報洞():
     inst = _tbl([("2330", "TW", "2026-10-07", 1.0), ("6488", "TWO", "2026-10-06", 1.0), ("6488", "TWO", "2026-10-07", 1.0)])
     gaps = dm.find_gaps({"raw_prices": raw, "inst": inst}, pd.Timestamp("2026-10-07"))
     assert gaps == {"inst.TW": ["2026-10-06"]}
+
+
+# ── 無成交旁表：週收集 ∪ 每日表（2026-10-13）──
+def _nt(rows):
+    return pd.DataFrame(rows, columns=["ticker", "market", "date", "volume", "value", "src"]).assign(date=lambda d: pd.to_datetime(d["date"]))
+
+
+def test_notrade_聯集_週收集優先_只留完整日以前():
+    w = _nt([("2718", "TWO", "2026-10-07", 100.0, 1.0, "official")])
+    d = _nt([("2718", "TWO", "2026-10-07", 999.0, 9.0, "openapi"),        # 同鍵：以週收集為準
+             ("5276", "TWO", "2026-10-08", 191.0, 3.0, "openapi"),
+             ("5276", "TWO", "2026-10-12", 0.0, 0.0, "openapi")])         # 完整日之後：不收
+    m = dm.merge_notrade(w, d, pd.Timestamp("2026-10-08"))
+    assert len(m) == 2
+    assert m[m["ticker"] == "2718"]["volume"].iloc[0] == 100.0
+    assert dm.merge_notrade(None, None, pd.Timestamp("2026-10-08")) is None
+    assert len(dm.merge_notrade(None, d, pd.Timestamp("2026-10-12"))) == 3       # 只有每日表也行（週表還沒涵蓋到的新日子）
+
+
+def test_main_有旁表就輸出且進雜湊_沒有就不輸出(tmp_path):
+    w, dd = tmp_path / "w", tmp_path / "d"
+    w.mkdir(), dd.mkdir()
+    _px([("2330", "TW", "2026-10-06", 10.0), ("6129", "TWO", "2026-10-06", 10.0)]).to_parquet(w / "raw_prices.parquet")
+    for name, cols in (("inst", ["foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net"]),
+                       ("margin", ["margin_balance", "margin_buy", "margin_sell", "short_balance", "short_sell"])):
+        pd.DataFrame({"date": pd.to_datetime("2026-10-06"), "ticker": ["2330", "6129"], "market": ["TW", "TWO"],
+                      **{c: 1.0 for c in cols}}).to_parquet(w / f"{name}.parquet")
+    def run(o):
+        assert dm.main(["--weekly-dir", str(w), "--daily-dir", str(dd), "--out-dir", str(o)]) == 0
+        return json.loads((o / "merge_manifest.json").read_text(encoding="utf-8"))["input_hash"]
+    h0 = run(tmp_path / "o0")
+    assert not (tmp_path / "o0" / "notrade.parquet").exists()
+    _nt([("6129", "TWO", "2026-10-06", 5.0, 1.0, "official")]).to_parquet(dd / "openapi_notrade.parquet")
+    h1 = run(tmp_path / "o1")
+    assert len(pd.read_parquet(tmp_path / "o1" / "notrade.parquet")) == 1
+    assert h1 != h0                                                          # 旁表變了 → 雜湊變 → zip 會重做

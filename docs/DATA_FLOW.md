@@ -124,6 +124,20 @@ TWSE BFI82U ─────────────┘   pcf_retry.yml(17:13/19:
 
 ---
 
+### 3.2 缺列怎麼處理：無成交沿用前收、停牌看事件簿（2026-10-13）
+
+日線在某天「沒有列」有兩種完全不同的情況，自建上游分開處理：
+
+| 官方當天表裡 | 意思 | 自建 zip 怎麼做 |
+|---|---|---|
+| **有列、收盤欄 `---`（上櫃）／空（上市）** | 當天沒成交（冷門股；只有零股或 0 股） | **補一列**：O=H=L=C＝前一筆**還原**收盤，量＝官方零股量。與官方「無成交→次日參考價沿用前收」同義，上游（Yahoo）也是延續舊價 |
+| **根本沒有這檔** | 停止買賣、減資換股停牌、終止上市／上櫃、尚未上市 | **不補**。原因看事件簿：`corp_actions`（減資恢復買賣日＋參考價）、`stophalt`、`ledger` 的 gap／halt／event |
+
+- 資料流：官方日線表（每日 `selfhost_openapi_daily.py` 的 `parse_notrade`；週收集 `selfhost_raw_prices.py` 早就有）→ `openapi_notrade.parquet`（Release `openapi-daily`）＋ `notrade.parquet`（Release `selfhost-data`）→ `selfhost_daily_merge.merge_notrade`（週優先、只留完整日以前、進輸入雜湊）→ `merged/notrade.parquet` → `selfhost_to_datapack.fill_no_trade`。
+- 沿用的是「前一筆**還原**收盤」，所以跨減資／除權息事件也自然接上（等於事件參考價），不會多出假跳空。
+- 每日旁表只收「日線被接受的那一天」，且**日線已存的目標日不會再請求**，所以新增這條線之前已經過去的日子，要等週收集（每週五，回補近 14 天）補進 `notrade.parquet` 才會被補列。
+- 沒有旁表（Release 上沒有）時 zip 與舊版完全相同（相容）。
+
 ## 4. 漏抓／壞掉之後：能補、補不回、怎麼救
 
 ### 4.1 可自癒（不用人管）

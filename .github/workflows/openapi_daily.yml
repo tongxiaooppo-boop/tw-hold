@@ -54,7 +54,7 @@ jobs:
                 grep -qx "$f" data/selfhost/_oa_assets.txt || { echo "::error::Release 上有 fetch log 卻缺 $f——疑似上次上傳中斷，請人工處理"; exit 1; }
               done
             fi
-            for f in openapi_prices.parquet openapi_margin.parquet openapi_inst.parquet openapi_forecast.jsonl openapi_events.parquet openapi_events_meta.json openapi_fetch_log.jsonl; do
+            for f in openapi_prices.parquet openapi_margin.parquet openapi_inst.parquet openapi_notrade.parquet openapi_forecast.jsonl openapi_events.parquet openapi_events_meta.json openapi_fetch_log.jsonl; do
               if grep -qx "$f" data/selfhost/_oa_assets.txt; then
                 ok=0
                 for try in 1 2 3; do
@@ -93,6 +93,10 @@ jobs:
             for f in openapi_prices.parquet openapi_margin.parquet; do
               [ -f data/selfhost/$f ] && gh release upload openapi-daily data/selfhost/$f --clobber
             done
+          fi
+          # 無成交旁表：失敗只警告（官方日線表只回最新一天，但週收集會把近 14 天的無成交列補回 notrade.parquet），不擋其他上傳
+          if [ "${{ steps.collect.outputs.notrade_changed }}" = "true" ] && [ -f data/selfhost/openapi_notrade.parquet ]; then
+            gh release upload openapi-daily data/selfhost/openapi_notrade.parquet --clobber || echo "::warning::無成交旁表上傳失敗，下一班會再傳"
           fi
           # 三大法人：失敗只警告（網站端點帶日期、補得回來），不擋其他上傳
           if [ "${{ steps.collect.outputs.inst_changed }}" = "true" ] && [ -f data/selfhost/openapi_inst.parquet ]; then

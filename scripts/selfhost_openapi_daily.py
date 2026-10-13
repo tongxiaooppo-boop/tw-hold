@@ -56,6 +56,7 @@ MARGIN = SH / "openapi_margin.parquet"
 LOG = SH / "openapi_fetch_log.jsonl"
 FORECAST = SH / "openapi_forecast.jsonl"
 INST = SH / "openapi_inst.parquet"
+NOTRADE = SH / "openapi_notrade.parquet"          # 官方有列、無成交價的 4 碼股票（只有零股或完全沒量）；zip 轉接層靠它把那天沿用前收補回去
 EVENTS = SH / "openapi_events.parquet"            # B6：官方除權息／減資／面額變更結果表近幾日窗口（每班抓、同鍵冪等）
 EVENTS_META = SH / "openapi_events_meta.json"      # 最近一次成功抓取：through＝事件已涵蓋到哪一天（給 daily_merge 的 events_through）
 EVENTS_WINDOW_DAYS = 5                             # 每班抓 [今天−5, 今天]（吃週末與官方延後公告；舊事件週收集會再覆蓋）
@@ -85,6 +86,7 @@ GAP_WINDOW_DAYS = 14
 
 PRICE_COLS = ["ticker", "market", "date", "open", "high", "low", "close", "volume", "value", "chg", "next_ref", "next_limit_up", "next_limit_down",
               "src", "last_modified", "fetched_at"]   # next_*：上櫃 daily_close_quotes 的官方次日參考價／漲跌停（上市沒有＝NaN）；除權息前一晚可直接拿到官方因子
+NT_COLS = ["ticker", "market", "date", "volume", "value", "src"]
 INST_OA_COLS = ["date", "ticker", "market", "foreign_net", "fi_prop_net", "trust_net", "dealer_net", "total_net", "src", "fetched_at"]
 MARGIN_COLS = ["ticker", "market", "date", "margin_prev", "margin_buy", "margin_sell", "margin_redeem", "margin_balance",
                "short_prev", "short_buy", "short_sell", "short_redeem", "short_balance", "offset", "note",
@@ -152,6 +154,45 @@ def parse_prices(rows: list[dict], market: str, d: date, lm, fetched) -> pd.Data
                     "src": "openapi" if market == "TW" else SRC_TPEX_DC, "last_modified": lm, "fetched_at": fetched})
     df = pd.DataFrame(out, columns=PRICE_COLS)
     return df.astype({"next_ref": float, "next_limit_up": float, "next_limit_down": float})   # 全是 None 時也要 float，否則 parquet 會存成 null 型別
+
+
+def parse_notrade(rows: list[dict], market: str, d: date) -> pd.DataFrame:
+    """官方日線表裡「4 碼、有列但沒有成交價」的股票（上櫃收盤欄 `---`、上市空字串）。量額是零股量額，沒有就 0。
+    這些列 `parse_prices` 會丟掉；留下來才分得出「當天沒成交」（zip 要沿用前收）和「根本沒列」（停牌／下市，看事件簿）。"""
+    out = []
+    for r in rows:
+        if market == "TW":
+            code, c, vol, val = r.get("Code"), r.get("ClosingPrice"), r.get("TradeVolume"), r.get("TradeValue")
+        else:
+            code, c, vol, val = r.get("SecuritiesCompanyCode"), r.get("Close"), r.get("TradingShares"), r.get("TransactionAmount")
+        code = str(code or "").strip()
+        close = _num(c)
+        if not (code.isdigit() and len(code) == 4) or (close is not None and close > 0):
+            continue
+        out.append({"ticker": code, "market": market, "date": pd.Timestamp(d), "volume": _num(vol) or 0.0,
+                    "value": _num(val) or 0.0, "src": "openapi" if market == "TW" else SRC_TPEX_DC})
+    return pd.DataFrame(out, columns=NT_COLS)
+
+
+def merge_notrade_day(old: pd.DataFrame, new: pd.DataFrame, market: str, d: date) -> tuple[pd.DataFrame, bool]:
+    """把 (市場, 資料日) 的無成交列換成 new（整天換，所以官方更正後原本無成交的股票變有成交會消失）。回 (新表, 有沒有變)。"""
+    ts = pd.Timestamp(d)
+    keep = old[~((old["market"] == market) & (old["date"] == ts))] if len(old) else old
+    cur = old[(old["market"] == market) & (old["date"] == ts)] if len(old) else old
+    key = lambda x: sorted(zip(x["ticker"].astype(str), x["volume"].astype(float))) if len(x) else []   # noqa: E731
+    if key(cur) == key(new):
+        return old, False
+    return pd.concat([keep, new], ignore_index=True)[NT_COLS], True
+
+
+def _drain_web_notrade() -> pd.DataFrame:
+    """取走 selfhost_raw_prices 解析官網 MI_INDEX 時順手記下的無成交列（它是全域清單，不取走會一直累積）。"""
+    import selfhost_raw_prices as rp  # noqa: PLC0415
+    rows, rp.NOTRADE[:] = list(rp.NOTRADE), []
+    df = pd.DataFrame(rows, columns=NT_COLS) if rows else pd.DataFrame(columns=NT_COLS)
+    if len(df):
+        df["src"] = SRC_WEB_MI_INDEX
+    return df[NT_COLS]
 
 
 def parse_margin(rows: list[dict], market: str, d: date, lm, fetched) -> pd.DataFrame:
@@ -638,6 +679,7 @@ def main() -> int:
             ("tpex_day", TPEX_DAY, "TWO", parse_prices, PRICES, PRICE_COLS),
             ("tpex_margin", TPEX_MARGIN, "TWO", parse_margin, MARGIN, MARGIN_COLS)]
     tables = {PRICES: _read(PRICES, PRICE_COLS), MARGIN: _read(MARGIN, MARGIN_COLS)}
+    nt_table, nt_changed = _read(NOTRADE, NT_COLS)[NT_COLS], False
     ok = 0
     in_window = 0                                     # 本班有幾個端點在請求時段內
     changed = False
@@ -657,6 +699,7 @@ def main() -> int:
             continue                                  # 取到就停：目標日已存，不再請求（也不會被隔天的重產版覆蓋）
         if name == "twse_day":                        # 官網帶日期端點為主；失敗（None）才退回 OpenAPI 備援；空＝尚未公布，不退備援
             wdf = fetch_twse_web(target, fetched)
+            wnt = _drain_web_notrade()                # 不論結果都取走（全域清單）；只有日線被接受時才併入
             wentry = {"fetched_at": str(fetched), "endpoint": "twse_day_web", "data_date": str(target)}
             if wdf is None:
                 wentry["result"] = "失敗（連線／日期不符），退回 OpenAPI 備援"
@@ -676,6 +719,9 @@ def main() -> int:
             else:
                 tables[path], action = merge_day(tables[path], wdf, cols)
                 changed = changed or action in ("added", "replaced")
+                if action in ("added", "replaced"):
+                    nt_table, c3 = merge_notrade_day(nt_table, wnt, mk, target)
+                    nt_changed = nt_changed or c3
                 wentry["rows"], wentry["result"] = len(wdf), f"{action} {len(wdf)} 列"
                 print(f"[openapi] twse_day_web：資料日 {target}、{len(wdf)} 列、{action}")
                 _log(wentry)
@@ -706,6 +752,9 @@ def main() -> int:
         tables[path], action = merge_day(tables[path], df, cols)
         if action in ("added", "replaced"):
             changed = True
+            if name in ("twse_day", "tpex_day"):      # 日線被接受時，同一天的無成交列一起換掉（同一份回應，不另外請求）
+                nt_table, c3 = merge_notrade_day(nt_table, parse_notrade(rows, mk, d), mk, d)
+                nt_changed = nt_changed or c3
         if action == "shrunk":
             print(f"::warning::OpenAPI {name} 資料日 {d}：較新的檔案列數縮水（{len(df)} 列），不覆蓋已存的完整版", file=sys.stderr)
         entry["result"] = f"{action} {len(df)} 列"
@@ -742,9 +791,12 @@ def main() -> int:
         for p, t in tables.items():
             if len(t):
                 _atomic_parquet(t, p)
+    if nt_changed:
+        _atomic_parquet(nt_table.sort_values(["date", "market", "ticker"]).reset_index(drop=True), NOTRADE)
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         with open(out, "a", encoding="utf-8") as f:
+            f.write(f"notrade_changed={'true' if nt_changed else 'false'}\n")
             f.write(f"changed={'true' if changed else 'false'}\n")
             f.write(f"forecast_changed={'true' if forecast_changed else 'false'}\n")
             f.write(f"inst_changed={'true' if inst_changed else 'false'}\n")

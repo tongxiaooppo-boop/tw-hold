@@ -126,3 +126,58 @@ def test_no_partial_zip_left_on_failure(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         dp.build(out, adj, raw, inst, margin)
     assert not out.exists()                                            # 失敗時不留看起來存在的半截檔（只可能有 .part）
+
+
+# ── 無成交日沿用前一個還原收盤（2026-10-13）──
+D3, D4 = pd.Timestamp("2026-10-05"), pd.Timestamp("2026-10-06")
+
+
+def _nt(rows):
+    return pd.DataFrame(rows, columns=["ticker", "market", "date", "volume", "value", "src"])
+
+
+def test_fill_no_trade_carries_previous_adjusted_close_and_odd_lot_volume():
+    adj, _, _, _ = _frames()
+    nt = _nt([("2330", "TW", D3, 608.0, 0.0, "official")])
+    out, n = dp.fill_no_trade(adj, nt)
+    assert n == 1
+    r = out[(out["ticker"] == "2330") & (out["date"] == D3)].iloc[0]
+    assert (r["open"], r["high"], r["low"], r["close"]) == (102.0, 102.0, 102.0, 102.0)     # 前一筆（D2）收盤
+    assert r["volume"] == 608.0
+
+
+def test_fill_no_trade_skips_days_that_already_have_a_price_and_tickers_without_history():
+    adj, _, _, _ = _frames()
+    nt = _nt([("2330", "TW", D2, 5.0, 0.0, "official"),          # 那天已有實價 → 不重複補
+              ("9999", "TWO", D3, 0.0, 0.0, "official")])        # 之前沒有任何實價 → 不補
+    out, n = dp.fill_no_trade(adj, nt)
+    assert n == 0 and len(out) == len(adj)
+
+
+def test_fill_no_trade_chains_over_consecutive_days_and_ignores_missing_table():
+    adj, _, _, _ = _frames()
+    nt = _nt([("2330", "TW", D3, 0.0, 0.0, "official"), ("2330", "TW", D4, 0.0, 0.0, "official")])
+    out, n = dp.fill_no_trade(adj, nt)
+    assert n == 2
+    assert out[(out["ticker"] == "2330") & (out["date"] == D4)]["close"].iloc[0] == 102.0     # 連續無成交：仍是最後一筆實價
+    assert dp.fill_no_trade(adj, None) == (adj, 0)
+    assert dp.fill_no_trade(adj, _nt([]))[1] == 0
+
+
+def test_fill_no_trade_after_event_uses_adjusted_level_not_raw():
+    # 減資恢復買賣：前一筆還原收盤已是參考價水位（12.1 × 1.2884 ≈ 15.59），沿用它就不會出現假跳空
+    adj = pd.DataFrame({"ticker": ["3085"], "date": [D1], "open": [15.59], "high": [15.59], "low": [15.59],
+                        "close": [15.59], "volume": [100.0], "raw_close": [12.1]})
+    out, n = dp.fill_no_trade(adj, _nt([("3085", "TWO", D4, 1855.0, 27917.0, "official")]))
+    assert n == 1 and out.iloc[-1]["close"] == 15.59 and out.iloc[-1]["raw_close"] == 12.1
+
+
+def test_build_writes_filled_rows_into_csv_and_reports_count(tmp_path):
+    nt = _nt([("6488", "TWO", D3, 1200.0, 0.0, "official")])
+    out, st = _build(tmp_path, notrade=nt)
+    df = pd.read_csv(zipfile.ZipFile(out).open("data/6488.TWO.csv"))
+    assert st["no_trade_filled"] == 1
+    assert df["Date"].tolist()[-1] == "2026-10-05" and df["Close"].iloc[-1] == 52.0 and df["Volume"].iloc[-1] == 1200
+    (tmp_path / "b").mkdir()
+    _, st0 = _build(tmp_path / "b")
+    assert st0["no_trade_filled"] == 0                                                          # 不給旁表＝跟舊行為一樣

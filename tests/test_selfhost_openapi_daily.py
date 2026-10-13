@@ -23,6 +23,7 @@ def _isolate_log(tmp_path, monkeypatch):
     monkeypatch.setattr(oa._retry.time, "sleep", lambda n: None)                  # 重試不真的等（個別測試要檢查等待秒數時自行覆蓋）
     monkeypatch.setattr(oa, "PRICES", tmp_path / "prices.parquet")
     monkeypatch.setattr(oa, "MARGIN", tmp_path / "margin.parquet")
+    monkeypatch.setattr(oa, "NOTRADE", tmp_path / "notrade.parquet")
 
 
 TODAY = date(2026, 10, 7)
@@ -186,6 +187,40 @@ def test_tpex_real_shape_filters_no_trade_and_non_4digit():
     rows = [_tpex_row(), _tpex_row(code="00411A"), _tpex_row(code="1241", close="---"), _tpex_row(code="030001")]
     df = oa.parse_prices(rows, "TWO", date(2026, 10, 6), LM1, FETCHED)
     assert list(df.ticker) == ["1240"] and df.chg.iloc[0] == 0.11
+
+
+# ───────── 無成交旁表（2026-10-13：官方有列、沒成交價 → zip 沿用前收）─────────
+def test_parse_notrade_keeps_only_four_digit_rows_without_price():
+    rows = [_tpex_row(), _tpex_row(code="00411A", close="---"), _tpex_row(code="030001", close="---"),
+            _tpex_row(code="1241", close=" ---")]
+    rows[-1]["TradingShares"], rows[-1]["TransactionAmount"] = "608", "23,915"
+    df = oa.parse_notrade(rows, "TWO", date(2026, 10, 8))
+    assert list(df.ticker) == ["1241"] and df.volume.iloc[0] == 608.0 and df.value.iloc[0] == 23915.0
+    assert list(df.columns) == oa.NT_COLS
+    tw = oa.parse_notrade([_tw(), _tw(code="2884", close=""), _tw(code="00625K", close="")], "TW", date(2026, 10, 8))
+    assert list(tw.ticker) == ["2884"] and tw.src.iloc[0] == "openapi"          # 有價的、非 4 碼數字的代號（權證、00625K）都不收
+
+
+def test_merge_notrade_day_replaces_whole_day_and_detects_no_change():
+    empty = pd.DataFrame(columns=oa.NT_COLS).astype({"date": "datetime64[ns]"})
+    d1 = oa.parse_notrade([_tpex_row(code="1241", close="---")], "TWO", date(2026, 10, 8))
+    t, ch = oa.merge_notrade_day(empty, d1, "TWO", date(2026, 10, 8))
+    assert ch and len(t) == 1
+    t2, ch2 = oa.merge_notrade_day(t, d1, "TWO", date(2026, 10, 8))
+    assert not ch2 and len(t2) == 1                                             # 同內容再來一次＝沒變（workflow 才不重傳）
+    d2 = oa.parse_notrade([_tpex_row(code="1242", close="---")], "TWO", date(2026, 10, 8))
+    t3, ch3 = oa.merge_notrade_day(t, d2, "TWO", date(2026, 10, 8))
+    assert ch3 and list(t3.ticker) == ["1242"]                                  # 官方更正：原本無成交的變有成交 → 舊列要消失
+    t4, _ = oa.merge_notrade_day(t3, oa.parse_notrade([_tw(code="2884", close="")], "TW", date(2026, 10, 8)), "TW", date(2026, 10, 8))
+    assert sorted(t4.ticker) == ["1242", "2884"]                                # 另一市場、同一天互不影響
+
+
+def test_drain_web_notrade_takes_and_clears_global_list():
+    import selfhost_raw_prices as rp
+    rp.NOTRADE[:] = [{"ticker": "2884", "market": "TW", "date": pd.Timestamp("2026-10-08"), "volume": 5.0, "value": 1.0, "src": "official"}]
+    df = oa._drain_web_notrade()
+    assert list(df.ticker) == ["2884"] and df.src.iloc[0] == oa.SRC_WEB_MI_INDEX and rp.NOTRADE == []
+    assert oa._drain_web_notrade().empty
 
 
 # ───────── 上市融資 MI_MARGN（網站端點，帶日期）─────────

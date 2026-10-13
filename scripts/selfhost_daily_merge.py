@@ -96,6 +96,20 @@ def merge_table(weekly: pd.DataFrame, daily: pd.DataFrame | None, val_cols: list
     return out.sort_values(["date", "market", "ticker"]).reset_index(drop=True), rep
 
 
+def merge_notrade(weekly: pd.DataFrame | None, daily: pd.DataFrame | None, cday: pd.Timestamp) -> pd.DataFrame | None:
+    """無成交旁表：週收集 ∪ 每日表（同 ticker/market/date 以週收集為準），只留完整日以前。兩邊都沒有回 None。
+    旁表只決定「zip 要不要補一列沿用前收」，不參與完整日判斷、不比對值（量是零股量，官方兩端點口徑不保證相同）。"""
+    parts = [_norm(x)[["ticker", "market", "date", "volume", "value", "src"]] for x in (weekly, daily)
+             if x is not None and len(x) and {"ticker", "market", "date"} <= set(x.columns)]
+    if not parts:
+        return None
+    for x in parts:
+        for c in ("volume", "value"):
+            x[c] = pd.to_numeric(x[c], errors="coerce") if c in x else float("nan")
+    m = pd.concat(parts, ignore_index=True).drop_duplicates(["ticker", "market", "date"], keep="first")
+    return m[m["date"] <= cday].sort_values(["date", "market", "ticker"]).reset_index(drop=True)
+
+
 def last_dates(tables: dict[str, pd.DataFrame]) -> dict[str, str | None]:
     out = {}
     for name, df in tables.items():
@@ -304,6 +318,9 @@ def main(argv=None) -> int:
         merged[name] = df[df["date"] <= cday]
         merged[name].to_parquet(odir / f"{name}.parquet", index=False, compression="zstd")
 
+    nt = merge_notrade(_read(wdir / "notrade.parquet"), _read(ddir / "openapi_notrade.parquet"), cday)
+    if nt is not None:
+        nt.to_parquet(odir / "notrade.parquet", index=False, compression="zstd")
     gaps = find_gaps(merged, cday)
     wraw = _read(wdir / TABLES["raw_prices"][0])
     ev_through = None
@@ -335,7 +352,7 @@ def main(argv=None) -> int:
 
     # 輸入雜湊：併好的四個檔內容一樣（完整日沒前進、舊日子沒被更正、週收集沒更新）→ workflow 不重做還原與 zip
     h = hashlib.sha256()
-    for n in ("raw_prices", "inst", "margin", "corp_actions"):
+    for n in ("raw_prices", "inst", "margin", "corp_actions", "notrade"):
         f = odir / f"{n}.parquet"
         if f.exists():
             h.update(n.encode())
