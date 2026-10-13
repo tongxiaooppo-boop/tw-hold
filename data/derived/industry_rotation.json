@@ -44,7 +44,7 @@
    "ret_1m": 0.0673,
    "headwind": false,
    "net_1w": 457.15,
-   "net_1m": 485.69
+   "net_1m": 485.68
   },
   {
    "industry": "半導體業",
@@ -89,7 +89,7 @@
    "ret_1m": 0.0253,
    "headwind": false,
    "net_1w": -0.01,
-   "net_1m": 0.02
+   "net_1m": 0.01
   },
   {
    "industry": "資訊服務業",

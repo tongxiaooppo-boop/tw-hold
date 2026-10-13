@@ -5,6 +5,30 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "2377": {
+      "name": "微星",
+      "status": "pending_entry",
+      "signal_date": "2026-10-12",
+      "risk_stop_ref": 150.26
+    },
+    "2436": {
+      "name": "偉詮電",
+      "status": "pending_entry",
+      "signal_date": "2026-10-12",
+      "risk_stop_ref": 67.05
+    },
+    "3014": {
+      "name": "聯陽",
+      "status": "pending_entry",
+      "signal_date": "2026-10-12",
+      "risk_stop_ref": 135.86
+    },
+    "6782": {
+      "name": "視陽",
+      "status": "pending_entry",
+      "signal_date": "2026-10-12",
+      "risk_stop_ref": 229.93
+    },
     "9933": {
       "name": "中鼎",
       "first_seen": "2026-10-08",
@@ -470,29 +494,11 @@
       "exit_date": "2026-10-05",
       "exit_price": 136.36
     },
-    "2377": {
-      "name": "微星",
+    "2027": {
+      "name": "大成鋼",
       "status": "pending_entry",
       "signal_date": "2026-10-12",
-      "risk_stop_ref": 150.26
-    },
-    "2436": {
-      "name": "偉詮電",
-      "status": "pending_entry",
-      "signal_date": "2026-10-12",
-      "risk_stop_ref": 67.05
-    },
-    "3014": {
-      "name": "聯陽",
-      "status": "pending_entry",
-      "signal_date": "2026-10-12",
-      "risk_stop_ref": 135.86
-    },
-    "6782": {
-      "name": "視陽",
-      "status": "pending_entry",
-      "signal_date": "2026-10-12",
-      "risk_stop_ref": 229.93
+      "risk_stop_ref": 47.81
     }
   }
 }
