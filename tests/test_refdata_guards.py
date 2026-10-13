@@ -176,3 +176,34 @@ def test_unzip_empty_zip_does_not_wipe_directory(tmp_path):
     pd.DataFrame({"a": [1]}).to_parquet(d / "keep.parquet")
     assert rd.unzip_pcf(_zip_with([]), d) == 0
     assert (d / "keep.parquet").exists()                          # 空 zip（異常）不可把本地快照清光
+
+
+def _shrunk_setup(monkeypatch, tmp_path):
+    pcf = tmp_path / "pcf"
+    for code in ("A", "B"):
+        (pcf / code).mkdir(parents=True)
+        pd.DataFrame({"a": [1]}).to_parquet(pcf / code / "2026-10-07.parquet")
+    _setup_pull_marker(tmp_path, pcf_counts={"A": 15, "B": 15})
+    monkeypatch.setattr(rd, "_release", lambda tok, create=False: {"id": 1, "assets": []})
+    sent = []
+    monkeypatch.setattr(rd, "_upload", lambda *a: sent.append(a[2]))
+    return pcf, sent
+
+
+def test_pcf_shrink_allowed_only_for_explicitly_listed_funds(monkeypatch, tmp_path):
+    pcf, sent = _shrunk_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv("REFDATA_ALLOW_PCF_SHRINK", "A")                  # 只放行 A（修補 workflow 的統一兩檔）
+    with pytest.raises(rd.RefdataError, match="B"):                       # B 一樣倒退 → 仍然擋，而且一個都沒推
+        rd.push([pcf], tok="t", root=tmp_path)
+    assert sent == []
+    monkeypatch.setenv("REFDATA_ALLOW_PCF_SHRINK", "A, B")                # 兩檔都列 → 放行
+    rd.push([pcf], tok="t", root=tmp_path)
+    assert len(sent) >= 2
+
+
+def test_pcf_shrink_blocked_by_default(monkeypatch, tmp_path):
+    pcf, sent = _shrunk_setup(monkeypatch, tmp_path)
+    monkeypatch.delenv("REFDATA_ALLOW_PCF_SHRINK", raising=False)
+    with pytest.raises(rd.RefdataError, match="殘缺"):
+        rd.push([pcf], tok="t", root=tmp_path)
+    assert sent == []

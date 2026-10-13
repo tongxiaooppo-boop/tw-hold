@@ -64,6 +64,8 @@ jobs:
         env:
           DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
           DATA_REPO: ${{ vars.DATA_REPO }}
+          # 修補會刪掉重複快照，數量本來就比 pull 時少；只放行統一兩檔，其他三檔仍受「不倒退」保護（reference/refdata.py）
+          REFDATA_ALLOW_PCF_SHRINK: "00981A,00403A"
         run: python scripts/refdata_sync.py push data/pcf
 
       - name: commit（旗標有變才 commit）

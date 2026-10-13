@@ -217,6 +217,12 @@ def _write_marker(root: Path) -> None:
         pass
 
 
+def _allowed_pcf_shrink() -> set[str]:
+    """明列允許「快照數比 pull 時少」的基金代號（環境變數 `REFDATA_ALLOW_PCF_SHRINK`，逗號分隔）。
+    只有 `pcf_repair.yml` 的推送步驟會設（修補會刪掉重複快照，數量本來就會變少）；平常空＝一律不准倒退，其他基金永遠受保護。"""
+    return {x.strip() for x in os.environ.get("REFDATA_ALLOW_PCF_SHRINK", "").split(",") if x.strip()}
+
+
 def _guard_against_shrink(jobs_meta: list, root: Path) -> None:
     """push 前的不倒退閘門：pull 時記下的規模 vs 現在要推的。jobs_meta＝[(kind, key, 現在規模)]，kind＝pcf／ref。"""
     mk = root / ".refdata_pulled.json"
@@ -230,7 +236,7 @@ def _guard_against_shrink(jobs_meta: list, root: Path) -> None:
         before = (m.get(kind) or {}).get(key)
         if before is None:
             continue
-        if kind == "pcf" and now < before:
+        if kind == "pcf" and now < before and key not in _allowed_pcf_shrink():
             raise RefdataError(f"pcf/{key} 快照數 {now} < pull 時的 {before}：疑似殘缺目錄，拒絕覆蓋 Release")
         if kind == "ref" and before > 0 and now < before * SHRINK_MIN:
             raise RefdataError(f"reference/{key} 大小 {now} < pull 時 {before} 的 {int(SHRINK_MIN * 100)}%：疑似殘缺，拒絕覆蓋 Release")
