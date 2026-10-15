@@ -237,3 +237,10 @@ def test_新上市個股沒有產業別_補未分類_ETF_DR_已下市不補():
     got = dict(zip(out["code"], out["sector"]))
     assert n == 1 and got["7856"] == dp.UNCLASSIFIED
     assert got["0050"] == "" and got["9105"] == "" and got["1234"] == "" and got["2330"] == "半導體業"
+
+
+def test_stock_list_carry不沿用補位標籤_讓它每次由classify重標():
+    carry = pd.DataFrame({"code": ["2330", "7856"], "name": ["台積電", "某新股"], "sector": ["半導體業", dp.UNCLASSIFIED]})
+    out = dp.stock_list_frame({"2330": "TW", "7856": "TW"}, None, None, carry).set_index("code")
+    assert out.loc["2330", "sector"] == "半導體業"
+    assert out.loc["7856", "sector"] == ""          # 不是 UNCLASSIFIED；是否重標由 classify_new_listings 看近況決定

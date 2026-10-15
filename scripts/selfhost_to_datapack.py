@@ -104,6 +104,8 @@ def stock_list_frame(codes_market: dict[str, str], stock_list: pd.DataFrame | No
         cur = names.setdefault(code, ["", ""])
         for i, v in enumerate((nm, sec)):
             v = "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v).strip()
+            if v == UNCLASSIFIED:      # 補位標籤不是真的產業別：不沿用（carry 會讓它只增不減，約 2027 年中超過 MAX_UNCLASSIFIED 擋發佈）；
+                v = ""                 # 近 7 天仍有成交的由 classify_new_listings 每次重新標，已下市的就留空
             if v and v.lower() != "nan" and not cur[i]:
                 cur[i] = v
 

@@ -15,10 +15,22 @@ def _short(asof, n, scanned=600, margin=True):
 def test_seal_force_revisions(tmp_path):
     a, ln = H.short_line(_short("2026-10-13", 2), "live")
     assert H.add_line(a, "short", ln, out_dir=tmp_path) == "written"
-    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 5), "live")[1], out_dir=tmp_path) == "sealed"
+    # 回填不得蓋掉 live
+    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 5), "backfill-git")[1], out_dir=tmp_path) == "sealed"
     assert json.loads((tmp_path / f"{a}.json").read_text(encoding="utf-8"))["lines"]["short"]["n"] == 2
-    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 5), "live")[1], force=True, out_dir=tmp_path) == "revised"
-    assert len(json.loads((tmp_path / f"{a}.json").read_text(encoding="utf-8"))["lines"]["short"]["revisions"]) == 1
+    # 同日 live 再跑且內容不同 → 以最後一版為準，舊版摘要進 revisions；內容相同則不動
+    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 5), "live")[1], out_dir=tmp_path) == "revised"
+    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 5), "live")[1], out_dir=tmp_path) == "sealed"
+    ln = json.loads((tmp_path / f"{a}.json").read_text(encoding="utf-8"))["lines"]["short"]
+    assert ln["n"] == 5 and len(ln["revisions"]) == 1
+
+
+def test_degraded_line_is_replaced_by_a_healthy_one(tmp_path):
+    a, bad = H.short_line(_short("2026-10-13", 3, margin=False), "live")
+    assert bad["status"] == "degraded"
+    H.add_line(a, "short", bad, out_dir=tmp_path)
+    assert H.add_line(a, "short", H.short_line(_short("2026-10-13", 3), "backfill-git")[1], out_dir=tmp_path) == "revised"
+    assert json.loads((tmp_path / f"{a}.json").read_text(encoding="utf-8"))["lines"]["short"]["status"] == "ok"
 
 
 def test_lines_are_independent_in_one_file(tmp_path):

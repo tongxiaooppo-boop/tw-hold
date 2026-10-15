@@ -1,7 +1,8 @@
 """推薦歷史（近 30 個工作日回顧）— tw-hold 三條線的每日快照與檢視模型。
 
 三條線（只記候選／訊號，**模擬單不納入**）：
-  swing  = tw-swing 短線（只存分享級欄位：代號／名稱／進場／停損／訊號名稱；**不含規則 ID**，本 repo 公開）
+  swing  = tw-swing 短線（只存分享級欄位：代號／名稱／進場／停損／訊號名稱；本 repo 公開，**不存 rule_id 欄位**；
+           訊號名稱沿用 tw-swing 公開分享頁上本來就有的文字，其中含「H2」「V6」這類前綴，這不是新洩漏）
   short  = tw-hold 短線（條件掃描 short_scan.json）
   long   = tw-hold 長波段（swing_list.json 的候選池）
 
@@ -93,11 +94,19 @@ def add_line(asof: str, key: str, line: dict, *, force: bool = False, out_dir: P
     doc = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"schema": SCHEMA, "asof": asof, "lines": {}}
     res = "written"
     if key in doc["lines"]:
-        if not force:
+        old = doc["lines"][key]
+        # 封存規則：status=ok 才算封存（交接單 §13.3）；degraded 的可被之後的版本取代。
+        # live 同一天會 rebuild 好幾次、內容可能不同：同為 live 時以「當天最後一版」為準（頁面上使用者看到的是最終版），
+        # 內容有差才留一筆 revisions；回填（backfill-*）不得蓋掉 live。
+        replace = force or old.get("status") == "degraded" or (
+            old.get("origin") == "live" and line.get("origin") == "live" and _digest(old) != _digest(line))
+        if (str(line.get("origin", "")).startswith("backfill") and old.get("origin") == "live"
+                and old.get("status") != "degraded" and not force):
+            replace = False
+        if not replace:
             return "sealed"
-        line["revisions"] = doc["lines"][key].get("revisions", []) + [
-            {"digest": _digest(doc["lines"][key]), "origin": doc["lines"][key].get("origin"),
-             "status": doc["lines"][key].get("status")}]
+        line["revisions"] = old.get("revisions", []) + [
+            {"digest": _digest(old), "origin": old.get("origin"), "status": old.get("status")}]
         res = "revised"
     doc["lines"][key] = line
     p.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -109,7 +118,10 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
     """某條線近 window 個工作日的檢視模型。state：ok／zero／degraded／recomp（含補算）／holiday／pending／notrun／before／not_retained。"""
     hdir = hist_dir or HIST_DIR
     hp = hdir / "_holidays.json"
-    hol = json.loads(hp.read_text(encoding="utf-8")) if hp.exists() else {}
+    try:
+        hol = json.loads(hp.read_text(encoding="utf-8")) if hp.exists() else {}
+    except Exception:  # noqa: BLE001   休市表損毀不該讓整個回顧崩潰（最多格子顯示成沒跑）
+        hol = {}
     got = {}
     for p in hdir.glob("20??-??-??.json"):
         try:
@@ -134,11 +146,14 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
         row = {"d": k, "wd": "一二三四五"[d.weekday()]}
         ln = got.get(k)
         if ln:
-            n = ln["n"]
+            n = ln.get("n", len(ln.get("candidates", [])))
             state = "ok" if n else ("degraded" if ln["status"] == "degraded" else "zero")
-            row.update(state=state, n=n, note=ln.get("note", ""), origin=ln.get("origin"), c=ln["candidates"])
+            row.update(state=state, n=n, note=ln.get("note", ""), origin=ln.get("origin"), c=ln["candidates"],
+                       deg=(ln.get("status") == "degraded" and n > 0))
             if k in rc:
-                row.update(state="recomp", nrc=len(rc[k]["candidates"]), n=n + len(rc[k]["candidates"]),
+                live_t = {c["t"] for c in ln["candidates"]}
+                nrc = len([c for c in rc[k]["candidates"] if c["t"] not in live_t])   # 同一檔已在當時紀錄就不重複算
+                row.update(state="recomp", nrc=nrc, n=n + nrc,
                            c=[dict(c, src="當時") for c in ln["candidates"]]
                            + [dict(c, src="補算") for c in rc[k]["candidates"]])
         elif k in hol:
@@ -163,7 +178,7 @@ def search(views: list[dict], q: str) -> tuple[list[str], bool]:
         return hits, deg
     for v in views:
         for d in v["days"]:
-            deg = deg or d["state"] == "degraded"
+            deg = deg or d["state"] == "degraded" or bool(d.get("deg"))
             for c in d.get("c") or []:
                 if k in str(c["t"]).lower() or k in str(c.get("nm") or "").lower():
                     hits.append(f"{d['d']}　{v['label']}　{c['t']} {c.get('nm') or ''}")

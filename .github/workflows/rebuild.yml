@@ -213,8 +213,10 @@ jobs:
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
                data/derived/short_scan.json \
+               data/history/ \
                reference/corporate_actions_resolved.json; then
-            echo "三清單 + resolved.json 皆無實質變更——跳過 commit"; exit 0
+            # data/history/ 也要算：swing 線的 asof 取自 tw-swing 的外部分享檔，隔天就換成下一天，這輪不 commit 就永遠補不回來。
+            echo "三清單 + resolved.json + history 皆無實質變更——跳過 commit"; exit 0
           fi
           git commit -m "rebuild: 三清單 $(date -u +%F) (${{ github.event_name }})"
           # 跟 global_macro.yml／pcf_retry.yml 都會 commit 回 main，手動重整按鈕
@@ -235,14 +237,22 @@ jobs:
             echo "push 被拒（第 $i 次），rebase 後重試"
             sleep $(( (RANDOM % 5) + i * 3 ))
             if ! git pull --rebase origin main; then
-              git checkout --theirs -- data/derived/ \
+              git checkout --theirs -- data/derived/ data/history/ \
                 reference/corporate_actions_resolved.json 2>/dev/null || true
-              git add -A data/derived/ \
+              git add -A data/derived/ data/history/ \
                 reference/corporate_actions_resolved.json 2>/dev/null || true
               GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
             fi
           done
           [ "$pushed" = 1 ] || { echo "::error::push 連續失敗，這次的資料沒有推上 main"; exit 1; }
+
+      # 短線條件掃描失敗（ScanTooThin 等）→ short_scan.json 保留舊檔，頁面會安靜地顯示舊名單。repo 沒有設 ALERT_WEBHOOK，
+      # 上面那步只有 ::warning::；這裡讓 job 變紅，至少 Actions 清單上看得到（commit 已在上面推完，不影響產出）。
+      - name: 短線掃描失敗就讓 job 變紅
+        if: always() && steps.short_scan.outcome == 'failure'
+        run: |
+          echo "::error::短線條件掃描失敗，short_scan.json 沿用舊檔——看『短線條件掃描』那步的 log"
+          exit 1
 
       # 私有資料還原失敗 → 今天的 PCF／指數序列沒有推上去（上面已跳過）；讓 job 變紅，才不會「綠燈但資料沒存」。
       - name: 私有資料還原或推送失敗就讓 job 變紅
