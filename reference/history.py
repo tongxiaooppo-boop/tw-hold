@@ -106,7 +106,7 @@ def add_line(asof: str, key: str, line: dict, *, force: bool = False, out_dir: P
 
 def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window: int = WINDOW,
               today: str | None = None) -> dict:
-    """某條線近 window 個工作日的檢視模型。state：ok／zero／degraded／holiday／pending／notrun／before／not_retained。"""
+    """某條線近 window 個工作日的檢視模型。state：ok／zero／degraded／recomp（含補算）／holiday／pending／notrun／before／not_retained。"""
     hdir = hist_dir or HIST_DIR
     hp = hdir / "_holidays.json"
     hol = json.loads(hp.read_text(encoding="utf-8")) if hp.exists() else {}
@@ -118,6 +118,14 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
             continue
         if ln:
             got[p.stem] = ln
+    rc = {}                                          # 補算旁檔：事故日用修好的資料事後重算（不改封存紀錄）
+    for p in (hdir / "recomputed").glob("20??-??-??.json"):
+        try:
+            ln = json.loads(p.read_text(encoding="utf-8")).get("lines", {}).get(key)
+        except Exception:  # noqa: BLE001
+            continue
+        if ln:
+            rc[p.stem] = ln
     first_live = min((d for d, ln in got.items() if ln.get("origin") == "live"), default=None)
     start = min(got) if got else asof.date().isoformat()
     days = []
@@ -129,6 +137,10 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
             n = ln["n"]
             state = "ok" if n else ("degraded" if ln["status"] == "degraded" else "zero")
             row.update(state=state, n=n, note=ln.get("note", ""), origin=ln.get("origin"), c=ln["candidates"])
+            if k in rc:
+                row.update(state="recomp", nrc=len(rc[k]["candidates"]), n=n + len(rc[k]["candidates"]),
+                           c=[dict(c, src="當時") for c in ln["candidates"]]
+                           + [dict(c, src="補算") for c in rc[k]["candidates"]])
         elif k in hol:
             row.update(state="holiday", note=hol[k])
         elif today and k == today:

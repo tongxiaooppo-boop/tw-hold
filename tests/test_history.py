@@ -59,3 +59,14 @@ def test_search_fullwidth_and_degraded_hint(tmp_path):
     v = H.load_view("short", pd.Timestamp("2026-10-08"), hist_dir=tmp_path, window=2)
     hits, deg = H.search([v], "１００１")
     assert len(hits) == 1 and "1001" in hits[0] and deg is True
+
+
+def test_view_merges_recomputed_sidecar(tmp_path):
+    (tmp_path / "recomputed").mkdir()
+    H.add_line("2026-10-05", "swing", H.swing_line("2026-10-05", [], "backfill-csv")[1], out_dir=tmp_path)
+    (tmp_path / "recomputed" / "2026-10-05.json").write_text(json.dumps({"lines": {"swing": {"candidates": [
+        {"t": "2.TW", "nm": "乙", "px": 5, "stop": 4, "sig": "月營收創年高 + 估值便宜"}]}}}), encoding="utf-8")
+    before = (tmp_path / "2026-10-05.json").read_bytes()
+    d = H.load_view("swing", pd.Timestamp("2026-10-05"), hist_dir=tmp_path, window=1)["days"][0]
+    assert d["state"] == "recomp" and d["n"] == 1 and d["c"][0]["src"] == "補算"
+    assert (tmp_path / "2026-10-05.json").read_bytes() == before

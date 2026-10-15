@@ -1676,9 +1676,10 @@ def _short_scan_section() -> None:
                "「待確認」＝資料不足、不算缺口；「風險揭露」是警示、不影響是否列出。")
 
 
-_HIST_SYM = {"ok": "✓", "zero": "0", "degraded": "0⚠", "holiday": "休市", "pending": "待產出",
+_HIST_SYM = {"ok": "✓", "zero": "0", "degraded": "0⚠", "recomp": "補算", "holiday": "休市", "pending": "待產出",
              "notrun": "✕ 沒跑", "before": "·", "not_retained": "無資料"}
-_HIST_TXT = {"ok": "有候選", "zero": "沒有訊號", "degraded": "資料不完整（零訊號不可信）", "holiday": "休市",
+_HIST_TXT = {"ok": "有候選", "zero": "沒有訊號", "degraded": "資料不完整（零訊號不可信）",
+             "recomp": "含補算（當天資料不完整，事後用修好的資料重算）", "holiday": "休市",
              "pending": "今天還沒到產出時間", "notrun": "管線沒跑", "before": "追蹤開始前",
              "not_retained": "當時沒留存（git 歷史撈不到，不補值）"}
 
@@ -1723,10 +1724,11 @@ def _history_body(keys: list[str], tag: str) -> None:
                     + (f"　·　{d['note']}" if d.get("note") else ""))
         if d.get("c"):
             st.dataframe(pd.DataFrame(d["c"]).rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "停損",
-                                                           "sig": "訊號", "fs": "進榜日", "st": "連續天數"}),
+                                                           "sig": "訊號", "fs": "進榜日", "st": "連續天數",
+                                                           "src": "來源"}),
                          hide_index=True, width="stretch")
     st.caption("✓ 有候選　0 沒有訊號　0⚠ 當天輸入資料不完整，零訊號不可信　✕ 管線沒跑　無資料＝當時沒留存，不補值。"
-               "回填的日子以當時的樣子為準，不回頭改。")
+               "回填的日子以當時的樣子為準，不回頭改；標「補算」的是事後用修好的資料重算的結果，不是當時系統的產出。")
 
 
 

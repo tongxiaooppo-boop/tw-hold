@@ -123,12 +123,36 @@ def backfill_swing(csv_dir: str, force: bool = False) -> int:
     return 0
 
 
+def backfill_rc(swing_repo: str) -> int:
+    """把 tw-swing 的補算旁檔（Y4／W6 事故日重算）轉成本 repo 的 swing 線補算旁檔。
+    只留分享級欄位：訊號用 rules.yaml 的規則『名稱』，不帶規則 ID（本 repo 公開）。"""
+    import yaml
+    root = Path(swing_repo)
+    names = {r["id"]: r["name"] for r in yaml.safe_load((root / "rules.yaml").read_text(encoding="utf-8"))["rules"]}
+    out_dir = H.HIST_DIR / "recomputed"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for f in sorted((root / "data" / "history" / "recomputed").glob("20??-??-??.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if not d["candidates"]:
+            continue
+        cands = [{"t": c["t"], "nm": c["nm"], "px": c["px"], "stop": c["stop"],
+                  "sig": "、".join(names[r] for r in c["r"])} for c in d["candidates"]]
+        doc = {"schema": 1, "asof": d["asof"], "method": d["method"],
+               "lines": {"swing": {"n": len(cands), "candidates": cands}}}
+        (out_dir / f.name).write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+        print("swing 補算", d["asof"], len(cands))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill-git", action="store_true")
     ap.add_argument("--backfill-swing", metavar="CSV_DIR")
+    ap.add_argument("--backfill-rc", metavar="SWING_REPO", help="讀 tw-swing 的 data/history/recomputed 產生 swing 線補算旁檔")
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
+    if a.backfill_rc:
+        return backfill_rc(a.backfill_rc)
     if a.backfill_git:
         return backfill_git(a.force)
     if a.backfill_swing:

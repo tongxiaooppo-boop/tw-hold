@@ -1,0 +1,19 @@
+{
+ "schema": 1,
+ "asof": "2026-10-01",
+ "method": "recompute-with-repaired-data",
+ "lines": {
+  "swing": {
+   "n": 1,
+   "candidates": [
+    {
+     "t": "4749.TWO",
+     "nm": "新應材",
+     "px": 757.0,
+     "stop": 743.71,
+     "sig": "月營收創年高 + 估值便宜"
+    }
+   ]
+  }
+ }
+}

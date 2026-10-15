@@ -1,0 +1,26 @@
+{
+ "schema": 1,
+ "asof": "2026-09-11",
+ "method": "recompute-with-repaired-data",
+ "lines": {
+  "swing": {
+   "n": 2,
+   "candidates": [
+    {
+     "t": "3229.TW",
+     "nm": "晟鈦",
+     "px": 67.5,
+     "stop": 59.17,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    },
+    {
+     "t": "6416.TW",
+     "nm": "瑞祺電通",
+     "px": 115.5,
+     "stop": 109.39,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ]
+  }
+ }
+}

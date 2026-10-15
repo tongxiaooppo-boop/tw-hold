@@ -1,0 +1,19 @@
+{
+ "schema": 1,
+ "asof": "2026-09-16",
+ "method": "recompute-with-repaired-data",
+ "lines": {
+  "swing": {
+   "n": 1,
+   "candidates": [
+    {
+     "t": "6168.TW",
+     "nm": "宏齊",
+     "px": 32.15,
+     "stop": 28.63,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "schema": 1,
+ "asof": "2026-09-29",
+ "method": "recompute-with-repaired-data",
+ "lines": {
+  "swing": {
+   "n": 2,
+   "candidates": [
+    {
+     "t": "3715.TW",
+     "nm": "定穎投控",
+     "px": 124.5,
+     "stop": 117.27,
+     "sig": "月營收創年高 + 估值便宜"
+    },
+    {
+     "t": "6127.TWO",
+     "nm": "九豪",
+     "px": 51.0,
+     "stop": 46.78,
+     "sig": "月營收創年高 + 估值便宜"
+    }
+   ]
+  }
+ }
+}

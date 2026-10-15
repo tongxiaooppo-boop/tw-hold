@@ -1,0 +1,19 @@
+{
+ "schema": 1,
+ "asof": "2026-09-14",
+ "method": "recompute-with-repaired-data",
+ "lines": {
+  "swing": {
+   "n": 1,
+   "candidates": [
+    {
+     "t": "6416.TW",
+     "nm": "瑞祺電通",
+     "px": 119.0,
+     "stop": 110.19,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ]
+  }
+ }
+}
