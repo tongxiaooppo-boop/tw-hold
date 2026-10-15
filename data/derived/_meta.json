@@ -1,12 +1,12 @@
 {
-  "trading_date": "2026-10-14",
-  "rebuilt_at": "2026-10-15T13:28:09+00:00",
+  "trading_date": "2026-10-15",
+  "rebuilt_at": "2026-10-15T15:02:34+00:00",
   "bundle_schema": 1,
   "universe_filtered": true,
-  "note": "universe.parquet：609 檔",
+  "note": "universe.parquet：614 檔",
   "u1b_pending": false,
   "has_pe_bands": true,
   "has_fill_rate": true,
   "has_industry": true,
-  "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2015-07-16：raw -3.4%；1216 2015-08-06：raw -6.8%；2884 2015-07-30：raw -7.1%；2892 2015-07-31：raw -10.3%"
+  "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2021-08-25：raw -4.8%；1216 2021-09-09：raw -5.2%；2884 2021-08-31：raw -4.5%；2892 2021-08-26：raw -4.1%"
 }

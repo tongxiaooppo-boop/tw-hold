@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-15T13:28:18+00:00",
+    "updated_at": "2026-10-15T15:02:45+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -256,17 +256,89 @@
       "exit_date": "2026-10-13",
       "exit_price": 2762.86,
       "ret_pct": -0.006165
+    },
+    {
+      "ticker": "2476",
+      "name": "鉅祥",
+      "entry_date": "2026-10-13",
+      "entry_price": 127.5,
+      "exit_date": "2026-10-15",
+      "exit_price": 122.34,
+      "ret_pct": -0.040471
+    },
+    {
+      "ticker": "5434",
+      "name": "崇越",
+      "entry_date": "2026-10-08",
+      "entry_price": 590.0,
+      "exit_date": "2026-10-15",
+      "exit_price": 573.43,
+      "ret_pct": -0.028085
+    },
+    {
+      "ticker": "1714",
+      "name": "和桐",
+      "entry_date": "2026-10-05",
+      "entry_price": 18.5,
+      "exit_date": "2026-10-15",
+      "exit_price": 19.39,
+      "ret_pct": 0.048108
+    },
+    {
+      "ticker": "3617",
+      "name": "碩天",
+      "entry_date": "2026-09-29",
+      "entry_price": 244.5,
+      "exit_date": "2026-10-15",
+      "exit_price": 263.5,
+      "ret_pct": 0.07771
+    },
+    {
+      "ticker": "3265",
+      "name": "台星科",
+      "entry_date": "2026-09-24",
+      "entry_price": 183.0,
+      "exit_date": "2026-10-15",
+      "exit_price": 276.07,
+      "ret_pct": 0.508579
+    },
+    {
+      "ticker": "6257",
+      "name": "矽格",
+      "entry_date": "2026-09-24",
+      "entry_price": 239.5,
+      "exit_date": "2026-10-15",
+      "exit_price": 270.36,
+      "ret_pct": 0.128852
+    },
+    {
+      "ticker": "3264",
+      "name": "欣銓",
+      "entry_date": "2026-09-24",
+      "entry_price": 245.0,
+      "exit_date": "2026-10-15",
+      "exit_price": 261.64,
+      "ret_pct": 0.067918
+    },
+    {
+      "ticker": "3711",
+      "name": "日月光投控",
+      "entry_date": "2026-09-21",
+      "entry_price": 691.0,
+      "exit_date": "2026-10-15",
+      "exit_price": 709.57,
+      "ret_pct": 0.026874
     }
   ],
   "stats": {
-    "n": 28,
-    "win_rate": 0.39285714285714285,
-    "avg_ret_gross": 0.018602214285714284,
-    "expectancy_net": 0.012752214285714287,
+    "n": 36,
+    "win_rate": 0.4722222222222222,
+    "avg_ret_gross": 0.03639852777777777,
+    "expectancy_net": 0.03054852777777778,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": -3.7142857142857144,
+      "gap_pp": 4.222222222222221,
       "diverging": false
     },
     "by_month": [
@@ -278,9 +350,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 20,
-        "win_rate": 0.35,
-        "avg_ret_net": 0.018615
+        "n": 28,
+        "win_rate": 0.4642857142857143,
+        "avg_ret_net": 0.03982089285714286
       }
     ]
   }
