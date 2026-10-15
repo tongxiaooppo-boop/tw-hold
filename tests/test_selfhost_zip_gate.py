@@ -127,3 +127,13 @@ def test_zip缺stock_list要擋(tmp_path):
                 zout.writestr(n, zin.read(n))
     errs, _ = zg.check(tmp_path / "b.zip", MAN, RAW, None)
     assert any("stock_list" in e for e in errs)
+
+
+def test_完整日列數相對已發佈縮水超過5pct要擋(tmp_path):
+    p = tmp_path / "a.zip"
+    _zip(p)
+    man = {**MAN, "cday_rows": {"raw_prices.TWO": 400, "raw_prices.TW": 1090}}
+    pub = {"complete_day": "2026-10-06", "cday_rows": {"raw_prices.TWO": 870, "raw_prices.TW": 1092}}
+    errs, _ = zg.check(p, man, RAW, pub)
+    assert any("半邊殘缺" in e and "raw_prices.TWO" in e for e in errs)
+    assert not any("raw_prices.TW " in e for e in errs)

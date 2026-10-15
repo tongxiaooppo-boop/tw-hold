@@ -145,3 +145,43 @@ def test_main_有旁表就輸出且進雜湊_沒有就不輸出(tmp_path):
     h1 = run(tmp_path / "o1")
     assert len(pd.read_parquet(tmp_path / "o1" / "notrade.parquet")) == 1
     assert h1 != h0                                                          # 旁表變了 → 雜湊變 → zip 會重做
+
+
+def _cnt_tbl(counts: dict[str, int], mk="TW"):
+    rows = [{"ticker": f"{1000 + i}", "market": mk, "date": pd.Timestamp(d)} for d, n in counts.items() for i in range(n)]
+    return pd.DataFrame(rows)
+
+
+def test_列數殘缺的最後一天要退回_不是通過():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 101, "2026-10-06": 100, "2026-10-07": 100}
+    tw = _cnt_tbl({**ok, "2026-10-08": 100}, "TW")
+    two_bad = _cnt_tbl({**ok, "2026-10-08": 45}, "TWO")            # 上櫃只回 45%
+    merged = {"raw_prices": pd.concat([tw, two_bad], ignore_index=True)}
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+    assert cday == pd.Timestamp("2026-10-07") and "raw_prices.TWO" in why
+
+
+def test_列數正常或小幅波動不退回():
+    base = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 101, "2026-10-06": 99, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**base, "2026-10-08": 97}, "TW")}              # 97% ≥ 95%
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+    assert cday == pd.Timestamp("2026-10-08") and not why
+
+
+def test_連續兩天殘缺退到最後一個正常日():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100}
+    merged = {"margin": _cnt_tbl({**ok, "2026-10-07": 30, "2026-10-08": 30}, "TW")}
+    cday, _ = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+    assert cday == pd.Timestamp("2026-10-06")
+
+
+def test_可比日不足3天視為正常():
+    merged = {"raw_prices": _cnt_tbl({"2026-10-07": 100, "2026-10-08": 10}, "TW")}
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+    assert cday == pd.Timestamp("2026-10-08") and not why
+
+
+def test_cday_rows_寫出完整日各表各市場列數():
+    merged = {"raw_prices": pd.concat([_cnt_tbl({"2026-10-08": 7}, "TW"), _cnt_tbl({"2026-10-08": 3}, "TWO")])}
+    r = dm.cday_rows(merged, pd.Timestamp("2026-10-08"))
+    assert r["raw_prices.TW"] == 7 and r["raw_prices.TWO"] == 3

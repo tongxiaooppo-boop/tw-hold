@@ -125,6 +125,49 @@ def complete_day(lasts: dict[str, str | None]) -> pd.Timestamp | None:
     return pd.Timestamp(min(lasts.values()))
 
 
+ROWS_LOOKBACK = 5        # 比較對象：該表該市場「實際有資料」的前 5 個交易日（不是日曆日，週末連假不會拉低中位數）
+ROWS_MIN_RATIO = 0.95    # 實測 openapi 10/06～10/14：法人上櫃最低約為中位數的 0.988，95% 夠用，不要調 98%
+
+
+def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> tuple[pd.Timestamp, dict[str, str]]:
+    """只看最後日期會讓「半邊殘缺」的一天通過（例：上櫃日線只回 450 列、平常約 870，完整日照樣前進，
+    約 440 檔上櫃股靜默缺席）。這裡對每個（表, 市場）從 `cday` 往前找第一個「列數 ≥ 前 5 個有資料交易日
+    中位數 × 0.95」的日子，整體完整日取最小值。
+
+    **退回而不是失敗**：殘缺的那天落到 `pending_after_complete_day`（完整日之後不收），延續「只發佈完整日」
+    的語意；退回太多天才由 selfhost_freshness 亮紅燈。前面不足 3 個交易日可比時視為正常。
+    回 (新完整日, {表.市場: 退回原因})。"""
+    eff = cday
+    why: dict[str, str] = {}
+    for name, df in merged.items():
+        for mk in MARKETS:
+            sub = df.loc[(df["market"] == mk) & (df["date"] <= cday), "date"]
+            if sub.empty:
+                continue
+            cnt = sub.value_counts().sort_index()
+            days = list(cnt.index)
+            ok_k = None
+            for k in range(len(days) - 1, -1, -1):
+                prev = cnt.iloc[max(0, k - ROWS_LOOKBACK):k]
+                if len(prev) < 3 or cnt.iloc[k] >= ROWS_MIN_RATIO * prev.median():
+                    ok_k = k
+                    break
+                why.setdefault(f"{name}.{mk}", f"{days[k].date()} 只有 {int(cnt.iloc[k])} 列 < 前{len(prev)}日中位數 {prev.median():.0f} × {ROWS_MIN_RATIO}")
+            if ok_k is None:                       # 整段都比不過（不該發生）：退到最早一天，讓閘門／新鮮度擋
+                ok_k = 0
+            eff = min(eff, days[ok_k])
+    return eff, why
+
+
+def cday_rows(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> dict[str, int]:
+    """完整日當天各（表.市場）的列數——寫進 manifest，zip 閘門拿它跟已發佈那包比（±5%）。"""
+    out = {}
+    for name, df in merged.items():
+        for mk in MARKETS:
+            out[f"{name}.{mk}"] = int(((df["market"] == mk) & (df["date"] == cday)).sum())
+    return out
+
+
 def find_gaps(merged: dict[str, pd.DataFrame], cday: pd.Timestamp, window: int = GAP_WINDOW_DAYS) -> dict[str, list[str]]:
     """完整日往前 `window` 個日曆日內的中間缺日：以三張表兩市場的日期聯集當交易日，哪張表哪個市場少了就是洞。
     （只看最後日抓不到「中間漏一天」——例：上市 10/9 失敗但 10/12 已進來，完整日仍前進，zip 會悄悄缺一天。）
@@ -310,6 +353,10 @@ def main(argv=None) -> int:
     if cday is None:
         print(f"::error::有資料項完全沒有列，無法決定完整日：{lasts}", file=sys.stderr)
         return 1
+    cday_by_date = cday
+    cday, thin = rowcount_complete_day(merged, cday)
+    if thin:
+        print(f"::warning::完整日由 {cday_by_date.date()} 退回 {cday.date()}（列數不足，半邊殘缺）：{thin}", file=sys.stderr)
     pending = {}
     for name, df in merged.items():
         late = df[df["date"] > cday]
@@ -358,7 +405,7 @@ def main(argv=None) -> int:
             h.update(n.encode())
             h.update(pd.util.hash_pandas_object(pd.read_parquet(f), index=False).values.tobytes())
     closed_days, closed_src = closed_days_for_manifest()
-    manifest = {"complete_day": str(cday.date()), "closed_days": closed_days, "closed_days_source": closed_src, "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
+    manifest = {"complete_day": str(cday.date()), "cday_rows": cday_rows(merged, cday), "rowcount_fallback": thin, "closed_days": closed_days, "closed_days_source": closed_src, "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
                 "events_gap_days": gap_days, "gaps": gaps,
                 "events_from_daily": ev_from_daily,
