@@ -94,9 +94,10 @@ def prices(code: str, lookback_days: int = 900) -> pd.DataFrame:
     if d.empty:
         return d
     d["date"] = pd.to_datetime(d["date"])
-    # 面額變更 / 股票分割：上游沒還原 → 分割日前 OHLC ÷ factor（見 reference.corporate_actions）
-    from reference.corporate_actions import adjust_per_share
-    d = adjust_per_share(d, ["open", "high", "low", "close"])
+    # 面額變更 / 股票分割：上游 data_pack 沒還原 → 分割日前 OHLC ÷ factor；自建包已還原的
+    # 事件會被 adjust_prices 偵測到價格連續而跳過（見 reference.corporate_actions）
+    from reference.corporate_actions import adjust_prices
+    d = adjust_prices(d, ["open", "high", "low", "close"])
     cut = d["date"].max() - pd.Timedelta(days=lookback_days)
     return d[d["date"] >= cut].sort_values("date").reset_index(drop=True)
 

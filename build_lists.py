@@ -328,8 +328,8 @@ def main() -> int:
         ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"  → {rot_out}（{len(r['industry_rotation'])} 個產業）")
 
-    from build_factors import detect_unhandled_splits
-    split_warn = detect_unhandled_splits()
+    from build_factors import check_adjusted_jumps, detect_unhandled_splits
+    split_warn = detect_unhandled_splits() + check_adjusted_jumps()
     for w in split_warn:
         print(f"  ⚠ 疑似未還原分割：{w}")
     if split_warn:

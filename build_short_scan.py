@@ -136,7 +136,7 @@ def _track_entry(stocks: list[dict], asof: str, prev_file: dict | None) -> tuple
 
 
 def build() -> dict:
-    from reference.corporate_actions import adjust_per_share
+    from reference.corporate_actions import adjust_prices
 
     uni = pd.read_parquet(UPSTREAM / "fundamentals" / "universe.parquet",
                           columns=["ticker", "stock_name", "industry", "in_universe"])
@@ -146,7 +146,7 @@ def build() -> dict:
     px = _read("prices_adj.parquet", ["date", "ticker", "open", "high", "low", "close", "volume"])
     if px is None:
         raise SystemExit("bundle 沒有 prices_adj.parquet——無法掃描")
-    px = adjust_per_share(_tail_days(px, PX_DAYS),
+    px = adjust_prices(_tail_days(px, PX_DAYS),
                           ["open", "high", "low", "close"])
     chips = _read("chips.parquet", ["date", "ticker", "foreign_net", "trust_net", "dealer_net", "total_net"])
     if chips is not None:

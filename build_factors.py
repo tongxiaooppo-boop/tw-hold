@@ -65,8 +65,8 @@ def _md_table(df: pd.DataFrame) -> str:
 def _split_adjust(d: pd.DataFrame, price_cols: list[str]) -> pd.DataFrame:
     """面額變更 / 股票分割：上游 `prices_adj` 沒還原 → 分割日前的價格 ÷ factor
     （見 reference.corporate_actions）。無已知分割的 ticker 原樣返回。"""
-    from reference.corporate_actions import adjust_per_share
-    return adjust_per_share(d, price_cols)
+    from reference.corporate_actions import adjust_prices
+    return adjust_prices(d, price_cols)
 
 
 def _read_bundle_prices() -> pd.DataFrame | None:
@@ -163,6 +163,38 @@ def detect_unhandled_splits(lookback_days: int = 400) -> list[str]:
     return [f"{j['ticker']} {j['date']} 還原收盤 ×{j['ratio']:.2f}"
             f"——疑似未還原的面額變更/分割/減資，`scripts/resolve_splits.py` 會試著自動解析"
             for j in scan_price_jumps(lookback_days)]
+
+
+def check_adjusted_jumps(prices: pd.DataFrame | None = None, window: int = 10,
+                         limit: float = 1.25) -> list[str]:
+    """還原**之後**再檢查一次：SPLITS 裡的代號在每個事件前後 ±`window` 個交易日內，若還有
+    單日 |比值| 超過 `limit`（±10% 漲跌停容得下，≥1.25 的殘留抓得到）就回警告字串。
+
+    `scan_price_jumps()` 對已列 SPLITS 的代號直接略過，所以「登記了卻還原錯」（重複還原、
+    日期偏移、factor 方向相反）原本完全不會報警——這支補那個洞。
+    `adjust_prices` 判不準時留的 `PRICE_WARNINGS` 也一併回傳。"""
+    from reference import corporate_actions as ca
+    if prices is None:
+        prices = _read_bundle_ohlc()
+    out = list(dict.fromkeys(ca.PRICE_WARNINGS))
+    if prices is None or prices.empty or "close" not in prices.columns:
+        return out
+    d = prices[["date", "ticker", "close"]].copy()
+    d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
+    d = d[(d["close"] > 0) & d["ticker"].isin(ca.SPLITS)].sort_values(["ticker", "date"])
+    lim = np.log(limit)
+    for tk, g in d.groupby("ticker", sort=False):
+        g = g.reset_index(drop=True)
+        lr = np.log(g["close"]).diff().abs()
+        for ev in ca.SPLITS[tk]:
+            pos = int(g["date"].searchsorted(pd.Timestamp(ev["date"])))
+            seg = lr.iloc[max(1, pos - window): pos + window + 1]
+            if len(seg) and seg.max() > lim:
+                k = seg.idxmax()
+                out.append(f"{tk} {pd.Timestamp(g['date'].iloc[k]).date()} 還原後仍有單日 "
+                           f"×{np.exp(seg.max()):.2f} 跳空（事件 {ev['date']} ×{ev['factor']:g}）"
+                           f"——分割／減資還原可能錯了")
+    return list(dict.fromkeys(out))
 
 
 def _read_bundle_ohlc() -> pd.DataFrame | None:
