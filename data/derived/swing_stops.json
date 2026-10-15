@@ -23,6 +23,18 @@
       "signal_date": "2026-10-14",
       "risk_stop_ref": 878.14
     },
+    "2027": {
+      "name": "大成鋼",
+      "status": "pending_entry",
+      "signal_date": "2026-10-14",
+      "risk_stop_ref": 48.04
+    },
+    "2404": {
+      "name": "漢唐",
+      "status": "pending_entry",
+      "signal_date": "2026-10-14",
+      "risk_stop_ref": 1134.3
+    },
     "6491": {
       "name": "晶碩",
       "first_seen": "2026-10-13",
@@ -502,18 +514,6 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
-    },
-    "2027": {
-      "name": "大成鋼",
-      "status": "pending_entry",
-      "signal_date": "2026-10-14",
-      "risk_stop_ref": 48.04
-    },
-    "2404": {
-      "name": "漢唐",
-      "status": "pending_entry",
-      "signal_date": "2026-10-14",
-      "risk_stop_ref": 1134.3
     }
   }
 }

@@ -372,12 +372,18 @@
    "conflict": false
   },
   "swing": {
-   "origin": "backfill-csv",
+   "origin": "live",
    "status": "degraded",
    "note": "這段期間 tw-swing 部分規則的輸入資料不完整，零訊號不代表當天沒有符合的股票",
    "n": 0,
    "candidates": [],
-   "revisions": []
+   "revisions": [
+    {
+     "digest": "1bdc80b8d7a85734",
+     "origin": "backfill-csv",
+     "status": "degraded"
+    }
+   ]
   }
  }
 }
