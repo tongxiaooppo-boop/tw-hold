@@ -221,3 +221,19 @@ def test_stock_list_只有carry時產業別數量不變():
     carry = pd.DataFrame({"code": list(codes), "name": ["n"] * 50, "sector": ["電子"] * 50})
     out = dp.stock_list_frame(codes, None, None, carry)
     assert (out["sector"] != "").sum() == 50 and (out["name"] != "").sum() == 50
+
+
+def test_新上市個股沒有產業別_補未分類_ETF_DR_已下市不補():
+    import pandas as pd
+    sl = pd.DataFrame({
+        "ticker": ["7856.TWO", "0050.TW", "9105.TW", "1234.TW", "2330.TW"],
+        "code": ["7856", "0050", "9105", "1234", "2330"],
+        "name": ["", "", "", "", "台積電"], "market": ["上櫃", "上市", "上市", "上市", "上市"],
+        "sector": ["", "", "", "", "半導體業"]})
+    adj = pd.DataFrame({
+        "ticker": ["7856", "0050", "9105", "1234", "2330"],
+        "date": pd.to_datetime(["2026-10-14", "2026-10-14", "2026-10-14", "2025-01-02", "2026-10-14"])})
+    out, n = dp.classify_new_listings(sl, adj)
+    got = dict(zip(out["code"], out["sector"]))
+    assert n == 1 and got["7856"] == dp.UNCLASSIFIED
+    assert got["0050"] == "" and got["9105"] == "" and got["1234"] == "" and got["2330"] == "半導體業"

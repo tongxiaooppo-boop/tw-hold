@@ -123,6 +123,30 @@ def stock_list_frame(codes_market: dict[str, str], stock_list: pd.DataFrame | No
     return pd.DataFrame(rows, columns=["ticker", "code", "name", "market", "sector"])
 
 
+UNCLASSIFIED = "未分類（新上市）"
+MAX_UNCLASSIFIED = 50                 # 正常約 16 檔；超過代表來源（universe＋carry）都斷了，閘門會擋
+ACTIVE_WITHIN_DAYS = 7
+NON_EQUITY_PREFIX = ("00", "91")      # ETF、存託憑證——沒有產業別是正常的，不是漏
+
+
+def classify_new_listings(sl: pd.DataFrame, adj: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """近期仍在交易、4 碼、非 ETF／DR，卻沒有任何來源給產業別的個股（多半是這幾個月才上市）→ 補
+    `UNCLASSIFIED`。tw-swing 以「sector 非空」判個股，沒補會讓這些股票永久進不了宇宙（2026-06 後上市的
+    16 檔，含 7856 近 20 日成交值中位數約 20 億），而且上游 stock_list 本來也沒有它們。
+    已下市／久未交易的舊代號不補（它們留在 zip 只是為了歷史），否則會混進每日掃描的個股集合。
+    回 (新 sl, 補了幾檔)。產業別目前只用在研究用的 env filter，live 規則不吃，所以用固定標籤即可。"""
+    if sl.empty or adj.empty:
+        return sl, 0
+    last = adj.groupby("ticker")["date"].max()
+    cutoff = pd.to_datetime(adj["date"]).max() - pd.Timedelta(days=ACTIVE_WITHIN_DAYS)
+    active = set(last[pd.to_datetime(last) >= cutoff].index.astype(str))
+    need = ((sl["sector"] == "") & sl["code"].isin(active) & (sl["code"].str.len() == 4)
+            & ~sl["code"].str.startswith(NON_EQUITY_PREFIX))
+    sl = sl.copy()
+    sl.loc[need, "sector"] = UNCLASSIFIED
+    return sl, int(need.sum())
+
+
 def fill_no_trade(adj: pd.DataFrame, notrade: pd.DataFrame | None) -> tuple[pd.DataFrame, int]:
     """把「官方有列、無成交價」的日子補進還原日線：O=H=L=C＝該檔前一筆**還原**收盤，量＝官方零股量。
     回 (新的 adj, 補了幾列)。補不了的（旁表那天已有實價、該檔之前沒有任何實價）直接略過。"""
@@ -183,10 +207,15 @@ def build(out_zip: Path, adj: pd.DataFrame, raw: pd.DataFrame, inst: pd.DataFram
                 z.writestr(f"data/{folder}/{t}_{suffix}.csv", fn(g, f"{t}.{MARKET_SUFFIX[mk[t]]}"))
                 stats[f"{name}_files"] += 1
         sl = stock_list_frame({t: mk[t] for t in have_price}, stock_list, universe, carry)
+        sl, n_unclassified = classify_new_listings(sl, adj)
+        stats["stock_list_unclassified"] = n_unclassified
+        if n_unclassified > MAX_UNCLASSIFIED:
+            print(f"::warning::{n_unclassified} 檔個股補成「{UNCLASSIFIED}」（正常約 16 檔）——名稱／產業別來源可能整批斷了", file=sys.stderr)
         z.writestr("data/stock_list.csv", sl.to_csv(index=False))
         stats["stock_list_rows"] = len(sl)
         stats["stock_list_named"] = int((sl["name"] != "").sum())
-        stats["stock_list_sector"] = int((sl["sector"] != "").sum())
+        # 真正有產業別的才算：UNCLASSIFIED 是補位標籤，不能讓閘門以為產業別沒斷
+        stats["stock_list_sector"] = int(((sl["sector"] != "") & (sl["sector"] != UNCLASSIFIED)).sum())
     tmp.replace(out_zip)          # 完整寫完才換名（不留半截 zip）
     return stats
 

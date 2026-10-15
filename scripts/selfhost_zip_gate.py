@@ -33,6 +33,8 @@ ROWS_TOL = 0.05            # 完整日各表各市場列數相對已發佈那包
 # stock_list 名稱／產業別守門：tw-swing 用 `sector.notna()` 判個股，sector 空掉 = 全宇宙零候選（靜默）
 MIN_SECTOR_ABS = 1500      # 個股約 1,968 檔；低於這個絕對下限一律擋
 MIN_NAMED_ABS = 1800
+UNCLASSIFIED = "未分類（新上市）"      # 與 selfhost_to_datapack.UNCLASSIFIED 同步
+MAX_UNCLASSIFIED = 50
 
 
 def sha256(p: Path) -> str:
@@ -92,7 +94,13 @@ def check(zip_path: Path, manifest: dict, raw: pd.DataFrame, published: dict | N
         else:
             sl = pd.read_csv(io.BytesIO(zf.read("data/stock_list.csv")), dtype=str, keep_default_na=False)
             stats["stock_list_named"] = int((sl["name"].str.strip() != "").sum())
-            stats["stock_list_sector"] = int((sl["sector"].str.strip() != "").sum())
+            sec = sl["sector"].str.strip()
+            n_unc = int((sec == UNCLASSIFIED).sum())
+            # 「未分類（新上市）」是補位標籤，不算真的有產業別——否則來源全斷時補位會讓下限照樣過
+            stats["stock_list_sector"] = int(((sec != "") & (sec != UNCLASSIFIED)).sum())
+            stats["stock_list_unclassified"] = n_unc
+            if n_unc > MAX_UNCLASSIFIED:
+                errs.append(f"stock_list 補位「{UNCLASSIFIED}」{n_unc} 檔 > {MAX_UNCLASSIFIED}（正常約 16 檔）——名稱／產業別來源斷了")
             if stats["stock_list_sector"] < MIN_SECTOR_ABS:
                 errs.append(f"stock_list 有產業別的只有 {stats['stock_list_sector']} 檔 < {MIN_SECTOR_ABS}"
                             "（tw-swing 以產業別判個股，空掉會讓全宇宙零候選）")

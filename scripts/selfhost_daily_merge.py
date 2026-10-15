@@ -159,6 +159,39 @@ def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -
     return eff, why
 
 
+DUP_COLS = ("margin_balance", "short_balance")
+DUP_MAX_SAME = 0.6       # 實測 2026 年融資「與前一日同值」比例：上市 0.10～0.21、上櫃 0.17～0.30；整列複製會接近 1.0
+
+
+def duplicate_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> tuple[pd.Timestamp, dict[str, str]]:
+    """融資每天列數恆定（上市 1059、上櫃 802），列數檢查抓不到『官方還沒更新、整列是前一日的複本』。
+    比對完整日與前一個有資料交易日的 `margin_balance`／`short_balance`：同值比例 > 0.6 視為複本日，
+    完整日退回前一日（連續複本就一路退）。只看融資——法人淨買超本來就常有相同值（含 0），不適用。"""
+    df = merged.get("margin")
+    why: dict[str, str] = {}
+    if df is None or df.empty or not set(DUP_COLS) <= set(df.columns):
+        return cday, why
+    eff = cday
+    for mk in MARKETS:
+        sub = df[df["market"] == mk]
+        days = sorted(d for d in sub["date"].unique() if d <= cday)
+        k = len(days) - 1
+        while k >= 1:
+            a = sub[sub["date"] == days[k - 1]].drop_duplicates("ticker").set_index("ticker")[list(DUP_COLS)]
+            b = sub[sub["date"] == days[k]].drop_duplicates("ticker").set_index("ticker")[list(DUP_COLS)]
+            both = a.index.intersection(b.index)
+            if len(both) < 50:
+                break
+            same = float((a.loc[both] == b.loc[both]).all(axis=1).mean())
+            if same <= DUP_MAX_SAME:
+                break
+            why[f"margin.{mk}"] = f"{pd.Timestamp(days[k]).date()} 與前一日同值比例 {same:.2f} > {DUP_MAX_SAME}（複本日）"
+            k -= 1
+        if k < len(days) - 1:
+            eff = min(eff, pd.Timestamp(days[k]))
+    return eff, why
+
+
 def cday_rows(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> dict[str, int]:
     """完整日當天各（表.市場）的列數——寫進 manifest，zip 閘門拿它跟已發佈那包比（±5%）。"""
     out = {}
@@ -357,6 +390,11 @@ def main(argv=None) -> int:
     cday, thin = rowcount_complete_day(merged, cday)
     if thin:
         print(f"::warning::完整日由 {cday_by_date.date()} 退回 {cday.date()}（列數不足，半邊殘缺）：{thin}", file=sys.stderr)
+    cday_before_dup = cday
+    cday, dup = duplicate_complete_day(merged, cday)
+    if dup:
+        print(f"::warning::完整日由 {cday_before_dup.date()} 退回 {cday.date()}（融資疑似前一日複本）：{dup}", file=sys.stderr)
+    thin = {**thin, **dup}
     pending = {}
     for name, df in merged.items():
         late = df[df["date"] > cday]

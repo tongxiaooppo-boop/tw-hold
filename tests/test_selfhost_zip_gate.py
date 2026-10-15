@@ -137,3 +137,15 @@ def test_完整日列數相對已發佈縮水超過5pct要擋(tmp_path):
     errs, _ = zg.check(p, man, RAW, pub)
     assert any("半邊殘缺" in e and "raw_prices.TWO" in e for e in errs)
     assert not any("raw_prices.TW " in e for e in errs)
+
+
+def test_補位未分類不算有產業別_來源全斷時閘門仍要擋(tmp_path):
+    """universe 與 carry 都拿不到 → 近期交易個股全被補成『未分類（新上市）』；不能讓補位標籤蒙混過下限。"""
+    rows = ["ticker,code,name,market,sector"]
+    for i in range(2000):
+        rows.append(f"{1000 + i}.TW,{1000 + i},名,上市,{zg.UNCLASSIFIED}")
+    p = tmp_path / "a.zip"
+    _zip(p, stock_list=chr(10).join(rows) + chr(10))
+    errs, stats = zg.check(p, MAN, RAW, None)
+    assert stats["stock_list_sector"] == 0
+    assert any("產業別" in e for e in errs) and any("補位" in e for e in errs)

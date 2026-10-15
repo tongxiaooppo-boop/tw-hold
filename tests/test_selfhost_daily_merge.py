@@ -185,3 +185,41 @@ def test_cday_rows_寫出完整日各表各市場列數():
     merged = {"raw_prices": pd.concat([_cnt_tbl({"2026-10-08": 7}, "TW"), _cnt_tbl({"2026-10-08": 3}, "TWO")])}
     r = dm.cday_rows(merged, pd.Timestamp("2026-10-08"))
     assert r["raw_prices.TW"] == 7 and r["raw_prices.TWO"] == 3
+
+
+def _margin(days_vals: dict[str, list[tuple[int, int]]], mk="TW"):
+    rows = []
+    for d, vals in days_vals.items():
+        for i, (mb, sb) in enumerate(vals):
+            rows.append({"ticker": f"{1000 + i}", "market": mk, "date": pd.Timestamp(d), "margin_balance": mb, "short_balance": sb})
+    return pd.DataFrame(rows)
+
+
+def test_融資整列複製前一日要退回():
+    base = [(100 + i, 5 + i % 7) for i in range(80)]
+    changed = [(100 + i + (i % 5) + 1, 5 + (i * 3) % 11) for i in range(80)]
+    merged = {"margin": _margin({"2026-10-12": base, "2026-10-13": changed, "2026-10-14": changed})}   # 10/14 = 10/13 的複本
+    cday, why = dm.duplicate_complete_day(merged, pd.Timestamp("2026-10-14"))
+    assert cday == pd.Timestamp("2026-10-13") and "margin.TW" in why
+
+
+def test_融資正常變動不退回():
+    a = [(100 + i, 5 + i % 7) for i in range(80)]
+    b = [(100 + i + (1 if i % 5 == 0 else 3), 5 + (i % 7) + (1 if i % 3 else 0)) for i in range(80)]
+    merged = {"margin": _margin({"2026-10-13": a, "2026-10-14": b})}
+    cday, why = dm.duplicate_complete_day(merged, pd.Timestamp("2026-10-14"))
+    assert cday == pd.Timestamp("2026-10-14") and not why
+
+
+def test_融資沒有該表或樣本太少視為正常():
+    assert dm.duplicate_complete_day({}, pd.Timestamp("2026-10-14"))[0] == pd.Timestamp("2026-10-14")
+    few = _margin({"2026-10-13": [(1, 1)] * 5, "2026-10-14": [(1, 1)] * 5})
+    assert dm.duplicate_complete_day({"margin": few}, pd.Timestamp("2026-10-14"))[0] == pd.Timestamp("2026-10-14")
+
+
+def test_融資有重複_ticker_日期不可拋例外():
+    a = [(100 + i, 5) for i in range(80)]
+    m = _margin({"2026-10-13": a, "2026-10-14": a})
+    m = pd.concat([m, m.iloc[:10]], ignore_index=True)            # 同 (日期, ticker) 重複列
+    cday, _ = dm.duplicate_complete_day({"margin": m}, pd.Timestamp("2026-10-14"))
+    assert cday == pd.Timestamp("2026-10-13")
