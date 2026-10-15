@@ -1,0 +1,129 @@
+{
+ "schema": 1,
+ "asof": "2026-09-15",
+ "lines": {
+  "long": {
+   "origin": "backfill-git",
+   "status": "ok",
+   "note": "",
+   "n": 12,
+   "candidates": [
+    {
+     "t": "1560",
+     "nm": "中砂",
+     "px": 735.0,
+     "stop": 694.66,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2303",
+     "nm": "聯電",
+     "px": 138.5,
+     "stop": 130.79,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2455",
+     "nm": "全新",
+     "px": 520.0,
+     "stop": 448.86,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3017",
+     "nm": "奇鋐",
+     "px": 3115.0,
+     "stop": 2803.54,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3037",
+     "nm": "欣興",
+     "px": 951.0,
+     "stop": 950.16,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3081",
+     "nm": "聯亞",
+     "px": 2675.0,
+     "stop": 2401.97,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3264",
+     "nm": "欣銓",
+     "px": 221.0,
+     "stop": 215.59,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3406",
+     "nm": "玉晶光",
+     "px": 915.0,
+     "stop": 723.86,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3653",
+     "nm": "健策",
+     "px": 5310.0,
+     "stop": 4661.43,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "5274",
+     "nm": "信驊",
+     "px": 17520.0,
+     "stop": 15790.9,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "6196",
+     "nm": "帆宣",
+     "px": 518.0,
+     "stop": 511.81,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "6491",
+     "nm": "晶碩",
+     "px": 390.0,
+     "stop": 364.93,
+     "fs": null,
+     "st": null
+    }
+   ],
+   "revisions": [],
+   "n_versions": 2,
+   "conflict": false
+  },
+  "swing": {
+   "origin": "backfill-csv",
+   "status": "degraded",
+   "note": "這段期間 tw-swing 部分規則的輸入資料不完整，零訊號不代表當天沒有符合的股票",
+   "n": 1,
+   "candidates": [
+    {
+     "t": "1528.TW",
+     "nm": "恩德",
+     "px": 24.65,
+     "stop": 23.07,
+     "sig": "H2 出場變體 · 2 ATR 移動停損 + 保本"
+    }
+   ],
+   "revisions": []
+  }
+ }
+}

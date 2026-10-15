@@ -1676,6 +1676,60 @@ def _short_scan_section() -> None:
                "「待確認」＝資料不足、不算缺口；「風險揭露」是警示、不影響是否列出。")
 
 
+_HIST_SYM = {"ok": "✓", "zero": "0", "degraded": "0⚠", "holiday": "休市", "pending": "待產出",
+             "notrun": "✕ 沒跑", "before": "·", "not_retained": "無資料"}
+_HIST_TXT = {"ok": "有候選", "zero": "沒有訊號", "degraded": "資料不完整（零訊號不可信）", "holiday": "休市",
+             "pending": "今天還沒到產出時間", "notrun": "管線沒跑", "before": "追蹤開始前",
+             "not_retained": "當時沒留存（git 歷史撈不到，不補值）"}
+
+
+def _history_section(keys: list[str], tag: str) -> None:
+    """頁面最底下的「近 30 個工作日推薦回顧」。只記候選／訊號，模擬單不納入。
+    st.expander 不會延遲執行，所以用 st.toggle 控制讀檔，整塊包在 fragment（互動只重跑這一塊）。"""
+    st.divider()
+    if not st.toggle("📅 近 30 個工作日推薦回顧（只含候選／訊號，不含模擬單）", key=f"_hist_on_{tag}"):
+        return
+    _history_body(keys, tag)
+
+
+@st.fragment
+def _history_body(keys: list[str], tag: str) -> None:
+    from reference import history as H
+    today = _taipei_today()
+    asof = pd.Timestamp(today)
+    while asof.weekday() > 4:
+        asof -= pd.Timedelta(days=1)
+    views = [H.load_view(k, asof, today=today) for k in keys]
+    labels = [v["label"] for v in views]
+    pick = labels[0]
+    if len(views) > 1:
+        pick = st.segmented_control("哪一條線", labels, default=labels[0], key=f"_hist_line_{tag}") or labels[0]
+    v = views[labels.index(pick)]
+    q = st.text_input("搜尋代號或名稱（近 30 個工作日內出現過的日子）", key=f"_hist_q_{tag}")
+    if q.strip():
+        hits, deg = H.search(views, q)
+        st.caption(f"共 {len(hits)} 筆" if hits else "近 30 個工作日沒有出現"
+                   + ("（注意：含資料不完整的日子，未出現不代表沒訊號）" if deg else ""))
+        for h in hits[:60]:
+            st.write(h)
+    rows = [{"日期": d["d"], "週": d["wd"], "狀態": f"{_HIST_SYM[d['state']]} {_HIST_TXT[d['state']]}",
+             "候選數": d.get("n")} for d in reversed(v["days"])]
+    ev = st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", height=330,
+                      on_select="rerun", selection_mode="single-row", key=f"_hist_df_{tag}_{v['line']}")
+    sel = (ev.selection.rows if ev and ev.selection else [])
+    if sel:
+        d = list(reversed(v["days"]))[sel[0]]
+        st.markdown(f"**{d['d']}（週{d['wd']}）** {_HIST_SYM[d['state']]} {_HIST_TXT[d['state']]}"
+                    + (f"　·　{d['note']}" if d.get("note") else ""))
+        if d.get("c"):
+            st.dataframe(pd.DataFrame(d["c"]).rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "停損",
+                                                           "sig": "訊號", "fs": "進榜日", "st": "連續天數"}),
+                         hide_index=True, width="stretch")
+    st.caption("✓ 有候選　0 沒有訊號　0⚠ 當天輸入資料不完整，零訊號不可信　✕ 管線沒跑　無資料＝當時沒留存，不補值。"
+               "回填的日子以當時的樣子為準，不回頭改。")
+
+
+
 def _shortterm_page() -> None:
     st.header("短線清單（tw-swing）")
 
@@ -3275,8 +3329,10 @@ def main() -> None:
         _card_list("deposit", "定存清單", _load("deposit_list.json"))
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
+        _history_section(["long"], "long")
     elif nav == "短線":
         _shortterm_page()
+        _history_section(["swing", "short"], "short")
     elif nav == "個股查詢":
         _stock_page()
     elif nav == "多軌體檢":

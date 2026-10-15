@@ -127,6 +127,11 @@ jobs:
           [ -z "$WEBHOOK" ] && exit 0
           curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
 
+      # 推薦歷史快照（三條線：tw-swing 短線／tw-hold 短線／長波段，只記候選；已封存的不覆寫）。失敗不擋三清單。
+      - name: 推薦歷史快照
+        continue-on-error: true
+        run: python scripts/write_history.py       # → data/history/<asof>.json
+
       # factors_*.parquet 刻意不進版控（每天一顆 blob）→ 推到 derived-latest release，
       # 讓 Streamlit Cloud 的「三軌體檢」頁執行期拉得到（tw-hold 是公開 repo，免 PAT）。
       - name: 因子表 → derived-latest release
@@ -200,7 +205,7 @@ jobs:
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
-          git add data/derived/ reference/corporate_actions_resolved.json || true
+          git add data/derived/ data/history/ reference/corporate_actions_resolved.json || true
           # 三張清單 JSON 沒實質變動、resolved.json 沒新增分割、且 PCF 快照/006201 代理無新增 →
           # 整批跳過（不為「只有 _meta.json 的 rebuilt_at / flags 的 fetched_at 變了」留 commit）。
           if git diff --cached --quiet -- \

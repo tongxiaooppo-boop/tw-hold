@@ -1,0 +1,169 @@
+{
+ "schema": 1,
+ "asof": "2026-09-14",
+ "lines": {
+  "long": {
+   "origin": "backfill-git",
+   "status": "ok",
+   "note": "",
+   "n": 18,
+   "candidates": [
+    {
+     "t": "1560",
+     "nm": "中砂",
+     "px": 753.0,
+     "stop": 693.96,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2006",
+     "nm": "東和鋼鐵",
+     "px": 82.1,
+     "stop": 78.69,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2027",
+     "nm": "大成鋼",
+     "px": 45.75,
+     "stop": 45.7,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2059",
+     "nm": "川湖",
+     "px": 11990.0,
+     "stop": 10950.05,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2303",
+     "nm": "聯電",
+     "px": 142.5,
+     "stop": 131.07,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "2455",
+     "nm": "全新",
+     "px": 535.0,
+     "stop": 466.0,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3017",
+     "nm": "奇鋐",
+     "px": 3310.0,
+     "stop": 2930.0,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3037",
+     "nm": "欣興",
+     "px": 970.0,
+     "stop": 947.94,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3081",
+     "nm": "聯亞",
+     "px": 2745.0,
+     "stop": 2383.05,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3264",
+     "nm": "欣銓",
+     "px": 227.5,
+     "stop": 215.8,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3406",
+     "nm": "玉晶光",
+     "px": 954.0,
+     "stop": 762.57,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3653",
+     "nm": "健策",
+     "px": 5820.0,
+     "stop": 5170.71,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "3711",
+     "nm": "日月光投控",
+     "px": 612.0,
+     "stop": 611.56,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "4979",
+     "nm": "華星光",
+     "px": 547.0,
+     "stop": 496.17,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "5274",
+     "nm": "信驊",
+     "px": 17980.0,
+     "stop": 15728.8,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "6196",
+     "nm": "帆宣",
+     "px": 520.0,
+     "stop": 512.69,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "6206",
+     "nm": "飛捷",
+     "px": 136.0,
+     "stop": 134.75,
+     "fs": null,
+     "st": null
+    },
+    {
+     "t": "6491",
+     "nm": "晶碩",
+     "px": 381.5,
+     "stop": 363.53,
+     "fs": null,
+     "st": null
+    }
+   ],
+   "revisions": [],
+   "n_versions": 4,
+   "conflict": false
+  },
+  "swing": {
+   "origin": "backfill-csv",
+   "status": "degraded",
+   "note": "這段期間 tw-swing 部分規則的輸入資料不完整，零訊號不代表當天沒有符合的股票",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}
