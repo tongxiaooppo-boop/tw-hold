@@ -135,6 +135,13 @@ def _track_entry(stocks: list[dict], asof: str, prev_file: dict | None) -> tuple
     return base, dropped
 
 
+MIN_SCAN_RATIO = 0.9   # 掃到的檔數低於 universe 的 90% → 拒絕覆寫（e3baa19 曾把 scanned=0 當正常提交）
+
+
+class ScanTooThin(RuntimeError):
+    """價格表缺檔太多（scanned 遠少於 universe）——名單會是空的或殘缺的，卻看起來完全正常。"""
+
+
 def build() -> dict:
     from reference.corporate_actions import adjust_prices
 
@@ -196,6 +203,12 @@ def build() -> dict:
             "checks": [{k: row[k] for k in ("組", "項目", "現值", "狀態")} for row in rows],
         })
 
+    # 掃描覆蓋守門：價格表缺檔／整批不是最新一天時 scanned 會崩，passed 變 0 或殘缺，照舊會被當正常結果提交
+    # （e3baa19：scanned=0）。不覆寫、整支失敗（rebuild.yml 會告警），保留上一份。
+    if scanned < MIN_SCAN_RATIO * len(uni):
+        raise ScanTooThin(f"scanned {scanned} < {MIN_SCAN_RATIO:.0%} × universe {len(uni)}"
+                          f"（asof {asof}）——價格表缺檔或不是最新一天，拒絕覆寫 short_scan.json")
+
     passed.sort(key=lambda x: x["ticker"])    # 代號序——刻意不排名
     prev_file = None
     if OUT.exists():
@@ -236,7 +249,11 @@ def build() -> dict:
 
 
 def main() -> int:
-    out = build()
+    try:
+        out = build()
+    except ScanTooThin as e:
+        print(f"::error::short_scan {e}")
+        return 1
     DERIVED.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     m = out["_meta"]

@@ -130,3 +130,20 @@ def test_thin_latest_判準():
     assert bs._thin_latest(part, asof) is True                        # 只有 57%
     ok = pd.concat([full[full["date"] != d[-1]], full[(full["date"] == d[-1]) & (full["ticker"] < 97)]])
     assert bs._thin_latest(ok, asof) is False                         # 97% 仍算正常（真實正常日 ≥ 98%）
+
+
+def test_scanned過少_拒絕覆寫且main回1(tmp_path, monkeypatch, capsys):
+    import json
+
+    import pandas as pd
+    import pytest
+    _setup_build(tmp_path, monkeypatch, "2026-09-03")          # 先組好 bundle（universe 1 檔、價格 1 檔）
+    uni = pd.DataFrame({"ticker": [f"{i}.TW" for i in range(10)], "stock_name": "n",
+                        "industry": "x", "in_universe": True})
+    uni.to_parquet(tmp_path / "fundamentals" / "universe.parquet")   # universe 10 檔、只有 1 檔有價 → 10% < 90%
+    before = bs.OUT.read_text(encoding="utf-8")
+    with pytest.raises(bs.ScanTooThin):
+        bs.build()
+    assert bs.main() == 1
+    assert bs.OUT.read_text(encoding="utf-8") == before        # 沒被覆寫
+    assert "::error::short_scan" in capsys.readouterr().out

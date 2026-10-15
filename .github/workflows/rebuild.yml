@@ -110,8 +110,22 @@ jobs:
       # 短線條件掃描（多軌體檢「⚡ 短線」檢核表掃 universe → 短線頁第四個名單）。
       # 讀主動 ETF 旗標當 context，所以排在旗標之後；掛了不擋三清單（app 沒這支 JSON 就不顯示該區）。
       - name: 短線條件掃描
+        id: short_scan
         continue-on-error: true
-        run: python build_short_scan.py           # → data/derived/short_scan.json
+        run: python build_short_scan.py           # → data/derived/short_scan.json（scanned < 90% × universe 會失敗且不覆寫）
+
+      - name: 短線掃描失敗告警（scanned 過少等）
+        if: steps.short_scan.outcome == 'failure'
+        env:
+          WEBHOOK: ${{ secrets.ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::warning::短線條件掃描失敗，short_scan.json 保留舊檔沒覆寫（多半是價格表缺檔，scanned 低於 universe 的 90%）"
+          MSG="🟠 tw-hold：短線條件掃描失敗，沿用上一份 short_scan.json
+          多半是 bundle 價格表缺檔／不是最新一天（scanned 低於 universe 90%）。看上面那步 log 的 ::error::。
+          ${RUN_URL}"
+          [ -z "$WEBHOOK" ] && exit 0
+          curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" --max-time 20             -d "$(jq -n --arg m "$MSG" '{content:$m,text:$m}')" || true
 
       # factors_*.parquet 刻意不進版控（每天一顆 blob）→ 推到 derived-latest release，
       # 讓 Streamlit Cloud 的「三軌體檢」頁執行期拉得到（tw-hold 是公開 repo，免 PAT）。
