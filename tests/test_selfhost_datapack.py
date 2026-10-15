@@ -194,3 +194,30 @@ def test_fill_no_trade_tolerates_mixed_datetime_precision():
     nt["date"] = nt["date"].astype("datetime64[ns]")
     adj["date"] = adj["date"].astype("datetime64[us]")
     assert dp.fill_no_trade(adj, nt)[1] == 1
+
+
+def test_stock_list_carry_universe拿不到時沿用上一包的名稱與產業別():
+    import pandas as pd
+    from selfhost_to_datapack import stock_list_frame
+    codes = {"2330": "TW", "6488": "TWO", "9999": "TW"}
+    carry = pd.DataFrame({"code": ["2330", "6488"], "name": ["台積電", "環球晶"], "sector": ["半導體業", "半導體業"]})
+    out = dp.stock_list_frame(codes, None, None, carry).set_index("code")
+    assert out.loc["2330", "sector"] == "半導體業" and out.loc["6488", "name"] == "環球晶"
+    assert out.loc["9999", "sector"] == ""                      # 新股沒有任何來源 → 空，由閘門的覆蓋率把關
+
+
+def test_stock_list_universe優先於carry_且名稱產業別各自獨立補():
+    import pandas as pd
+    from selfhost_to_datapack import stock_list_frame
+    uni = pd.DataFrame({"ticker": ["2330.TW"], "stock_name": ["台積電"], "industry": [""]})   # 產業別空
+    carry = pd.DataFrame({"code": ["2330"], "name": ["舊名"], "sector": ["半導體業"]})
+    out = dp.stock_list_frame({"2330": "TW"}, None, uni, carry).iloc[0]
+    assert out["name"] == "台積電" and out["sector"] == "半導體業"
+
+
+def test_stock_list_只有carry時產業別數量不變():
+    import pandas as pd
+    codes = {f"{1000 + i}": "TW" for i in range(50)}
+    carry = pd.DataFrame({"code": list(codes), "name": ["n"] * 50, "sector": ["電子"] * 50})
+    out = dp.stock_list_frame(codes, None, None, carry)
+    assert (out["sector"] != "").sum() == 50 and (out["name"] != "").sum() == 50

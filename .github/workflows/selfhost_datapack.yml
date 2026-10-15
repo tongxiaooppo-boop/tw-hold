@@ -128,9 +128,22 @@ jobs:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
 
+      - name: 上一包的名稱／產業別（carry，打斷 universe 閉環）
+        # 產業別本來只有 tw-swing bundle 的 universe 有；bundle 一拿不到（PAT 到期、網路），整包 sector
+        # 會變空 → tw-swing 以 sector.notna() 判個股 → 全宇宙零候選，且換好 PAT 後仍是空的。
+        # 所以沿用「上一包已發佈」的 stock_list 當最低優先來源。先找獨立資產 stock_list_named.csv，
+        # 沒有（第一次）就從已發佈 zip 抽。都拿不到不中止（閘門會用絕對下限擋空包）。
+        if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
+        continue-on-error: true
+        run: |
+          gh release download datapack-selfhost -p stock_list_named.csv -D "$P" --clobber 2>/dev/null             || { gh release download datapack-selfhost -p data_pack_selfhost.zip -D "$P" --clobber                  && python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extract('data/stock_list.csv', sys.argv[2])" "$P/data_pack_selfhost.zip" "$P/_x"                  && mv "$P/_x/data/stock_list.csv" "$P/stock_list_named.csv"; }
+          ls -la "$P"
+
       - name: 產 zip
         if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
-        run: python scripts/selfhost_to_datapack.py --in-dir "$M" --out "$M/data_pack_selfhost.zip"
+        run: |
+          CARRY=""; [ -f "$P/stock_list_named.csv" ] && CARRY="--carry $P/stock_list_named.csv"
+          python scripts/selfhost_to_datapack.py --in-dir "$M" --out "$M/data_pack_selfhost.zip" $CARRY
 
       - name: 閘門（不比已發佈那包差）
         if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
@@ -142,6 +155,10 @@ jobs:
         if: steps.stamp.outputs.skip == 'false' && steps.same.outputs.skip == 'false'
         run: |
           gh release upload datapack-selfhost "$M/data_pack_selfhost.zip" --clobber
+          # 下一次 carry 用的名稱／產業別（小檔，不必為了它下載整包 zip）
+          python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extract('data/stock_list.csv', sys.argv[2])" "$M/data_pack_selfhost.zip" "$M/_x"
+          cp "$M/_x/data/stock_list.csv" "$M/stock_list_named.csv"
+          gh release upload datapack-selfhost "$M/stock_list_named.csv" --clobber
           gh release upload datapack-selfhost "$M/adjust_log.csv" --clobber
           gh release upload datapack-selfhost "$M/merge_manifest.json" --clobber
           gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber

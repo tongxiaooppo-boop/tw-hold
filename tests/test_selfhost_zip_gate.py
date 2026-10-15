@@ -10,8 +10,19 @@ sys.path.insert(0, "scripts")
 import selfhost_zip_gate as zg  # noqa: E402
 
 
-def _zip(path, last_close=100.0, last_day="2026-10-07", codes=(("0050", "TW"), ("2330", "TW"), ("6488", "TWO"))):
+def _stock_list(n=2000, named=None, sectors=None):
+    named = n if named is None else named
+    sectors = n if sectors is None else sectors
+    rows = ["ticker,code,name,market,sector"]
+    for i in range(n):
+        rows.append(f"{1000 + i}.TW,{1000 + i},{'名' if i < named else ''},上市,{'電子' if i < sectors else ''}")
+    return "\n".join(rows) + "\n"
+
+
+def _zip(path, last_close=100.0, last_day="2026-10-07", codes=(("0050", "TW"), ("2330", "TW"), ("6488", "TWO")),
+         stock_list=None):
     with zipfile.ZipFile(path, "w") as z:
+        z.writestr("data/stock_list.csv", _stock_list() if stock_list is None else stock_list)
         for c, mk in codes:
             z.writestr(f"data/{c}.{mk}.csv", f"Date,Open,High,Low,Close,Volume\n2026-10-06,1,1,1,99,1\n{last_day},1,1,1,{last_close},1\n")
             z.writestr(f"data/institutional/{c}_inst.csv", "ticker,date,total_net\nx,2026-10-07,1\n")
@@ -89,3 +100,30 @@ def test_通過時manifest寫入published_at(tmp_path):
     assert zg.main(["--zip", str(z), "--manifest", str(m), "--raw", str(r)]) == 0
     out = json.loads(m.read_text(encoding="utf-8"))
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", out["published_at"])
+
+
+def test_stock_list產業別空掉要擋_打斷閉環(tmp_path):
+    """PAT 到期 → bundle 拿不到 → sector 全空 → tw-swing 全宇宙零候選：閘門要在發佈前擋下。"""
+    p = tmp_path / "a.zip"
+    _zip(p, stock_list=_stock_list(n=2000, sectors=0))
+    errs, stats = zg.check(p, MAN, RAW, None)
+    assert any("產業別" in e for e in errs) and stats["stock_list_sector"] == 0
+
+
+def test_stock_list名稱縮水相對已發佈要擋(tmp_path):
+    p = tmp_path / "a.zip"
+    _zip(p, stock_list=_stock_list(n=2000, named=1950, sectors=1950))
+    pub = {"complete_day": "2026-10-06", "zip": {"price_files": 3, "stock_list_named": 2100, "stock_list_sector": 2100}}
+    errs, _ = zg.check(p, MAN, RAW, pub)
+    assert any("縮水" in e and "名稱" in e for e in errs)
+
+
+def test_zip缺stock_list要擋(tmp_path):
+    p = tmp_path / "a.zip"
+    _zip(p)
+    with zipfile.ZipFile(p) as zin, zipfile.ZipFile(tmp_path / "b.zip", "w") as zout:
+        for n in zin.namelist():
+            if n != "data/stock_list.csv":
+                zout.writestr(n, zin.read(n))
+    errs, _ = zg.check(tmp_path / "b.zip", MAN, RAW, None)
+    assert any("stock_list" in e for e in errs)

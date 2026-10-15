@@ -89,20 +89,36 @@ def margin_csv(g: pd.DataFrame, ticker_name: str) -> str:
     return out.to_csv(index=False)
 
 
-def stock_list_frame(codes_market: dict[str, str], stock_list: pd.DataFrame | None, universe: pd.DataFrame | None) -> pd.DataFrame:
-    """ticker／code／name／market／sector。市場別一律以自建實價為準；名稱與產業別有來源才補。"""
-    names: dict[str, tuple[str, str]] = {}
+def stock_list_frame(codes_market: dict[str, str], stock_list: pd.DataFrame | None, universe: pd.DataFrame | None,
+                     carry: pd.DataFrame | None = None) -> pd.DataFrame:
+    """ticker／code／name／market／sector。市場別一律以自建實價為準；名稱與產業別有來源才補。
+
+    名稱／產業別的優先序（高→低）：`stock_list`（明確指定）→ `universe`（tw-swing bundle，最新）→
+    `carry`（上一包已發佈的 stock_list）。**carry 是為了打斷閉環**：產業別本來只有 tw-swing 的
+    universe 有，bundle 下載（PAT 到期、網路）一失敗，整包 sector 會變空，tw-swing 端 `sector.notna()`
+    判個股 → 全宇宙零候選，而且換好 PAT 後還是空的（來源就是上一包的空值）。有 carry 時，bundle 拿不到
+    只是名稱／產業別不更新，不會變空。名稱、產業別各自獨立補（一個空不影響另一個）。"""
+    names: dict[str, list[str]] = {}
+
+    def _fill(code: str, nm, sec) -> None:
+        cur = names.setdefault(code, ["", ""])
+        for i, v in enumerate((nm, sec)):
+            v = "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v).strip()
+            if v and v.lower() != "nan" and not cur[i]:
+                cur[i] = v
+
     if stock_list is not None and len(stock_list):
-        sl = stock_list.copy()
-        sl["code"] = sl["code"].astype(str).str.strip()
-        names.update({r.code: (str(r.name), str(getattr(r, "sector", "") or "")) for r in sl.itertuples()})
+        for r in stock_list.itertuples():
+            _fill(str(r.code).strip(), r.name, getattr(r, "sector", ""))
     if universe is not None and len(universe):
         for r in universe.itertuples():
-            names.setdefault(str(r.ticker).split(".")[0],
-                             (str(getattr(r, "stock_name", "") or ""), str(getattr(r, "industry", "") or "")))
+            _fill(str(r.ticker).split(".")[0], getattr(r, "stock_name", ""), getattr(r, "industry", ""))
+    if carry is not None and len(carry):
+        for r in carry.itertuples():
+            _fill(str(r.code).strip(), r.name, getattr(r, "sector", ""))
     rows = []
     for code, mk in sorted(codes_market.items()):
-        nm, sec = names.get(code, ("", ""))
+        nm, sec = names.get(code, ["", ""])
         rows.append({"ticker": f"{code}.{MARKET_SUFFIX[mk]}", "code": code, "name": nm, "market": MARKET_ZH[mk], "sector": sec})
     return pd.DataFrame(rows, columns=["ticker", "code", "name", "market", "sector"])
 
@@ -135,7 +151,7 @@ def fill_no_trade(adj: pd.DataFrame, notrade: pd.DataFrame | None) -> tuple[pd.D
 def build(out_zip: Path, adj: pd.DataFrame, raw: pd.DataFrame, inst: pd.DataFrame | None, margin: pd.DataFrame | None,
           stock_list: pd.DataFrame | None = None, universe: pd.DataFrame | None = None,
           tickers: set[str] | None = None, since: str | None = None, four_digit_only: bool = True,
-          notrade: pd.DataFrame | None = None) -> dict:
+          notrade: pd.DataFrame | None = None, carry: pd.DataFrame | None = None) -> dict:
     """組 zip。回傳統計 dict。tickers／since 只給小量試跑用。"""
     mk = latest_market(raw)
     if four_digit_only:
@@ -166,10 +182,11 @@ def build(out_zip: Path, adj: pd.DataFrame, raw: pd.DataFrame, inst: pd.DataFram
             for t, g in d.sort_values(["ticker", "date"]).groupby("ticker", sort=False):
                 z.writestr(f"data/{folder}/{t}_{suffix}.csv", fn(g, f"{t}.{MARKET_SUFFIX[mk[t]]}"))
                 stats[f"{name}_files"] += 1
-        sl = stock_list_frame({t: mk[t] for t in have_price}, stock_list, universe)
+        sl = stock_list_frame({t: mk[t] for t in have_price}, stock_list, universe, carry)
         z.writestr("data/stock_list.csv", sl.to_csv(index=False))
         stats["stock_list_rows"] = len(sl)
         stats["stock_list_named"] = int((sl["name"] != "").sum())
+        stats["stock_list_sector"] = int((sl["sector"] != "").sum())
     tmp.replace(out_zip)          # 完整寫完才換名（不留半截 zip）
     return stats
 
@@ -187,6 +204,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--stock-list", help="tw-swing 的 stock_list（csv 或 parquet，欄位 ticker/code/name/market/sector）")
+    ap.add_argument("--carry", help="上一包已發佈的 stock_list（csv，欄位同上）；universe 拿不到時沿用名稱／產業別，打斷閉環")
     ap.add_argument("--universe", default=str(ROOT / "data" / "upstream" / "fundamentals" / "universe.parquet"))
     ap.add_argument("--tickers", help="逗號分隔，只轉這幾檔（試跑用）")
     ap.add_argument("--since", help="YYYY-MM-DD，只轉這天之後（試跑用）")
@@ -202,7 +220,8 @@ def main(argv=None) -> int:
     notrade = pd.read_parquet(d / "notrade.parquet") if (d / "notrade.parquet").exists() else None   # 沒有就不補（舊流程相容）
     stats = build(Path(a.out), adj, raw, inst, margin,
                   _read_any(Path(a.stock_list) if a.stock_list else None), _read_any(Path(a.universe)),
-                  set(a.tickers.split(",")) if a.tickers else None, a.since, not a.all_codes, notrade)
+                  set(a.tickers.split(",")) if a.tickers else None, a.since, not a.all_codes, notrade,
+                  _read_any(Path(a.carry) if a.carry else None))
     print("[datapack]", stats)
     if stats["price_files"] == 0:
         print("::error::沒有轉出任何日線檔", file=sys.stderr)

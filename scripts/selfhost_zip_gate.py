@@ -29,6 +29,9 @@ import pandas as pd
 
 ANCHORS = {"0050": "TW", "2330": "TW", "6488": "TWO"}
 SHRINK_TOL = 0.02
+# stock_list 名稱／產業別守門：tw-swing 用 `sector.notna()` 判個股，sector 空掉 = 全宇宙零候選（靜默）
+MIN_SECTOR_ABS = 1500      # 個股約 1,968 檔；低於這個絕對下限一律擋
+MIN_NAMED_ABS = 1800
 
 
 def sha256(p: Path) -> str:
@@ -82,6 +85,18 @@ def check(zip_path: Path, manifest: dict, raw: pd.DataFrame, published: dict | N
             # 用 max 而非「每個都要等於完整日」：個別錨點本來就可能缺日（6488 法人 2686 列 vs 2330 的 2864 列、0050 沒有融資檔）
             elif max(lasts) != str(cday.date()):
                 errs.append(f"{kind} 錨點最後日 {sorted(set(lasts))} 與完整日 {cday.date()} 不一致（最新者應等於完整日）")
+    with zipfile.ZipFile(zip_path) as zf:
+        if "data/stock_list.csv" not in zf.namelist():
+            errs.append("zip 裡沒有 data/stock_list.csv")
+        else:
+            sl = pd.read_csv(io.BytesIO(zf.read("data/stock_list.csv")), dtype=str, keep_default_na=False)
+            stats["stock_list_named"] = int((sl["name"].str.strip() != "").sum())
+            stats["stock_list_sector"] = int((sl["sector"].str.strip() != "").sum())
+            if stats["stock_list_sector"] < MIN_SECTOR_ABS:
+                errs.append(f"stock_list 有產業別的只有 {stats['stock_list_sector']} 檔 < {MIN_SECTOR_ABS}"
+                            "（tw-swing 以產業別判個股，空掉會讓全宇宙零候選）")
+            if stats["stock_list_named"] < MIN_NAMED_ABS:
+                errs.append(f"stock_list 有名稱的只有 {stats['stock_list_named']} 檔 < {MIN_NAMED_ABS}")
     if stats["inst_files"] == 0 or stats["margin_files"] == 0:
         errs.append(f"法人／融資檔數為 0：{stats}")
     if published:
@@ -90,6 +105,10 @@ def check(zip_path: Path, manifest: dict, raw: pd.DataFrame, published: dict | N
         old = (published.get("zip") or {}).get("price_files")
         if old and stats["price_files"] < old * (1 - SHRINK_TOL):
             errs.append(f"日線檔數縮水：{stats['price_files']} < 已發佈 {old} × {1 - SHRINK_TOL}")
+        for k, label in (("stock_list_sector", "產業別"), ("stock_list_named", "名稱")):
+            oldn = (published.get("zip") or {}).get(k)
+            if oldn and stats.get(k, 0) < oldn * (1 - SHRINK_TOL):
+                errs.append(f"stock_list {label}縮水：{stats.get(k)} < 已發佈 {oldn} × {1 - SHRINK_TOL}")
     return errs, stats
 
 
