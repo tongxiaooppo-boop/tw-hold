@@ -1748,7 +1748,15 @@ def _shortterm_page() -> None:
     gen = data.get("generated_at", "—")
     wd = data.get("weekday", "")
     # 「整群計算時間」放在最顯眼的地方；當天沒產出時明講，不靜默拿舊的當新的。
-    st.caption(f"**清單產生日 {asof}（{wd}）**　·　產生時刻 {gen}（台北）　·　來源 tw-swing")
+    dw = list(data.get("data_warnings") or [])
+    rr = data.get("regen_reason") or ""
+    bad = bool(dw or rr or data.get("data_ok") is False)
+    ok_mark = "" if "data_ok" not in data else ("　·　⚠️ **資料警示，請看下方**" if bad else "　·　✓ 資料檢查正常")
+    st.caption(f"**清單產生日 {asof}（{wd}）**　·　產生時刻 {gen}（台北）　·　來源 tw-swing{ok_mark}")
+    if bad:      # 沒有推播管道：警報就是清單本身，朋友看到就會通知維護者
+        st.error("⚠️ **這份 tw-swing 清單的資料有問題——「沒有訊號」或下面的結果不可全信，請通知維護者。**\n\n"
+                 + "\n".join(f"- {w}" for w in dw)
+                 + (f"\n- 這份清單是重新計算的。原因：{rr}" if rr else ""))
     _disclaimer()
     today = _taipei_today()
     if asof != "—" and asof < today:
@@ -1764,7 +1772,9 @@ def _shortterm_page() -> None:
 
     cands = data.get("candidates", [])
     if data.get("empty") or not cands:
-        st.info(f"tw-swing 在 {asof} 收盤後跑完，**當日無訊號**。")
+        (st.warning if bad else st.info)(
+            f"tw-swing 在 {asof} 收盤後跑完，**當日無訊號**。" if not bad else
+            f"tw-swing 在 {asof} 顯示「無訊號」，**但資料有問題（見上方警示），這個結果不可信**。")
         st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
                    "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
         for d in data.get("disclaimer", []):

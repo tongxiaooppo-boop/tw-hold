@@ -64,7 +64,7 @@ def live() -> int:
     try:
         req = urllib.request.Request(SWING_SHARE_URL, headers={"User-Agent": "tw-hold"})
         share = json.loads(urllib.request.urlopen(req, timeout=20).read().decode("utf-8"))
-        a, ln = H.swing_line(share["asof"], share.get("candidates") or [], "live")
+        a, ln = H.swing_line(share["asof"], share.get("candidates") or [], "live", warnings=share.get("data_warnings") or [])
         print("swing", a, H.add_line(a, "swing", ln))
     except Exception as e:  # noqa: BLE001
         print(f"[WARN] tw-swing 分享 JSON 抓不到，swing 線今天不記：{e}")

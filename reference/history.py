@@ -60,11 +60,13 @@ def long_line(doc: dict, origin: str) -> tuple[str, dict]:
         "revisions": []}
 
 
-def swing_line(asof: str, cands: list[dict], origin: str) -> tuple[str, dict]:
+def swing_line(asof: str, cands: list[dict], origin: str, warnings: list[str] | None = None) -> tuple[str, dict]:
     """cands：[{ticker,name,entry,stop,signal}]（分享 JSON 或 tw-swing csv 轉出，皆不含規則 ID）。"""
     status, note = "ok", ""
     if SWING_DEGRADED[0] <= asof <= SWING_DEGRADED[1]:
         status, note = "degraded", "這段期間 tw-swing 部分規則的輸入資料不完整，零訊號不代表當天沒有符合的股票"
+    if warnings:      # tw-swing 自己在清單上標了資料警示（share JSON 的 data_warnings）→ 這天不可信
+        status, note = "degraded", "tw-swing 當天標示資料有問題：" + "；".join(warnings)[:300]
     rows, seen = [], {}
     for c in cands:
         t = c["ticker"]

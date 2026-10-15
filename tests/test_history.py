@@ -102,3 +102,9 @@ def test_recompute_only_day_and_streaks_across_live_and_recomputed(tmp_path):
     v = H.load_view("short", pd.Timestamp("2026-09-10"), hist_dir=tmp_path, window=3)
     c = [x for x in v["days"][-1]["c"] if x["t"] == "1101"][0]
     assert (c["fs"], c["st"]) == ("2026-09-08", 3)
+
+
+def test_swing_line_carries_tw_swing_warnings_into_status():
+    a, ln = H.swing_line("2026-10-20", [], "live", warnings=["Y4 輸入不完整"])
+    assert ln["status"] == "degraded" and "Y4 輸入不完整" in ln["note"]
+    assert H.swing_line("2026-10-20", [], "live")[1]["status"] == "ok"
