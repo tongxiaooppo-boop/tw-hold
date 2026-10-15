@@ -113,6 +113,24 @@ def add_line(asof: str, key: str, line: dict, *, force: bool = False, out_dir: P
     return res
 
 
+def _annotate_streaks(days: list[dict], members: dict[str, set], hol: dict) -> None:
+    """每個候選加 fs（進榜日）、st（連續幾個交易日）。往前一個交易日＝前一個平日且不在休市表；
+    那天沒有紀錄（沒跑／無資料）就停——不替未知的日子假設有／沒有，所以連續日數是『已知紀錄內的下限』。"""
+    for d in days:
+        for c in d.get("c") or []:
+            n, fs, cur = 1, d["d"], pd.Timestamp(d["d"])
+            while True:
+                cur = cur - pd.Timedelta(days=1)
+                while cur.weekday() > 4 or cur.date().isoformat() in hol:
+                    cur = cur - pd.Timedelta(days=1)
+                k = cur.date().isoformat()
+                if c["t"] in members.get(k, ()):
+                    n, fs = n + 1, k
+                else:
+                    break
+            c["st"], c["fs"] = n, fs
+
+
 def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window: int = WINDOW,
               today: str | None = None) -> dict:
     """某條線近 window 個工作日的檢視模型。state：ok／zero／degraded／recomp（含補算）／holiday／pending／notrun／before／not_retained。"""
@@ -160,6 +178,10 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
             row.update(state="holiday", note=hol[k])
         elif today and k == today:
             row.update(state="pending")            # 今天還沒到產出時間，不算沒跑
+        elif k in rc:                              # 當時沒有紀錄、但有事後補算（例如短線掃描 10/02 才上線，之前的日子用 bundle 重掃）
+            cs = rc[k]["candidates"]
+            row.update(state="recomp", n=len(cs), nrc=len(cs), origin="recompute", note=rc[k].get("note", ""),
+                       c=[dict(c, src="補算") for c in cs])
         elif k < start:
             row.update(state="before")
         elif first_live and k < first_live:
@@ -167,6 +189,11 @@ def load_view(key: str, asof: pd.Timestamp, hist_dir: Path | None = None, window
         else:
             row.update(state="notrun")
         days.append(row)
+    if key in ("swing", "short"):      # long 用檔內追蹤器的 first_seen／streak_days（含 git 歷史，比這裡可靠）
+        members = {k: {c["t"] for c in ln.get("candidates", [])} for k, ln in got.items()}
+        for k, ln in rc.items():
+            members.setdefault(k, set()).update(c["t"] for c in ln["candidates"])
+        _annotate_streaks(days, members, hol)
     return {"line": key, "label": LINES[key], "asof": asof.date().isoformat(), "days": days}
 
 

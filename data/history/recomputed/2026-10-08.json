@@ -1,7 +1,6 @@
 {
  "schema": 1,
  "asof": "2026-10-08",
- "method": "recompute-with-repaired-data",
  "lines": {
   "swing": {
    "n": 3,
@@ -29,5 +28,6 @@
     }
    ]
   }
- }
+ },
+ "method": "recompute-with-repaired-data"
 }

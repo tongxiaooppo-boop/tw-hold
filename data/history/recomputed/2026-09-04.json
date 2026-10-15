@@ -1,0 +1,25 @@
+{
+ "schema": 1,
+ "asof": "2026-09-04",
+ "lines": {
+  "short": {
+   "n": 2,
+   "scanned": 603,
+   "status": "ok",
+   "note": "",
+   "candidates": [
+    {
+     "t": "2353",
+     "nm": "宏碁",
+     "px": 32.7
+    },
+    {
+     "t": "2385",
+     "nm": "群光",
+     "px": 110.5
+    }
+   ]
+  }
+ },
+ "method": "recompute-from-current-bundle"
+}

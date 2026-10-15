@@ -1,0 +1,42 @@
+{
+ "schema": 1,
+ "asof": "2026-09-07",
+ "lines": {
+  "short": {
+   "n": 3,
+   "scanned": 605,
+   "status": "ok",
+   "note": "",
+   "candidates": [
+    {
+     "t": "2330",
+     "nm": "台積電",
+     "px": 2452.77
+    },
+    {
+     "t": "5243",
+     "nm": "乙盛-KY",
+     "px": 93.06
+    },
+    {
+     "t": "5876",
+     "nm": "上海商銀",
+     "px": 46.95
+    }
+   ]
+  },
+  "swing": {
+   "n": 1,
+   "candidates": [
+    {
+     "t": "3529.TWO",
+     "nm": "力旺",
+     "px": 2570.0,
+     "stop": 2295.18,
+     "sig": "月營收創年高 + 估值便宜"
+    }
+   ]
+  }
+ },
+ "method": "recompute-with-repaired-data"
+}

@@ -1,0 +1,37 @@
+{
+ "schema": 1,
+ "asof": "2026-09-08",
+ "lines": {
+  "short": {
+   "n": 2,
+   "scanned": 605,
+   "status": "ok",
+   "note": "",
+   "candidates": [
+    {
+     "t": "2330",
+     "nm": "台積電",
+     "px": 2462.74
+    },
+    {
+     "t": "4961",
+     "nm": "天鈺",
+     "px": 177.5
+    }
+   ]
+  },
+  "swing": {
+   "n": 1,
+   "candidates": [
+    {
+     "t": "6179.TWO",
+     "nm": "亞通",
+     "px": 33.1,
+     "stop": 28.66,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ]
+  }
+ },
+ "method": "recompute-with-repaired-data"
+}

@@ -1,0 +1,14 @@
+{
+ "schema": 1,
+ "asof": "2026-09-10",
+ "lines": {
+  "short": {
+   "n": 0,
+   "scanned": 605,
+   "status": "ok",
+   "note": "",
+   "candidates": []
+  }
+ },
+ "method": "recompute-from-current-bundle"
+}

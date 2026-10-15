@@ -142,7 +142,7 @@ class ScanTooThin(RuntimeError):
     """價格表缺檔太多（scanned 遠少於 universe）——名單會是空的或殘缺的，卻看起來完全正常。"""
 
 
-def build() -> dict:
+def build(cutoff: str | None = None) -> dict:
     from reference.corporate_actions import adjust_prices
 
     uni = pd.read_parquet(UPSTREAM / "fundamentals" / "universe.parquet",
@@ -153,6 +153,8 @@ def build() -> dict:
     px = _read("prices_adj.parquet", ["date", "ticker", "open", "high", "low", "close", "volume"])
     if px is None:
         raise SystemExit("bundle 沒有 prices_adj.parquet——無法掃描")
+    if cutoff:                                  # 補算：只用 cutoff（含）以前的資料，不寫檔、不碰追蹤
+        px = px[pd.to_datetime(px["date"]) <= pd.Timestamp(cutoff)]
     px = adjust_prices(_tail_days(px, PX_DAYS),
                           ["open", "high", "low", "close"])
     chips = _read("chips.parquet", ["date", "ticker", "foreign_net", "trust_net", "dealer_net", "total_net"])
@@ -163,6 +165,11 @@ def build() -> dict:
                   f"三項≠合計 {st['mismatch']:.1%}——以合計−外資−投信補自營；上游多半又出事了")
         chips = fill_dealer(chips)
     margin = _read("margin.parquet", ["date", "ticker", "margin_balance", "short_balance"])
+    if cutoff:
+        if chips is not None:
+            chips = chips[pd.to_datetime(chips["date"]) <= pd.Timestamp(cutoff)]
+        if margin is not None:
+            margin = margin[pd.to_datetime(margin["date"]) <= pd.Timestamp(cutoff)]
 
     px_g = _by_code(px)
     chips_g = _by_code(_tail_days(chips, CHIPS_DAYS)) if chips is not None else {}
@@ -210,6 +217,9 @@ def build() -> dict:
                           f"（asof {asof}）——價格表缺檔或不是最新一天，拒絕覆寫 short_scan.json")
 
     passed.sort(key=lambda x: x["ticker"])    # 代號序——刻意不排名
+    if cutoff:                                 # 補算模式：直接回結果，不做缺料沿用／進榜追蹤
+        return {"_meta": {"asof": asof, "scanned": scanned, "passed": len(passed),
+                          "has_margin": margin_ok, "has_chips": chips_ok}, "stocks": passed}
     prev_file = None
     if OUT.exists():
         try:

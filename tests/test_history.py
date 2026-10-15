@@ -82,3 +82,23 @@ def test_view_merges_recomputed_sidecar(tmp_path):
     d = H.load_view("swing", pd.Timestamp("2026-10-05"), hist_dir=tmp_path, window=1)["days"][0]
     assert d["state"] == "recomp" and d["n"] == 1 and d["c"][0]["src"] == "補算"
     assert (tmp_path / "2026-10-05.json").read_bytes() == before
+
+
+def test_recompute_only_day_and_streaks_across_live_and_recomputed(tmp_path):
+    (tmp_path / "recomputed").mkdir()
+    # 9/08 只有補算（當時沒有這條線的紀錄）、9/09 有 live：同一檔連續兩日
+    (tmp_path / "recomputed" / "2026-09-08.json").write_text(json.dumps({"lines": {"short": {"candidates": [
+        {"t": "1101", "nm": "台泥", "px": 30.0}]}}}), encoding="utf-8")
+    H.add_line("2026-09-09", "short", H.short_line(_short("2026-09-09", 1), "live")[1], out_dir=tmp_path)
+    v = H.load_view("short", pd.Timestamp("2026-09-09"), hist_dir=tmp_path, window=2)
+    d8, d9 = v["days"]
+    assert d8["state"] == "recomp" and d8["c"][0]["src"] == "補算" and d8["n"] == 1
+    assert d9["c"][0]["t"] == "1000" and d9["c"][0]["st"] == 1       # 9/09 的 1000 前一天沒出現 → 1
+    # 同一檔跨補算＋live 連續
+    H.add_line("2026-09-10", "short", H.short_line({"_meta": {"asof": "2026-09-10", "scanned": 600, "has_margin": True, "has_chips": True},
+                                                    "stocks": [{"ticker": "1101", "name": "台泥", "close": 31.0}]}, "live")[1], out_dir=tmp_path)
+    (tmp_path / "recomputed" / "2026-09-09.json").write_text(json.dumps({"lines": {"short": {"candidates": [
+        {"t": "1101", "nm": "台泥", "px": 30.5}]}}}), encoding="utf-8")
+    v = H.load_view("short", pd.Timestamp("2026-09-10"), hist_dir=tmp_path, window=3)
+    c = [x for x in v["days"][-1]["c"] if x["t"] == "1101"][0]
+    assert (c["fs"], c["st"]) == ("2026-09-08", 3)
