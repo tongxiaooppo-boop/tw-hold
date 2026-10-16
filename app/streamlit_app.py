@@ -1388,7 +1388,7 @@ def _card_list(kind: str, title: str, payload: dict | None) -> None:
         cc[0].markdown("**擠進前 15**\n\n" + _bullets(cand.get("likely_in")))
         cc[1].markdown("**掉出前 15**\n\n" + _bullets(_fmt_removed(cand.get("likely_out", []))))
 
-    with st.expander("複製給 AI"):
+    with st.expander("📋 複製給 AI（點開看）"):
         st.code(_copy_for_ai(title, meta, rows), language="markdown")
 
     st.divider()
@@ -1550,7 +1550,7 @@ def _swing_page(payload: dict | None) -> None:
                   for c in rows) + "</div>",
         unsafe_allow_html=True)
 
-    with st.expander("複製給 AI"):
+    with st.expander("📋 複製給 AI（點開看）"):
         st.code(_copy_for_ai("長波段候選池", meta, rows),
                 language="markdown")
     st.divider()
@@ -1705,7 +1705,7 @@ def _history_section(keys: list[str], tag: str) -> None:
     跟「📊 回測報告」同一種 expander（2026-10-16 使用者：原本的 toggle 跟回測報告不一致）；
     expander 收著也會執行，讀檔靠 `_hist_views` 快取壓成本。整塊包在 fragment（翻日期只重跑這一塊）。"""
     st.divider()
-    with st.expander("📅 近 30 個工作日推薦回顧（點開看，只含候選／訊號，不含模擬單）"):
+    with st.expander("📅 近 30 個工作日推薦回顧（只含候選／訊號，不含模擬單｜點開看）"):
         _history_body(keys, tag)
 
 
@@ -1833,7 +1833,7 @@ def _shortterm_page() -> None:
                 + "".join(_short_b_html(c, _active_of(c.get("ticker"), flags)) for c in cands)
                 + "</div>", unsafe_allow_html=True)
 
-    with st.expander("複製給 AI"):
+    with st.expander("📋 複製給 AI（點開看）"):
         lines = [f"# 短線清單 tw-swing（產生日 {asof}，非投資建議、隔日開盤前有效）", ""]
         for c in cands:
             lines.append(
@@ -2056,7 +2056,7 @@ def _stock_page() -> None:
                    "這裡是診斷用。")
         st.dataframe(ch.fscore_table(d["qf"]), hide_index=True, use_container_width=True)
 
-    with st.expander("原始季度數據"):
+    with st.expander("🗂️ 原始季度數據（點開看）"):
         st.caption("金額欄位以**千元**顯示、加千分號；eps／比率／年季欄維持原值。")
         _raw = d["qf"] if not d["qf"].empty else d["fin"]
         st.dataframe(_qf_display(_raw), use_container_width=True)
@@ -3166,7 +3166,7 @@ def _macro_compass_page() -> None:
         top, rest = ranked[:10], ranked[10:]
         st.markdown(_industry_rotation_table(top, mode=sort_mode), unsafe_allow_html=True)
         if rest:
-            with st.expander(f"看其他 {len(rest)} 個產業"):
+            with st.expander(f"📂 看其他 {len(rest)} 個產業（點開看）"):
                 st.markdown(_industry_rotation_table(rest, mode=sort_mode), unsafe_allow_html=True)
         st.caption("樣本數 < 3 檔的產業不列（中位數/加總沒意義）。報酬用還原股價的中位數，"
                    "不是市值加權指數；資金缺口少數產業可能沒有 chips 資料。")
