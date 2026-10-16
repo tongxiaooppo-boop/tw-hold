@@ -116,14 +116,18 @@ def fetch_csv_records(days: int = BACKFILL_DAYS) -> list[dict]:
     start = end - pd.Timedelta(days=days)
     body = urlencode({"down_type": "1", "commodity_id": "TX", "commodity_id2": "",
                       "queryStartDate": f"{start:%Y/%m/%d}", "queryEndDate": f"{end:%Y/%m/%d}"}).encode()
-    try:
-        req = urllib.request.Request(CSV_URL, data=body, headers={"User-Agent": "tw-hold"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read()
-        return parse_csv(raw.decode("big5", errors="replace"))
-    except Exception as e:  # noqa: BLE001
-        print(f"::warning::期交所 CSV 下載失敗（{type(e).__name__}），改用 OpenAPI 備援")
-        return []
+    # UA 比照 fetch_foreign_futures（同網站、CI 上抓得到）；自訂 UA 在 runner 上曾逾時（2026-10-16）。
+    err = None
+    for _ in range(2):
+        try:
+            req = urllib.request.Request(CSV_URL, data=body, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                raw = resp.read()
+            return parse_csv(raw.decode("big5", errors="replace"))
+        except Exception as e:  # noqa: BLE001
+            err = e
+    print(f"::warning::期交所 CSV 下載失敗（{type(err).__name__}），改用 OpenAPI 備援")
+    return []
 
 
 def _to_record(r: dict) -> dict | None:
