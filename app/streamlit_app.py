@@ -1030,6 +1030,19 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .ir-tag{display:inline-block;margin-left:.5rem;font-size:.7rem;color:var(--thc-soft);
   background:var(--thc-surface2,var(--thc-line));border:1px solid var(--thc-line);
   border-radius:4px;padding:.05rem .4rem;white-space:nowrap;}
+/* 推薦回顧的「◀ 日期 ▶」一列：Streamlit 的 st.columns 在窄螢幕（<640px）會疊成直的，
+   手機上變三行。用 st.container(key=histnav_*) 產生的 class 鎖住這一列不換行（2026-10-16 使用者要求）。 */
+[class*="st-key-histnav_"] [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;gap:.4rem !important;
+  align-items:center;}
+[class*="st-key-histnav_"] [data-testid="stColumn"]{min-width:0 !important;width:auto !important;}
+[class*="st-key-histnav_"] [data-testid="stColumn"]:nth-child(1),
+[class*="st-key-histnav_"] [data-testid="stColumn"]:nth-child(3){flex:0 0 2.9rem !important;}
+[class*="st-key-histnav_"] [data-testid="stColumn"]:nth-child(2){flex:1 1 0 !important;}
+[class*="st-key-histnav_"] [data-testid="stButton"],[class*="st-key-histnav_"] [data-testid="stButton"] > div{width:100% !important;}
+[class*="st-key-histnav_"] button{width:100% !important;min-width:2.75rem;min-height:2.75rem;padding:0 !important;}
+.hist-day{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
+.hist-day b{font-size:1rem;color:var(--thc-ink);}
+.hist-day span{display:block;font-size:.74rem;color:var(--thc-soft);}
 </style>
 """
 
@@ -1689,11 +1702,25 @@ _HIST_TXT = {"ok": "有候選", "zero": "沒有訊號", "degraded": "資料不�
 
 def _history_section(keys: list[str], tag: str) -> None:
     """頁面最底下的「近 30 個工作日推薦回顧」。只記候選／訊號，模擬單不納入。
-    st.expander 不會延遲執行，所以用 st.toggle 控制讀檔，整塊包在 fragment（互動只重跑這一塊）。"""
+    跟「📊 回測報告」同一種 expander（2026-10-16 使用者：原本的 toggle 跟回測報告不一致）；
+    expander 收著也會執行，讀檔靠 `_hist_views` 快取壓成本。整塊包在 fragment（翻日期只重跑這一塊）。"""
     st.divider()
-    if not st.toggle("📅 近 30 個工作日推薦回顧（只含候選／訊號，不含模擬單）", key=f"_hist_on_{tag}"):
-        return
-    _history_body(keys, tag)
+    with st.expander("📅 近 30 個工作日推薦回顧（點開看，只含候選／訊號，不含模擬單）"):
+        _history_body(keys, tag)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _hist_views(keys: tuple[str, ...], asof_iso: str, today: str) -> list[dict]:
+    from reference import history as H
+    return [H.load_view(k, pd.Timestamp(asof_iso), today=today) for k in keys]
+
+
+def _hist_past_days(days: list[dict]) -> list[dict]:
+    """可翻閱的日子（新→舊）：**主畫面那天以前**——主畫面已顯示最新一份，回顧不重複（2026-10-16 使用者要求）。
+    主畫面那天＝最後一個有封存紀錄（origin 有值）的日子；休市與「追蹤開始前」翻到也沒內容，略過。"""
+    latest = max((i for i, d in enumerate(days) if d.get("origin") and d.get("origin") != "recompute"), default=None)
+    past = days[:latest] if latest is not None else [d for d in days if d["state"] != "pending"]
+    return [d for d in reversed(past) if d["state"] not in ("holiday", "before", "pending")]
 
 
 @st.fragment
@@ -1703,12 +1730,39 @@ def _history_body(keys: list[str], tag: str) -> None:
     asof = pd.Timestamp(today)
     while asof.weekday() > 4:
         asof -= pd.Timedelta(days=1)
-    views = [H.load_view(k, asof, today=today) for k in keys]
+    views = _hist_views(tuple(keys), asof.date().isoformat(), today)
     labels = [v["label"] for v in views]
     pick = labels[0]
     if len(views) > 1:
         pick = st.segmented_control("哪一條線", labels, default=labels[0], key=f"_hist_line_{tag}") or labels[0]
     v = views[labels.index(pick)]
+    days = _hist_past_days(v["days"])
+    if not days:
+        st.caption("主畫面那天以前還沒有紀錄。")
+    else:
+        ik = f"_hist_i_{tag}_{v['line']}"
+        i = min(st.session_state.get(ik, 0), len(days) - 1)
+        with st.container(key=f"histnav_{tag}"):
+            c_old, c_mid, c_new = st.columns([1, 4, 1])
+            older = c_old.button("◀", key=f"{ik}_old", disabled=i >= len(days) - 1, help="前一天（更早）")
+            newer = c_new.button("▶", key=f"{ik}_new", disabled=i <= 0, help="後一天（較新）")
+            i = min(i + 1, len(days) - 1) if older else (max(i - 1, 0) if newer else i)
+            st.session_state[ik] = i
+            d = days[i]
+            if d["state"] == "recomp":   # 補算日照一般「有候選」顯示（2026-10-16 使用者：補算字樣去掉、正常顯示）
+                d = {k: x for k, x in d.items() if k not in ("deg", "note")} | {"state": "ok" if d.get("n") else "zero"}
+            n_txt = f" {d['n']} 檔" if d.get("n") else ""
+            c_mid.markdown(f'<div class="hist-day"><b>{d["d"][5:].replace("-", "/")}（{d["wd"]}）'
+                           f'{_HIST_SYM[d["state"]]}{n_txt}</b>'
+                           f'<span>往前第 {i + 1}／{len(days)} 天</span></div>', unsafe_allow_html=True)
+        st.markdown(f"{_HIST_TXT[d['state']]}"
+                    + ("　⚠當時資料不完整" if d.get("deg") else "")
+                    + (f"　·　{d['note']}" if d.get("note") else ""))
+        if d.get("c"):
+            st.dataframe(pd.DataFrame(d["c"]).drop(columns=["src"], errors="ignore").rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "停損",
+                                                           "sig": "訊號", "fs": "進榜日", "st": "連續天數",
+                                                           "src": "來源"}),
+                         hide_index=True, width="stretch")
     q = st.text_input("搜尋代號或名稱（近 30 個工作日內出現過的日子）", key=f"_hist_q_{tag}")
     if q.strip():
         hits, deg = H.search(views, q)
@@ -1716,22 +1770,8 @@ def _history_body(keys: list[str], tag: str) -> None:
                    + ("（注意：含資料不完整的日子，未出現不代表沒訊號）" if deg else ""))
         for h in hits[:60]:
             st.write(h)
-    rows = [{"日期": d["d"], "週": d["wd"], "狀態": f"{_HIST_SYM[d['state']]} {_HIST_TXT[d['state']]}" + ("　⚠當時資料不完整" if d.get("deg") else ""),
-             "候選數": d.get("n")} for d in reversed(v["days"])]
-    ev = st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", height=330,
-                      on_select="rerun", selection_mode="single-row", key=f"_hist_df_{tag}_{v['line']}")
-    sel = (ev.selection.rows if ev and ev.selection else [])
-    if sel:
-        d = list(reversed(v["days"]))[sel[0]]
-        st.markdown(f"**{d['d']}（週{d['wd']}）** {_HIST_SYM[d['state']]} {_HIST_TXT[d['state']]}"
-                    + (f"　·　{d['note']}" if d.get("note") else ""))
-        if d.get("c"):
-            st.dataframe(pd.DataFrame(d["c"]).rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "停損",
-                                                           "sig": "訊號", "fs": "進榜日", "st": "連續天數",
-                                                           "src": "來源"}),
-                         hide_index=True, width="stretch")
-    st.caption("✓ 有候選　0 沒有訊號　0⚠ 當天輸入資料不完整，零訊號不可信　✕ 管線沒跑　無資料＝當時沒留存，不補值。"
-               "回填的日子以當時的樣子為準，不回頭改；標「補算」的是事後用修好的資料重算的結果，不是當時系統的產出。")
+    st.caption("◀ 往前一天、▶ 往後一天（最新一天在主畫面）。✓ 有候選　0 沒有訊號　0⚠ 當天輸入資料不完整，零訊號不可信　"
+               "✕ 管線沒跑　無資料＝當時沒留存，不補值。")
 
 
 
