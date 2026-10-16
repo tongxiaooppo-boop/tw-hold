@@ -1009,6 +1009,9 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .gz-pct{display:block;font-family:var(--thc-mono);font-size:.7rem;color:var(--thc-faint);margin-top:.15rem;}
 .gz-stale{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--thc-line);
   font-size:.7rem;color:var(--thc-warn);}
+/* 每張卡自己的資料日（2026-10-16 使用者要求：頁頂只有一行彙總，看不出哪張卡是舊的）。
+   淡色小字、不搶數字；過期時改由上面的 *-stale 那行（警示色）取代，不重複。 */
+.mc-asof,.gz-asof{margin-top:.35rem;font-family:var(--thc-mono);font-size:.68rem;color:var(--thc-faint);}
 /* 總經導航——族群動向。刻意不用紅綠燈：排行順序本身就是訊號（上面領漲、
    下面落後），量條只用單一中性色階＋透明度表大小，不分正負色；逆風是純
    文字標籤，不是判斷色的燈號（跟 industry_headwind 那個既有旗標同語意）。 */
@@ -2561,14 +2564,25 @@ def _mc_price_line(chg: dict | None) -> str:
             f'{chg["chg"]:+,.2f}（{chg["chg_pct"]:+.2%}）</div>')
 
 
+def _asof_tag(asof, cls: str) -> str:
+    """卡片底部「資料日 MM-DD」——該序列最後一筆收盤的當地交易日（美股＝美東日期）。"""
+    if asof is None:
+        return ""
+    try:
+        return f'<div class="{cls}">資料日 {pd.Timestamp(asof).strftime("%m-%d")}</div>'
+    except Exception:  # noqa: BLE001  日期壞掉不該讓卡片炸
+        return ""
+
+
 def _mc_card(ticker: str, market: str, card: dict, chg: dict | None = None,
-             windows: tuple[str, ...] = ("ma60", "ma200"), stale: dict | None = None) -> str:
+             windows: tuple[str, ...] = ("ma60", "ma200"), stale: dict | None = None,
+             asof=None) -> str:
     # 卡片左側細條：顯示的窗口全一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
     states = {card[w]["state"] for w in windows if card.get(w)}
     sev = _MC_VERDICT[next(iter(states))][1] if len(states) == 1 else "neutral"
     ma_rows = "".join(_mc_row(_MC_LABEL[w], card.get(w)) for w in windows)
     stale_line = (f'<div class="mc-stale">⚠️ 資料落後 {stale["lag_days"]} 天'
-                  f'（最新只到 {stale["latest"]}）</div>' if stale else "")
+                  f'（最新只到 {stale["latest"]}）</div>' if stale else _asof_tag(asof, "mc-asof"))
     return (
         f'<div class="mc-card {sev}"><div class="stripe"></div><div class="mc-body">'
         f'<div class="mc-head"><span class="mc-market">{market}</span>'
@@ -2621,10 +2635,22 @@ def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
         body = (f'<div class="gz-value">{ch["value"]:,.2f}{suffix}</div>'
                 f'<div class="gz-chg {sign}">{arrow} {ch["chg"]:+,.2f}{suffix}'
                 f'　({ch["chg_pct"]:+.2%})</div>' + pct_line)
+    _s = close.dropna()
     stale_line = (f'<div class="gz-stale">⚠️ 資料落後 {stale["lag_days"]} 天'
-                  f'（最新只到 {stale["latest"]}）</div>' if stale else "")
+                  f'（最新只到 {stale["latest"]}）</div>' if stale
+                  else _asof_tag(_s.index[-1] if len(_s) else None, "gz-asof"))
     return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">{name}</span>'
             f'<span class="gz-ticker">{symbol}</span></div>{body}{stale_line}</div>')
+
+
+def _snapshot_fetched_line(meta: dict) -> str:
+    """國際指數／美股整批快照的抓取時間（台北）＋卡片資料日的口徑說明。"""
+    try:
+        hhmm = pd.Timestamp(meta.get("fetched_at")).tz_convert("Asia/Taipei").strftime("%m-%d %H:%M")
+    except Exception:  # noqa: BLE001  舊 meta 沒有 fetched_at（NaT）或格式壞掉
+        return ""
+    return (f"國際指數／波動度／美股個股這批 **抓取於 {hhmm}（台北）**"
+            "　·　每張卡的「資料日」是該市場當地的收盤日（美股是美東日期，台北隔天早上才收盤）。")
 
 
 def _flow_stale_line(latest: pd.Timestamp) -> str:
@@ -3043,7 +3069,7 @@ def _macro_compass_page() -> None:
     st.divider()
     st.subheader("台股")
     if tw_data:
-        cards = [_mc_card(t, d["market"], d["card"], d["chg"]) for t, d in tw_data.items()]
+        cards = [_mc_card(t, d["market"], d["card"], d["chg"], asof=_asof.get(t)) for t, d in tw_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
     if fell_back:
         st.caption(f"·「{'／'.join(fell_back)}」這次改走備援資料來源，日期可能落後一兩天。")
@@ -3120,9 +3146,13 @@ def _macro_compass_page() -> None:
                    "「立即重新整理資料」試試看。")
     st.subheader("國際指數")
     if intl_idx_data:
-        cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",), stale=stale_map.get(s))
+        cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",), stale=stale_map.get(s),
+                          asof=_asof.get(f"idx:{s}"))
                  for s, d in intl_idx_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    _fetched = _snapshot_fetched_line(snap_meta)
+    if _fetched:
+        st.caption(_fetched)
 
     st.divider()
     st.subheader("波動度／殖利率／匯率")
