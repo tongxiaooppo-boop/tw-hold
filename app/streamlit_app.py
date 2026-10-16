@@ -1793,9 +1793,12 @@ def _shortterm_page() -> None:
     # 「整群計算時間」放在最顯眼的地方；當天沒產出時明講，不靜默拿舊的當新的。
     dw = list(data.get("data_warnings") or [])
     rr = data.get("regen_reason") or ""
-    bad = bool(dw or rr or data.get("data_ok") is False)
+    # 只有重算、沒有警示 → 不是「資料有問題」（重算多半是修正；舊版 tw-swing 在重算時也會給 data_ok=False）
+    bad = bool(dw or (data.get("data_ok") is False and not rr))
     ok_mark = "" if "data_ok" not in data else ("　·　⚠️ **資料警示，請看下方**" if bad else "　·　✓ 資料檢查正常")
     st.caption(f"**清單產生日 {asof}（{wd}）**　·　產生時刻 {gen}（台北）　·　來源 tw-swing{ok_mark}")
+    if rr and not bad:
+        st.info(f"這份清單重新計算過。原因：{rr}")
     if bad:      # 沒有推播管道：警報就是清單本身，朋友看到就會通知維護者
         st.error("⚠️ **這份 tw-swing 清單的資料有問題——「沒有訊號」或下面的結果不可全信，請通知維護者。**\n\n"
                  + "\n".join(f"- {w}" for w in dw)
