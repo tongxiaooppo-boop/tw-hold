@@ -20,3 +20,13 @@ def load_session(session: str) -> pd.Series:
     if df.empty:
         return pd.Series(dtype="float64")
     return df.set_index("date")["last"].sort_index()
+
+
+def load_day_settlement() -> pd.Series:
+    """日盤結算價序列（index=date）。夜盤漲跌的官方基準＝前一個日盤的結算價。"""
+    if not TX_FUTURES.exists():
+        return pd.Series(dtype="float64")
+    df = pd.read_parquet(TX_FUTURES, filters=[("session", "==", "day")])
+    if df.empty or "settlement" not in df:
+        return pd.Series(dtype="float64")
+    return df.set_index("date")["settlement"].dropna().sort_index()

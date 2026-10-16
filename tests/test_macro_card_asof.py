@@ -55,3 +55,13 @@ def test_夜盤標實際時段_歸屬下一交易日():
     h = sa._gz_card("TX", "夜盤收盤（前一晚）", _close(["2026-10-12", "2026-10-13"]), show_pct=False,
                     asof_text="時段 10/12 15:00→10/13 05:00")
     assert "時段 10/12 15:00→10/13 05:00" in h and "資料日" not in h
+
+
+def test_夜盤卡_漲跌對前一日盤結算_標時段():
+    import streamlit_app as sa
+    day = _close(["2026-10-14", "2026-10-15"])
+    night = pd.Series([47945.0, 47366.0], index=pd.to_datetime(["2026-10-15", "2026-10-16"]))
+    settle = pd.Series([48798.0, 46931.0], index=pd.to_datetime(["2026-10-14", "2026-10-15"]))
+    h = sa._tx_night_card(night, day, settle)
+    assert "47,366.00" in h and "+435.00" in h and "vs 10/15 日盤結算 46,931" in h
+    assert "時段 10/15 15:00→10/16 05:00" in h

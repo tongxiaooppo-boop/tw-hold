@@ -14,6 +14,17 @@ TAIFEX 官方 OpenAPI `https://openapi.taifex.com.tw/v1/DailyMarketReportFut`—
 近月合約：`ContractMonth(Week)` 有些是價差單的複合月份（如 `202609/202610`），
 只留純六碼月份，取最小值當近月（TAIFEX 回傳順序本身就是近到遠，但排序更保險）。
 
+## 主來源改為網站「每日行情下載」CSV（2026-10-16）
+
+`POST https://www.taifex.com.tw/cht/3/futDataDown`（down_type=1、commodity_id=TX、起訖日）回 Big5 CSV，
+**可指定日期區間（能回補）**，而且**夜盤一結束就有**：實測 10/16 09:25 已有「2026/10/16 盤後」
+（＝10/15 15:00→10/16 05:00），OpenAPI 同時間還停在 10/15。OpenAPI 要等當天日盤收盤後才換日，
+早上只拿得到「前一晚之前那一場」夜盤，總經頁的夜盤就失去意義（使用者 2026-10-16 指出）。
+OpenAPI 保留當備援（CSV 失敗才用）。
+
+⚠️ **夜盤歸屬下一個交易日**：交易日 D 的「盤後」＝前一交易日 15:00 → D 05:00，發生在 D 日盤之前。
+CSV 每次抓近 `BACKFILL_DAYS` 天，漏抓的日子下一輪自動補回。
+
 ## 排程
 
 不用另開 workflow——TAIFEX 夜盤 05:00 收盤，跟 `global_macro.yml`（台北 06:37
@@ -40,6 +51,8 @@ from pathlib import Path
 import pandas as pd
 
 URL = "https://openapi.taifex.com.tw/v1/DailyMarketReportFut"
+CSV_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
+BACKFILL_DAYS = 10
 OUT = Path(__file__).resolve().parents[1] / "data" / "reference" / "tx_futures.parquet"
 META_OUT = OUT.with_name("tx_futures_meta.json")
 
@@ -57,6 +70,60 @@ def fetch_front_month_rows() -> list[dict]:
         return []
     front = min(r["ContractMonth(Week)"] for r in tx)
     return [r for r in tx if r["ContractMonth(Week)"] == front]
+
+
+def _num(x: str) -> float | None:
+    x = (x or "").strip()
+    try:
+        return float(x)
+    except ValueError:
+        return None
+
+
+def parse_csv(text: str) -> list[dict]:
+    """futDataDown 的 CSV → 每個 (交易日, 時段) 的近月 TX 一筆。近月＝同一交易日內最小的純六碼月份。"""
+    import csv
+    import io
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return []
+    head = [h.strip() for h in rows[0]]
+    try:
+        ix = {k: head.index(k) for k in ("交易日期", "契約", "到期月份(週別)", "收盤價", "結算價", "交易時段")}
+    except ValueError:
+        return []
+    cand = []
+    for r in rows[1:]:
+        if len(r) <= max(ix.values()) or r[ix["契約"]].strip() != "TX":
+            continue
+        month = r[ix["到期月份(週別)"]].strip()
+        session = {"一般": "day", "盤後": "night"}.get(r[ix["交易時段"]].strip())
+        last = _num(r[ix["收盤價"]])
+        if not _MONTH_RE.match(month) or session is None or last is None:
+            continue
+        cand.append({"date": pd.Timestamp(r[ix["交易日期"]].strip().replace("/", "-")), "session": session,
+                     "contract_month": month, "last": last, "settlement": _num(r[ix["結算價"]])})
+    front = {}
+    for c in cand:
+        front[c["date"]] = min(front.get(c["date"], c["contract_month"]), c["contract_month"])
+    return [c for c in cand if c["contract_month"] == front[c["date"]]]
+
+
+def fetch_csv_records(days: int = BACKFILL_DAYS) -> list[dict]:
+    """網站 CSV 抓近 `days` 天（含今天）；任何失敗回 []，由呼叫端退回 OpenAPI。"""
+    from urllib.parse import urlencode
+    end = pd.Timestamp.now(tz="Asia/Taipei").normalize()
+    start = end - pd.Timedelta(days=days)
+    body = urlencode({"down_type": "1", "commodity_id": "TX", "commodity_id2": "",
+                      "queryStartDate": f"{start:%Y/%m/%d}", "queryEndDate": f"{end:%Y/%m/%d}"}).encode()
+    try:
+        req = urllib.request.Request(CSV_URL, data=body, headers={"User-Agent": "tw-hold"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read()
+        return parse_csv(raw.decode("big5", errors="replace"))
+    except Exception as e:  # noqa: BLE001
+        print(f"::warning::期交所 CSV 下載失敗（{type(e).__name__}），改用 OpenAPI 備援")
+        return []
 
 
 def _to_record(r: dict) -> dict | None:
@@ -77,8 +144,10 @@ def _to_record(r: dict) -> dict | None:
 
 
 def main() -> None:
-    rows = fetch_front_month_rows()
-    records = [rec for r in rows if (rec := _to_record(r)) is not None]
+    records = fetch_csv_records()
+    if not records:
+        rows = fetch_front_month_rows()
+        records = [rec for r in rows if (rec := _to_record(r)) is not None]
     if not records:
         print("⚠️ 今天沒抓到 TX 近月合約資料（假日或 TAIFEX 還沒更新）")
         _write_meta(None, missing_night=True, note="整批沒抓到")
@@ -95,17 +164,19 @@ def main() -> None:
     combined = combined.sort_values(["date", "session"]).reset_index(drop=True)
     combined.to_parquet(OUT, index=False)
 
-    for rec in records:
+    for rec in sorted(records, key=lambda r: (r["date"], r["session"]))[-4:]:
         label = "日盤" if rec["session"] == "day" else "夜盤"
         print(f"  {rec['date'].date()} {label}（{rec['contract_month']}）收 {rec['last']}")
     print(f"寫入 {OUT}：累積 {len(combined)} 筆")
 
-    fetched_date = records[0]["date"].strftime("%Y-%m-%d")
-    sessions = {r["session"] for r in records}
-    missing_night = "night" not in sessions
+    fetched_date = max(r["date"] for r in records).strftime("%Y-%m-%d")
+    # 最新日盤之前那一晚都沒有夜盤（night 最新日 < day 最新日）才算缺。CSV 早上會多一筆「下一交易日的盤後」，那是正常的。
+    last_day = max((r["date"] for r in records if r["session"] == "day"), default=None)
+    last_night = max((r["date"] for r in records if r["session"] == "night"), default=None)
+    missing_night = last_night is None or (last_day is not None and last_night < last_day)
     if missing_night:
-        print(f"::warning::{fetched_date} 沒有夜盤資料——這支 API 沒有回補機制，"
-              "這天的夜盤收盤可能永久遺失，等隔天正常有資料就沒事，連續發生才需要人工介入")
+        print(f"::warning::{fetched_date} 最新日盤之前那一晚沒有夜盤資料——CSV 會回補近 {BACKFILL_DAYS} 天，"
+              "下一輪通常會補上；走的是 OpenAPI 備援時沒有回補，連續發生才需要人工介入")
     _write_meta(fetched_date, missing_night, note="" if not missing_night else "只有日盤")
 
 

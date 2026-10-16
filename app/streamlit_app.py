@@ -2697,6 +2697,28 @@ def _snapshot_fetched_line(meta: dict) -> str:
             "　·　每張卡的「資料日」是該市場當地的收盤日（美股是美東日期，台北隔天早上才收盤）。")
 
 
+def _tx_night_card(tx_night: pd.Series, tx_day: pd.Series, settle: pd.Series) -> str:
+    """夜盤卡：漲跌照期交所口徑＝夜盤收盤 − 前一個日盤結算價（不是跟上一場夜盤比）；底部標實際時段。"""
+    if tx_night.empty:
+        return _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)
+    d, last = tx_night.index[-1], float(tx_night.iloc[-1])
+    base_s = settle[settle.index < d]
+    base_d = tx_day[tx_day.index < d]
+    base, base_lbl = ((float(base_s.iloc[-1]), f"{base_s.index[-1]:%m/%d} 日盤結算") if len(base_s)
+                      else ((float(base_d.iloc[-1]), f"{base_d.index[-1]:%m/%d} 日盤收盤") if len(base_d) else (None, "")))
+    if base is None:
+        return _gz_card("TX", "夜盤收盤", tx_night, show_pct=False, asof_text=f"時段 {_night_window(d, tx_day)}")
+    chg = last - base
+    sign = "up" if chg > 0 else ("down" if chg < 0 else "flat")
+    arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
+    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">夜盤收盤</span>'
+            f'<span class="gz-ticker">TX</span></div>'
+            f'<div class="gz-value">{last:,.2f}</div>'
+            f'<div class="gz-chg {sign}">{arrow} {chg:+,.2f}　({chg / base:+.2%})</div>'
+            f'<span class="gz-pct">vs {base_lbl} {base:,.0f}</span>'
+            f'<div class="gz-asof">時段 {_night_window(d, tx_day)}</div></div>')
+
+
 def _night_window(night_date, tx_day: pd.Series) -> str:
     """TAIFEX 標 D 的盤後 → 實際時段「前一交易日 15:00 → D 05:00」（前一交易日取日盤序列裡 D 之前最近一天）。"""
     d = pd.Timestamp(night_date)
@@ -3139,12 +3161,13 @@ def _macro_compass_page() -> None:
     _asof_slot.caption(_asof_line(_asof, tx_day, tx_night, ff, inst, _load("industry_rotation.json")))
     tx_cards = []
     if not tx_day.empty or not tx_night.empty:
-        # 夜盤歸屬「下一個交易日」：TAIFEX 標 D 的盤後＝D 前一交易日 15:00 → D 05:00，發生在 D 日盤**之前**，
-        # 所以排在日盤前面、日期寫實際時段（2026-10-16 使用者看到「夜盤 10-15」比 10-15 日盤收盤還高才發現標錯）。
-        _nw = _night_window(tx_night.index[-1], tx_day) if not tx_night.empty else None
-        tx_cards += [_gz_card("TX", "夜盤收盤（前一晚）", tx_night, show_pct=False,
-                              asof_text=f"時段 {_nw}" if _nw else None),
-                     _gz_card("TX", "日盤收盤", tx_day, show_pct=False)]
+        # 夜盤歸屬「下一個交易日」：TAIFEX 標 D 的盤後＝前一交易日 15:00 → D 05:00。早上抓到的最新夜盤
+        # （D＝今天）發生在最新日盤**之後**→ 排在日盤後面；還沒抓到時最新夜盤在最新日盤之前 → 排前面。
+        # 卡上一律寫實際時段（2026-10-16 使用者看到「夜盤 10-15」比 10-15 日盤收盤還高才發現標錯）。
+        day_card = _gz_card("TX", "日盤收盤", tx_day, show_pct=False)
+        night_card = _tx_night_card(tx_night, tx_day, tx_futures.load_day_settlement())
+        after = not tx_night.empty and (tx_day.empty or tx_night.index[-1] > tx_day.index[-1])
+        tx_cards += [day_card, night_card] if after else [night_card, day_card]
     for _card in ((_foreign_short_card(ff) if not ff.empty else ""),
                   (_inst_flow_card(inst) if not inst.empty else "")):
         if _card:
@@ -3152,7 +3175,7 @@ def _macro_compass_page() -> None:
     if tx_cards:
         st.markdown(f'<div class="gz-grid">{"".join(tx_cards)}</div>', unsafe_allow_html=True)
         st.caption("台指期近月合約日盤／夜盤（TAIFEX OpenAPI `DailyMarketReportFut`；夜盤沒有獨立結算價，"
-                   "顯示夜盤最後成交價，跨夜到隔天 05:00）。**夜盤在期交所歸屬下一個交易日**：卡上的夜盤是當天日盤**之前**那一晚（前一交易日 15:00 → 當日 05:00）；當天收盤後那一晚的夜盤，期交所要到下一個交易日收盤後才發布。**外資淨空單**＝外資及陸資在臺股期貨（大台）"
+                   "顯示夜盤最後成交價，跨夜到隔天 05:00）。**夜盤**顯示最新一場（卡底標實際時段；期交所把夜盤算在下一個交易日），漲跌照期交所口徑＝夜盤收盤減前一個日盤結算價。資料取自期交所每日行情下載，夜盤結束後即有。**外資淨空單**＝外資及陸資在臺股期貨（大台）"
                    "空方未平倉減多方未平倉的口數（空單、多單總量在小字），增減對照前一個交易日（TAIFEX 期貨三大法人，盤後約 15:00 公布，"
                    "傍晚排程更新（排程常延遲數小時），各卡資料日見頁頂）。**三大法人買賣超**＝上市現貨買賣金額差額（TWSE "
                    "三大法人買賣金額統計表，不含上櫃）。這些是籌碼事實的攤開，不是多空訊號。")
