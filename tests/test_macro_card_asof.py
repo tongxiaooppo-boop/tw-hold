@@ -45,3 +45,13 @@ def test_抓取時間轉台北():
     s = sa._snapshot_fetched_line({"fetched_at": "2026-10-15T23:59:00+00:00"})
     assert "抓取於 10-16 07:59（台北）" in s
     assert sa._snapshot_fetched_line({}) == ""
+
+
+def test_夜盤標實際時段_歸屬下一交易日():
+    import streamlit_app as sa
+    day = _close(["2026-10-08", "2026-10-12", "2026-10-13"])           # 10/09 國慶補假
+    assert sa._night_window(pd.Timestamp("2026-10-12"), day) == "10/08 15:00→10/12 05:00"
+    assert sa._night_window(pd.Timestamp("2026-10-13"), day) == "10/12 15:00→10/13 05:00"
+    h = sa._gz_card("TX", "夜盤收盤（前一晚）", _close(["2026-10-12", "2026-10-13"]), show_pct=False,
+                    asof_text="時段 10/12 15:00→10/13 05:00")
+    assert "時段 10/12 15:00→10/13 05:00" in h and "資料日" not in h
