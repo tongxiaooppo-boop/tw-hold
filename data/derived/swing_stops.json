@@ -11,6 +11,30 @@
       "signal_date": "2026-10-19",
       "risk_stop_ref": 807.82
     },
+    "2476": {
+      "name": "鉅祥",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 122.97
+    },
+    "3037": {
+      "name": "欣興",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 1081.4
+    },
+    "3711": {
+      "name": "日月光投控",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 644.72
+    },
+    "6257": {
+      "name": "矽格",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 228.09
+    },
     "5434": {
       "name": "崇越",
       "first_seen": "2026-10-16",
@@ -490,30 +514,6 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
-    },
-    "2476": {
-      "name": "鉅祥",
-      "status": "pending_entry",
-      "signal_date": "2026-10-19",
-      "risk_stop_ref": 122.97
-    },
-    "3037": {
-      "name": "欣興",
-      "status": "pending_entry",
-      "signal_date": "2026-10-19",
-      "risk_stop_ref": 1081.4
-    },
-    "3711": {
-      "name": "日月光投控",
-      "status": "pending_entry",
-      "signal_date": "2026-10-19",
-      "risk_stop_ref": 644.72
-    },
-    "6257": {
-      "name": "矽格",
-      "status": "pending_entry",
-      "signal_date": "2026-10-19",
-      "risk_stop_ref": 228.09
     }
   }
 }
