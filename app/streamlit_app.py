@@ -2465,7 +2465,7 @@ def _active_summary(fl: dict) -> str:
 def _active_etf_page() -> None:
     """主動式 ETF 每日動向——那六檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
-    兼作「爬五家投信官網有沒有正常」的體檢面板。"""
+    兼作「爬四家投信官網有沒有正常」的體檢面板。"""
     st.header("主動式 ETF 每日動向", anchor="top")
 
     idx = _load_pcf_index()
@@ -2493,7 +2493,7 @@ def _active_etf_page() -> None:
     try:
         if _idx_date and (pd.Timestamp(_taipei_today()) - pd.Timestamp(_idx_date)).days > 3:
             st.warning(f"⚠️ 快照最後更新 {_idx_date}，距今超過 3 天。中間若有交易日，代表 CI 沒跑、"
-                       f"或五家投信官網把 CI 的 IP 擋掉了——看 [rebuild 執行紀錄]({_REBUILD_RUNS_URL}) "
+                       f"或四家投信官網把 CI 的 IP 擋掉了——看 [rebuild 執行紀錄]({_REBUILD_RUNS_URL}) "
                        "的「PCF 快照」步驟有沒有 `::warning::`。")
     except Exception:  # noqa: BLE001
         pass
