@@ -1,4 +1,4 @@
-"""規模前五大「主動式 ETF」的每日申購買回清單（PCF）/ 完整持股抓取。
+"""規模前六大「主動式 ETF」的每日申購買回清單（PCF）/ 完整持股抓取。
 
 ## 這是什麼
 
@@ -17,8 +17,13 @@
 | 00991A | 主動復華未來50 | 復華 | ETF23 | fhtrust GET /api/assets?qDate= |
 | 00982A | 主動群益台灣精選強棒 | 群益 | 399 | capitalfund POST /CFWeb/api/etf/buyback |
 | 00992A | 主動群益科技創新 | 群益 | 500 | 同上 |
+| 00406A | 主動中信台灣收益 | 中信 | E0038 | ctbcinvestments POST /API/etf/Buyback（要先拿 token） |
 
-前 5 名以外（野村 00980A、國泰 00400A、富邦 00405A…）暫不納。清單穩定，
+2026-10-20 加入 00406A：上市 4 個月規模衝到 1,024 億（官方 API 基金淨資產，10/19），
+超過 00991A／00982A／00992A，排第 3。它另外持有台指期（約 23% 淨值）與保證金，
+`fetch_ctbc` 只取「股票」那一類；權重和因此約 84%，仍在理智檢查範圍內。
+
+前幾名以外（野村 00980A、國泰 00400A、富邦 00405A…）暫不納。清單穩定，
 每月對一次 wantgoo；內部 id 變更時的 resolver 見各 `_resolve_*` 註解。
 
 ## 正規化輸出（每檔 fund）
@@ -51,6 +56,7 @@ import io
 import json
 import ssl
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.cookiejar import CookieJar
@@ -69,6 +75,7 @@ FUNDS: list[dict[str, str]] = [
     {"code": "00991A", "name": "主動復華未來50",     "issuer": "復華", "fetch": "fuhwa",   "fund_id": "ETF23"},
     {"code": "00982A", "name": "主動群益台灣精選強棒", "issuer": "群益", "fetch": "capital", "fund_id": "399"},
     {"code": "00992A", "name": "主動群益科技創新",   "issuer": "群益", "fetch": "capital", "fund_id": "500"},
+    {"code": "00406A", "name": "主動中信台灣收益",   "issuer": "中信", "fetch": "ctbc",    "fund_id": "E0038"},
 ]
 
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -330,7 +337,88 @@ def fetch_fuhwa(fund_id: str) -> dict[str, Any]:
     raise RuntimeError(f"復華 /api/assets 連 8 個日期都拿不到持股（fund_id={fund_id}）：{last_err}")
 
 
-_FETCHERS = {"tongyi": fetch_tongyi, "capital": fetch_capital, "fuhwa": fetch_fuhwa}
+# ── 中信（ctbcinvestments）─────────────────────────────────────────────
+# 官網是 Vue SPA，資料走 https://www.ctbcinvestments.com.tw/API/<path>?token=<t>：
+#   1. POST home/AuthToken（body 帶 token="www.ctbcinvestments.com"）→ Data.token
+#   2. POST etf/Buyback，body {token, FID, StartDate:"YYYY-MM-DD"} →
+#      Data.Data[0]（基金淨資產價值／淨值日期／公告日）＋ Data.Detail[]（分類持股）
+#      Detail 裡 Code=="STOCK" 那組是股票；FUTURE（台指期）／MARGIN（保證金）不納。
+# 公告日（post_date）= StartDate 當天，持股與淨值是前一交易日（淨值日期＝data_date）。
+# fund_id resolver：POST etf/ETFCNOList → Data.List[].{ETF_ID, FID}。
+_CTBC_API = "https://www.ctbcinvestments.com.tw/API/"
+_CTBC_HEADERS = {"User-Agent": _UA, "Content-Type": "application/json; charset=utf-8",
+                 "Origin": "https://www.ctbcinvestments.com",
+                 "Referer": "https://www.ctbcinvestments.com/"}
+
+
+def _ctbc_post(path: str, token: str, data: dict | None = None) -> dict:
+    url = f"{_CTBC_API}{path}?token={urllib.parse.quote(token)}"
+    body = json.dumps({"token": token, **(data or {})}).encode()
+    req = urllib.request.Request(url, data=body, method="POST", headers=_CTBC_HEADERS)
+    d = json.loads(urllib.request.urlopen(req, timeout=_TIMEOUT, context=_CTX).read().decode("utf-8"))
+    if d.get("ResultCode") != 0:
+        raise RuntimeError(f"中信 API {path} 失敗：{d.get('ResultCode')} {d.get('ResultMsg')}")
+    return d.get("Data") or {}
+
+
+def _ctbc_token() -> str:
+    t = _ctbc_post("home/AuthToken", "www.ctbcinvestments.com").get("token")
+    if not t:
+        raise RuntimeError("中信 home/AuthToken 沒回 token")
+    return t
+
+
+def resolve_ctbc_ids() -> dict[str, str]:
+    """ETF_ID(00406A) → FID(E0038)。"""
+    lst = _ctbc_post("etf/ETFCNOList", _ctbc_token()).get("List") or []
+    return {r["ETF_ID"]: r["FID"] for r in lst if r.get("ETF_ID") and r.get("FID")}
+
+
+def fetch_ctbc(fund_id: str) -> dict[str, Any]:
+    token = _ctbc_token()
+    last_err: Exception | None = None
+    for dt in _taipei_dates(8):
+        q = dt.strftime("%Y-%m-%d")
+        try:
+            d = _ctbc_post("etf/Buyback", token, {"FID": fund_id, "StartDate": q})
+        except Exception as e:                                   # noqa: BLE001
+            last_err = e
+            continue
+        head = (d.get("Data") or [{}])[0] if d.get("Data") else {}
+        stock_grp = next((g for g in (d.get("Detail") or []) if g.get("Code") == "STOCK"), None)
+        if not head or not stock_grp:
+            continue
+        stocks: list[dict] = []
+        for r in stock_grp.get("Data") or []:
+            sc = str(r.get("code_") or "").strip()
+            sh = _num(r.get("qty_"))
+            if not sc or sh is None:
+                continue
+            stocks.append({
+                "stock_code": sc,
+                "stock_name": str(r.get("name_") or "").strip(),
+                "shares": sh,
+                "weight": _num(r.get("weights_")),
+                "market_value": _num(r.get("amount_")),
+                "price": _num(r.get("price_")),
+            })
+        if not stocks:
+            continue
+        post = _isodate(head.get("公告日")) or q
+        nav_day = _isodate(head.get("淨值日期")) or _isodate(head.get("NAV_DATE")) or post
+        return {
+            "data_date": nav_day,
+            "post_date": post,
+            "nav": _num(head.get("基金淨資產價值")),
+            "units": _num(head.get("已發行受益權單位總數")),
+            "name_full": str(head.get("FundName") or "").strip(),
+            "holdings": stocks,
+        }
+    raise RuntimeError(f"中信 etf/Buyback 連 8 個日期都拿不到股票持股（fund_id={fund_id}）：{last_err}")
+
+
+_FETCHERS = {"tongyi": fetch_tongyi, "capital": fetch_capital, "fuhwa": fetch_fuhwa,
+             "ctbc": fetch_ctbc}
 
 
 # ── TWSE 收盤價（算折溢價用；PCF 只給淨值，沒有市價）───────────────────────

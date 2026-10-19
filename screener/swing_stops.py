@@ -52,10 +52,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from screener.candidate_pool import _bare, atr14
+from screener.candidate_pool import MIN_STOP_BUFFER_ATR_MULT, _bare, atr14
 
 TRAIL_ATR_MULT = 2.0   # 比照 tw-swing H2-trailatr2
-MIN_BUFFER_ATR_MULT = 1.0
+MIN_BUFFER_ATR_MULT = MIN_STOP_BUFFER_ATR_MULT   # 與候選池共用（2026-10-20）
 # 2026-09-17 加：進場價到停損參考位至少要留 1 倍 ATR14 的緩衝，不夠就放棄這筆訊號。
 # 起因：risk_stop_ref 用訊號日收盤算、entry_price 用次日開盤算，兩者中間沒有掛勾——
 # 訊號日股價若本來就貼在 50MA／20週前低上方（這其實是常見型態，「站上」的當下本來就

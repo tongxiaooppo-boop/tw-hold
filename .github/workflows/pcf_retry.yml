@@ -1,6 +1,6 @@
 name: 主動式 ETF PCF 補跑
 
-# PCF（五檔主動式 ETF 的申購買回清單）官方只給「當天」、沒有歷史查詢 API——
+# PCF（六檔主動式 ETF 的申購買回清單）官方只給「當天」、沒有歷史查詢 API——
 # 跟 bundle／yfinance 那種「整段全量覆寫、明天重抓自動補上」不同，這個資料源
 # 一旦當天沒抓到就永久缺一格（見 scripts/snapshot_pcf.py 檔頭）。
 #

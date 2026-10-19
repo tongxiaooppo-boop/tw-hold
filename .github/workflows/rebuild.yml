@@ -94,7 +94,7 @@ jobs:
       - name: 算因子 + 三清單
         run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
-      # 主動式 ETF 認養旗標（context flag，非 gate）。抓規模前五大主動 ETF 的官網
+      # 主動式 ETF 認養旗標（context flag，非 gate）。抓規模前六大主動 ETF 的官網
       # 每日 PCF → 落 data/pcf/ 快照 → 前後兩日差分 → active_etf_flags.json。
       # 單一投信掛掉 / 網路失敗都 continue-on-error，**不擋三清單**。
       - name: 主動式 ETF PCF 快照

@@ -28,6 +28,12 @@ INST_WINDOW = 20           # 法人淨買超回看交易日
 RS_PCTILE_MIN = 70         # Minervini ⑧
 ATR_N = 14
 STOP_BUFFER = 0.10         # §5.3 可買上限 = 停損位 ÷ (1 − 10%)
+# 2026-10-20 加：現價離停損參考位不到 1 倍 ATR14 的不進候選池（使用者拍板「停損太近的不推薦、
+# 移除」）。起因：§5.3 停損 = max(50MA, 20 週前低, 現價 − 2×ATR) 取最大，股價貼著 50MA 時
+# 停損就貼著現價（實測 10/19 有 2421 建準 0.3%、2476 鉅祥 0.8%、2436 偉詮電 1.0%），
+# 一點雜訊就出場。模擬單（swing_stops）早有同一道門檻、進場前會放棄；候選池沒擋就會
+# 「清單推薦、模擬單卻不進」。兩邊共用這個常數。
+MIN_STOP_BUFFER_ATR_MULT = 1.0
 EPS_LOW_BASE_ABS = 1.0     # 去年同期單季 EPS 低於此值（元）→ YoY 比例視為基期過低、失真
 
 
@@ -321,6 +327,8 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
         # §5.3 停損參考位 = max(50MA, 20 週前低, 現價 − 2×ATR14)
         stop = float(np.nanmax([ma50, row["low_20w"],
                                 close - 2 * atr.get(tk, np.nan)]))
+        if pd.notna(stop) and close - stop < MIN_STOP_BUFFER_ATR_MULT * atr.get(tk, 0.0):
+            continue                 # 停損太近（緩衝 < 1 ATR14）→ 不推薦；ATR 為 NaN 時比較為 False 照舊保留；停損高於現價（<0）也會被擋
         rec["risk_stop"] = round(stop, 2) if pd.notna(stop) else None
         rec["risk_pct_at_close"] = _f(close / stop - 1.0) if pd.notna(stop) and stop > 0 else None
         rec["max_buy"] = round(stop / (1 - STOP_BUFFER), 2) if pd.notna(stop) and stop > 0 else None

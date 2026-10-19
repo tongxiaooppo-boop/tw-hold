@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 st_testing = pytest.importorskip("streamlit.testing.v1")
@@ -45,10 +47,15 @@ def test_主動式ETF分頁_渲染不炸():
     at.radio(key="_nav").set_value("主動式 ETF").run()
     assert not at.exception
     assert "主動式 ETF 每日動向" in " ".join(h.value for h in at.header)
-    # 五檔基金代號都要出現（有訊號或「等隔天」都算）
+    # 基金代號都要出現（有訊號或「等隔天」都算）。00406A 是 2026-10-20 才加的：
+    # _index.json 還沒有它（第一次快照前）時不要求，有了就一定要渲染。
     blob = " ".join(m.value for m in at.markdown)
     for code in ("00981A", "00403A", "00991A", "00982A", "00992A"):
         assert code in blob
+    import json
+    idx = Path(REPO_APP).resolve().parent.parent / "data" / "pcf" / "_index.json"
+    if idx.exists() and "00406A" in json.loads(idx.read_text(encoding="utf-8")).get("funds", {}):
+        assert "00406A" in blob
 
 
 def test_多軌體檢_帶代號_四個分頁都渲染不炸():

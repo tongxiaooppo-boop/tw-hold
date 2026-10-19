@@ -1,4 +1,4 @@
-"""每日拉規模前五大主動式 ETF 的 PCF → 落每日快照 `data/pcf/<code>/<date>.parquet`。
+"""每日拉規模前六大主動式 ETF 的 PCF → 落每日快照 `data/pcf/<code>/<date>.parquet`。
 
 `rebuild.yml` 每天跑一次（`continue-on-error`）。PCF 各家只給「當天」、無歷史 →
 自己存快照，`build_active_etf_flags.py` 再拿前後兩份做差分。
@@ -72,7 +72,7 @@ def _prune(fund_dir: Path) -> None:
         p.unlink()
 
 
-#: 五檔主動式 ETF 正常都是數十檔持股——holdings 少於這個數字（或加總股數 <=0）
+#: 六檔主動式 ETF 正常都是數十檔持股——holdings 少於這個數字（或加總股數 <=0）
 #: 不當「有抓到」，當「抓失敗」處理（不落快照、記進 missing）。2026-09-22
 #: Opus 審出：原本完全不檢查內容，投信網站改版/回傳空陣列但沒丟例外時，
 #: 會把「今天全部賣光」這種假訊號寫進快照，下游 build_active_etf_flags.py
@@ -123,7 +123,7 @@ def main() -> int:
         print(f"::warning::主動式 ETF PCF 抓不到 {b['code']}（{b['issuer']}）：{b['error']}")
 
     if not args.dry_run:
-        # 規模重排 sanity check：用各家自報 nav 排序，跟寫死的前 5 對一下
+        # 規模重排 sanity check：用各家自報 nav 排序，跟寫死的前六對一下
         idx["nav_rank"] = [
             {"code": c, "nav": v["nav"]}
             for c, v in sorted(idx["funds"].items(), key=lambda kv: -(kv[1].get("nav") or 0))

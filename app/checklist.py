@@ -81,14 +81,14 @@ def _active_etf_row(g: "_G", active_etf: dict | None) -> None:
     cons = active_etf.get("consensus") or 0
     tag = f"、{abs(cons)} 檔共識" if abs(cons) >= 2 else ""
     if kind in ("consensus_buy", "buy"):
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+        g("主動式 ETF 認養（前六大主動 ETF PCF，非官方三大法人）",
           f"狀態型：{win}主動式 ETF 淨買超", f"{who}淨買超 {lots}{tag}", True)
     elif kind in ("consensus_sell", "sell"):
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+        g("主動式 ETF 認養（前六大主動 ETF PCF，非官方三大法人）",
           f"狀態型：{win}主動式 ETF 淨賣超", f"{who}淨賣超 {lots.lstrip('+')}{tag}",
           None, raw="⚠️ 命中")
     else:
-        g("主動式 ETF 認養（前五大主動 ETF PCF，非官方三大法人）",
+        g("主動式 ETF 認養（前六大主動 ETF PCF，非官方三大法人）",
           f"狀態型：{win}主動式 ETF 買賣", f"{win}無主動式 ETF 買賣", None, raw="—")
 
 

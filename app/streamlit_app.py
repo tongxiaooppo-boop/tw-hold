@@ -653,10 +653,10 @@ def _bullets(items: list, empty: str = "—") -> str:
 
 
 # ── 主動式 ETF 認養旗標（context flag；見 build_active_etf_flags.py）──────────
-# 規模前五大主動式 ETF（統一/復華/群益官網每日揭露 PCF）前後兩日持股差分——
+# 規模前六大主動式 ETF（統一/復華/群益/中信官網每日揭露 PCF）前後兩日持股差分——
 # 只是把「近一日主動式 ETF 對這檔加碼／調節」攤在卡片上，**不 gate 任何進出場**。
 # 非官方三大法人／投信買賣超。來源過期或抓不到 → 整組隱藏（helper 回空字串）。
-_ACTIVE_SRC = "規模前五大主動式 ETF・第三方投信 PCF"
+_ACTIVE_SRC = "規模前六大主動式 ETF・第三方投信 PCF"
 _ACTIVE_LABEL = {
     "consensus_buy": "🏦 主動ETF 認養", "buy": "🏦 主動ETF 加碼",
     "consensus_sell": "🏦 主動ETF 調節", "sell": "🏦 主動ETF 調節",
@@ -739,7 +739,7 @@ def _active_legend(flags: dict) -> str:
     multi = m.get("multi_day_etfs") or []
     multi_txt = (f"，其中 {'／'.join(multi)} 因為中間漏抓，差分跨 "
                  f"{m.get('max_span_days', 2)} 個交易日" if multi else "")
-    return (f"🏦 主動式 ETF 認養＝近一次揭露變化中「規模前五大主動式 ETF」對該股的加碼／調節"
+    return (f"🏦 主動式 ETF 認養＝近一次揭露變化中「規模前六大主動式 ETF」對該股的加碼／調節"
             f"（{_ACTIVE_SRC}，真實股數差，資料日 {m.get('anchor_date', '—')}"
             f"{stale_txt}{multi_txt}）。"
             f"**非官方三大法人／投信買賣超，不是機構認養背書**；賣出也可能是基金"
@@ -2419,7 +2419,7 @@ def _holdings_table_html(df: pd.DataFrame) -> str:
 
 
 def _active_summary(fl: dict) -> str:
-    """五檔加總：整體加碼 vs 整體調節（跨五檔彙總，不是單一基金視角）。
+    """六檔加總：整體加碼 vs 整體調節（跨六檔彙總，不是單一基金視角）。
 
     方向沿用 `build_active_etf_flags.py` 的 `kind` 判斷（consensus 優先，
     否則看淨股數方向）——**不是多數決**。同一檔如果有買有賣（分歧），
@@ -2453,7 +2453,7 @@ def _active_summary(fl: dict) -> str:
     sell_html = "".join(_row(tk, f) for tk, f in sells) or '<li class="flat">—</li>'
     return (
         '<div class="thc-card thc-neutral"><div class="thc-stripe"></div><div class="thc-body">'
-        '<div class="thc-head"><span class="thc-cn">五檔加總</span></div>'
+        '<div class="thc-head"><span class="thc-cn">六檔加總</span></div>'
         f'<div class="thc-ctx">整體加碼 {len(buys)} 檔　·　整體調節 {len(sells)} 檔'
         '（有買有賣的檔位以淨額判斷方向，比數不隱藏）</div>'
         '<div class="sw-cols">'
@@ -2463,7 +2463,7 @@ def _active_summary(fl: dict) -> str:
 
 
 def _active_etf_page() -> None:
-    """主動式 ETF 每日動向——那五檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
+    """主動式 ETF 每日動向——那六檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
     兼作「爬五家投信官網有沒有正常」的體檢面板。"""
     st.header("主動式 ETF 每日動向", anchor="top")
@@ -2561,8 +2561,8 @@ def _active_etf_page() -> None:
 
     st.divider()
     st.caption(
-        "規模前五大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
-        "真實股數差＝這五檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
+        "規模前六大主動式 ETF，發行投信官網每日揭露的 PCF（申購買回清單），前後兩個交易日"
+        "真實股數差＝這六檔當日的加碼／調節（門檻濾掉權重當量 <0.03pp 的雜訊）。"
         "賣出也可能是基金應付大額贖回被迫調節，不一定是看壞這檔股票。"
         f"日期對齊股票日線的交易日。**{_ACTIVE_SRC}；非官方三大法人／投信買賣超，永不 gate。**")
     _msp = meta.get("max_span_days") or 1

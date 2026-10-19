@@ -2,7 +2,7 @@
 
 ## 這是什麼
 
-規模前五大「主動式 ETF」（統一 00981A/00403A、復華 00991A、群益 00982A/00992A）
+規模前六大「主動式 ETF」（統一 00981A/00403A、中信 00406A、復華 00991A、群益 00982A/00992A）
 **前後兩個交易日 PCF 持股的差分**，攤成一個 per-ticker 旗標，給長波段候選池、短線頁、
 個股查詢、多軌體檢當 **context flag**——**不 gate 任何進出場 / verdict / 排名**。
 
@@ -68,7 +68,7 @@ EXIT_LOT_MAX = 1        # 賣出後剩 ≤ 此張數 → 特別註記（出清 /
 REL_EPS = 0.03          # 沒有 nav/price 時的退路：主動股數差 / 部位 ≥ 3%
 CONSENSUS_MIN = 2       # |buyers - sellers| ≥ 此值 → consensus_buy / consensus_sell
 MIN_SYNC_HOLDINGS = 5    # 今天筆數 < max(此值, 前一份一半) → 當沒同步，見 build_flags
-SOURCE = "自建 PCF（統一／復華／群益官網每日揭露）"
+SOURCE = "自建 PCF（統一／復華／群益／中信官網每日揭露）"
 
 
 def _now_iso() -> str:
