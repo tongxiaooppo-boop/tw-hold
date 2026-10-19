@@ -1,0 +1,22 @@
+{
+ "schema": 1,
+ "asof": "2026-10-19",
+ "lines": {
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 1,
+   "candidates": [
+    {
+     "t": "1815.TWO",
+     "nm": "富喬",
+     "px": 154.0,
+     "stop": 131.64,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ],
+   "revisions": []
+  }
+ }
+}
