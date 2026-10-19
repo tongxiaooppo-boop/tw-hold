@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-19T15:38:07+00:00",
+    "updated_at": "2026-10-19T16:15:51+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -346,17 +346,89 @@
       "exit_date": "2026-10-16",
       "exit_price": 512.36,
       "ret_pct": 0.040325
+    },
+    {
+      "ticker": "6197",
+      "name": "佳必琪",
+      "entry_date": "2026-10-14",
+      "entry_price": 356.5,
+      "exit_date": "2026-10-19",
+      "exit_price": 339.57,
+      "ret_pct": -0.047489
+    },
+    {
+      "ticker": "6196",
+      "name": "帆宣",
+      "entry_date": "2026-10-13",
+      "entry_price": 643.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 606.29,
+      "ret_pct": -0.057092
+    },
+    {
+      "ticker": "2421",
+      "name": "建準",
+      "entry_date": "2026-10-13",
+      "entry_price": 169.5,
+      "exit_date": "2026-10-19",
+      "exit_price": 160.79,
+      "ret_pct": -0.051386
+    },
+    {
+      "ticker": "2377",
+      "name": "微星",
+      "entry_date": "2026-10-12",
+      "entry_price": 154.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 160.93,
+      "ret_pct": 0.045
+    },
+    {
+      "ticker": "3653",
+      "name": "健策",
+      "entry_date": "2026-10-08",
+      "entry_price": 7165.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 6560.0,
+      "ret_pct": -0.084438
+    },
+    {
+      "ticker": "3026",
+      "name": "禾伸堂",
+      "entry_date": "2026-10-01",
+      "entry_price": 845.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 783.71,
+      "ret_pct": -0.072533
+    },
+    {
+      "ticker": "3044",
+      "name": "健鼎",
+      "entry_date": "2026-09-18",
+      "entry_price": 518.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 563.71,
+      "ret_pct": 0.088243
+    },
+    {
+      "ticker": "3406",
+      "name": "玉晶光",
+      "entry_date": "2026-09-17",
+      "entry_price": 996.0,
+      "exit_date": "2026-10-19",
+      "exit_price": 1031.57,
+      "ret_pct": 0.035713
     }
   ],
   "stats": {
-    "n": 38,
-    "win_rate": 0.47368421052631576,
-    "avg_ret_gross": 0.034076552631578945,
-    "expectancy_net": 0.02822655263157895,
+    "n": 46,
+    "win_rate": 0.45652173913043476,
+    "avg_ret_gross": 0.025020152173913048,
+    "expectancy_net": 0.019170152173913043,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": 4.368421052631577,
+      "gap_pp": 2.6521739130434763,
       "diverging": false
     },
     "by_month": [
@@ -368,9 +440,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 30,
-        "win_rate": 0.4666666666666667,
-        "avg_ret_net": 0.036261566666666675
+        "n": 38,
+        "win_rate": 0.4473684210526316,
+        "avg_ret_net": 0.02360697368421053
       }
     ]
   }
