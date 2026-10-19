@@ -163,18 +163,17 @@ def test_build_pool_新長表營收_進池且帶accel():
     assert "月營收 YoY 較上月加速" in pool[0]["support"]
 
 
-def test_build_pool_停損太近_緩衝不到1ATR_不進池():
+def test_build_pool_停損太近_緩衝不到1ATR_不進池(monkeypatch):
     """2026-10-20：現價 − 停損 < 1×ATR14 的不推薦（模擬單早有同一道門檻）。
-    穩定上升的假資料，停損是 現價−2×ATR（緩衝 = 2 ATR，過關）；把 50MA 拉到貼近現價
-    （最後一天暴衝，50MA 仍在後面）反而是離現價遠，所以改用壓低 ATR 的方式不可行——
-    直接把門檻調到 3 倍 ATR，緩衝 2 ATR 的這檔就必須被擋掉。"""
+    穩定上升假資料的停損是「現價 − 2×ATR」（緩衝剛好 2 ATR，過關）；
+    把門檻調到 3 倍 → 必擋（驗常數有接上）。再造一檔「最後一天衝高、50MA 還貼在後面」
+    不行（50MA 離得更遠），所以邊界用 2.0 vs 2.0 本身：緩衝 = 2 ATR，門檻 2.0 → 不擋（不等於），
+    門檻略大於 2.0 → 擋。"""
     from screener import candidate_pool as cp
     args = (_qf("1001"), _uptrend_prices("1001"), _flat_index(),
             _chips("1001"), _revenue("1001"))
     assert len(build_candidate_pool(*args, universe={"1001"}, asof=ASOF)) == 1
-    old = cp.MIN_STOP_BUFFER_ATR_MULT
-    try:
-        cp.MIN_STOP_BUFFER_ATR_MULT = 3.0
-        assert build_candidate_pool(*args, universe={"1001"}, asof=ASOF) == []
-    finally:
-        cp.MIN_STOP_BUFFER_ATR_MULT = old
+    monkeypatch.setattr(cp, "MIN_STOP_BUFFER_ATR_MULT", 2.0)
+    assert len(build_candidate_pool(*args, universe={"1001"}, asof=ASOF)) == 1   # 剛好等於 → 不擋
+    monkeypatch.setattr(cp, "MIN_STOP_BUFFER_ATR_MULT", 2.01)
+    assert build_candidate_pool(*args, universe={"1001"}, asof=ASOF) == []

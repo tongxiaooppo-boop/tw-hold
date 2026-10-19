@@ -65,7 +65,9 @@ jobs:
           today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
           dates = [v.get('post_date') or v.get('latest_date') for v in idx.get('funds', {}).values()]
           dates = [d for d in dates if d]
-          need = bool(idx.get('missing')) or not dates or max(dates) < today
+          ld = [v.get('latest_date') for v in idx.get('funds', {}).values() if v.get('latest_date')]
+          # 最後一項：有基金資料日落後其他檔（例：中信當天晚公告）也要補
+          need = bool(idx.get('missing')) or not dates or max(dates) < today or bool(ld and min(ld) < max(ld))
           print('1' if need else '0')
           " 2>/dev/null || echo 1)
           echo "need_retry=$NEED" >> "$GITHUB_OUTPUT"

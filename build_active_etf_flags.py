@@ -175,6 +175,13 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
     synced, anchor = 0, ""
     fund_detail: dict[str, dict] = {}
 
+    # 全體最新資料日。2026-10-20 Opus 審出：某檔當天沒更新（抓失敗／中信還沒公告）時，
+    # 它磁碟上最近兩份還是「昨天那組」，舊差分會被當成今天的訊號算進旗標（例：00981A
+    # 10/16→10/19、00406A 10/15→10/16 → anchor=10/19，兩檔「同買」被判共識）。
+    # 落後全體最新日的基金一律當沒同步（lagging），不算差分。
+    newest = max((h[-1][0] for h in snaps.values()
+                  if len(h) >= 2 and h[-1][0] > h[-2][0]), default="")
+
     for code, hist in snaps.items():
         if len(hist) < 2:
             fund_detail[code] = {"synced": False,
@@ -183,6 +190,10 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
         (pd_date, prev), (td_date, today) = hist[-2], hist[-1]
         if td_date <= pd_date:                               # 同日 / 或抓到更舊的
             fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0}
+            continue
+        if td_date < newest:                                 # 落後其他基金的最新日 → 舊差分不算
+            fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0,
+                                 "lagging": True}
             continue
         # 第二層防守：snapshot_pcf.py 2026-09-22 起會擋掉異常少的 holdings，但
         # 這道防不到「這次改動之前」就已經落在 data/pcf/ 的壞快照（Opus 審出）。

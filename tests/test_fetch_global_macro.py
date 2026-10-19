@@ -92,3 +92,18 @@ def test_retry_stale用重試資料蓋掉過期尾端(monkeypatch):
     # ^DJI 沒被動到
     dji = merged[merged["symbol"] == "^DJI"]
     assert len(dji) == 2
+
+
+def test_台北上午不留亞洲指數今天那列_盤中價():
+    """2026-10-20 Opus 審出：排程延遲在台北早上跑時，日經／KOSPI／恆生「今天」那列是盤中價。"""
+    from datetime import datetime, timezone
+    from scripts.fetch_global_macro import _drop_intraday_asia
+    df = _df([("^N225", "2026-10-16", 1.0), ("^N225", "2026-10-17", 2.0),
+              ("^KS11", "2026-10-17", 3.0), ("^IXIC", "2026-10-17", 4.0)])
+    # 台北 10/17 08:42 = UTC 10/17 00:42
+    out = _drop_intraday_asia(df, datetime(2026, 10, 17, 0, 42, tzinfo=timezone.utc))
+    assert sorted(zip(out["symbol"], out["date"].dt.strftime("%m-%d"))) == [
+        ("^IXIC", "10-17"), ("^N225", "10-16")]          # 美股不動；亞洲只留昨天
+    # 台北 17:00 之後（恆生 16:00 也收了）全部保留
+    out2 = _drop_intraday_asia(df, datetime(2026, 10, 17, 9, 0, tzinfo=timezone.utc))
+    assert len(out2) == 4

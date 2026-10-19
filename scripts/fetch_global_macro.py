@@ -78,6 +78,26 @@ STOCKS = {"AAPL": "Apple", "MSFT": "Microsoft", "GOOGL": "Alphabet", "AMZN": "Am
 ALL_SYMBOLS = {**INDICES, **GAUGES, **STOCKS}
 
 
+#: 亞洲三大指數收盤（台北時間）：日經 12:30、KOSPI 14:30、恆生 16:00。排程延遲時（實測 2~9 小時）
+#: 台北上午就跑，這三檔「今天」那一列是盤中價——Yahoo 日線會把盤中即時價當當日收盤。
+#: 2026-10-20 Opus 審出：本機 meta 10/16 00:42 UTC（台北 08:42）的快照裡 ^N225、^KS11 已有
+#: 10/16 那列而美股只到 10/15，且這列會被拿去當 reference_date。台北 17:00 前一律丟掉「今天」那列。
+_ASIA_CLOSE_CUTOFF_HOUR_TPE = 17
+_ASIA_SYMBOLS = ("^N225", "^HSI", "^KS11")
+
+
+def _drop_intraday_asia(df: pd.DataFrame, now_utc: datetime | None = None) -> pd.DataFrame:
+    now_tpe = (now_utc or datetime.now(timezone.utc)) + timedelta(hours=8)
+    if now_tpe.hour >= _ASIA_CLOSE_CUTOFF_HOUR_TPE:
+        return df
+    today = pd.Timestamp(now_tpe.date())
+    bad = df["symbol"].isin(_ASIA_SYMBOLS) & (df["date"] >= today)
+    if bad.any():
+        print(f"  ⚠️ 台北 {now_tpe:%H:%M} 亞洲盤還沒全收，丟掉盤中價：" +
+              "、".join(sorted(f"{r.symbol} {r.date:%m-%d}" for r in df[bad].itertuples())))
+    return df[~bad].reset_index(drop=True)
+
+
 def fetch() -> pd.DataFrame:
     raw = yf.download(list(ALL_SYMBOLS), period="2y", interval="1d",
                        progress=False, group_by="ticker", auto_adjust=True)
@@ -94,6 +114,7 @@ def fetch() -> pd.DataFrame:
         raise RuntimeError("yfinance 全部抓空——網路問題或 Yahoo 介面改了？")
     out = pd.concat(frames, ignore_index=True)
     out["date"] = pd.to_datetime(out["date"]).dt.tz_localize(None)
+    out = _drop_intraday_asia(out)
     return out.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 
@@ -140,6 +161,7 @@ def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     merged = pd.concat(frames, ignore_index=True)
     # 同一天同一檔以後蓋前——重試的資料排在 frames 後面，keep="last" 讓它贏。
     merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
+    merged = _drop_intraday_asia(merged)          # 重試抓的短天期序列一樣可能帶盤中價
     return merged.sort_values(["symbol", "date"]).reset_index(drop=True)
 
 

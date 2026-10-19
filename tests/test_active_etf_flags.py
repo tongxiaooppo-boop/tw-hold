@@ -255,3 +255,18 @@ def test_holdings筆數異常少當沒同步(monkeypatch):
     fd_bad = b.build_flags(snaps_bad)["_meta"]["funds"]["00981A"]
     assert fd_bad["synced"] is False
     assert fd_bad["moved_n"] == 0
+
+
+def test_落後基金的舊差分不算進今天的旗標():
+    """2026-10-20 Opus 審出：某檔當天沒更新，磁碟上最近兩份還是昨天那組，
+    不能被當成今天的訊號（兩檔「同買」會被判共識）。"""
+    prev = [("6515", "穎崴", 100_000, 3.0)]
+    today = [("6515", "穎崴", 180_000, 4.5)]
+    snaps = {"00981A": _snap(prev, today, d_prev="2026-10-16", d_today="2026-10-19"),
+             "00406A": _snap(prev, today, d_prev="2026-10-15", d_today="2026-10-16")}   # 落後一天
+    out = b.build_flags(snaps)
+    f = out["flags"]["6515"]
+    assert f["buyers"] == ["00981A"] and f["consensus_strong"] is False
+    d = out["_meta"]["funds"]["00406A"]
+    assert d["synced"] is False and d.get("lagging") is True
+    assert out["_meta"]["anchor_date"] == "2026-10-19" and out["_meta"]["synced_etfs"] == 1

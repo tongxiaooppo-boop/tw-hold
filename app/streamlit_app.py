@@ -2481,7 +2481,7 @@ def _active_etf_page() -> None:
         return
 
     anchor = meta.get("anchor_date") or "—"
-    synced, total = meta.get("synced_etfs"), meta.get("total_etfs") or 5
+    synced, total = meta.get("synced_etfs"), meta.get("total_etfs") or 6
     idx_upd = (idx or {}).get("updated_at")
     st.markdown(
         f"**資料日 {anchor}**　·　{synced if synced is not None else '—'} / {total} 檔算得出差分"
@@ -2511,9 +2511,14 @@ def _active_etf_page() -> None:
         exit_n = {tk: (fl[tk].get("exit_notes") or {}).get(code) for tk in sells}
         return buys, sells, nm, qty, exit_n
 
+    # snapshot_pcf 的 missing 是 [{code, issuer, error}]（不是代號字串）。2026-10-20 Opus 審出：
+    # 原本直接 set(missing) 會 TypeError（dict 不可 hash）→ 只要有一檔抓失敗整頁炸掉，
+    # 「🔴 沒抓到」那張卡從沒顯示過。另外 nav_rank 只收成功的基金，失敗的要補在最後。
+    missing = {m.get("code") if isinstance(m, dict) else m
+               for m in (idx or {}).get("missing") or []} - {None}
     order = ([r["code"] for r in (idx or {}).get("nav_rank") or []]
              or list(idx_funds) or list(fm_all))
-    missing = set((idx or {}).get("missing") or [])
+    order += sorted(c for c in missing if c not in order)
 
     cards: list[str] = []
     for code in order:

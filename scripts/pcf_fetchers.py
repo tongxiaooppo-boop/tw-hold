@@ -423,7 +423,7 @@ _FETCHERS = {"tongyi": fetch_tongyi, "capital": fetch_capital, "fuhwa": fetch_fu
 
 # ── TWSE 收盤價（算折溢價用；PCF 只給淨值，沒有市價）───────────────────────
 # `STOCK_DAY_ALL` 是官方每日全市場收盤行情、免驗證，一次回全部證券（含 ETF）
-# 一天份，不用逐檔查。這 5 檔全是上市（無上櫃），只打 TWSE 這支就夠。
+# 一天份，不用逐檔查。這 6 檔全是上市（無上櫃），只打 TWSE 這支就夠。
 _TWSE_DAY_ALL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY_ALL"
 
 
@@ -475,6 +475,8 @@ def fetch_one(fund: dict[str, str]) -> dict[str, Any]:
     # 基本理智檢查：至少 10 檔、權重總和落在 60~130%
     hs = out["holdings"]
     wsum = sum(h["weight"] for h in hs if h.get("weight"))
+    # 邊界：00406A 另持台指期／保證金（約 16%），股票權重和約 84%；若期貨比重拉高到股票
+    # 權重和 < 55%，這裡會天天當抓失敗——到時要放寬下限或改看市值佔淨值，不要靜默跳過。
     if len(hs) < 10 or not (55 <= wsum <= 135):
         raise RuntimeError(f"{fund['code']} 持股不合理（{len(hs)} 檔、權重和 {wsum:.0f}%）")
     return out
