@@ -2249,6 +2249,7 @@ def _checklist_page() -> None:
         # 淨買超」這條判準本身的計算長度（那是吃全部歷史算的），維持 4 個月。
         # 2026-09-26 K線加使用者可選區間（12W/24W/Y），月營收窗口跟著等比率
         # 縮放（沿用原本 K線:月營收=1:2 的比例，換算下來剛好是 0.5Y/Y/2Y）。
+        # 2026-10-20：短區間下月營收最少顯示 13 個月、日線最少 20 筆（stockcharts._min_start）。
         _render_checks(_safe_checks(cl.swing_checks, d, active_etf=_aef),
                        missing=("這檔在 bundle 沒有價量／財報資料，無法體檢波段軌。"
                                 if px_fin_empty else None),

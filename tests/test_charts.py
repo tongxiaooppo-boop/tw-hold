@@ -131,3 +131,62 @@ def test_monthly_revenue_柱加YoY線():
     assert "月營收（億）" in names and "YoY %" in names
     fig2 = ch.monthly_revenue(rev, "測試", pd.Timestamp("2023-06-01"))
     assert list(fig2.layout.xaxis.range)[0] == pd.Timestamp("2023-06-01")
+
+
+# ── 2026-10-20 短區間最少筆數（與 Opus 討論）──────────────────────────────
+def _rev30():
+    m = pd.period_range("2022-01", periods=30, freq="M").astype(str)
+    return pd.DataFrame({"month": pd.to_datetime(m), "revenue": np.linspace(1e8, 3e8, 30)})
+
+
+def test_min_start_None不處理():
+    assert ch._min_start(pd.Series(pd.date_range("2024-01-01", periods=5)), None, 13) == (None, False)
+
+
+def test_min_start_足夠不放寬():
+    months = _rev30()["month"]                      # 2022-01 ~ 2024-06
+    eff, widened = ch._min_start(months, pd.Timestamp("2023-06-01"), 13)   # 2023-06 ~ 2024-06 剛好 13 根
+    assert eff == pd.Timestamp("2023-06-01") and widened is False
+
+
+def test_monthly_revenue_3月放寬到13根():
+    rev = _rev30()
+    start = pd.Timestamp("2024-06-01") - pd.Timedelta(days=92)      # 只剩約 3 根
+    fig = ch.monthly_revenue(rev, "測試", start)
+    assert list(fig.layout.xaxis.range)[0] == pd.Timestamp("2023-06-01")   # 倒數第 13 根
+    assert "近 13 個月" in fig.layout.title.text
+
+
+def test_monthly_revenue_一月今年至今不空():
+    m = pd.period_range("2023-01", periods=24, freq="M").astype(str)      # 到 2024-12，2025 還沒公布
+    rev = pd.DataFrame({"month": pd.to_datetime(m), "revenue": np.linspace(1e8, 2e8, 24)})
+    fig = ch.monthly_revenue(rev, "測試", pd.Timestamp("2025-01-01"))
+    assert list(fig.layout.xaxis.range)[0] == pd.Timestamp("2023-12-01")
+
+
+def test_monthly_revenue_資料不足13筆夾到最早():
+    rev = _rev30().head(13)
+    fig = ch.monthly_revenue(rev, "測試", pd.Timestamp("2030-01-01"))
+    assert list(fig.layout.xaxis.range)[0] == pd.Timestamp("2022-01-01")
+
+
+def test_monthly_revenue_缺月按實際筆數算():
+    rev = _rev30().drop(index=[20, 21])                            # 缺 2 個月
+    eff, widened = ch._min_start(rev["month"], pd.Timestamp("2024-05-01"), 13)
+    assert widened is True and int((rev["month"] >= eff).sum()) == 13
+
+
+def test_kline_年初日線至少20根():
+    px = _px(n=250)
+    dates = pd.to_datetime(px["date"]).sort_values().reset_index(drop=True)
+    start = dates.iloc[-3]                                          # 只剩 3 根
+    fig = ch.kline(px, "測試", start, ch._MA_SHORT)
+    assert list(fig.layout.xaxis.range)[0] == dates.iloc[-20]
+
+
+def test_kline_3月不放寬():
+    px = _px(n=250)
+    end = pd.to_datetime(px["date"]).max()
+    start = end - pd.Timedelta(days=92)
+    fig = ch.kline(px, "測試", start, ch._MA_SHORT)
+    assert list(fig.layout.xaxis.range)[0] == start

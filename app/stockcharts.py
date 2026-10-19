@@ -56,6 +56,34 @@ def _right_pad(dates: pd.Series) -> pd.Timedelta:
     return gap / 2
 
 
+#: 短區間（個股查詢的「3月」「今年至資料日期」、多軌體檢的 12W…）下，圖「最少要看到幾筆」。
+#: 2026-10-20 與 Opus 討論：月營收選 3月 只剩 1–2 根柱、1 月選「今年至資料日期」整張空圖，很突兀。
+#: 月營收 13 根＝12 個 YoY 點正好一整個季節循環，也跟 app「滿 13 個月才畫 YoY」的門檻一致；
+#: 日線 20 根約一個月（實務上只有年初的「今年至資料日期」會觸發）。
+MIN_POINTS_MONTHLY = 13
+MIN_POINTS_DAILY = 20
+
+
+def _min_start(dates: pd.Series, start, min_points: int) -> tuple[pd.Timestamp | None, bool]:
+    """把 x 軸起點 `start` 往前放寬到「至少看得到 min_points 筆資料」為止。
+
+    回 (實際起點, 是否放寬)。規則：
+    - start 是 None（＝全部）→ (None, False)。
+    - 先夾到資料最早那天（同原本的 `max(start, dates.min())`）。
+    - 夾完可見筆數 ≥ min_points → 照 start，不放寬（1年／2年／全部的結果完全不變）。
+    - 不夠 → 起點改成「倒數第 min_points 筆」的日期；資料本身不足就退回最早那天。
+    筆數按實際有資料的列數算、不按曆月推算（有缺月的公司才不會拿錯筆數）。"""
+    if start is None:
+        return None, False
+    d = pd.to_datetime(pd.Series(dates)).dropna().sort_values().drop_duplicates().reset_index(drop=True)
+    if d.empty:
+        return pd.Timestamp(start), False
+    eff = max(pd.Timestamp(start), d.iloc[0])
+    if int((d >= eff).sum()) >= min_points:
+        return eff, False
+    return (d.iloc[-min_points] if len(d) >= min_points else d.iloc[0]), True
+
+
 def _style(fig: go.Figure, title: str, height: int) -> go.Figure:
     fig.update_layout(
         title=dict(text=title, x=0.01, xanchor="left", font=dict(size=14)),
@@ -88,7 +116,7 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
         # 2026-09-24 修：新上市股票的價量歷史可能比選的區間短（比如選「1年」但
         # 掛牌才 3 個月），直接用選到的 start 設 x 軸範圍會在左側留一大塊空白。
         # 夾到資料實際最早那天，不要求資料生不出來的日期。
-        eff_start = max(pd.Timestamp(start), d["date"].min())
+        eff_start, _ = _min_start(d["date"], start, MIN_POINTS_DAILY)
         fig.update_xaxes(range=[eff_start, d["date"].max() + _right_pad(d["date"])])
         vis = close[d["date"] >= eff_start]
         if len(vis):
@@ -115,10 +143,13 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
     fig.update_layout(
         yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
                     zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
+    title = f"{name} 月營收 + YoY"
     if start is not None:
-        eff_start = max(pd.Timestamp(start), d["month"].min())     # 同 kline，夾到實際資料起點
+        eff_start, widened = _min_start(d["month"], start, MIN_POINTS_MONTHLY)   # 夾到資料起點＋至少 13 根
         fig.update_xaxes(range=[eff_start, d["month"].max() + _right_pad(d["month"])])
-    return _style(fig, f"{name} 月營收 + YoY", 360)
+        if widened:
+            title += f"（區間太短，顯示近 {int((d['month'] >= eff_start).sum())} 個月）"
+    return _style(fig, title, 360)
 
 
 def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
@@ -138,7 +169,7 @@ def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
                       yaxis2=dict(overlaying="y", side="right", showgrid=False,
                                   zeroline=True, zerolinecolor="rgba(43,51,59,.25)"))
     if start is not None:
-        eff_start = max(pd.Timestamp(start), d["date"].min())      # 同 kline，夾到實際資料起點
+        eff_start, _ = _min_start(d["date"], start, MIN_POINTS_DAILY)
         fig.update_xaxes(range=[eff_start, d["date"].max() + _right_pad(d["date"])])
     return _style(fig, f"{name} 法人買賣超（張）", 360)
 
@@ -236,7 +267,7 @@ def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.F
     fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
                              line=dict(color="#2B333B", width=1.6)))
     if start is not None:
-        eff_start = max(pd.Timestamp(start), m["date"].min())      # 同 kline，夾到實際資料起點
+        eff_start, _ = _min_start(m["date"], start, MIN_POINTS_DAILY)
         fig.update_xaxes(range=[eff_start, m["date"].max()])
         vis = m.loc[m["date"] >= eff_start]
         if not vis.empty:
@@ -284,7 +315,7 @@ def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
                                 line=dict(width=2, color="#5C7A72"))])
     fig.update_layout(yaxis=dict(ticksuffix="%"))
     if start is not None:
-        eff_start = max(pd.Timestamp(start), pd.to_datetime(d["date"]).min())
+        eff_start, _ = _min_start(d["date"], start, MIN_POINTS_DAILY)
         fig.update_xaxes(range=[eff_start, pd.to_datetime(d["date"]).max()])
     return _style(fig, f"{name} 現金殖利率走勢（%）", 320)
 
