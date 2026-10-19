@@ -5,6 +5,12 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "1560": {
+      "name": "中砂",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 807.82
+    },
     "5434": {
       "name": "崇越",
       "first_seen": "2026-10-16",
@@ -109,12 +115,6 @@
       "dropped_date": null,
       "exit_date": "2026-10-19",
       "exit_price": 339.57
-    },
-    "1560": {
-      "name": "中砂",
-      "status": "pending_entry",
-      "signal_date": "2026-10-19",
-      "risk_stop_ref": 807.82
     },
     "2027": {
       "name": "大成鋼",
@@ -490,6 +490,30 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
+    },
+    "2476": {
+      "name": "鉅祥",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 122.97
+    },
+    "3037": {
+      "name": "欣興",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 1081.4
+    },
+    "3711": {
+      "name": "日月光投控",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 644.72
+    },
+    "6257": {
+      "name": "矽格",
+      "status": "pending_entry",
+      "signal_date": "2026-10-19",
+      "risk_stop_ref": 228.09
     }
   }
 }
