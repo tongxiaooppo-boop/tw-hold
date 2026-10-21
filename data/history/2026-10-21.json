@@ -198,6 +198,22 @@
     }
    ],
    "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 1,
+   "candidates": [
+    {
+     "t": "3234.TWO",
+     "nm": "光環",
+     "px": 196.5,
+     "stop": 180.34,
+     "sig": "上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM）"
+    }
+   ],
+   "revisions": []
   }
  }
 }
