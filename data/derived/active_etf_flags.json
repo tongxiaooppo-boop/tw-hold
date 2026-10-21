@@ -3,10 +3,10 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-10-20",
   "market_date": "2026-10-20",
-  "fetched_at": "2026-10-20T15:38:31+00:00",
+  "fetched_at": "2026-10-21T00:09:12+00:00",
   "total_etfs": 6,
-  "synced_etfs": 5,
-  "stale_etfs": 1,
+  "synced_etfs": 6,
+  "stale_etfs": 0,
   "max_span_days": 1,
   "multi_day_etfs": [],
   "funds": {
@@ -86,10 +86,19 @@
     "premium_skipped": false
    },
    "00406A": {
-    "synced": false,
-    "date": "2026-10-19",
-    "moved_n": 0,
-    "lagging": true
+    "synced": true,
+    "date": "2026-10-20",
+    "prev_date": "2026-10-19",
+    "span_days": 1,
+    "moved_n": 7,
+    "aum": 100704931861.0,
+    "aum_prev": 102444806822.0,
+    "navps": 9.07819066196511,
+    "navps_prev": 9.249208502263711,
+    "close": 9.15,
+    "close_date": "2026-10-20",
+    "premium_pct": 0.7910093619838842,
+    "premium_skipped": false
    }
   },
   "schema_ok": true
@@ -387,19 +396,135 @@
   "3264": {
    "name": "欣銓",
    "industry": null,
-   "net_shares": 500000,
-   "net_amount": 123462741,
+   "net_shares": 1000000,
+   "net_amount": 246962741,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
+   "span_days": 1,
+   "buyers": [
+    "00406A",
+    "00992A"
+   ],
+   "sellers": [],
+   "kind": "consensus_buy",
+   "by_fund": {
+    "00992A": 500000,
+    "00406A": 500000
+   },
+   "exit_notes": {}
+  },
+  "2368": {
+   "name": "金像電子",
+   "industry": null,
+   "net_shares": 150000,
+   "net_amount": 177750000,
    "issuer_count": 1,
    "consensus": 1,
    "consensus_strong": false,
    "span_days": 1,
    "buyers": [
-    "00992A"
+    "00406A"
    ],
    "sellers": [],
    "kind": "buy",
    "by_fund": {
-    "00992A": 500000
+    "00406A": 150000
+   },
+   "exit_notes": {}
+  },
+  "3037": {
+   "name": "欣興電子",
+   "industry": null,
+   "net_shares": 170000,
+   "net_amount": 179350000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 170000
+   },
+   "exit_notes": {}
+  },
+  "3443": {
+   "name": "創意電子",
+   "industry": null,
+   "net_shares": 18000,
+   "net_amount": 139410000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 18000
+   },
+   "exit_notes": {}
+  },
+  "6147": {
+   "name": "頎邦科技",
+   "industry": null,
+   "net_shares": 600000,
+   "net_amount": 121500000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 600000
+   },
+   "exit_notes": {}
+  },
+  "6223": {
+   "name": "旺矽科技",
+   "industry": null,
+   "net_shares": 36000,
+   "net_amount": 176400000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 36000
+   },
+   "exit_notes": {}
+  },
+  "6274": {
+   "name": "台燿科技",
+   "industry": null,
+   "net_shares": 80000,
+   "net_amount": 124000000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 80000
    },
    "exit_notes": {}
   }
