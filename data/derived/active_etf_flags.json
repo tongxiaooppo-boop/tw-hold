@@ -3,7 +3,7 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-10-22",
   "market_date": "2026-10-22",
-  "fetched_at": "2026-10-23T01:18:55+00:00",
+  "fetched_at": "2026-10-23T01:25:48+00:00",
   "total_etfs": 6,
   "synced_etfs": 5,
   "stale_etfs": 1,
@@ -164,7 +164,11 @@
     "aum": 106661581547.0,
     "aum_prev": 100704931861.0,
     "navps": 9.183830906619923,
-    "navps_prev": 9.07819066196511
+    "navps_prev": 9.07819066196511,
+    "close": 9.22,
+    "close_date": "2026-10-21",
+    "premium_pct": 0.3938344874578044,
+    "premium_skipped": false
    }
   },
   "schema_ok": true
