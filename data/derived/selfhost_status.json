@@ -1,44 +1,44 @@
 {
  "datasets": {
   "raw_prices": {
-   "rows": 4954972,
-   "last_date": "2026-10-16",
+   "rows": 4962815,
+   "last_date": "2026-10-22",
    "last_day_counts": {
     "TW": 1089,
-    "TWO": 865
+    "TWO": 868
    }
   },
   "inst": {
-   "rows": 4275261,
-   "last_date": "2026-10-16",
+   "rows": 4282701,
+   "last_date": "2026-10-22",
    "last_day_counts": {
-    "TW": 1079,
-    "TWO": 768
+    "TW": 1080,
+    "TWO": 788
    }
   },
   "margin": {
-   "rows": 4591441,
-   "last_date": "2026-10-16",
+   "rows": 4598890,
+   "last_date": "2026-10-22",
    "last_day_counts": {
     "TW": 1061,
-    "TWO": 801
+    "TWO": 802
    }
   },
   "corp_actions": {
-   "rows": 18623,
+   "rows": 18632,
    "last_date": "2026-10-27"
   },
   "notrade": {
-   "rows": 62065,
-   "last_date": "2026-10-16"
+   "rows": 62170,
+   "last_date": "2026-10-22"
   },
   "refmark": {
-   "rows": 25997,
-   "last_date": "2026-10-16"
+   "rows": 26014,
+   "last_date": "2026-10-22"
   },
   "stophalt": {
-   "rows": 21,
-   "last_date": "2026-10-17"
+   "rows": 22,
+   "last_date": "2026-10-24"
   }
  },
  "gate_ok": true,
