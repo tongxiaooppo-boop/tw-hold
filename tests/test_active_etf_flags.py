@@ -296,3 +296,14 @@ def test_落後超過一天_不算自己的差分():
              "00406A": _snap(prev, today, d_prev="2026-10-19", d_today="2026-10-20")}
     d = b.build_flags(snaps)["_meta"]["funds"]["00406A"]
     assert d["lagging"] is True and "own" not in d
+
+
+def test_晚一天的基金_折溢價用它自己資料日的收盤():
+    """00406A 資料日 10/21、快照裡的 ETF 收盤也是 10/21 → 照算（2026-10-23）。"""
+    rows = [("6515", "穎崴", 100_000, 3.0)]
+    t = _df([("6515", "穎崴", 180_000, 4.5)], date="2026-10-21")
+    t["fund_close"], t["fund_close_date"] = 10.5, "2026-10-21"         # 淨值 1_000_000/100_000 = 10
+    snaps = {"00981A": _snap(rows, rows, d_prev="2026-10-21", d_today="2026-10-22"),
+             "00406A": [("2026-10-20", _df(rows, date="2026-10-20")), ("2026-10-21", t)]}
+    d = b.build_flags(snaps)["_meta"]["funds"]["00406A"]
+    assert "own" in d and d["premium_pct"] == pytest.approx(5.0) and d["premium_skipped"] is False

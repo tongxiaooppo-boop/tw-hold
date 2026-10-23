@@ -164,13 +164,29 @@ def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(names="stock_code")
 
 
-def _aum_navps(today: pd.DataFrame, prev: pd.DataFrame) -> dict:
-    """基金規模（fund_nav）與每單位淨值，今天／前一份。"""
+def _fund_metrics(today: pd.DataFrame, prev: pd.DataFrame, td_date: str) -> dict:
+    """基金規模（總 AUM）＋每單位淨值（今天／前一份）＋折溢價。
+
+    PCF 快照本來就有 fund_nav/fund_units 兩欄，不用另外抓。2026-09-11 拿三方站截圖對過：
+    fund_nav 精確等於官網「資產規模」；fund_nav/fund_units 等於「淨值」。
+    折溢價要市價——PCF 沒有，改抓 TWSE STOCK_DAY_ALL 收盤價（見
+    pcf_fetchers.fetch_twse_closes），存進快照的 fund_close 欄；抓不到就 None。
+    折溢價 =（市價 − 淨值）÷ 淨值，兩個數字必須同一天。TWSE 給的是「最近一個
+    已收盤交易日」，PCF 基準日常常是前一交易日——盤後跑就差一天，那時寧可不算
+    也不要給一個跨日的數字（2026-09-11 修）。舊快照沒有這欄 → 當作不確定。"""
     aum_t, aum_p = _scalar(today, "fund_nav"), _scalar(prev, "fund_nav")
     u_t, u_p = _scalar(today, "fund_units"), _scalar(prev, "fund_units")
+    navps_t = (aum_t / u_t) if (aum_t and u_t) else None
+    navps_p = (aum_p / u_p) if (aum_p and u_p) else None
+    close_t = _scalar(today, "fund_close")
+    close_d = _text(today, "fund_close_date")
+    close_aligned = bool(close_d) and close_d == td_date
+    premium_t = ((close_t - navps_t) / navps_t * 100)         if (close_t and navps_t and close_aligned) else None
     return {"aum": aum_t, "aum_prev": aum_p,
-            "navps": (aum_t / u_t) if (aum_t and u_t) else None,
-            "navps_prev": (aum_p / u_p) if (aum_p and u_p) else None}
+            "navps": navps_t, "navps_prev": navps_p,
+            "close": close_t, "close_date": close_d or None,
+            "premium_pct": premium_t,
+            "premium_skipped": bool(close_t and navps_t and not close_aligned)}
 
 
 def _own_moves(today: pd.DataFrame, prev: pd.DataFrame, pd_date: str, td_date: str) -> dict:
@@ -226,7 +242,7 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             if (_span_days(td_date, newest) <= 1
                     and len(today) >= max(MIN_SYNC_HOLDINGS, 0.5 * len(prev))):
                 detail["own"] = _own_moves(today, prev, pd_date, td_date)
-                detail.update(_aum_navps(today, prev))
+                detail.update(_fund_metrics(today, prev, td_date))   # 折溢價用它自己資料日的收盤
             fund_detail[code] = detail
             continue
         # 第二層防守：snapshot_pcf.py 2026-09-22 起會擋掉異常少的 holdings，但
@@ -245,30 +261,9 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
         mv = _fund_moves(today, prev)
         moved = int((mv["direction"] != 0).sum())
 
-        # 基金規模（總 AUM）+ 淨值（每受益權單位）——PCF 快照本來就有 fund_nav/
-        # fund_units 兩欄，不用另外抓。2026-09-11 拿三方站截圖對過：fund_nav 精確
-        # 等於官網「資產規模」；fund_nav/fund_units 等於「淨值」。
-        # 折溢價要market價——PCF 沒有，改抓 TWSE STOCK_DAY_ALL 收盤價（見
-        # pcf_fetchers.fetch_twse_closes），存進快照的 fund_close 欄；抓不到就 None。
-        aum_t, aum_p = _scalar(today, "fund_nav"), _scalar(prev, "fund_nav")
-        u_t, u_p = _scalar(today, "fund_units"), _scalar(prev, "fund_units")
-        navps_t = (aum_t / u_t) if (aum_t and u_t) else None
-        navps_p = (aum_p / u_p) if (aum_p and u_p) else None
-        close_t = _scalar(today, "fund_close")
-        # 折溢價 =（市價 − 淨值）÷ 淨值，兩個數字必須同一天。TWSE 給的是「最近一個
-        # 已收盤交易日」，PCF 基準日常常是前一交易日——盤後跑就差一天，那時寧可不算
-        # 也不要給一個跨日的數字（2026-09-11 修）。舊快照沒有這欄 → 當作不確定。
-        close_d = _text(today, "fund_close_date")
-        close_aligned = bool(close_d) and close_d == td_date
-        premium_t = ((close_t - navps_t) / navps_t * 100)             if (close_t and navps_t and close_aligned) else None
         fund_detail[code] = {"synced": True, "date": td_date, "prev_date": pd_date,
                              "span_days": span, "moved_n": moved,
-                             "aum": aum_t, "aum_prev": aum_p,
-                             "navps": navps_t, "navps_prev": navps_p,
-                             "close": close_t, "close_date": close_d or None,
-                             "premium_pct": premium_t,
-                             "premium_skipped": bool(close_t and navps_t
-                                                     and not close_aligned)}
+                             **_fund_metrics(today, prev, td_date)}
 
         for r in mv.itertuples(index=False):
             if r.direction == 0 and not r.d_shares:
