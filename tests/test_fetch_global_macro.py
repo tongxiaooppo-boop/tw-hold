@@ -107,3 +107,16 @@ def test_台北上午不留亞洲指數今天那列_盤中價():
     # 台北 17:00 之後（恆生 16:00 也收了）全部保留
     out2 = _drop_intraday_asia(df, datetime(2026, 10, 17, 9, 0, tzinfo=timezone.utc))
     assert len(out2) == 4
+
+
+
+def test_即時報價_失敗或非正值就略過(monkeypatch):
+    import scripts.fetch_global_macro as mod
+
+    class _T:
+        def __init__(self, sym):
+            if sym == "BAD":
+                raise RuntimeError("boom")
+            self.fast_info = {"lastPrice": 0.0 if sym == "ZERO" else 212.21, "previousClose": 219.26}
+    monkeypatch.setattr(mod.yf, "Ticker", _T)
+    assert mod.fetch_quotes(["NVDA", "BAD", "ZERO"]) == {"NVDA": {"price": 212.21, "prev_close": 219.26}}

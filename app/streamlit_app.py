@@ -2678,6 +2678,29 @@ _US_GAUGES = [("^VIX", "VIX", ""), ("DX-Y.NYB", "美元指數", ""),
               ("^TYX", "美債長天期(30年)", "%")]
 
 
+def _us_quote_card(symbol: str, name: str, q: dict, fetched_at: str | None) -> str:
+    """美股個股卡（抓取當下價）：值＝Yahoo 最新成交價、漲跌對 Yahoo 前一收盤、底部標抓取時間（台北）。
+    美股幾乎 24 小時交易，沒有收盤概念（2026-10-23 使用者拍板），所以不標資料日。"""
+    price, prev = float(q.get("price") or 0), float(q.get("prev_close") or 0)
+    if price <= 0 or prev <= 0:
+        return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">{name}</span>'
+                f'<span class="gz-ticker">{symbol}</span></div>'
+                '<div class="gz-value">—</div><div class="gz-chg flat">報價不完整</div></div>')
+    chg = price - prev
+    sign = "up" if chg > 0 else ("down" if chg < 0 else "flat")
+    arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
+    try:
+        when = "抓取於 " + pd.Timestamp(fetched_at).tz_convert("Asia/Taipei").strftime("%m-%d %H:%M")
+    except Exception:  # noqa: BLE001  meta 沒有 fetched_at 或格式壞掉，不讓卡片炸
+        when = "抓取時間不明"
+    return (f'<div class="gz-card"><div class="gz-head"><span class="gz-name">{name}</span>'
+            f'<span class="gz-ticker">{symbol}</span></div>'
+            f'<div class="gz-value">{price:,.2f}</div>'
+            f'<div class="gz-chg {sign}">{arrow} {chg:+,.2f}　({chg / prev:+.2%})</div>'
+            f'<span class="gz-pct">vs 前收 {prev:,.2f}</span>'
+            f'<div class="gz-asof">{when}（台北）</div></div>')
+
+
 def _gz_card(symbol: str, name: str, close: pd.Series, *, suffix: str = "",
              show_pct: bool = True, stale: dict | None = None, asof_text: str | None = None) -> str:
     from reference.global_macro import latest_change, percentile_rank
@@ -2719,7 +2742,8 @@ def _snapshot_fetched_line(meta: dict) -> str:
     except Exception:  # noqa: BLE001  舊 meta 沒有 fetched_at（NaT）或格式壞掉
         return ""
     return (f"國際指數／波動度／美股個股這批 **抓取於 {hhmm}（台北）**"
-            "　·　每張卡的「資料日」是該市場當地的收盤日（美股是美東日期，台北隔天早上才收盤）。"
+            "　·　國際指數／波動度卡的「資料日」是該市場當地的收盤日（美股是美東日期，台北隔天早上才收盤）；"
+            "美股個股卡沒有收盤概念，改標抓取時間（見個股區說明）。"
             "　·　資料日落後的判讀：非假日最多落後 3 天（跨週末），跨連假才會到 7 天；"
             "日經／KOSPI／恆生超過 7 天才標 ⚠️，所以落後 3 天內不一定有警示，請以卡片的資料日為準。")
 
@@ -3278,9 +3302,15 @@ def _macro_compass_page() -> None:
 
     st.divider()
     st.subheader("美股個股（七巨頭＋美光）")
-    stock_cards = [_gz_card(sym, name, global_macro.load_close(sym), show_pct=False, stale=stale_map.get(sym))
+    _quotes = snap_meta.get("quotes") or {}
+    stock_cards = [_us_quote_card(sym, name, _quotes[sym], snap_meta.get("fetched_at")) if sym in _quotes
+                   else _gz_card(sym, name, global_macro.load_close(sym), show_pct=False, stale=stale_map.get(sym))
                    for sym, name in _US_STOCKS]
     st.markdown(f'<div class="gz-grid">{"".join(stock_cards)}</div>', unsafe_allow_html=True)
+    if _quotes:
+        st.caption("美股現在幾乎 24 小時交易（盤前／盤後／夜盤），已經沒有單一的「收盤價」。"
+                   "個股卡顯示的是**抓取當下** Yahoo 的最新成交價，漲跌是相對 Yahoo 標的前一收盤；"
+                   "卡片底部是抓取時間（台北），不是資料日。抓取一天一次（`global_macro.yml`），不是即時報價。")
 
     if intl_idx_missing or not intl_idx_data:
         st.info(f"國際指數：{'全部沒拿到' if not intl_idx_data else ('部分沒拿到：' + '／'.join(intl_idx_missing))}"

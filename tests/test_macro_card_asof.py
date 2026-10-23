@@ -107,3 +107,12 @@ def test_主動ETF圖例_標出晚一天的基金():
                                      "funds": {"00981A": {"synced": True},
                                                "00406A": {"synced": False, "lagging": True}}}})
     assert "1/6 檔尚未更新（00406A 資料日晚一天" in h
+
+
+def test_美股個股卡_標抓取時間不標資料日():
+    """美股幾乎 24 小時交易，沒有收盤概念（2026-10-23）：顯示抓取當下價、標抓取時間（台北）。"""
+    import streamlit_app as sa
+    h = sa._us_quote_card("NVDA", "NVIDIA", {"price": 212.21, "prev_close": 219.26}, "2026-10-23T00:54:48+00:00")
+    assert "212.21" in h and "-7.05" in h and "vs 前收 219.26" in h
+    assert "抓取於 10-23 08:54（台北）" in h and "資料日" not in h
+    assert "報價不完整" in sa._us_quote_card("NVDA", "NVIDIA", {"price": 0}, None)

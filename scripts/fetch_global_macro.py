@@ -132,6 +132,25 @@ def _check_staleness(df: pd.DataFrame) -> list[dict]:
     return stale
 
 
+def fetch_quotes(symbols) -> dict[str, dict]:
+    """美股個股抓取當下的最新價＋Yahoo 的前一收盤（`fast_info`），寫進 meta 的 `quotes`。
+
+    2026-10-23 使用者拍板：美股幾乎 24 小時交易（盤前／盤後／夜盤），沒有「收盤」概念了，
+    個股卡改顯示抓取當下的價、標抓取時間。順便避開 Yahoo 日線的坑：當天實測個股前一交易日
+    那根日線收盤是 NaN（指數正常），日線卡天天晚一天。單檔失敗就略過，App 退回日線卡。"""
+    out = {}
+    for sym in symbols:
+        try:
+            fi = yf.Ticker(sym).fast_info
+            price, prev = float(fi["lastPrice"]), float(fi["previousClose"])
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ {sym} 即時報價失敗：{e}")
+            continue
+        if price > 0 and prev > 0:
+            out[sym] = {"price": round(price, 4), "prev_close": round(prev, 4)}
+    return out
+
+
 def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     """對過期的 symbol 個別重抓一次短天期序列，補進去蓋掉過期的尾端。
 
@@ -197,6 +216,9 @@ def main() -> None:
     # 舊日期，彼此之間沒有落差，stale 會是空的，app 卡片一個 ⚠️ 都不會出現。
     # 這裡另外記一個跟「執行當下」比的落後天數，才是使用者真正在意的
     # 「這批資料是不是新的」。
+    quotes = fetch_quotes(STOCKS)
+    print(f"美股個股即時報價 {len(quotes)}/{len(STOCKS)} 檔")
+
     ref_date = df["date"].max().date()
     today = datetime.now(timezone.utc).date()
     snapshot_lag_days = _business_days_since(ref_date, today)
@@ -206,6 +228,7 @@ def main() -> None:
         "reference_date": df["date"].max().strftime("%Y-%m-%d"),
         "snapshot_lag_days": snapshot_lag_days,
         "stale": stale,
+        "quotes": quotes,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     if snapshot_lag_days > 2:
         print(f"::warning::整批快照落後 {snapshot_lag_days} 個營業日"
