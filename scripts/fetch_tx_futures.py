@@ -80,6 +80,11 @@ def _num(x: str) -> float | None:
         return None
 
 
+def _settle(x: float | None) -> float | None:
+    """結算價 ≤ 0 當沒有：最後交易日期交所結算價欄填 0（2026-10-21 10 月合約）。"""
+    return x if x is not None and x > 0 else None
+
+
 def parse_csv(text: str) -> list[dict]:
     """futDataDown 的 CSV → 每個 (交易日, 時段) 的近月 TX 一筆。近月＝同一交易日內最小的純六碼月份。"""
     import csv
@@ -102,7 +107,7 @@ def parse_csv(text: str) -> list[dict]:
         if not _MONTH_RE.match(month) or session is None or last is None:
             continue
         cand.append({"date": pd.Timestamp(r[ix["交易日期"]].strip().replace("/", "-")), "session": session,
-                     "contract_month": month, "last": last, "settlement": _num(r[ix["結算價"]])})
+                     "contract_month": month, "last": last, "settlement": _settle(_num(r[ix["結算價"]]))})
     front = {}
     for c in cand:
         front[c["date"]] = min(front.get(c["date"], c["contract_month"]), c["contract_month"])
@@ -143,7 +148,7 @@ def _to_record(r: dict) -> dict | None:
         "contract_month": r["ContractMonth(Week)"],
         "last": float(last),
         "settlement": None if r.get("SettlementPrice") in (None, "", "NULL", "-")
-        else float(r["SettlementPrice"]),
+        else _settle(float(r["SettlementPrice"])),
     }
 
 

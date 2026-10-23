@@ -118,3 +118,9 @@ def test_csv有資料就不打OpenAPI_且早上多一筆盤後不算缺(monkeypa
     mod.main()
     m = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
     assert m["date"] == "2026-10-16" and m["missing_night"] is False
+
+
+def test_結算價0視為無():
+    """最後交易日期交所結算價欄填 0（2026-10-21 10 月合約）。"""
+    from scripts.fetch_tx_futures import _settle
+    assert _settle(0.0) is None and _settle(None) is None and _settle(46341.0) == 46341.0

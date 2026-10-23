@@ -2708,17 +2708,24 @@ def _snapshot_fetched_line(meta: dict) -> str:
             "日經／KOSPI／恆生超過 7 天才標 ⚠️，所以落後 3 天內不一定有警示，請以卡片的資料日為準。")
 
 
-def _tx_night_card(tx_night: pd.Series, tx_day: pd.Series, settle: pd.Series) -> str:
-    """夜盤卡：漲跌照期交所口徑＝夜盤收盤 − 前一個日盤結算價（不是跟上一場夜盤比）；底部標實際時段。"""
+def _tx_night_card(tx_night: pd.Series, tx_day: pd.Series, settle: pd.Series,
+                   base_day: pd.Series | None = None, rollover: str | None = None) -> str:
+    """夜盤卡：漲跌照期交所口徑＝夜盤收盤 − 前一個日盤結算價（不是跟上一場夜盤比）；底部標實際時段。
+    `settle`／`base_day` 由呼叫端先篩成跟夜盤同一個合約月份（`base_day` 省略＝`tx_day`）；
+    找不到 > 0 的同合約基準（例：換月後第一場夜盤）就不算漲跌，`rollover` 給了就標「換月」。"""
     if tx_night.empty:
         return _gz_card("TX", "夜盤收盤", tx_night, show_pct=False)
     d, last = tx_night.index[-1], float(tx_night.iloc[-1])
-    base_s = settle[settle.index < d]
-    base_d = tx_day[tx_day.index < d]
+    base_day = tx_day if base_day is None else base_day
+    base_s = settle[(pd.DatetimeIndex(settle.index) < d) & (settle > 0)]
+    base_d = base_day[(pd.DatetimeIndex(base_day.index) < d) & (base_day > 0)]
     base, base_lbl = ((float(base_s.iloc[-1]), f"{base_s.index[-1]:%m/%d} 日盤結算") if len(base_s)
                       else ((float(base_d.iloc[-1]), f"{base_d.index[-1]:%m/%d} 日盤收盤") if len(base_d) else (None, "")))
     if base is None:
-        return _gz_card("TX", "夜盤收盤", tx_night, show_pct=False, asof_text=f"時段 {_night_window(d, tx_day)}")
+        note = f" · 換月（{rollover}），無同合約日盤可比" if rollover else ""
+        # 換月時只給最後一筆：不讓 _gz_card 拿上一場（舊合約）夜盤算漲跌
+        return _gz_card("TX", "夜盤收盤", tx_night.iloc[-1:] if rollover else tx_night, show_pct=False,
+                        asof_text=f"時段 {_night_window(d, tx_day)}{note}")
     chg = last - base
     sign = "up" if chg > 0 else ("down" if chg < 0 else "flat")
     arrow = "▲" if sign == "up" else ("▼" if sign == "down" else "—")
@@ -3176,7 +3183,10 @@ def _macro_compass_page() -> None:
         # （D＝今天）發生在最新日盤**之後**→ 排在日盤後面；還沒抓到時最新夜盤在最新日盤之前 → 排前面。
         # 卡上一律寫實際時段（2026-10-16 使用者看到「夜盤 10-15」比 10-15 日盤收盤還高才發現標錯）。
         day_card = _gz_card("TX", "日盤收盤", tx_day, show_pct=False)
-        night_card = _tx_night_card(tx_night, tx_day, tx_futures.load_day_settlement())
+        # 夜盤基準只拿同合約月份：結算日（如 2026-10-21）後的夜盤已換下個月合約，不能跟舊合約比。
+        _nc = tx_futures.latest_contract("night")
+        night_card = _tx_night_card(tx_night, tx_day, tx_futures.load_day_settlement(_nc),
+                                    base_day=tx_futures.load_session("day", _nc), rollover=_nc)
         after = not tx_night.empty and (tx_day.empty or tx_night.index[-1] > tx_day.index[-1])
         tx_cards += [day_card, night_card] if after else [night_card, day_card]
     for _card in ((_foreign_short_card(ff) if not ff.empty else ""),

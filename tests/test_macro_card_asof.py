@@ -65,3 +65,36 @@ def test_夜盤卡_漲跌對前一日盤結算_標時段():
     h = sa._tx_night_card(night, day, settle)
     assert "47,366.00" in h and "+435.00" in h and "vs 10/15 日盤結算 46,931" in h
     assert "時段 10/15 15:00→10/16 05:00" in h
+
+
+def test_夜盤卡_結算價0不除以0():
+    """2026-10-21 10 月合約最後交易日，期交所結算價欄填 0 → App ZeroDivisionError 整頁炸。"""
+    import streamlit_app as sa
+    day = _close(["2026-10-20", "2026-10-21"])
+    night = pd.Series([46975.0], index=pd.to_datetime(["2026-10-22"]))
+    settle = pd.Series([46341.0, 0.0], index=pd.to_datetime(["2026-10-20", "2026-10-21"]))
+    h = sa._tx_night_card(night, day, settle)
+    assert "vs 10/20 日盤結算 46,341" in h
+
+
+def test_夜盤卡_換月無同合約基準就不算漲跌():
+    import streamlit_app as sa
+    night = pd.Series([46975.0, 47482.0], index=pd.to_datetime(["2026-10-21", "2026-10-22"]))
+    empty = pd.Series(dtype="float64")
+    h = sa._tx_night_card(night, _close(["2026-10-21"]), empty, base_day=empty, rollover="202611")
+    assert "47,482.00" in h and "vs " not in h and "換月（202611）" in h and "+507" not in h
+
+
+def test_tx_futures_同合約篩選且結算價0視為無(monkeypatch, tmp_path):
+    from reference import tx_futures
+    p = tmp_path / "tx.parquet"
+    pd.DataFrame({"date": pd.to_datetime(["2026-10-20", "2026-10-21", "2026-10-21", "2026-10-22"]),
+                  "session": ["day", "day", "night", "night"],
+                  "contract_month": ["202610", "202610", "202610", "202611"],
+                  "last": [46384.0, 46648.0, 46975.0, 47482.0],
+                  "settlement": [46341.0, 0.0, None, None]}).to_parquet(p)
+    monkeypatch.setattr(tx_futures, "TX_FUTURES", p)
+    assert tx_futures.latest_contract("night") == "202611"
+    assert tx_futures.load_day_settlement("202611").empty
+    assert list(tx_futures.load_day_settlement()) == [46341.0]
+    assert list(tx_futures.load_session("day", "202610")) == [46384.0, 46648.0]
