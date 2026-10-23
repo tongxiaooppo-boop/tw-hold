@@ -2549,6 +2549,24 @@ def _active_etf_page() -> None:
             # 晚上 CI 跑時永遠比其他五檔晚一天 → 不算進當天旗標，免得兩個資料日混在一起。
             why = ("中信投信隔天白天才公告前一交易日的持股，CI 晚上跑時固定比其他五檔晚一天"
                    if issuer == "中信" else "這一檔的資料日比其他基金舊")
+            own = fmd.get("own")
+            if own:
+                # 晚一天但自己兩份相鄰 → 照樣列它自己的加減碼，只是不算進共識旗標（2026-10-23）
+                aum_line = _fmt_aum_navps(fmd)
+                cards.append(_ae_card(
+                    code, issuer, name, "warn", "🟡 晚一天",
+                    f"{own.get('prev_date', '?')} → {own.get('date', '—')}　·　加碼 {len(own.get('buys') or [])} 檔"
+                    f"　·　調節 {len(own.get('sells') or [])} 檔"
+                    + (f"　·　{aum_line}" if aum_line else ""),
+                    buys=own.get("buys") or [], sells=own.get("sells") or [],
+                    names=own.get("names") or {}, qty=own.get("qty") or {},
+                    exit_notes=own.get("exit_notes") or {},
+                    note=f"{why}。下面是它自己前後兩份的變化（資料日 {own.get('date', '—')}），"
+                         "日期跟其他五檔不同，不算進共識旗標。",
+                    holdings_html=_holdings_table_html(_holdings_df(code, own.get("date"))),
+                    meta_line=f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
+                              f"　·　磁碟留存 {snaps_n} 份快照"))
+                continue
             cards.append(_ae_card(
                 code, issuer, name, "warn", "🟡 晚一天",
                 f"最新 PCF 日 {fmd.get('date') or fi.get('latest_date') or '—'}",

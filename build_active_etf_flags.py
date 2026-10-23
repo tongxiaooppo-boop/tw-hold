@@ -164,6 +164,33 @@ def _fund_moves(today: pd.DataFrame, prev: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(names="stock_code")
 
 
+def _aum_navps(today: pd.DataFrame, prev: pd.DataFrame) -> dict:
+    """基金規模（fund_nav）與每單位淨值，今天／前一份。"""
+    aum_t, aum_p = _scalar(today, "fund_nav"), _scalar(prev, "fund_nav")
+    u_t, u_p = _scalar(today, "fund_units"), _scalar(prev, "fund_units")
+    return {"aum": aum_t, "aum_prev": aum_p,
+            "navps": (aum_t / u_t) if (aum_t and u_t) else None,
+            "navps_prev": (aum_p / u_p) if (aum_p and u_p) else None}
+
+
+def _own_moves(today: pd.DataFrame, prev: pd.DataFrame, pd_date: str, td_date: str) -> dict:
+    """單一基金自己的差分（不進共識）：加碼／調節代號、名稱、股數、出清註記。"""
+    mv = _fund_moves(today, prev)
+    buys, sells, names, qty, exit_notes = [], [], {}, {}, {}
+    for r in mv.itertuples(index=False):
+        if r.direction == 0:
+            continue
+        (buys if r.direction > 0 else sells).append(r.stock_code)
+        names[r.stock_code] = r.stock_name
+        qty[r.stock_code] = round(float(r.d_shares))
+        after = getattr(r, "shares_after", None)
+        if r.direction < 0 and after is not None and pd.notna(after) and after / LOT_SHARES <= EXIT_LOT_MAX:
+            exit_notes[r.stock_code] = "出清" if after <= 0 else "僅剩1張"
+    return {"prev_date": pd_date, "date": td_date, "span_days": _span_days(pd_date, td_date),
+            "moved_n": len(buys) + len(sells), "buys": sorted(buys), "sells": sorted(sells),
+            "names": names, "qty": qty, "exit_notes": exit_notes}
+
+
 def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
                 meta: dict[str, dict] | None = None) -> dict:
     """`snaps`：{code: [(date, df), ...]}（每檔最多 2 份，時間升冪）。
@@ -192,8 +219,15 @@ def build_flags(snaps: dict[str, list[tuple[str, pd.DataFrame]]],
             fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0}
             continue
         if td_date < newest:                                 # 落後其他基金的最新日 → 舊差分不算
-            fund_detail[code] = {"synced": False, "date": td_date, "moved_n": 0,
-                                 "lagging": True}
+            detail = {"synced": False, "date": td_date, "moved_n": 0, "lagging": True}
+            # 中信隔天白天才公告前一交易日持股，CI 晚上跑時固定晚一天（2026-10-23 查證）。
+            # 落後 ≤1 個交易日、筆數正常 → 照算它自己前後兩份的差分放 `own`，只給它自己的卡片看，
+            # **不進 per_stock／共識旗標**（不同資料日不混在一起；2026-10-23 使用者拍板）。
+            if (_span_days(td_date, newest) <= 1
+                    and len(today) >= max(MIN_SYNC_HOLDINGS, 0.5 * len(prev))):
+                detail["own"] = _own_moves(today, prev, pd_date, td_date)
+                detail.update(_aum_navps(today, prev))
+            fund_detail[code] = detail
             continue
         # 第二層防守：snapshot_pcf.py 2026-09-22 起會擋掉異常少的 holdings，但
         # 這道防不到「這次改動之前」就已經落在 data/pcf/ 的壞快照（Opus 審出）。
@@ -338,8 +372,11 @@ def main() -> int:
     print(f"anchor={m.get('anchor_date')}　synced={m.get('synced_etfs')}/{m.get('total_etfs')}"
           f"　flags={len(payload['flags'])} 檔")
     for c, fd in (m.get("funds") or {}).items():
+        own = fd.get("own") or {}
         print(f"  {c}: {'✓' if fd.get('synced') else '·'} {fd.get('date')} "
-              f"(prev {fd.get('prev_date', '—')}) 動 {fd.get('moved_n', 0)} 檔")
+              f"(prev {fd.get('prev_date', '—')}) 動 {fd.get('moved_n', 0)} 檔"
+              + (f"　晚一天、自己差分 {own['prev_date']}→{own['date']} 動 {own['moved_n']} 檔（不進旗標）"
+                 if own else ""))
 
     if args.dry_run:
         return 0

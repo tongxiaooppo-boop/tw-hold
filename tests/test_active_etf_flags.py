@@ -270,3 +270,29 @@ def test_落後基金的舊差分不算進今天的旗標():
     d = out["_meta"]["funds"]["00406A"]
     assert d["synced"] is False and d.get("lagging") is True
     assert out["_meta"]["anchor_date"] == "2026-10-19" and out["_meta"]["synced_etfs"] == 1
+
+
+def test_晚一天的基金_照算自己的差分但不進共識():
+    """中信隔天才公告、固定晚一天（2026-10-23）：自己前後兩份照算放 own，不進 flags。"""
+    prev = [("6515", "穎崴", 100_000, 3.0), ("2330", "台積電", 50_000, 5.0)]
+    today = [("6515", "穎崴", 180_000, 4.5)]                                          # 2330 出清
+    snaps = {"00981A": _snap(prev, prev, d_prev="2026-10-21", d_today="2026-10-22"),
+             "00406A": _snap(prev, today, d_prev="2026-10-20", d_today="2026-10-21")}
+    out = b.build_flags(snaps)
+    assert out["flags"] == {}                                    # 不進共識／旗標
+    d = out["_meta"]["funds"]["00406A"]
+    assert d["synced"] is False and d["lagging"] is True
+    own = d["own"]
+    assert (own["prev_date"], own["date"]) == ("2026-10-20", "2026-10-21")
+    assert own["buys"] == ["6515"] and own["sells"] == ["2330"]
+    assert own["qty"] == {"6515": 80_000, "2330": -50_000} and own["exit_notes"] == {"2330": "出清"}
+    assert d["aum"] == 1_000_000.0 and out["_meta"]["synced_etfs"] == 1
+
+
+def test_落後超過一天_不算自己的差分():
+    prev = [("6515", "穎崴", 100_000, 3.0)]
+    today = [("6515", "穎崴", 180_000, 4.5)]
+    snaps = {"00981A": _snap(prev, today, d_prev="2026-10-21", d_today="2026-10-22"),
+             "00406A": _snap(prev, today, d_prev="2026-10-19", d_today="2026-10-20")}
+    d = b.build_flags(snaps)["_meta"]["funds"]["00406A"]
+    assert d["lagging"] is True and "own" not in d
