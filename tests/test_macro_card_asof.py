@@ -98,3 +98,12 @@ def test_tx_futures_同合約篩選且結算價0視為無(monkeypatch, tmp_path)
     assert tx_futures.load_day_settlement("202611").empty
     assert list(tx_futures.load_day_settlement()) == [46341.0]
     assert list(tx_futures.load_session("day", "202610")) == [46384.0, 46648.0]
+
+
+def test_主動ETF圖例_標出晚一天的基金():
+    """中信隔天才公告，CI 晚上跑時固定晚一天（2026-10-23）。"""
+    import streamlit_app as sa
+    h = sa._active_legend({"_meta": {"stale_etfs": 1, "total_etfs": 6, "anchor_date": "2026-10-22",
+                                     "funds": {"00981A": {"synced": True},
+                                               "00406A": {"synced": False, "lagging": True}}}})
+    assert "1/6 檔尚未更新（00406A 資料日晚一天" in h

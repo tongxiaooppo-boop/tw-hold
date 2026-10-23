@@ -736,7 +736,10 @@ def _active_legend(flags: dict) -> str:
     if not m:
         return ""
     stale = m.get("stale_etfs")
-    stale_txt = f"，{stale}/{m.get('total_etfs', '?')} 檔尚未更新" if stale else ""
+    lag = [c for c, f in (m.get("funds") or {}).items() if f.get("lagging")]
+    stale_txt = (f"，{stale}/{m.get('total_etfs', '?')} 檔尚未更新"
+                 + (f"（{'／'.join(lag)} 資料日晚一天，例：中信隔天才公告，不算進旗標）" if lag else "")
+                 if stale else "")
     # 有基金漏抓一天 → 它的差分跨 > 1 個交易日，這裡要講清楚是哪幾檔（stale_etfs
     # 抓不到這種：它有兩份快照、只是不相鄰）。
     multi = m.get("multi_day_etfs") or []
@@ -2539,6 +2542,19 @@ def _active_etf_page() -> None:
                 "這次 CI 完全沒抓到這一檔。",
                 note="通常是被反爬擋、或投信官網改版——看 CI log 的 `::warning::`。",
                 meta_line=f"最後抓取 {fetched}"))
+            continue
+
+        if fmd.get("lagging"):
+            # 中信隔天白天才公告前一交易日持股（2026-10-23 查證：09:00 還查不到前一天的），
+            # 晚上 CI 跑時永遠比其他五檔晚一天 → 不算進當天旗標，免得兩個資料日混在一起。
+            why = ("中信投信隔天白天才公告前一交易日的持股，CI 晚上跑時固定比其他五檔晚一天"
+                   if issuer == "中信" else "這一檔的資料日比其他基金舊")
+            cards.append(_ae_card(
+                code, issuer, name, "warn", "🟡 晚一天",
+                f"最新 PCF 日 {fmd.get('date') or fi.get('latest_date') or '—'}",
+                note=f"{why}；為了不把不同資料日混在一起，這檔不算進今天的旗標。",
+                meta_line=f"抓取 {fetched}　·　持股 {fi.get('holdings_n', '—')} 檔"
+                          f"　·　磁碟留存 {snaps_n} 份快照"))
             continue
 
         if not fmd.get("synced"):

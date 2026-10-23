@@ -65,9 +65,9 @@ jobs:
           today = datetime.now(ZoneInfo('Asia/Taipei')).date().isoformat()
           dates = [v.get('post_date') or v.get('latest_date') for v in idx.get('funds', {}).values()]
           dates = [d for d in dates if d]
-          ld = [v.get('latest_date') for v in idx.get('funds', {}).values() if v.get('latest_date')]
-          # 最後一項：有基金資料日落後其他檔（例：中信當天晚公告）也要補
-          need = bool(idx.get('missing')) or not dates or max(dates) < today or bool(ld and min(ld) < max(ld))
+          # 不再因「某檔資料日落後其他檔」補跑（2026-10-23 使用者拍板）：中信隔天白天才公告，
+          # 晚上補跑永遠拿不到，只是白跑；其他五檔有就好，中信由 App 標「晚一天」。
+          need = bool(idx.get('missing')) or not dates or max(dates) < today
           print('1' if need else '0')
           " 2>/dev/null || echo 1)
           echo "need_retry=$NEED" >> "$GITHUB_OUTPUT"
