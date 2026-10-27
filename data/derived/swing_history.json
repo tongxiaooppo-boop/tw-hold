@@ -1,22 +1,18 @@
 {
-  "_asof": "2026-10-22",
+  "_asof": "2026-10-27",
   "_pool": [
     "2006",
     "2027",
     "2031",
     "2377",
-    "3014",
-    "3044",
+    "2535",
     "3045",
-    "3265",
     "6196",
     "6491",
     "6782",
     "9933"
   ],
   "_prev_pool": [
-    "1560",
-    "1714",
     "2006",
     "2027",
     "2031",
@@ -25,85 +21,12 @@
     "3044",
     "3045",
     "3265",
-    "5434",
     "6196",
-    "6197",
-    "6257",
     "6491",
     "6782",
     "9933"
   ],
   "_prev_tickers": {
-    "1560": {
-      "first_seen": "2026-09-07",
-      "streak_days": 30
-    },
-    "1714": {
-      "first_seen": "2026-10-05",
-      "streak_days": 12
-    },
-    "2006": {
-      "first_seen": "2026-09-17",
-      "streak_days": 22
-    },
-    "2027": {
-      "first_seen": "2026-09-24",
-      "streak_days": 17
-    },
-    "2031": {
-      "first_seen": "2026-10-15",
-      "streak_days": 5
-    },
-    "2377": {
-      "first_seen": "2026-10-12",
-      "streak_days": 8
-    },
-    "3014": {
-      "first_seen": "2026-10-12",
-      "streak_days": 8
-    },
-    "3044": {
-      "first_seen": "2026-09-18",
-      "streak_days": 21
-    },
-    "3045": {
-      "first_seen": "2026-10-15",
-      "streak_days": 5
-    },
-    "3265": {
-      "first_seen": "2026-09-18",
-      "streak_days": 21
-    },
-    "5434": {
-      "first_seen": "2026-10-21",
-      "streak_days": 1
-    },
-    "6196": {
-      "first_seen": "2026-09-14",
-      "streak_days": 25
-    },
-    "6197": {
-      "first_seen": "2026-10-21",
-      "streak_days": 1
-    },
-    "6257": {
-      "first_seen": "2026-10-21",
-      "streak_days": 1
-    },
-    "6491": {
-      "first_seen": "2026-09-07",
-      "streak_days": 30
-    },
-    "6782": {
-      "first_seen": "2026-10-12",
-      "streak_days": 8
-    },
-    "9933": {
-      "first_seen": "2026-10-02",
-      "streak_days": 13
-    }
-  },
-  "tickers": {
     "2006": {
       "first_seen": "2026-09-17",
       "streak_days": 23
@@ -151,6 +74,48 @@
     "9933": {
       "first_seen": "2026-10-02",
       "streak_days": 14
+    }
+  },
+  "tickers": {
+    "2006": {
+      "first_seen": "2026-09-17",
+      "streak_days": 24
+    },
+    "2027": {
+      "first_seen": "2026-09-24",
+      "streak_days": 19
+    },
+    "2031": {
+      "first_seen": "2026-10-15",
+      "streak_days": 7
+    },
+    "2377": {
+      "first_seen": "2026-10-12",
+      "streak_days": 10
+    },
+    "2535": {
+      "first_seen": "2026-10-27",
+      "streak_days": 1
+    },
+    "3045": {
+      "first_seen": "2026-10-15",
+      "streak_days": 7
+    },
+    "6196": {
+      "first_seen": "2026-09-14",
+      "streak_days": 27
+    },
+    "6491": {
+      "first_seen": "2026-09-07",
+      "streak_days": 32
+    },
+    "6782": {
+      "first_seen": "2026-10-12",
+      "streak_days": 10
+    },
+    "9933": {
+      "first_seen": "2026-10-02",
+      "streak_days": 15
     }
   }
 }

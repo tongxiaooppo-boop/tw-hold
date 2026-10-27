@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-10-27T14:33:30+00:00",
+    "updated_at": "2026-10-27T16:03:52+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -445,17 +445,62 @@
       "exit_date": "2026-10-22",
       "exit_price": 140.07,
       "ret_pct": -0.030657
+    },
+    {
+      "ticker": "6197",
+      "name": "佳必琪",
+      "entry_date": "2026-10-21",
+      "entry_price": 340.0,
+      "exit_date": "2026-10-27",
+      "exit_price": 319.47,
+      "ret_pct": -0.060382
+    },
+    {
+      "ticker": "3044",
+      "name": "健鼎",
+      "entry_date": "2026-10-20",
+      "entry_price": 581.0,
+      "exit_date": "2026-10-27",
+      "exit_price": 550.57,
+      "ret_pct": -0.052375
+    },
+    {
+      "ticker": "1560",
+      "name": "中砂",
+      "entry_date": "2026-10-19",
+      "entry_price": 856.0,
+      "exit_date": "2026-10-27",
+      "exit_price": 829.0,
+      "ret_pct": -0.031542
+    },
+    {
+      "ticker": "6257",
+      "name": "矽格",
+      "entry_date": "2026-10-19",
+      "entry_price": 246.0,
+      "exit_date": "2026-10-27",
+      "exit_price": 228.09,
+      "ret_pct": -0.072805
+    },
+    {
+      "ticker": "5434",
+      "name": "崇越",
+      "entry_date": "2026-10-16",
+      "entry_price": 566.0,
+      "exit_date": "2026-10-27",
+      "exit_price": 543.8,
+      "ret_pct": -0.039223
     }
   ],
   "stats": {
-    "n": 49,
-    "win_rate": 0.42857142857142855,
-    "avg_ret_gross": 0.019622183673469386,
-    "expectancy_net": 0.01377218367346939,
+    "n": 54,
+    "win_rate": 0.3888888888888889,
+    "avg_ret_gross": 0.013058518518518518,
+    "expectancy_net": 0.007208518518518524,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": -0.14285714285714457,
+      "gap_pp": -4.11111111111111,
       "diverging": false
     },
     "by_month": [
@@ -467,9 +512,9 @@
       },
       {
         "ym": "2026-10",
-        "n": 41,
-        "win_rate": 0.4146341463414634,
-        "avg_ret_net": 0.016831097560975613
+        "n": 46,
+        "win_rate": 0.3695652173913043,
+        "avg_ret_net": 0.008793434782608701
       }
     ]
   }

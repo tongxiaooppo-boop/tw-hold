@@ -1,16 +1,16 @@
 {
   "_meta": {
-    "trading_date": "2026-10-22",
-    "rebuilt_at": "2026-10-27T14:33:19+00:00",
+    "trading_date": "2026-10-27",
+    "rebuilt_at": "2026-10-27T16:03:40+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
-    "note": "universe.parquet：615 檔",
+    "note": "universe.parquet：613 檔",
     "u1b_pending": false,
     "has_pe_bands": true,
     "has_fill_rate": true,
     "has_industry": true,
     "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2021-08-25：raw -4.8%；1216 2021-09-09：raw -5.2%；2884 2021-08-31：raw -4.5%；2892 2021-08-26：raw -4.1%",
-    "pool_note": "候選池 12 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）",
+    "pool_note": "候選池 10 檔（CANSLIM ∩ 月營收 ∩ 法人 ∩ 趨勢模板 8/8）",
     "disclaimer": "🟡 候選池篩選規則本身已有回測驗證（次日開盤買得到口徑、資金天花板約束）——這裡顯示的停損位/可買上限是風控算術，不是驗證過的買點，不回答「這個進場點會不會賺」。候選池 = 狀態成立的標的 + 支持/反對證據，**不是推薦清單**，不給 verdict、不給總分排名，買賣由你決定。每日重算。"
   },
   "holdings": [],
@@ -30,16 +30,16 @@
       "revenue_yoy": 0.13828970856873446,
       "c_rev_yoy": true,
       "revenue_accel": false,
-      "inst_net20": 3581397.0,
+      "inst_net20": 3019774.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.10222807229489961,
-      "dist_52w_high": -0.001071876744314193,
-      "dist_200ma": 0.2783193979324934,
-      "risk_stop": 88.86,
-      "risk_pct_at_close": 0.048874602322395155,
-      "max_buy": 98.73,
-      "close": 93.2,
+      "dist_50ma": 0.09676050039511108,
+      "dist_52w_high": -0.004287261659112751,
+      "dist_200ma": 0.27138139913513615,
+      "risk_stop": 88.21,
+      "risk_pct_at_close": 0.05311741319271923,
+      "max_buy": 98.02,
+      "close": 92.9,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -75,7 +75,7 @@
         }
       ],
       "support": [
-        "法人 20 日淨買超 3,581 張"
+        "法人 20 日淨買超 3,020 張"
       ],
       "oppose": [
         "月營收 YoY 較上月減速",
@@ -101,9 +101,9 @@
       ],
       "name": "東和鋼鐵",
       "industry": "鋼鐵工業",
-      "market_cap": 68055923931.56433,
+      "market_cap": 67836863134.217834,
       "first_seen": "2026-09-17",
-      "streak_days": 23
+      "streak_days": 24
     },
     {
       "ticker": "2027",
@@ -120,16 +120,16 @@
       "revenue_yoy": 0.4107117679210266,
       "c_rev_yoy": true,
       "revenue_accel": false,
-      "inst_net20": 44745054.0,
+      "inst_net20": 46386517.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.04078817255876066,
-      "dist_52w_high": -0.007843167174096166,
-      "dist_200ma": 0.24661777038059585,
-      "risk_stop": 48.62,
-      "risk_pct_at_close": 0.04078817255876066,
-      "max_buy": 54.02,
-      "close": 50.6,
+      "dist_50ma": 0.04705592772880118,
+      "dist_52w_high": 0.0,
+      "dist_200ma": 0.2538108899885232,
+      "risk_stop": 48.71,
+      "risk_pct_at_close": 0.04705592772880118,
+      "max_buy": 54.12,
+      "close": 51.0,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -167,13 +167,13 @@
       "support": [
         "季 EPS YoY +360%（基期過低，數字供參考）",
         "月營收 YoY +41%（成長明確）",
-        "法人 20 日淨買超 44,745 張",
-        "距 50MA 僅 +4%（進場點貼近支撐）"
+        "法人 20 日淨買超 46,387 張",
+        "距 50MA 僅 +5%（進場點貼近支撐）"
       ],
       "oppose": [
         "去年同期單季 EPS 僅 0.42 元（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）",
         "月營收 YoY 較上月減速",
-        "距 52 週高僅 -1%（追高風險）"
+        "距 52 週高僅 +0%（追高風險）"
       ],
       "invalidation": [
         {
@@ -195,9 +195,9 @@
       ],
       "name": "大成鋼",
       "industry": "鋼鐵工業",
-      "market_cap": 130763582416.73125,
+      "market_cap": 131797290600.0,
       "first_seen": "2026-09-24",
-      "streak_days": 18
+      "streak_days": 19
     },
     {
       "ticker": "2031",
@@ -214,16 +214,16 @@
       "revenue_yoy": 0.37098626598937856,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 5069578.0,
+      "inst_net20": 4471979.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.0560448883740281,
-      "dist_52w_high": -0.0010362536178352144,
-      "dist_200ma": 0.21407679099424737,
-      "risk_stop": 46.21,
-      "risk_pct_at_close": 0.043128793170198465,
-      "max_buy": 51.34,
-      "close": 48.2,
+      "dist_50ma": 0.06792715452897014,
+      "dist_52w_high": 0.0,
+      "dist_200ma": 0.22711814174544065,
+      "risk_stop": 46.79,
+      "risk_pct_at_close": 0.043053453736966896,
+      "max_buy": 51.98,
+      "close": 48.8,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -262,11 +262,11 @@
         "季 EPS YoY +61%（遠超 25% 門檻）",
         "月營收 YoY +37%（成長明確）",
         "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 5,070 張",
-        "距 50MA 僅 +6%（進場點貼近支撐）"
+        "法人 20 日淨買超 4,472 張",
+        "距 50MA 僅 +7%（進場點貼近支撐）"
       ],
       "oppose": [
-        "距 52 週高僅 -0%（追高風險）"
+        "距 52 週高僅 +0%（追高風險）"
       ],
       "invalidation": [
         {
@@ -288,9 +288,9 @@
       ],
       "name": "新光鋼",
       "industry": "鋼鐵工業",
-      "market_cap": 15479251905.015182,
+      "market_cap": 15671939194.984818,
       "first_seen": "2026-10-15",
-      "streak_days": 6
+      "streak_days": 7
     },
     {
       "ticker": "2377",
@@ -307,16 +307,16 @@
       "revenue_yoy": 0.01832841346248526,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 26201238.0,
+      "inst_net20": 27885108.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.0652012724993305,
-      "dist_52w_high": -0.012121212121212088,
-      "dist_200ma": 0.3570702200950835,
-      "risk_stop": 153.57,
-      "risk_pct_at_close": 0.06139535072041946,
-      "max_buy": 170.63,
-      "close": 163.0,
+      "dist_50ma": 0.08248380406029976,
+      "dist_52w_high": 0.0,
+      "dist_200ma": 0.37801848159106344,
+      "risk_stop": 156.14,
+      "risk_pct_at_close": 0.06312899996190624,
+      "max_buy": 173.49,
+      "close": 166.0,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -354,12 +354,11 @@
       "support": [
         "季 EPS YoY +123%（遠超 25% 門檻）",
         "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 26,201 張",
-        "距 50MA 僅 +7%（進場點貼近支撐）"
+        "法人 20 日淨買超 27,885 張"
       ],
       "oppose": [
         "月營收 YoY 僅 +2%（勉強過門檻）",
-        "距 52 週高僅 -1%（追高風險）"
+        "距 52 週高僅 +0%（追高風險）"
       ],
       "invalidation": [
         {
@@ -381,35 +380,35 @@
       ],
       "name": "微星",
       "industry": "電腦及週邊設備業",
-      "market_cap": 137711560600.0,
+      "market_cap": 140246129200.0,
       "first_seen": "2026-10-12",
-      "streak_days": 9
+      "streak_days": 10
     },
     {
-      "ticker": "3014",
+      "ticker": "2535",
       "c_eps_yoy": true,
       "c_eps_3y_growth": true,
       "c_roe": true,
       "c_gm_not_deteriorating": true,
       "c_fscore": true,
-      "eps_yoy_q": 0.2838983050847457,
-      "eps_yoy_base": 2.36,
+      "eps_yoy_q": 1.1910828025477707,
+      "eps_yoy_base": 1.57,
       "eps_yoy_low_base": false,
-      "roe": 0.22357868711590806,
-      "f_score": 6.0,
-      "revenue_yoy": 0.0050262302777071,
+      "roe": 0.24371843100079768,
+      "f_score": 7.0,
+      "revenue_yoy": 0.2156792787186841,
       "c_rev_yoy": true,
       "revenue_accel": false,
-      "inst_net20": 1309875.0,
+      "inst_net20": 875163.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.03160667251975413,
-      "dist_52w_high": -0.11409012228916726,
-      "dist_200ma": 0.11236494318895263,
-      "risk_stop": 136.68,
-      "risk_pct_at_close": 0.03160667251975413,
-      "max_buy": 151.87,
-      "close": 141.0,
+      "dist_50ma": 0.03681241287602832,
+      "dist_52w_high": -0.03826263769400717,
+      "dist_200ma": 0.17956966078351067,
+      "risk_stop": 90.17,
+      "risk_pct_at_close": 0.03136883913514765,
+      "max_buy": 100.19,
+      "close": 93.0,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -445,100 +444,10 @@
         }
       ],
       "support": [
-        "法人 20 日淨買超 1,310 張",
-        "距 50MA 僅 +3%（進場點貼近支撐）"
-      ],
-      "oppose": [
-        "月營收 YoY 僅 +1%（勉強過門檻）",
-        "月營收 YoY 較上月減速"
-      ],
-      "invalidation": [
-        {
-          "條件": "收盤跌破 50MA",
-          "目前": "未觸發"
-        },
-        {
-          "條件": "趨勢模板 < 5/8",
-          "目前": "未觸發"
-        },
-        {
-          "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（但 YoY 已較上月減速）"
-        },
-        {
-          "條件": "季 EPS YoY 轉負",
-          "目前": "未觸發"
-        }
-      ],
-      "name": "聯陽",
-      "industry": "半導體業",
-      "market_cap": 23403053100.0,
-      "first_seen": "2026-10-12",
-      "streak_days": 9
-    },
-    {
-      "ticker": "3044",
-      "c_eps_yoy": true,
-      "c_eps_3y_growth": true,
-      "c_roe": true,
-      "c_gm_not_deteriorating": true,
-      "c_fscore": true,
-      "eps_yoy_q": 0.5935483870967742,
-      "eps_yoy_base": 4.65,
-      "eps_yoy_low_base": false,
-      "roe": 0.2201869210208341,
-      "f_score": 6.0,
-      "revenue_yoy": 0.5350005968173204,
-      "c_rev_yoy": true,
-      "revenue_accel": false,
-      "inst_net20": 5060321.0,
-      "c_inst": true,
-      "trend_cnt": 8,
-      "dist_50ma": 0.07176590782042136,
-      "dist_52w_high": -0.07794361525704807,
-      "dist_200ma": 0.2815400413327749,
-      "risk_stop": 518.77,
-      "risk_pct_at_close": 0.07176590782042136,
-      "max_buy": 576.41,
-      "close": 556.0,
-      "conditions": [
-        {
-          "項": "季 EPS YoY > 25%",
-          "狀態": "成立"
-        },
-        {
-          "項": "近 3 年 TTM EPS 成長",
-          "狀態": "成立"
-        },
-        {
-          "項": "ROE > 15%",
-          "狀態": "成立"
-        },
-        {
-          "項": "毛利率未連兩季惡化",
-          "狀態": "成立"
-        },
-        {
-          "項": "F-Score ≥ 6",
-          "狀態": "成立"
-        },
-        {
-          "項": "月營收 YoY > 0",
-          "狀態": "成立"
-        },
-        {
-          "項": "法人 20 日淨買超 > 0",
-          "狀態": "成立"
-        },
-        {
-          "項": "Minervini 趨勢模板",
-          "狀態": "8/8"
-        }
-      ],
-      "support": [
-        "月營收 YoY +54%（成長明確）",
-        "法人 20 日淨買超 5,060 張",
-        "距 50MA 僅 +7%（進場點貼近支撐）"
+        "季 EPS YoY +119%（遠超 25% 門檻）",
+        "月營收 YoY +22%（成長明確）",
+        "法人 20 日淨買超 875 張",
+        "距 50MA 僅 +4%（進場點貼近支撐）"
       ],
       "oppose": [
         "月營收 YoY 較上月減速"
@@ -561,11 +470,11 @@
           "目前": "未觸發"
         }
       ],
-      "name": "健鼎",
-      "industry": "電子零組件業",
-      "market_cap": 292236880400.0,
-      "first_seen": "2026-09-18",
-      "streak_days": 22
+      "name": "達欣工",
+      "industry": "建材營造",
+      "market_cap": 25183842000.0,
+      "first_seen": "2026-10-27",
+      "streak_days": 1
     },
     {
       "ticker": "3045",
@@ -582,16 +491,16 @@
       "revenue_yoy": 0.10346626140125847,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 36380751.0,
+      "inst_net20": 35150890.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.10768718247688858,
+      "dist_50ma": 0.11553454424815457,
       "dist_52w_high": 0.0,
-      "dist_200ma": 0.20600767205708537,
-      "risk_stop": 127.93,
-      "risk_pct_at_close": 0.03964265939388145,
-      "max_buy": 142.14,
-      "close": 133.0,
+      "dist_200ma": 0.2178160862102967,
+      "risk_stop": 129.21,
+      "risk_pct_at_close": 0.04090657712251433,
+      "max_buy": 143.57,
+      "close": 134.5,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -628,7 +537,7 @@
       ],
       "support": [
         "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 36,381 張"
+        "法人 20 日淨買超 35,151 張"
       ],
       "oppose": [
         "距 52 週高僅 +0%（追高風險）"
@@ -653,102 +562,9 @@
       ],
       "name": "台灣大",
       "industry": "通信網路業",
-      "market_cap": 495216323000.0,
+      "market_cap": 500801469500.0,
       "first_seen": "2026-10-15",
-      "streak_days": 6
-    },
-    {
-      "ticker": "3265",
-      "c_eps_yoy": true,
-      "c_eps_3y_growth": true,
-      "c_roe": true,
-      "c_gm_not_deteriorating": true,
-      "c_fscore": true,
-      "eps_yoy_q": 2.1666666666666665,
-      "eps_yoy_base": 0.66,
-      "eps_yoy_low_base": true,
-      "roe": 0.15390874721789816,
-      "f_score": 6.0,
-      "revenue_yoy": 0.11472566934227002,
-      "c_rev_yoy": true,
-      "revenue_accel": true,
-      "inst_net20": 7958340.0,
-      "c_inst": true,
-      "trend_cnt": 8,
-      "dist_50ma": 0.17394008500051839,
-      "dist_52w_high": -0.22564102564102562,
-      "dist_200ma": 0.3807336060196127,
-      "risk_stop": 192.94,
-      "risk_pct_at_close": 0.17394008500051839,
-      "max_buy": 214.38,
-      "close": 226.5,
-      "conditions": [
-        {
-          "項": "季 EPS YoY > 25%",
-          "狀態": "成立（基期過低，數字供參考）"
-        },
-        {
-          "項": "近 3 年 TTM EPS 成長",
-          "狀態": "成立"
-        },
-        {
-          "項": "ROE > 15%",
-          "狀態": "成立"
-        },
-        {
-          "項": "毛利率未連兩季惡化",
-          "狀態": "成立"
-        },
-        {
-          "項": "F-Score ≥ 6",
-          "狀態": "成立"
-        },
-        {
-          "項": "月營收 YoY > 0",
-          "狀態": "成立"
-        },
-        {
-          "項": "法人 20 日淨買超 > 0",
-          "狀態": "成立"
-        },
-        {
-          "項": "Minervini 趨勢模板",
-          "狀態": "8/8"
-        }
-      ],
-      "support": [
-        "季 EPS YoY +217%（基期過低，數字供參考）",
-        "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 7,958 張",
-        "距 52 週高 -23%（尚有空間）"
-      ],
-      "oppose": [
-        "去年同期單季 EPS 僅 0.66 元（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）",
-        "到停損位 +17%（停損位遠、單筆風險高）"
-      ],
-      "invalidation": [
-        {
-          "條件": "收盤跌破 50MA",
-          "目前": "未觸發"
-        },
-        {
-          "條件": "趨勢模板 < 5/8",
-          "目前": "未觸發"
-        },
-        {
-          "條件": "月營收 YoY 轉負",
-          "目前": "未觸發（YoY 仍加速）"
-        },
-        {
-          "條件": "季 EPS YoY 轉負",
-          "目前": "未觸發"
-        }
-      ],
-      "name": "台星科",
-      "industry": "半導體業",
-      "market_cap": 30863275050.0,
-      "first_seen": "2026-09-18",
-      "streak_days": 22
+      "streak_days": 7
     },
     {
       "ticker": "6196",
@@ -765,16 +581,16 @@
       "revenue_yoy": 0.8849473702740245,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 2697160.0,
+      "inst_net20": 2509039.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.08543481027617683,
-      "dist_52w_high": -0.1207658321060383,
-      "dist_200ma": 0.39105032846591925,
-      "risk_stop": 550.01,
-      "risk_pct_at_close": 0.08543481027617683,
-      "max_buy": 611.12,
-      "close": 597.0,
+      "dist_50ma": 0.05894939164808055,
+      "dist_52w_high": -0.13991163475699553,
+      "dist_200ma": 0.3557723209578607,
+      "risk_stop": 551.49,
+      "risk_pct_at_close": 0.05894939164808055,
+      "max_buy": 612.77,
+      "close": 584.0,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -813,7 +629,8 @@
         "季 EPS YoY +319%（遠超 25% 門檻）",
         "月營收 YoY +88%（成長明確）",
         "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 2,697 張"
+        "法人 20 日淨買超 2,509 張",
+        "距 50MA 僅 +6%（進場點貼近支撐）"
       ],
       "oppose": [
         "（未發現反對證據——這代表檢查不足，不代表完美）"
@@ -838,9 +655,9 @@
       ],
       "name": "帆宣",
       "industry": "其他電子業",
-      "market_cap": 131536711500.0,
+      "market_cap": 128672428000.0,
       "first_seen": "2026-09-14",
-      "streak_days": 26
+      "streak_days": 27
     },
     {
       "ticker": "6491",
@@ -857,16 +674,16 @@
       "revenue_yoy": 0.20642978547032986,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 1836896.0,
+      "inst_net20": 1745412.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.07877891408023263,
-      "dist_52w_high": -0.018561484918793503,
-      "dist_200ma": 0.3193449063591596,
-      "risk_stop": 392.11,
-      "risk_pct_at_close": 0.07877891408023263,
-      "max_buy": 435.68,
-      "close": 423.0,
+      "dist_50ma": 0.0800427437410951,
+      "dist_52w_high": -0.015081206496519672,
+      "dist_200ma": 0.3209244848681523,
+      "risk_stop": 393.04,
+      "risk_pct_at_close": 0.0800427437410951,
+      "max_buy": 436.71,
+      "close": 424.5,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -905,8 +722,7 @@
         "季 EPS YoY +76%（遠超 25% 門檻）",
         "月營收 YoY +21%（成長明確）",
         "月營收 YoY 較上月加速",
-        "法人 20 日淨買超 1,837 張",
-        "距 50MA 僅 +8%（進場點貼近支撐）"
+        "法人 20 日淨買超 1,745 張"
       ],
       "oppose": [
         "距 52 週高僅 -2%（追高風險）"
@@ -931,9 +747,9 @@
       ],
       "name": "晶碩",
       "industry": "化學生技醫療",
-      "market_cap": 32994000000.0,
+      "market_cap": 33111000000.0,
       "first_seen": "2026-09-07",
-      "streak_days": 31
+      "streak_days": 32
     },
     {
       "ticker": "6782",
@@ -950,16 +766,16 @@
       "revenue_yoy": 0.14869338282201472,
       "c_rev_yoy": true,
       "revenue_accel": false,
-      "inst_net20": 428961.0,
+      "inst_net20": 594192.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.16064927834168485,
-      "dist_52w_high": 0.0,
-      "dist_200ma": 0.37066433194239123,
-      "risk_stop": 250.57,
-      "risk_pct_at_close": 0.08152793732203589,
-      "max_buy": 278.41,
-      "close": 271.0,
+      "dist_50ma": 0.13190654843110505,
+      "dist_52w_high": -0.020295202952029467,
+      "dist_200ma": 0.3395408531331823,
+      "risk_stop": 244.29,
+      "risk_pct_at_close": 0.08684210162633899,
+      "max_buy": 271.43,
+      "close": 265.5,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -995,11 +811,11 @@
         }
       ],
       "support": [
-        "法人 20 日淨買超 429 張"
+        "法人 20 日淨買超 594 張"
       ],
       "oppose": [
         "月營收 YoY 較上月減速",
-        "距 52 週高僅 +0%（追高風險）"
+        "距 52 週高僅 -2%（追高風險）"
       ],
       "invalidation": [
         {
@@ -1021,9 +837,9 @@
       ],
       "name": "視陽",
       "industry": "生技醫療業",
-      "market_cap": 17073000000.0,
+      "market_cap": 16726500000.0,
       "first_seen": "2026-10-12",
-      "streak_days": 9
+      "streak_days": 10
     },
     {
       "ticker": "9933",
@@ -1040,16 +856,16 @@
       "revenue_yoy": 0.042521183245222804,
       "c_rev_yoy": true,
       "revenue_accel": false,
-      "inst_net20": 17123790.0,
+      "inst_net20": 21227785.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.08032907377765941,
-      "dist_52w_high": -0.03667738951903865,
-      "dist_200ma": 0.22156868677195996,
-      "risk_stop": 41.33,
-      "risk_pct_at_close": 0.08032907377765941,
-      "max_buy": 45.92,
-      "close": 44.65,
+      "dist_50ma": 0.11416346784790887,
+      "dist_52w_high": -0.002157464453357516,
+      "dist_200ma": 0.26256638814022026,
+      "risk_stop": 43.16,
+      "risk_pct_at_close": 0.07148766712064258,
+      "max_buy": 47.96,
+      "close": 46.25,
       "conditions": [
         {
           "項": "季 EPS YoY > 25%",
@@ -1086,12 +902,13 @@
       ],
       "support": [
         "季 EPS YoY +431%（基期過低，數字供參考）",
-        "法人 20 日淨買超 17,124 張"
+        "法人 20 日淨買超 21,228 張"
       ],
       "oppose": [
         "去年同期單季 EPS 僅 0.32 元（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）",
         "月營收 YoY 僅 +4%（勉強過門檻）",
-        "月營收 YoY 較上月減速"
+        "月營收 YoY 較上月減速",
+        "距 52 週高僅 -0%（追高風險）"
       ],
       "invalidation": [
         {
@@ -1113,13 +930,19 @@
       ],
       "name": "中鼎",
       "industry": "其他",
-      "market_cap": 42953823872.91336,
+      "market_cap": 44493041125.0,
       "first_seen": "2026-10-02",
-      "streak_days": 14
+      "streak_days": 15
     }
   ],
   "changes": {
-    "added": [],
-    "removed": []
+    "added": [
+      "2535"
+    ],
+    "removed": [
+      "3014",
+      "3044",
+      "3265"
+    ]
   }
 }
