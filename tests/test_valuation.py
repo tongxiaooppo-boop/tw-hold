@@ -127,6 +127,8 @@ def test_本益比樣本不足():
 def test_本益比區間太寬_警示():
     r = va.estimate(_qf(), _rev(), _px(), _per(lo=5, hi=60))
     assert any("本益比區間很寬" in w for w in r["warns"])
+    assert r["pe"]["wide"] and r["band"] is not None      # 卡片不列、展開照列
+    assert not va.estimate(_qf(), _rev(), _px(), _per())["pe"]["wide"]
 
 
 def test_股數跳過EPS近零的季():

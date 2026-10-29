@@ -2010,8 +2010,13 @@ def _valuation_block(d: dict) -> None:
 
         def _vs(v):
             return f"（{v / px0 - 1:+.0%}）" if (v and px0) else ""
-        tiers = (f"便宜 {b['p30']:,.1f}｜合理 **{b['p50']:,.1f}**｜昂貴 {b['p70']:,.1f}"
-                 if b else "三段價：—（本益比樣本不足或預估 EPS ≤ 0）")
+        # 自身 PE 區間太寬（P70 > 2×P30）→ 卡片不列三段價，免得 88～360 這種區間誤導；展開裡照列
+        if b and pe and pe.get("wide"):
+            tiers = "三段價：本益比區間太寬，不列（見試算細節）"
+        elif b:
+            tiers = f"便宜 {b['p30']:,.1f}｜合理 **{b['p50']:,.1f}**｜昂貴 {b['p70']:,.1f}"
+        else:
+            tiers = "三段價：—（本益比樣本不足或預估 EPS ≤ 0）"
         grow = (f"合理成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
                 else "合理成長價：—")
         st.markdown(f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"

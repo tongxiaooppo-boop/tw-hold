@@ -228,7 +228,9 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     # 合理成長價（使用者 Excel 口徑）＝ 今年預估 EPS × 目前本益比：倍數不變、讓獲利成長推股價
     cur_pe = _current_pe(per)
     growth_price = cur_pe["pe"] * est_eps if (cur_pe and est_eps and est_eps > 0) else None
-    if pe and pe["p70"] > pe["p30"] * PE_WIDE_RATIO:
+    if pe:
+        pe["wide"] = pe["p70"] > pe["p30"] * PE_WIDE_RATIO
+    if pe and pe["wide"]:
         warns.append(f"自身本益比區間很寬（P30 {pe['p30']:.0f} 倍～P70 {pe['p70']:.0f} 倍），"
                      "多半是過去獲利很薄時本益比被撐高；歷史倍數參考性低。")
 
