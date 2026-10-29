@@ -83,12 +83,25 @@ jobs:
         continue-on-error: true
         run: python scripts/promote_index_0050.py
 
-      # 偵測到 bundle 有未還原的分割/減資跳空 → 抓 FinMind 事件表自動算 factor、
-      # 寫進 corporate_actions_resolved.json。要在 build_lists 之前跑，當次就修好。
-      - name: 自動解析未還原分割
+      # 股數變動事件（分割／面額變更／減資／無償配股）：從自建事件表 corp_actions.parquet
+      # 產生、寫進 corporate_actions_resolved.json，事件前的每股 EPS／股利 ÷ 股數比。
+      # 2026-10-30 起取代「bundle 跳空偵測 + FinMind」（自建包價格已還原，永遠偵測不到）。
+      # 要在 build_lists 之前跑，當次就修好。下載失敗 → resolve_splits 維持既有 json。
+      - name: 下載自建事件表（股數事件來源）
         continue-on-error: true
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          GH_TOKEN: ${{ secrets.DATA_REPO_PAT || github.token }}
+          GH_REPO: ${{ vars.DATA_REPO || github.repository }}
+        run: |
+          mkdir -p data/selfhost
+          for try in 1 2 3; do
+            gh release download selfhost-data -D data/selfhost -p corp_actions.parquet --clobber && break
+            sleep $((try * 10))
+          done
+          ls -la data/selfhost/corp_actions.parquet
+
+      - name: 股數事件表（corp_actions → resolved.json）
+        continue-on-error: true
         run: python scripts/resolve_splits.py --write
 
       - name: 算因子 + 三清單

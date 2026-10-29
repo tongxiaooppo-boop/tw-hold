@@ -116,7 +116,9 @@ def _read_bundle_per_history() -> pd.DataFrame | None:
         return None
     d = pd.read_parquet(p, columns=["ticker", "date", "per", "dividend_yield"])
     d["date"] = pd.to_datetime(d["date"])
-    return d
+    # 配股後交易所沿用舊股數一段時間 → 修回同一把尺（見 corporate_actions.fix_exchange_ratios）
+    from reference.corporate_actions import fix_exchange_ratios
+    return fix_exchange_ratios(d, _read_bundle_raw_close_history())
 
 
 def scan_price_jumps(lookback_days: int = 400) -> list[dict]:
@@ -125,7 +127,7 @@ def scan_price_jumps(lookback_days: int = 400) -> list[dict]:
 
     回傳 `[{ticker, date "YYYY-MM-DD", ratio}]`（ratio<1 疑分割/面額變更，>1 疑減資/雜訊）。
     純結構化——`detect_unhandled_splits()` 拿去組字串、`scripts/resolve_splits.py` 拿去對 FinMind。"""
-    from reference.corporate_actions import SPLITS, IGNORE_JUMPS
+    from reference.corporate_actions import IGNORE_JUMPS, price_split_tickers
     p = BUNDLE_DIR / "prices_adj.parquet"
     if not p.exists():
         return []
@@ -134,7 +136,7 @@ def scan_price_jumps(lookback_days: int = 400) -> list[dict]:
     d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
     d = d[(d["date"] >= d["date"].max() - pd.Timedelta(days=lookback_days))
           & (d["close"] > 0)].sort_values(["ticker", "date"])
-    known = set(SPLITS) | set(IGNORE_JUMPS)
+    known = price_split_tickers() | set(IGNORE_JUMPS)
     out = []
     for tk, g in d.groupby("ticker", sort=False):
         if tk in known or len(g) < 12:
@@ -181,18 +183,18 @@ def check_adjusted_jumps(prices: pd.DataFrame | None = None, window: int = 10,
         return out
     d = prices[["date", "ticker", "close"]].copy()
     d["ticker"] = d["ticker"].astype(str).str.split(".").str[0]
-    d = d[(d["close"] > 0) & d["ticker"].isin(ca.SPLITS)].sort_values(["ticker", "date"])
+    d = d[(d["close"] > 0) & d["ticker"].isin(ca.price_split_tickers())]         .sort_values(["ticker", "date"])
     lim = np.log(limit)
     for tk, g in d.groupby("ticker", sort=False):
         g = g.reset_index(drop=True)
         lr = np.log(g["close"]).diff().abs()
-        for ev in ca.SPLITS[tk]:
-            pos = int(g["date"].searchsorted(pd.Timestamp(ev["date"])))
+        for ts, f in ca._price_events(tk):
+            pos = int(g["date"].searchsorted(ts))
             seg = lr.iloc[max(1, pos - window): pos + window + 1]
             if len(seg) and seg.max() > lim:
                 k = seg.idxmax()
                 out.append(f"{tk} {pd.Timestamp(g['date'].iloc[k]).date()} 還原後仍有單日 "
-                           f"×{np.exp(seg.max()):.2f} 跳空（事件 {ev['date']} ×{ev['factor']:g}）"
+                           f"×{np.exp(seg.max()):.2f} 跳空（事件 {ts.date()} ×{f:g}）"
                            f"——分割／減資還原可能錯了")
     return list(dict.fromkeys(out))
 

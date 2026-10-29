@@ -151,10 +151,17 @@ def margin(code: str, lookback_days: int = 120) -> pd.DataFrame:
 
 
 def per_history(code: str) -> pd.DataFrame:
+    """交易所每日 PER／PBR／殖利率。配股後交易所沿用舊股數一段時間 → 用原始收盤偵測、
+    修回同一把尺（`reference.corporate_actions.fix_exchange_ratios`）。"""
     d = _read("per.parquet", code, False, ["date", "ticker", "per", "pbr", "dividend_yield"])
-    if not d.empty:
-        d["date"] = pd.to_datetime(d["date"])
-    return d.sort_values("date").reset_index(drop=True) if not d.empty else d
+    if d.empty:
+        return d
+    d["date"] = pd.to_datetime(d["date"])
+    from reference.corporate_actions import EXCHANGE_LAG_TYPES, SPLITS, fix_exchange_ratios
+    if any(e.get("type") in EXCHANGE_LAG_TYPES for e in SPLITS.get(_t(code), [])):
+        d = fix_exchange_ratios(d, _read("prices_raw_close.parquet", code, True,
+                                         ["date", "ticker", "close"]))
+    return d.sort_values("date").reset_index(drop=True)
 
 
 def financials(code: str) -> pd.DataFrame:
@@ -177,6 +184,8 @@ def dividends(code: str) -> pd.DataFrame:
     for c in ("pay_date", "CashExDividendTradingDate"):
         if c in d.columns:
             d[c] = pd.to_datetime(d[c], errors="coerce")
-    # 註：分割前的每股股利理應 ÷ factor，但上游這張股利表對 5904 本身就前後不一致
-    # （2021–2024 看起來已被 ÷10、2025 又是舊基準）——不在這裡硬還原，避免越弄越糟。
+    # 配股／分割前的每股現金股利 ÷ m 搬到最新股本基準（股利表是當時每股；舊註解說 5904
+    # 2021–2024 已被 ÷10 是誤判——那幾年 11～25 元對拆前股價 600～700，是當時每股）
+    from reference.corporate_actions import adjust_dividends
+    d = adjust_dividends(d, ["CashEarningsDistribution", "CashStatutorySurplus"])
     return d.sort_values("year").reset_index(drop=True)

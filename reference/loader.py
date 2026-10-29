@@ -86,6 +86,9 @@ def load_dividends() -> pd.DataFrame:
     })
     d = d[d["year"].notna()].copy()
     d["year"] = d["year"].astype("int64")
+    # 配股／分割前的每股現金股利 ÷ m 搬到最新股本基準（逐筆、加總前做：同一年可能跨事件）
+    from reference.corporate_actions import adjust_dividends
+    d = adjust_dividends(d, ["cash_earnings", "cash_surplus"])
     agg = {"cash_earnings": "sum", "stock_earnings": "sum",
            "pay_date": "max", "announce_date": "max", "ex_date": "max"}
     if "cash_surplus" in d.columns:

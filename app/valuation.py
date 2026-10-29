@@ -96,26 +96,6 @@ def _revenue_block(rev: pd.DataFrame, q: pd.DataFrame) -> dict | None:
     }
 
 
-def _per_split_fix(per: pd.DataFrame) -> pd.DataFrame:
-    """交易所 PER 在分割／面額變更後一年內是「新股價 ÷ 舊股數 EPS」→ 低估 factor 倍。
-    事件日起 365 天內 × factor 搬回同一把尺（6669 2026-09-02 1→3：PER 25→8.4 一天掉 3 倍，
-    2026-10-29 使用者抓到）。一年後交易所的近 4 季 EPS 全是新基準，不再調。"""
-    if per is None or per.empty or "ticker" not in per.columns:
-        return per
-    from reference.corporate_actions import _events
-    evs = _events(str(per["ticker"].iloc[0]))
-    if not evs:
-        return per
-    p = per.copy()
-    d = pd.to_datetime(p["date"])
-    v = pd.to_numeric(p["per"], errors="coerce")
-    for ts, f in evs:
-        sel = (d >= ts) & (d < ts + pd.Timedelta(days=365))
-        v = v.where(~sel, v * f)
-    p["per"] = v
-    return p
-
-
 def _pe_block(per: pd.DataFrame, px: pd.DataFrame) -> dict | None:
     """近 5 個日曆年「各年平均本益比」（排除 per≤0 的日子）→ 最低／中間／最高＝三段倍數
     （使用者 2026-10-29 指定）。另給全期日資料的平均 ±1σ（外資 PE band 口徑）當對照。"""
@@ -255,7 +235,6 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     if px is not None and not px.empty:
         last = px.sort_values("date").iloc[-1]
         price, px_date = _num(last["close"]), pd.Timestamp(last["date"]).strftime("%Y/%m/%d")
-    per = _per_split_fix(per)
     pe = _pe_block(per, px)
     implied_pe = price / run_ex if (price and run_ex and run_ex > 0) else None
     yb = _year_block(q, int(rv["last_month"][:4]), run_ex / 4 if run_ex is not None else None)

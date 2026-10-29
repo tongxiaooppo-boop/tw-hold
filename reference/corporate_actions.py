@@ -1,34 +1,34 @@
-"""股票分割 / 面額變更 / 減資的每股數字還原對照表。
+"""股數變動事件（分割 / 面額變更 / 減資 / 無償配股）的每股數字還原對照表。
 
 ## 為什麼要這張表
 
-上游 `data_pack` 的還原引擎有還原**除權息**，但**沒處理面額變更 / 分割 / 減資**。
-結果 bundle 的 `prices_adj` 在事件日會有一道 ~Nx 的斷崖，而財報的每股 EPS / 每股股利
-在事件日之前仍是舊基準 → normalized_EPS 隱含 PE 被灌歪 → 價值清單 verdict 被
-`eps_basis_suspect` 擋成「資料不足」；K 線 / 回測跨越事件日全錯（`me` 被 2327 國巨逼出
-`price_adjuster.py` 就是這個）。
+財報的每股 EPS、股利表的每股股利都是「當時的股數」；股數一變（分割、面額變更、減資彌補
+虧損、盈餘／公積轉增資配股），事件日之前的每股數字就跟現在的股價不是同一把尺：
+6669 緯穎 2026-09-02 配股 ×2.98，試算 EPS 變成市場預估的 3～4 倍（2026-10-29 使用者抓到）。
+交易所的本益比／股價淨值比／殖利率在配股後也會沿用舊股數一段時間（見 `fix_exchange_ratios`）。
 
-## 兩個來源
+## 來源（2026-10-30 起）
 
-1. **`_RESOLVED`（自動）**：`scripts/resolve_splits.py` 每次 rebuild 跑——
-   `build_factors.scan_price_jumps()` 掃到 bundle 跳空 → 抓 FinMind `TaiwanStockSplitPrice`
-   / `TaiwanStockCapitalReductionReferencePrice`（免費）→ **FinMind 給 factor、偵測器給日期**
-   → 寫進 `corporate_actions_resolved.json`（版控）。
-2. **`_MANUAL`（手動覆寫）**：FinMind 也沒有、或自動解錯時，手動釘死。衝突時**手動贏**。
+1. **`_RESOLVED`（自動）**：`scripts/resolve_splits.py` 每次 rebuild 從自建事件表
+   `corp_actions.parquet`（官方除權息／減資／面額變更 + FinMind 分割）產生，寫進
+   `corporate_actions_resolved.json`（版控，app 端也讀它）。
+2. **`_MANUAL`（手動覆寫）**：自動解錯時手動釘死。衝突時**手動贏**（整檔覆蓋）。
 
-`IGNORE_JUMPS`：偵測器掃到、FinMind 查無事件、判定是資料雜訊 → 列這裡讓偵測器閉嘴。
+`IGNORE_JUMPS`：價格跳空偵測器掃到、判定是資料雜訊 → 列這裡讓偵測器閉嘴。
 
 ## 慣例
 
-`factor` = 新股數 ÷ 舊股數（= 事件前股價 ÷ 事件後股價）。
-  - 分割 / 面額變更（1 股 → N 股）：factor = N（> 1）
-  - 減資：factor < 1
-事件日**當天（含）之後**為新基準；之前的每股數字（還原股價 OHLC、每股 EPS、每股股利）
-一律 ÷ factor 搬到新基準。同一檔多次事件 → 依序累乘。
-
-⚠️ **日期用 bundle `prices_adj` 實際跳空那天**（跑 `scan_price_jumps()` 拿），
-   不是 FinMind 事件日、也不是 TWSE 官方新股上市日——三者常差幾天，用錯會把
-   已經是新基準的那幾天再 ÷factor 一次。
+每個事件 `{date, type, m, pf}`：
+  - `m`  ＝ 新股數 ÷ 舊股數（每股數字用）。分割 1→N：N；減資：< 1；配股 100‰：1.1。
+    **現金減資 `m=None`**（IAS 33.29 不追溯調整，財報 EPS 也不會重編）。
+  - `pf` ＝ 事件前收盤 ÷ 參考價（價格用；只有分割／面額變更／減資有，配股沒有——
+    上游 data_pack 與自建包都已還原除權息）。
+  - 舊格式 `{date, factor}`（`_MANUAL`、測試）＝ m 與 pf 都用 factor。
+事件日**當天（含）之後**為新基準。各類每股數字的分界不同：
+  - 價格：`adjust_prices`，事件日之前 ÷ pf，而且先檢查價格本身是否已還原；
+  - 季 EPS：`adjust_eps`，看財報**公布時**股數換了沒（不是看季末）；
+  - 股利：`adjust_dividends`，除息日 ≤ 事件日 → ÷ m（同日除權息的現金是舊股數發的）。
+同一檔多次事件 → 依序累乘。
 """
 from __future__ import annotations
 
@@ -40,25 +40,16 @@ import pandas as pd
 
 _RESOLVED_PATH = Path(__file__).with_name("corporate_actions_resolved.json")
 
-#: 手動覆寫層（FinMind 沒有 / 自動解錯時用）。衝突時蓋掉 _RESOLVED。
-_MANUAL: dict[str, list[dict]] = {
-    # 5904 寶雅 面額 10→1。FinMind factor 10（720/72）；bundle 2026-07-20 收 611 → 07-21 收 63.3。
-    "5904": [{"date": "2026-07-21", "factor": 10}],
-    # 6949 沛爾生醫 面額 10→0.5（factor 20）。bundle 跳空 2026-09-07（資料尾端只一根新價，
-    #   比例略偏 ×0.045）。bundle 累積完整後回頭校日期。
-    "6949": [{"date": "2026-09-07", "factor": 20}],
-    # 2321 東訊、8277 商丞：減資彌補虧損（非現金減資），FinMind 查無事件（2026-09-15
-    # resolve_splits.py 連續多天解不了）。官方減資比例反推的 factor 跟 bundle 實際跳空
-    # 比例對到小數點後 4 位（2321 官方 1÷0.54687826≈1.9369 vs bundle 27.794121/14.35≈
-    # 1.936873；8277 官方 1÷0.431087≈2.3111 vs bundle 18.557737/8.03≈2.311051），
-    # 用 bundle 實測值（跟其他事件一致）。停止買賣 09-10、換發新股 09-21 恢復交易。
-    "2321": [{"date": "2026-09-02", "factor": 1.936873}],
-    "8277": [{"date": "2026-09-02", "factor": 2.311051}],
-    # 6669 緯穎 1→3（2026-10-29 使用者發現試算 EPS 是市場預估 3.5～4 倍）。自建資料包價格已含
-    #   還原、沒有跳空 → 偵測器抓不到；證據：股本 55.85 億÷10＝5.585 億股 vs 財報淨利÷EPS
-    #   1.86 億股（剛好 3.0）、交易所 PER 2026-09-01 25.01 → 09-02 8.37（股價 2615→2610）。
-    "6669": [{"date": "2026-09-02", "factor": 3.0}],
-}
+#: 手動覆寫層（自動解錯時用）。衝突時整檔蓋掉 _RESOLVED。
+#: 2026-10-30 起自動來源改吃自建事件表，原本的 5904／6949／2321／8277／6669 都已自動涵蓋
+#: （而且用官方事件日；2321、8277 舊手動條目方向是反的——減資股數變少 m 應 <1，卻寫 1.94）。
+_MANUAL: dict[str, list[dict]] = {}
+
+#: 價格還原只收 |ln pf| ≥ ln 1.5 的事件：小事件的跳空落在漲跌停 ±10% 以內，
+#: `_jump_date` 分不出「已還原」還是「沒還原」，會誤除或狂發警告。
+PRICE_MIN_RATIO = 1.5
+#: 交易所沿用舊股數的修正（`fix_exchange_ratios`）只對配股類事件
+EXCHANGE_LAG_TYPES = ("ex_rights", "ex_both")
 
 
 def _load_resolved() -> dict[str, list[dict]]:
@@ -68,6 +59,8 @@ def _load_resolved() -> dict[str, list[dict]]:
         raw = json.loads(_RESOLVED_PATH.read_text(encoding="utf-8"))
     except Exception:
         return {}
+    if "events" in raw:                       # v2：resolve_splits.py 從 corp_actions 產
+        return {str(tk): [dict(e) for e in evs] for tk, evs in raw["events"].items() if evs}
     return {str(tk): [{"date": e["date"], "factor": float(e["factor"])} for e in evs]
             for tk, evs in raw.get("splits", {}).items() if evs}
 
@@ -97,17 +90,52 @@ def reload() -> None:
     SPLITS = _merge()
 
 
+def _m(e: dict):
+    return e.get("m") if ("m" in e or "type" in e) else e.get("factor")
+
+
+def _pf(e: dict):
+    return e.get("pf") if ("pf" in e or "type" in e) else e.get("factor")
+
+
 def _events(ticker: str) -> list[tuple[pd.Timestamp, float]]:
-    return [(pd.Timestamp(e["date"]), float(e["factor"]))
-            for e in SPLITS.get(str(ticker).split(".")[0], [])]
+    """每股數字用的事件 `[(日期, m)]`（現金減資等 m=None 的不列）。"""
+    out = []
+    for e in SPLITS.get(str(ticker).split(".")[0], []):
+        m = _m(e)
+        if m is not None and m > 0 and abs(np.log(float(m))) > 1e-9:
+            out.append((pd.Timestamp(e["date"]), float(m)))
+    return out
+
+
+def _price_events(ticker: str) -> list[tuple[pd.Timestamp, float]]:
+    """價格用的事件 `[(日期, pf)]`：舊格式全收；新格式只收 |ln pf| ≥ ln PRICE_MIN_RATIO。"""
+    out = []
+    for e in SPLITS.get(str(ticker).split(".")[0], []):
+        f = _pf(e)
+        if f is None or not (f > 0):
+            continue
+        if "type" in e and abs(np.log(float(f))) < np.log(PRICE_MIN_RATIO):
+            continue
+        out.append((pd.Timestamp(e["date"]), float(f)))
+    return out
+
+
+def price_split_tickers() -> set[str]:
+    """有價格事件的代號（偵測器 `scan_price_jumps`／`check_adjusted_jumps` 用）。"""
+    return {t for t in SPLITS if _price_events(t)}
 
 
 def adjust_per_share(df: pd.DataFrame, cols, date_col: str = "date",
-                     ticker_col: str = "ticker") -> pd.DataFrame:
-    """把 `cols`（每股數字）在各自事件日之前的列 ÷ factor，搬到最新股本基準。
+                     ticker_col: str = "ticker", inclusive: bool = False) -> pd.DataFrame:
+    """把 `cols`（每股數字）在各自事件日之前（`inclusive` 時含當天）的列 ÷ m，搬到最新股本基準。
 
     非破壞性：回傳 copy。`df` 缺欄或沒有已知事件 → 原樣返回。
     """
+    return _divide_before(df, cols, date_col, ticker_col, _events, inclusive)
+
+
+def _divide_before(df, cols, date_col, ticker_col, events_fn, inclusive: bool = False):
     if df is None or df.empty or ticker_col not in df.columns \
             or date_col not in df.columns:
         return df
@@ -119,11 +147,11 @@ def adjust_per_share(df: pd.DataFrame, cols, date_col: str = "date",
     dates = pd.to_datetime(d[date_col])
     tk = d[ticker_col].astype(str).str.split(".").str[0]
     for t in tk.unique():
-        evs = _events(t)
+        evs = events_fn(t)
         if not evs:
             continue
         for ex_date, factor in evs:
-            mask = (tk == t) & (dates < ex_date)
+            mask = (tk == t) & ((dates <= ex_date) if inclusive else (dates < ex_date))
             if mask.any():
                 d.loc[mask, have] = d.loc[mask, have] / factor
     return d
@@ -153,32 +181,37 @@ def adjust_prices(df: pd.DataFrame, cols, date_col: str = "date",
       - 其他（含方向相反 r*≈1/f、找不到事件日之後的資料）→ **不除**並寫 `PRICE_WARNINGS`，
         絕不靜默。收盤價 ≤ 0 的列不參與判斷。
     每股 EPS／股利沒有任何資料源還原過，仍用 `adjust_per_share`——只有價格走這支。
-    缺 `probe_col` 時退回 `adjust_per_share` 的舊行為。
+    缺 `probe_col` 時不檢查連續性、直接以登記日為界 ÷ pf（舊行為，只用價格事件）。
     """
-    if df is None or df.empty or ticker_col not in df.columns             or date_col not in df.columns or probe_col not in df.columns:
-        return adjust_per_share(df, cols, date_col, ticker_col)
+    if df is None or df.empty or ticker_col not in df.columns             or date_col not in df.columns:
+        return df
+    if probe_col not in df.columns:
+        return _divide_before(df, cols, date_col, ticker_col, _price_events)
     have = [c for c in cols if c in df.columns]
     if not have or not any(str(t).split(".")[0] in SPLITS
                            for t in df[ticker_col].unique()):
         return df
     d = df.copy()
-    dates = pd.to_datetime(d[date_col])
-    tk = d[ticker_col].astype(str).str.split(".").str[0]
-    for t in tk.unique():
-        evs = _events(t)
+    dates = pd.to_datetime(d[date_col]).to_numpy()
+    tk = d[ticker_col].astype(str).str.split(".").str[0].to_numpy()
+    probe = pd.to_numeric(d[probe_col], errors="coerce").to_numpy(dtype=float)
+    # 一次分組：全市場日線數百萬列，逐檔 `tk == t` 會讓 rebuild 慢十分鐘（2026-10-30 實測）
+    groups = pd.Series(np.arange(len(d)), index=tk).groupby(level=0).indices
+    cis = [d.columns.get_loc(c) for c in have]
+    for t, pos in groups.items():
+        evs = _price_events(t)
         if not evs:
             continue
-        sel = tk == t
-        sub = pd.DataFrame({"date": dates[sel],
-                            "px": pd.to_numeric(d.loc[sel, probe_col], errors="coerce")})
+        sub = pd.DataFrame({"date": dates[pos], "px": probe[pos]})
         sub = sub[sub["px"] > 0].sort_values("date").reset_index(drop=True)
         for ex_date, factor in evs:
             cut = _jump_date(sub, ex_date, factor, t)
             if cut is None:
                 continue
-            mask = sel & (dates < cut)
-            if mask.any():
-                d.loc[mask, have] = d.loc[mask, have] / factor
+            rows = pos[dates[pos] < np.datetime64(cut)]
+            if len(rows):
+                for ci in cis:
+                    d.iloc[rows, ci] = d.iloc[rows, ci].to_numpy(dtype=float) / factor
     return d
 
 
@@ -187,7 +220,9 @@ def _jump_date(sub: pd.DataFrame, ex_date: pd.Timestamp, factor: float, ticker: 
     if not (factor > 0) or abs(np.log(factor)) < 1e-9:
         return None
     pos = int(sub["date"].searchsorted(ex_date))        # 第一根 >= 登記日
-    if pos >= len(sub) or pos == 0:
+    if pos == 0:
+        return None                                     # 事件早於資料起點：沒東西要除
+    if pos >= len(sub):
         PRICE_WARNINGS.append(f"{ticker} {ex_date.date()} ×{factor:g}：登記日前後缺資料，未還原價格")
         return None
     lo, hi = max(1, pos - _SEARCH_ROWS), min(len(sub) - 1, pos + _SEARCH_ROWS)
@@ -204,3 +239,202 @@ def _jump_date(sub: pd.DataFrame, ex_date: pd.Timestamp, factor: float, ticker: 
         f"{ticker} {ex_date.date()} ×{factor:g}：前後跳空 ×{r:.3f} 與登記 factor 對不上"
         f"（方向相反或日期偏離過大），未還原價格")
     return None
+
+
+# ── 季 EPS：看「財報公布時」股數換了沒 ──────────────────────────────────────
+
+#: 各季財報法定公布期限（月, 日）；Q4 是隔年。只拿來圈出「季末 < 事件日 ≤ 期限」的模糊季。
+_DEADLINE = {3: (5, 15), 6: (8, 14), 9: (11, 14), 12: (3, 31)}
+#: 金融業期限較晚、公司也可能延後公布 → 模糊窗口多放寬幾天，讓更多季走隱含股數判斷
+_DEADLINE_SLACK = pd.Timedelta(days=21)
+
+
+def report_deadline(period_end) -> pd.Timestamp:
+    pe = pd.Timestamp(period_end)
+    mo, dd = _DEADLINE.get(pe.month, (pe.month, 28))
+    return pd.Timestamp(pe.year + (1 if pe.month == 12 else 0), mo, dd)
+
+
+def _basis_switched_at(sh: np.ndarray, i: int, m: float):
+    """第 i 季（模糊季）的隱含股數是新基準嗎？True/False；判不了 → None。
+    比「跟上一季比 ≈m、跟下一季比 ≈1」vs「跟上一季 ≈1、跟下一季 ≈m」哪個比較像。"""
+    lm = np.log(m)
+
+    def lr(a, b):
+        ok = np.isfinite(a) and np.isfinite(b) and a > 0 and b > 0
+        return float(np.log(a / b)) if ok else None
+    rp = lr(sh[i], sh[i - 1]) if i >= 1 else None
+    rn = lr(sh[i + 1], sh[i]) if i + 1 < len(sh) else None
+    if rp is None and rn is None:
+        return None
+    new = (abs(rp - lm) if rp is not None else 0) + (abs(rn) if rn is not None else 0)
+    old = (abs(rp) if rp is not None else 0) + (abs(rn - lm) if rn is not None else 0)
+    return bool(new < old)
+
+
+def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
+               period_col: str = "period_end") -> pd.DataFrame:
+    """季 EPS 搬到最新股本基準。財報 EPS 用的是**公布當時**的股數（IAS 33.64：期後、
+    公布前的配股／分割會追溯重編），所以分界看公布日，不是季末：
+      - 公布期限（＋寬限）< 事件日 → 舊基準 → ÷ m；
+      - 季末 ≥ 事件日 → 新基準 → 不動；
+      - 中間（季末 < 事件日 ≤ 期限＋寬限）：公司早公布就是舊、晚公布就是新（實測
+        2015～2026 上市配股 ≥10%：新 67／舊 26）→ 用隱含股數（歸母淨利 ÷ EPS，沒有
+        就用淨利）跟前後季比；判不了當新基準（多數情況）。
+    非破壞性；沒有事件 → 原樣返回。
+    """
+    if q is None or q.empty or col not in q.columns or ticker_col not in q.columns \
+            or period_col not in q.columns:
+        return q
+    tks = q[ticker_col].astype(str).str.split(".").str[0]
+    hit = [t for t in tks.unique() if _events(t)]
+    if not hit:
+        return q
+    d = q.copy()
+    pe_all = pd.to_datetime(d[period_col])
+    ni_col = next((c for c in ("equity_parent", "net_income") if c in d.columns), None)
+    for t in hit:
+        idx = d.index[(tks == t).to_numpy()]
+        order = pe_all.loc[idx].sort_values().index
+        pe = pe_all.loc[order]
+        eps0 = pd.to_numeric(d.loc[order, col], errors="coerce").to_numpy(dtype=float)
+        if ni_col is not None:
+            ni = pd.to_numeric(d.loc[order, ni_col], errors="coerce").to_numpy(dtype=float)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                sh = ni / eps0
+        else:
+            sh = np.full(len(order), np.nan)
+        div = np.ones(len(order))
+        for ts, m in _events(t):
+            for i, p in enumerate(pe):
+                if p >= ts:
+                    continue
+                if report_deadline(p) + _DEADLINE_SLACK < ts:
+                    div[i] *= m
+                elif _basis_switched_at(sh, i, m) is False:
+                    div[i] *= m
+        d.loc[order, col] = eps0 / div
+    return d
+
+
+# ── 股利 ─────────────────────────────────────────────────────────────────
+
+def adjust_dividends(div: pd.DataFrame, cols, ticker_col: str = "ticker",
+                     date_cols=("ex_date", "CashExDividendTradingDate", "pay_date")) -> pd.DataFrame:
+    """每股股利搬到最新股本基準：除息日 ≤ 事件日 → ÷ m（同日除權息的現金是舊股數領的）。
+    除息日缺就依序退用其他日期欄。FinMind 股利表是「當時每股」（2026-10-30 對 8974 筆官方
+    息值：94% 完全相同，其餘是資本公積現金沒併進來，沒有追溯調整過的）。"""
+    if div is None or div.empty:
+        return div
+    have = [c for c in date_cols if c in div.columns]
+    if not have:
+        return div
+    d = div.copy()
+    eff = pd.to_datetime(d[have[0]], errors="coerce")
+    for c in have[1:]:
+        eff = eff.fillna(pd.to_datetime(d[c], errors="coerce"))
+    d["_eff_date"] = eff
+    d = adjust_per_share(d, cols, date_col="_eff_date", ticker_col=ticker_col, inclusive=True)
+    return d.drop(columns="_eff_date")
+
+
+# ── 交易所本益比／淨值比／殖利率 ─────────────────────────────────────────
+
+#: 偵測「交易所換成新股數」：隱含每股數字掉到事件後初值的 m^-0.5 以下。只對 m ≥ 這個值做，
+#: 小配股的 √m 落在一般季 EPS 波動裡，偵測不可靠 → 走日曆退路。
+_DETECT_MIN_M = 1.15
+_DETECT_DAYS = 420
+
+
+def fix_exchange_ratios(per: pd.DataFrame, raw_close: pd.DataFrame | None = None) -> pd.DataFrame:
+    """交易所 PER／PBR／殖利率在**配股**後沿用舊股數的每股數字（2026-10-30 實測）：
+      - PER、PBR：事件日起「新價 ÷ 舊 EPS／淨值」→ 低估 m 倍，直到下一份財報公布
+        （多在 8/14、11/14、3/31 附近，偶爾拖到年報）。6669 9/2 PER 25.0 → 8.4。
+      - 殖利率：「舊每股現金 ÷ 新價」→ 高估 m 倍，直到隔年新股利公布。
+    分割／面額變更交易所當天就換好（5904、4747、8476 實測 PER 連續），不修。
+
+    修法：事件日起到「交易所換基準」為止，PER/PBR × m、殖利率 ÷ m。換基準日：
+      有原始收盤 `raw_close [ticker,date,close]` 且 m ≥ 1.15 → 偵測隱含每股數字
+      （收盤 ÷ PER、收盤 ÷ PBR、殖利率 × 收盤）掉到事件後初值的 m^-0.5 以下的第一天；
+      偵測不到 → 退路：PER/PBR 到下一個財報期限、殖利率 365 天。
+    `per` 欄：`[ticker, date, per, pbr?, dividend_yield?]`；非破壞性。
+    """
+    if per is None or per.empty or "ticker" not in per.columns or "date" not in per.columns:
+        return per
+    tks = per["ticker"].astype(str).str.split(".").str[0]
+    evmap = {}
+    for t in tks.unique():
+        evs = [(pd.Timestamp(e["date"]), float(e["m"]))
+               for e in SPLITS.get(t, [])
+               if e.get("type") in EXCHANGE_LAG_TYPES and e.get("m") and e["m"] > 1.0]
+        if evs:
+            evmap[t] = evs
+    if not evmap:
+        return per
+    d = per.copy()
+    dates_all = pd.to_datetime(d["date"])
+    closes: dict[str, pd.Series] = {}
+    if raw_close is not None and not raw_close.empty:
+        rc = raw_close[["ticker", "date", "close"]].copy()
+        rc["ticker"] = rc["ticker"].astype(str).str.split(".").str[0]
+        rc = rc[rc["ticker"].isin(evmap)]
+        rc["date"] = pd.to_datetime(rc["date"])
+        for t, g in rc.groupby("ticker", sort=False):
+            closes[t] = g.drop_duplicates("date").set_index("date")["close"]
+    specs = [("per", True, lambda c, v: c / v, "deadline"),
+             ("pbr", True, lambda c, v: c / v, "deadline"),
+             ("dividend_yield", False, lambda c, v: c * v, "year")]
+    cols = [c for c, *_ in specs if c in d.columns]
+    for c in cols:
+        d[c] = pd.to_numeric(d[c], errors="coerce").astype(float)
+    # 一次分組（整張全市場 PER 表數百萬列，逐檔布林篩選會慢到 rebuild 逾時）
+    groups = pd.Series(np.arange(len(d)), index=tks.to_numpy()).groupby(level=0).indices
+    pos_of = {t: groups[t] for t in evmap if t in groups}
+    for t, evs in evmap.items():
+        if t not in pos_of:
+            continue
+        pos = pos_of[t]
+        dts = pd.DatetimeIndex(dates_all.to_numpy()[pos])
+        close = closes.get(t)
+        for col, mul, implied_fn, fallback in specs:
+            if col not in cols:
+                continue
+            ci = d.columns.get_loc(col)
+            v = d.iloc[pos, ci].to_numpy(dtype=float).copy()
+            for ts, m in evs:
+                end = _exchange_switch(dts, pd.Series(v), close, ts, m, implied_fn)
+                if end is None:
+                    end = (report_deadline(_next_quarter_end(ts)) if fallback == "deadline"
+                           else ts + pd.Timedelta(days=365))
+                win = (dts >= ts) & (dts < end)
+                if win.any():
+                    v[win] = v[win] * m if mul else v[win] / m
+            d.iloc[pos, ci] = v
+    return d
+
+
+def _next_quarter_end(ts: pd.Timestamp) -> pd.Timestamp:
+    """事件日之後第一份會用新股數的財報的季末＝期限 ≥ 事件日的最早一季。"""
+    q = (pd.Timestamp(ts) - pd.DateOffset(months=6)).to_period("Q").end_time.normalize()
+    for _ in range(8):
+        if report_deadline(q) >= ts:
+            return q
+        q = (q + pd.DateOffset(days=1)).to_period("Q").end_time.normalize()
+    return q
+
+
+def _exchange_switch(dates: pd.Series, vals: pd.Series, close, ts, m, implied_fn):
+    if close is None or close.empty or m < _DETECT_MIN_M:
+        return None
+    s = pd.Series(np.asarray(vals, dtype=float), index=pd.DatetimeIndex(dates))
+    s = s[(s.index >= ts) & (s.index < ts + pd.Timedelta(days=_DETECT_DAYS)) & (s > 0)]
+    j = pd.concat([s.rename("v"), close.rename("c")], axis=1, join="inner").dropna()
+    j = j[j["c"] > 0]
+    if len(j) < 6:
+        return None
+    imp = implied_fn(j["c"], j["v"])
+    ref = float(imp.iloc[:5].median())
+    if not (ref > 0):
+        return None
+    hit = imp[imp / ref < m ** -0.5]
+    return pd.Timestamp(hit.index[0]) if len(hit) else None

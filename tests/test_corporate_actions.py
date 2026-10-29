@@ -1,9 +1,18 @@
-"""已知股票分割 / 面額變更的每股數字還原（reference.corporate_actions）。"""
+"""股數變動事件的每股數字還原（reference.corporate_actions）。"""
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+import pytest
 
+import reference.corporate_actions as ca
 from reference.corporate_actions import IGNORE_JUMPS, SPLITS, adjust_per_share, adjust_prices
+
+
+@pytest.fixture(autouse=True)
+def _fake_5904(monkeypatch):
+    """舊測試用的 5904 面額變更（舊格式 {date, factor}），跟真實事件表脫鉤。"""
+    monkeypatch.setitem(ca.SPLITS, "5904", [{"date": "2026-07-21", "factor": 10}])
 
 
 def test_分割日前除以factor_日後不動():
@@ -46,17 +55,23 @@ def test_減資_factor小於1_放大分割日前的價(monkeypatch):
 
 def test_對照表格式():
     for tk, events in SPLITS.items():
-        assert tk.isdigit()
+        assert tk.isalnum()
         for e in events:
-            assert pd.Timestamp(e["date"]) and e["factor"] > 0 and e["factor"] != 1
-    assert not (set(SPLITS) & set(IGNORE_JUMPS))     # 同一檔不能又修又忽略
+            assert pd.Timestamp(e["date"])
+            m, pf = ca._m(e), ca._pf(e)
+            assert m is None or (m > 0 and m != 1)
+            assert pf is None or pf > 0
+            assert m is not None or pf is not None
+    # 2026-10-30 起事件表涵蓋 2015～全部事件，IGNORE_JUMPS 忽略的是「另一筆」雜訊跳空
+    # （例 5314：2025-03-31 真的 1 拆 20，忽略的是 2026-08-06 那筆），可以重疊
+    assert all(str(t).isalnum() for t in IGNORE_JUMPS)
 
 
 def test_偵測器對已登記或已忽略的跳空不再報():
     from build_factors import detect_unhandled_splits
     for line in detect_unhandled_splits():
         tk = line.split()[0]
-        assert tk not in SPLITS and tk not in IGNORE_JUMPS
+        assert tk not in ca.price_split_tickers() and tk not in IGNORE_JUMPS
 
 
 def test_adjust_prices_上游沒還原的照除():
@@ -138,3 +153,102 @@ def test_check_adjusted_jumps_抓得到還原後殘留的斷崖(monkeypatch):
     assert any("9995" in w for w in check_adjusted_jumps(bad))
     ca.PRICE_WARNINGS.clear()
     assert check_adjusted_jumps(ok) == []
+
+
+# ── 2026-10-30 新格式：{date, type, m, pf} ───────────────────────────────
+
+def test_新格式_配股只調每股數字不調價格(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9990", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 3.0, "pf": None}])
+    d = pd.bdate_range("2026-08-26", periods=8)
+    px = pd.DataFrame({"ticker": "9990", "date": d, "close": [7800.0] * 4 + [2600.0] * 4})
+    pd.testing.assert_frame_equal(adjust_prices(px, ["close"]), px)    # 價格不碰
+    eps = pd.DataFrame({"ticker": "9990", "date": d[:2], "eps": [30.0, 30.0]})
+    assert adjust_per_share(eps, ["eps"])["eps"].tolist() == [10.0, 10.0]
+    assert "9990" not in ca.price_split_tickers()
+
+
+def test_新格式_現金減資m為None不調每股數字(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9991", [{"date": "2026-01-05", "type": "cap_reduction",
+                                             "m": None, "pf": 0.6}])
+    eps = pd.DataFrame({"ticker": "9991", "date": pd.to_datetime(["2025-12-31"]), "eps": [3.0]})
+    pd.testing.assert_frame_equal(adjust_per_share(eps, ["eps"]), eps)
+
+
+def test_新格式_小事件不進價格還原(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9992", [{"date": "2026-01-05", "type": "cap_reduction",
+                                             "m": 0.9, "pf": 0.9}])
+    assert ca._price_events("9992") == []
+
+
+def _q(periods, eps, ni):
+    return pd.DataFrame({"ticker": "9993", "period_end": pd.to_datetime(periods),
+                         "eps": eps, "equity_parent": ni})
+
+
+def test_adjust_eps_期限前事件全除_季末後不動(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9993", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 3.0, "pf": None}])
+    # Q1 期限 5/15 遠早於 9/2 → 除；Q2 落在模糊窗（期限 8/14＋寬限）→ 看隱含股數；Q3 季末後 → 不動
+    q = _q(["2026-03-31", "2026-06-30", "2026-09-30"], [30.0, 30.0, 10.0], [300.0, 300.0, 300.0])
+    out = ca.adjust_eps(q)["eps"].tolist()
+    assert out == [10.0, 10.0, 10.0]   # Q2 隱含股數同 Q1（10）、跟 Q3（30）差 3 倍 → 舊基準 → 除
+
+
+def test_adjust_eps_模糊季已是新股數就不除(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9993", [{"date": "2026-07-25", "type": "ex_rights",
+                                             "m": 1.2, "pf": None}])
+    # Q2 財報晚公布、已用新股數：隱含股數 12 跟 Q1 的 10 差 1.2、跟 Q3 一樣
+    q = _q(["2026-03-31", "2026-06-30", "2026-09-30"], [1.2, 1.0, 1.0], [12.0, 12.0, 12.0])
+    assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([1.0, 1.0, 1.0])
+
+
+def test_adjust_eps_判不了當新基準(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9993", [{"date": "2026-07-25", "type": "ex_rights",
+                                             "m": 1.2, "pf": None}])
+    q = _q(["2026-03-31", "2026-06-30"], [1.2, 1.0], [np.nan, np.nan])
+    assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([1.0, 1.0])
+
+
+def test_adjust_dividends_除息日當天也除(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9994", [{"date": "2026-08-10", "type": "ex_both",
+                                             "m": 1.25, "pf": None}])
+    dv = pd.DataFrame({"ticker": "9994", "year": [2024, 2025, 2026],
+                       "ex_date": pd.to_datetime(["2025-08-01", "2026-08-10", "2027-08-01"]),
+                       "cash_earnings": [5.0, 5.0, 5.0]})
+    assert ca.adjust_dividends(dv, ["cash_earnings"])["cash_earnings"].tolist() == [4.0, 4.0, 5.0]
+
+
+def test_fix_exchange_ratios_偵測換基準日(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9989", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 3.0, "pf": None}])
+    d = pd.bdate_range("2026-08-25", "2026-12-31")
+    close = np.where(d < "2026-09-02", 7800.0, 2600.0)
+    eps = np.where(d < "2026-11-10", 300.0, 100.0)        # 交易所 11/10 才換成新股數 EPS
+    per = pd.DataFrame({"ticker": "9989", "date": d, "per": close / eps,
+                        "dividend_yield": 1.0})
+    raw = pd.DataFrame({"ticker": "9989", "date": d, "close": close})
+    out = ca.fix_exchange_ratios(per, raw).set_index("date")
+    assert out.loc["2026-08-31", "per"] == pytest.approx(26.0)       # 事件前不動
+    assert out.loc["2026-09-03", "per"] == pytest.approx(26.0)       # 8.67 × 3
+    assert out.loc["2026-11-10", "per"] == pytest.approx(26.0)       # 換基準後原樣
+    assert out.loc["2026-09-03", "dividend_yield"] == pytest.approx(1 / 3)
+
+
+def test_fix_exchange_ratios_面額變更不修(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9988", [{"date": "2026-08-10", "type": "par_change",
+                                             "m": 10, "pf": 10}])
+    per = pd.DataFrame({"ticker": "9988", "date": pd.bdate_range("2026-08-10", periods=3),
+                        "per": [23.0, 23.5, 24.0]})
+    pd.testing.assert_frame_equal(ca.fix_exchange_ratios(per, None), per)
+
+
+def test_fix_exchange_ratios_沒收盤走日曆退路(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9987", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 1.1, "pf": None}])
+    per = pd.DataFrame({"ticker": "9987",
+                        "date": pd.to_datetime(["2026-09-01", "2026-09-02", "2026-11-13",
+                                                "2026-11-16"]),
+                        "per": [10.0, 10.0, 10.0, 10.0]})
+    out = ca.fix_exchange_ratios(per, None)["per"].round(6).tolist()
+    assert out == [10.0, 11.0, 11.0, 10.0]          # 到 Q3 期限 11/14 為止

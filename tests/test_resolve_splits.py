@@ -1,8 +1,11 @@
-"""resolve_splits：跳空比例 ↔ FinMind 事件 factor 的比對與吸附。"""
+"""resolve_splits：自建事件表 → 股數事件（m／pf）的規則。"""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import resolve_splits as rs  # noqa: E402
@@ -17,16 +20,31 @@ def test_nice_吸附整數與簡分數():
     assert rs._nice(3.999) == 4
 
 
-def test_比對邏輯_分割與減資方向():
-    # 分割：bundle 跳空 ×0.1（跌），target = 1/0.1 = 10，FinMind before/after = 720/72 = 10
-    ratio = 0.1
-    target = 1.0 / ratio if ratio < 1 else ratio
-    assert abs(10.0 / target - 1) < rs.MATCH_TOL
+def _row(tk, d, typ, pre, ref, src, detail="{}", reason=None):
+    return {"ticker": tk, "date": pd.Timestamp(d), "type": typ, "prev_close": pre,
+            "ref_price": ref, "source": src, "detail": detail, "reason": reason}
 
-    # 減資：bundle 跳空 ×2.18（漲），target = 2.18，FinMind = 48.15/22.05 ≈ 2.18
-    ratio = 2.18
-    target = 1.0 / ratio if ratio < 1 else ratio
-    assert abs((48.15 / 22.05) / target - 1) < rs.MATCH_TOL
 
-    # 資料雜訊：跳空 ×1.85，FinMind 兩張表皆空 → 沒有 event 可比 → 不會 match
-    assert rs._nice(1.0) == 1
+def test_build_events_各類規則():
+    corp = pd.DataFrame([
+        _row("5904", "2026-08-10", "par_change", 720.0, 72.0, "tpex_par"),
+        _row("5904", "2026-08-10", "par_change", 720.0, 72.0, "fm_split"),       # 重複來源
+        _row("2321", "2026-09-21", "cap_reduction", 15.10, 27.61, "twse_red", reason="彌補虧損"),
+        _row("9945", "2023-09-25", "cap_reduction", 34.90, 37.66, "twse_red", reason="退還股款"),
+        _row("6669", "2026-09-02", "ex_rights", 7800.0, 2614.99, "twse_ex"),
+        _row("9950", "2017-08-30", "ex_rights", 13.85, 13.45, "tpex_ex",
+             detail=json.dumps({"stock_div_per_1000": "30.00000516"})),
+        _row("1234", "2026-08-01", "ex_rights", 50.0, 48.0, "twse_ex"),         # 純現增
+        _row("2330", "2026-07-01", "ex_div", 1000.0, 995.0, "twse_ex"),
+        _row("7777", "2026-08-05", "ex_both", 40.0, 36.0, "twse_ex"),           # 還沒查配股率
+    ])
+    cache = {"6669:2026-09-02": 1982.8, "1234:2026-08-01": 0.0}
+    ev, missing = rs.build_events(corp, cache)
+    assert ev["5904"] == [{"date": "2026-08-10", "type": "par_change", "m": 10, "pf": 10,
+                           "src": "tpex_par"}]
+    assert 0.54 < ev["2321"][0]["m"] < 0.55 and ev["2321"][0]["m"] == ev["2321"][0]["pf"]
+    assert ev["9945"][0]["m"] is None and ev["9945"][0]["pf"] < 1      # 現金減資
+    assert ev["6669"][0]["m"] == 2.9828 and ev["6669"][0]["pf"] is None
+    assert ev["9950"][0]["m"] == 1.03
+    assert "1234" not in ev and "2330" not in ev
+    assert missing == ["7777:2026-08-05"]

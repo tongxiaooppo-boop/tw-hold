@@ -75,11 +75,11 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
         if c not in q.columns:
             q[c] = np.nan
 
-    # 面額變更 / 股票分割：上游沒還原 → 分割日前的每股 EPS ÷ factor，搬到最新股本
-    # 基準，normalized_EPS / TTM_EPS / 年度 EPS 才跟分割後的股價同一把尺（見
-    # reference.corporate_actions）。無已知分割的 ticker 完全不受影響。
-    from reference.corporate_actions import adjust_per_share
-    q = adjust_per_share(q, ["eps"], date_col="period_end")
+    # 股數變動（分割／面額變更／減資彌補虧損／無償配股）：財報 EPS 是公布當時的股數 →
+    # 搬到最新股本基準，normalized_EPS / TTM_EPS / 年度 EPS 才跟現在的股價同一把尺；
+    # 分界看財報公布時股數換了沒（見 reference.corporate_actions.adjust_eps）。
+    from reference.corporate_actions import adjust_eps
+    q = adjust_eps(q)
 
     # 金融軌：金控的 FinMind 淨利 2026 起改用 YTD 累計口徑 → 還原單季
     # （見 _deaccum_ytd，限 2026+ 且年內單調不減）。只動 net_income——金控 revenue
