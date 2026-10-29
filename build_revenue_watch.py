@@ -78,6 +78,24 @@ def _cum(hist: pd.DataFrame, period: pd.Period) -> float | None:
     return _maybe_float(seg["revenue"].sum())
 
 
+def _fin_known_by(fin: pd.DataFrame, pub_month: pd.Period) -> pd.DataFrame:
+    """只留「該期公布窗結束日（pub_month 的 14 號）前，法定期限已到」的財報季。
+
+    bundle 財報只有 period_end、沒有公告日 → 用法定期限推：Q1 5/15、Q2 8/14、
+    Q3 11/14、Q4 隔年 3/31。避免 11 月重算時，「9 月營收」那期拿到 10 月初
+    還不可能知道的 Q3 財報（偷看未來；2026-10-29 雲端審查必修）。
+    """
+    if fin is None or fin.empty or "period_end" not in fin.columns:
+        return fin
+    pe = pd.to_datetime(fin["period_end"])
+    deadline = pd.Series(pd.NaT, index=fin.index, dtype="datetime64[ns]")
+    for m, (dm, dd, dy) in {3: (5, 15, 0), 6: (8, 14, 0), 9: (11, 14, 0), 12: (3, 31, 1)}.items():
+        sel = pe.dt.month == m
+        deadline[sel] = pd.to_datetime({"year": pe[sel].dt.year + dy, "month": dm, "day": dd})
+    cutoff = pd.Timestamp(pub_month.year, pub_month.month, 14)
+    return fin[deadline.notna() & (deadline <= cutoff)].reset_index(drop=True)
+
+
 def _bundle_last_date() -> str:
     """bundle 現價／均線用的最後收盤日（prices_adj 全表 date 最大）。"""
     p = REPO / "data" / "upstream" / "prices_adj.parquet"
@@ -209,84 +227,90 @@ def main(argv: list[str] | None = None) -> int:
 
         cur_ts = pd.Timestamp(month.to_timestamp())
         rows = []
+        n_fail = 0
         for code in codes:
-            u = uni_by_code.get(code)
-            if u is None:
-                continue
-            hist = bd.revenue(code)
-            if hist is None or hist.empty:
-                hist = pd.DataFrame({"month": pd.Series(dtype="datetime64[ns]"),
-                                     "revenue": pd.Series(dtype="float64")})
-            else:
-                hist = hist.copy()
-
-            if source == "mops":
-                rev = mops_by_code.get(code)
-                if rev is None:
-                    continue
-                m = mops_meta[code]
-                prev_rev = _maybe_float(m.get("revenue_prev_month"))
-                last_year_rev = _maybe_float(m.get("revenue_last_year"))
-                cum = _maybe_float(m.get("revenue_cum"))
-                cum_last_year = _maybe_float(m.get("revenue_cum_last_year"))
-                note = m.get("note")
-                first_seen_at = m.get("first_seen_at")
-                revised = bool(m.get("revised", False))
-            else:
-                rev = _rev_at(hist, month)
-                if rev is None:
-                    continue
-                prev_rev = _rev_at(hist, month - 1)
-                last_year_rev = _rev_at(hist, month - 12)
-                cum = _cum(hist, month)
-                cum_last_year = _cum(hist, month - 12)
-                note = None
-                first_seen_at = None
-                revised = False
-
-            # hist 截到 ≤ 該月；來自 mops 且 bundle 缺該月時 append
-            if not (hist["month"] == cur_ts).any():
-                hist = pd.concat([hist, pd.DataFrame({"month": [cur_ts], "revenue": [rev]})],
-                                 ignore_index=True)
-            hist = hist[hist["month"] <= cur_ts].sort_values("month").reset_index(drop=True)
-
-            px = bd.prices(code)
-            close = closes.get(code)
-            if close is not None and closes_day:
-                close_ts = pd.Timestamp(closes_day)
-                if px is None or px.empty:
-                    px = pd.DataFrame({"date": [close_ts], "close": [float(close)]})
-                elif close_ts > pd.Timestamp(px["date"].max()):
-                    px = pd.concat([px, pd.DataFrame({"date": [close_ts],
-                                                      "close": [float(close)]})],
-                                   ignore_index=True).sort_values("date").reset_index(drop=True)
-            ma = rw.ma_status(px)
-
-            base = {
-                "code": code,
-                "name": u.get("stock_name"),
-                "industry": u.get("industry"),
-                "market_cap": u.get("market_cap"),
-                "revenue": rev,
-                "revenue_prev_month": prev_rev,
-                "revenue_last_year": last_year_rev,
-                "revenue_cum": cum,
-                "revenue_cum_last_year": cum_last_year,
-                "note": note,
-                "first_seen_at": first_seen_at,
-                "revised": revised,
-            }
-
             try:
-                fin = bd.financials(code)
-                qf = quarterly_factors(fin)
-                per = bd.per_history(code)
-                est = va.estimate(qf, hist, px, per)
-                val = rw.valuation_fields(est, ma.get("price"))
-            except Exception as e:  # noqa: BLE001
-                val = rw.valuation_fields({"ok": False, "reason": f"計算失敗：{type(e).__name__}"}, None)
+                u = uni_by_code.get(code)
+                if u is None:
+                    continue
+                hist = bd.revenue(code)
+                if hist is None or hist.empty:
+                    hist = pd.DataFrame({"month": pd.Series(dtype="datetime64[ns]"),
+                                         "revenue": pd.Series(dtype="float64")})
+                else:
+                    hist = hist.copy()
 
-            rows.append(rw.make_row(base, hist, month, ma, val))
+                if source == "mops":
+                    rev = mops_by_code.get(code)
+                    if rev is None:
+                        continue
+                    m = mops_meta[code]
+                    prev_rev = _maybe_float(m.get("revenue_prev_month"))
+                    last_year_rev = _maybe_float(m.get("revenue_last_year"))
+                    cum = _maybe_float(m.get("revenue_cum"))
+                    cum_last_year = _maybe_float(m.get("revenue_cum_last_year"))
+                    note = m.get("note")
+                    first_seen_at = m.get("first_seen_at")
+                    revised = bool(m.get("revised", False))
+                else:
+                    rev = _rev_at(hist, month)
+                    if rev is None:
+                        continue
+                    prev_rev = _rev_at(hist, month - 1)
+                    last_year_rev = _rev_at(hist, month - 12)
+                    cum = _cum(hist, month)
+                    cum_last_year = _cum(hist, month - 12)
+                    note = None
+                    first_seen_at = None
+                    revised = False
+
+                # hist 截到 ≤ 該月；來自 mops 且 bundle 缺該月時 append
+                if not (hist["month"] == cur_ts).any():
+                    hist = pd.concat([hist, pd.DataFrame({"month": [cur_ts], "revenue": [rev]})],
+                                     ignore_index=True)
+                hist = hist[hist["month"] <= cur_ts].sort_values("month").reset_index(drop=True)
+
+                px = bd.prices(code)
+                close = closes.get(code)
+                if close is not None and closes_day:
+                    close_ts = pd.Timestamp(closes_day)
+                    if px is None or px.empty:
+                        px = pd.DataFrame({"date": [close_ts], "close": [float(close)]})
+                    elif close_ts > pd.Timestamp(px["date"].max()):
+                        px = pd.concat([px, pd.DataFrame({"date": [close_ts],
+                                                          "close": [float(close)]})],
+                                       ignore_index=True).sort_values("date").reset_index(drop=True)
+                ma = rw.ma_status(px)
+
+                base = {
+                    "code": code,
+                    "name": u.get("stock_name"),
+                    "industry": u.get("industry"),
+                    "market_cap": u.get("market_cap"),
+                    "revenue": rev,
+                    "revenue_prev_month": prev_rev,
+                    "revenue_last_year": last_year_rev,
+                    "revenue_cum": cum,
+                    "revenue_cum_last_year": cum_last_year,
+                    "note": note,
+                    "first_seen_at": first_seen_at,
+                    "revised": revised,
+                }
+
+                try:
+                    fin = _fin_known_by(bd.financials(code), month + 1)
+                    qf = quarterly_factors(fin)
+                    per = bd.per_history(code)
+                    est = va.estimate(qf, hist, px, per)
+                    val = rw.valuation_fields(est, ma.get("price"))
+                except Exception as e:  # noqa: BLE001
+                    print(f"[{month_s}] {code} 估值失敗：{e!r}", file=sys.stderr)
+                    val = rw.valuation_fields({"ok": False, "reason": f"計算失敗：{e!r}"[:80]}, None)
+
+                rows.append(rw.make_row(base, hist, month, ma, val))
+            except Exception as e:  # noqa: BLE001  單檔髒資料不拖垮整批
+                n_fail += 1
+                print(f"[{month_s}] {code} 整檔略過：{e!r}", file=sys.stderr)
 
         n_ok = sum(1 for r in rows if r.get("est_ok"))
         out_periods.append({
@@ -299,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             "rows": rows,
         })
         print(f"[{month_s}] source={source} n_published={len(rows)}/{n_universe} "
-              f"est_ok={n_ok} 耗時 {time.time() - t0:.1f}s")
+              f"est_ok={n_ok} 略過={n_fail} 耗時 {time.time() - t0:.1f}s")
 
     doc = {
         "built_at": now.replace(microsecond=0).isoformat(),
@@ -307,9 +331,15 @@ def main(argv: list[str] | None = None) -> int:
         "universe_note": f"市值前500∪成交值前500（universe.parquet in_universe，與其他清單一致，asof {asof}）",
         "periods": out_periods,
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(_json_safe(doc), ensure_ascii=False, indent=None), encoding="utf-8")
-    print(f"已寫 {OUT}（總耗時 {time.time() - t_start:.1f}s）")
+    # 護欄：整批 0 列（bundle 缺檔／universe 空）不寫，留著舊 JSON（2026-10-29 雲端審查）
+    if not args.limit and sum(len(p["rows"]) for p in out_periods) == 0:
+        print("錯誤：兩期都是 0 列，中止且不覆寫舊 JSON。", file=sys.stderr)
+        return 1
+    # --limit 是本機試跑：寫旁邊的檔，不蓋正式檔
+    out = OUT.with_name("revenue_watch.limit.json") if args.limit else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(_json_safe(doc), ensure_ascii=False, indent=None), encoding="utf-8")
+    print(f"已寫 {out}（總耗時 {time.time() - t_start:.1f}s）")
     return 0
 
 

@@ -22,6 +22,8 @@ import pandas as pd
 
 _FLOW = ["revenue", "eps", "net_income", "gross_profit", "op_income",
          "pretax_income", "ocf", "ocf_net", "capex"]
+_STOCK_COLS = ["equity_parent", "total_assets", "total_liabilities",
+               "current_assets", "current_liabilities", "capital_stock"]
 
 
 def _ttm(df: pd.DataFrame, col: str) -> pd.Series:
@@ -67,6 +69,11 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     """
     q = q.sort_values(["ticker", "period_end"]).reset_index(drop=True).copy()
     fin_tickers = fin_tickers or set()
+    # 單檔呼叫（個股頁、月營收 build）時，上游沒給的資產負債表欄整欄不存在 → 補 NaN，
+    # 讓相關因子變 NaN 而不是整檔 KeyError（2026-10-29：1709、3094 等 7 檔缺 total_assets）
+    for c in _STOCK_COLS:
+        if c not in q.columns:
+            q[c] = np.nan
 
     # 面額變更 / 股票分割：上游沒還原 → 分割日前的每股 EPS ÷ factor，搬到最新股本
     # 基準，normalized_EPS / TTM_EPS / 年度 EPS 才跟分割後的股價同一把尺（見

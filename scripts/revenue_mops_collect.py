@@ -71,7 +71,12 @@ def main() -> int:
         # （2026-10-29 手動觸發就踩到）。只抓、印，不寫——當連線檢查用。
         print(f"今天 {now:%m/%d} 不在公布期（1～{rm.WINDOW_LAST_DAY} 號），只抓不寫")
         args.dry_run = True
+    elif args.period and period != rm.target_period(now) and not args.dry_run:
+        # 公布期內補抓別的期別，同樣會把舊資料記成「今天第一次看到」（2026-10-29 雲端審查）
+        print(f"--period {period} 不是本期（{rm.target_period(now)}），只抓不寫")
+        args.dry_run = True
 
+    existing = rm.load_period(period)
     frames, log, failed = [], [], []
     for i, market in enumerate(rm.MARKETS):
         if i:
@@ -85,6 +90,15 @@ def main() -> int:
                         "rows": None, "error": err})
             continue
         df = rm.parse_page(rm.decode(raw), market, period)
+        had = 0 if existing is None else int((existing["market"] == market).sum())
+        if df.empty and had:
+            # 之前已收到過這個市場、這次 0 列＝空回應／被擋，不是「還沒人公布」
+            err = f"回應 0 列（之前已有 {had} 家，疑似被擋）"
+            failed.append(market)
+            print(f"[FAIL] {market} {err}")
+            log.append({"run_at": now, "period": str(period), "market": market,
+                        "rows": 0, "error": err})
+            continue
         print(f"[OK]   {market:<5} {period} {len(df):>5} 家  ({len(raw):,} bytes)")
         log.append({"run_at": now, "period": str(period), "market": market,
                     "rows": len(df), "error": ""})
@@ -92,7 +106,6 @@ def main() -> int:
 
     snapshot = (pd.concat(frames, ignore_index=True) if frames
                 else pd.DataFrame(columns=rm.COLUMNS[:-3]))
-    existing = rm.load_period(period)
     merged = rm.merge_seen(existing, snapshot, now)
     n_new = len(merged) - (0 if existing is None else len(existing))
 

@@ -213,11 +213,13 @@ jobs:
           git add data/derived/ data/history/ reference/corporate_actions_resolved.json || true
           # 三張清單 JSON 沒實質變動、resolved.json 沒新增分割、且 PCF 快照/006201 代理無新增 →
           # 整批跳過（不為「只有 _meta.json 的 rebuilt_at / flags 的 fetched_at 變了」留 commit）。
+          # revenue_watch.json 不列入判斷：built_at／現價每天必變，列進來等於每天必 commit 1.2MB；
+          # 它跟著其他清單一起 commit（data/derived/ 已 add）就好（2026-10-29 雲端審查）。
           if git diff --cached --quiet -- \
                data/derived/value_list.json \
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
-               data/derived/short_scan.json                data/derived/revenue_watch.json \
+               data/derived/short_scan.json \
                data/history/ \
                reference/corporate_actions_resolved.json; then
             # data/history/ 也要算：swing 線的 asof 取自 tw-swing 的外部分享檔，隔天就換成下一天，這輪不 commit 就永遠補不回來。
@@ -244,6 +246,9 @@ jobs:
             if ! git pull --rebase origin main; then
               git checkout --theirs -- data/derived/ data/history/ \
                 reference/corporate_actions_resolved.json 2>/dev/null || true
+              # revenue_watch.json 例外：revenue_watch.yml 可能剛推了含新公布公司的版本，
+              # 這輪 checkout 時還沒有那批 data/revenue_mops → 讓遠端版本贏（rebase 中 --ours＝遠端）
+              git checkout --ours -- data/derived/revenue_watch.json 2>/dev/null || true
               git add -A data/derived/ data/history/ \
                 reference/corporate_actions_resolved.json 2>/dev/null || true
               GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }

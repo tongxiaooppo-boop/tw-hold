@@ -238,3 +238,26 @@ def test_pe_wide_and_rank_exclude():
             {"code": "C", "u": 1.0, "cyclical": False, "pe_wide": False, "market_cap": 1}]
     assert [r["code"] for r in rw.rank(rows, "u", exclude=("cyclical", "pe_wide"))] == ["C"]
     assert [r["code"] for r in rw.rank(rows, "u")] == ["A", "B", "C"]
+
+
+def test_財報只留公布窗前法定期限已到的季():
+    from build_revenue_watch import _fin_known_by
+    fin = pd.DataFrame({"ticker": ["X"] * 4,
+                        "period_end": pd.to_datetime(["2025-12-31", "2026-03-31",
+                                                      "2026-06-30", "2026-09-30"])})
+    # 9 月營收（10 月公布）：Q3 法定 11/14 還沒到
+    got = _fin_known_by(fin, pd.Period("2026-10", "M"))
+    assert list(got["period_end"].dt.strftime("%Y-%m")) == ["2025-12", "2026-03", "2026-06"]
+    # 10 月營收（11 月公布，窗口到 11/14）：Q3 可用
+    assert len(_fin_known_by(fin, pd.Period("2026-11", "M"))) == 4
+    # 2 月營收（3 月公布）：去年 Q4 法定 3/31 還沒到
+    assert len(_fin_known_by(fin, pd.Period("2026-03", "M"))) == 0
+
+
+def test_quarterly_factors_缺資產負債欄不炸():
+    from factors.factors import quarterly_factors
+    q = pd.DataFrame({"ticker": ["X"] * 5,
+                      "period_end": pd.date_range("2025-03-31", periods=5, freq="QE"),
+                      "revenue": [1.0] * 5, "net_income": [0.1] * 5, "eps": [0.5] * 5})
+    out = quarterly_factors(q)
+    assert out["roa"].isna().all()
