@@ -1965,12 +1965,115 @@ def _page_footer(other_nav: str, other_label: str) -> None:
         st.rerun()
 
 
+def _fmt_yi(v) -> str:
+    return "—" if v is None else f"{v / 1e8:,.2f} 億"
+
+
+def _fmt_pct(v, sign: bool = True) -> str:
+    return "—" if v is None else (f"{v:+.1%}" if sign else f"{v:.1%}")
+
+
+def _fmt_x(v, nd: int = 2) -> str:
+    return "—" if v is None else f"{v:,.{nd}f}"
+
+
+def _valuation_block(d: dict) -> None:
+    """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
+    計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。"""
+    import valuation as va
+
+    r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
+    a = r.get("asof") or {}
+    st.markdown("#### 💰 估值速覽")
+    if not r["ok"]:
+        st.caption(r["reason"])
+        return
+    st.caption(f"營運速度年化試算，**非全年預測、非目標價**　｜　財報 {a['fin_q']}｜"
+               f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
+
+    rv, e, pe = r["rev"], r["eps"], r["pe"]
+    c1, c2, c3 = st.columns(3)
+    with c1.container(border=True):
+        st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
+                    f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**  \n"
+                    f"vs 上季 {a['fin_q']}：{_fmt_pct(rv['vs_last_q'])}  \n"
+                    f"年增：{_fmt_pct(rv['yoy'])}")
+    with c2.container(border=True):
+        st.markdown(f"**EPS**（年化試算）  \n"
+                    f"排除業外 **{_fmt_x(e['run_ex'])}**  \n"
+                    f"含近 4 季平均業外：{_fmt_x(e['run_incl'])}  \n"
+                    f"近 4 季實際：{_fmt_x(e['ttm'])}")
+    with c3.container(border=True):
+        pe_txt = (f"自身近 5 年中位數：{pe['p50']:.1f} 倍" if pe
+                  else "自身本益比樣本不足")
+        imp = (f"**{r['implied_pe']:.1f} 倍**" if r["implied_pe"]
+               else "—（試算 EPS ≤ 0）")
+        st.markdown(f"**股價**  \n"
+                    f"現價 **{_fmt_x(r['price'], 1)}**  \n"
+                    f"現價 ÷ 年化試算 EPS：{imp}  \n{pe_txt}")
+    for w in r["warns"]:
+        st.warning(w, icon="⚠️")
+    for i in r["infos"]:
+        st.caption("ℹ️ " + i)
+
+    inp = r["inputs"]
+    with st.expander("🔍 試算細節（推導表／敏感度／本益比區間／業外）"):
+        gp = rv["m3_sum"] * inp["gm"] if inp["gm"] is not None else None
+        op = gp - inp["opex"] if gp is not None else None
+        net = op * inp["conv"] if (op is not None and inp["conv"] is not None) else None
+        rows = [
+            ("近 3 月營收合計", _fmt_yi(rv["m3_sum"]), f"月營收 {rv['first_month']}–{rv['last_month']}"),
+            ("× 毛利率", _fmt_pct(inp["gm"], False), f"{a['fin_q']} 財報"),
+            ("＝ 毛利", _fmt_yi(gp), ""),
+            ("－ 營業費用", _fmt_yi(inp["opex"]), f"{a['fin_q']} 金額，固定不隨營收縮放"),
+            ("＝ 營業利益（試算）", _fmt_yi(op), ""),
+            ("＋ 業外", "0（排除）",
+             f"對照版加回近 4 季平均 {_fmt_yi(inp['nonop_avg4'])}；最新一季 {_fmt_yi(inp['nonop_latest'])}"),
+            ("× 歸母淨利 ÷ 稅前", _fmt_pct(inp["conv"], False), "近 4 季合計（含稅與非控制權益）"),
+            ("＝ 歸母淨利（單季試算）", _fmt_yi(net), ""),
+            ("÷ 股數", "—" if inp["shares"] is None else f"{inp['shares'] / 1e8:,.2f} 億股",
+             "近 4 季「歸母淨利 ÷ EPS」中位數"),
+            ("× 4 ＝ 年化試算 EPS", _fmt_x(e["run_ex"]), "把這一季的速度延長成一年"),
+        ]
+        st.markdown("**推導表**")
+        st.dataframe(pd.DataFrame(rows, columns=["步驟", "數值", "來源／假設"]),
+                     hide_index=True, use_container_width=True)
+
+        if r["sens"]:
+            s = r["sens"]
+            st.markdown("**敏感度：營收 × 毛利率 → 年化試算 EPS（排除業外）**")
+            st.dataframe(pd.DataFrame(
+                [[_fmt_x(v) for v in row] for row in s["eps"]],
+                index=[f"營收 {x:+.0%}" for x in s["rev"]],
+                columns=[f"毛利率 {x * 100:+.0f}pp" for x in s["gm"]]),
+                use_container_width=True)
+
+        st.markdown("**自身本益比區間 × 年化試算 EPS**")
+        if pe and r["band"]:
+            st.dataframe(pd.DataFrame({
+                "分位": ["P30", "P50", "P70"],
+                "本益比": [f"{pe[k]:.1f} 倍" for k in ("p30", "p50", "p70")],
+                "套用後股價": [_fmt_x(r["band"][k], 1) for k in ("p30", "p50", "p70")],
+            }), hide_index=True, use_container_width=True)
+            st.caption(f"本益比取 {pe['since']} 起 {pe['n_days']} 個交易日（排除虧損日）的 "
+                       "trailing PE。trailing 倍數 × 年化試算 EPS 口徑不一致，只能讀成"
+                       "「如果市場照過去的倍數給這個獲利速度」，**不是合理價**。")
+        else:
+            st.caption("本益比樣本不足或試算 EPS ≤ 0，不套倍數。")
+
+        st.markdown("**近 8 季業外**")
+        st.dataframe(pd.DataFrame([{
+            "季": h["q"], "業外": _fmt_yi(h["nonop"]), "稅前": _fmt_yi(h["pretax"]),
+            "業外占稅前": (_fmt_pct(h["nonop"] / abs(h["pretax"])) if h["pretax"] else "—"),
+        } for h in r["nonop_hist"]]), hide_index=True, use_container_width=True)
+        st.caption("業外＝稅前 − 營業利益（匯兌、投資、處分、利息都在裡面）。排除業外"
+                   "也一併拿掉了利息費用，有大額借款的公司會偏樂觀。")
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     st.header("個股查詢", anchor="top")
-    st.caption("不打分，純數據 + plotly 圖表（K 線／營收等）。查詢範圍限 bundle 內"
-              "的前 500 大約 1,000 檔，不即時抓單股資料（PRD 明定的紅線）。")
-    _disclaimer()
+    _disclaimer()     # 頁首說明移到頁尾（2026-10-29：讓手機第一屏就看得到估值速覽）
     st.markdown("**股票代號**")
     code = _stock_input("stock_query", "查詢")
     if not code:
@@ -2003,6 +2106,11 @@ def _stock_page() -> None:
         _sx, _ox = _active_evidence(_aef)
         st.markdown(f'<div class="thc-chips">{_active_chip(_aef)}</div>', unsafe_allow_html=True)
         st.caption((_sx or _ox) + "　—　" + _active_legend(_aflags))
+
+    try:
+        _valuation_block(d)
+    except Exception as e:  # noqa: BLE001  試算掛掉不連累下面的圖
+        st.warning(f"估值速覽算不出來：{type(e).__name__}: {e}")
 
     if not d["px"].empty:
         end = pd.Timestamp(pd.to_datetime(d["px"]["date"]).max())
@@ -2071,7 +2179,8 @@ def _stock_page() -> None:
         st.dataframe(_qf_display(_raw), use_container_width=True)
 
     st.divider()
-    st.caption("攤開數據讓人／AI 判斷，**不打分、不給買賣建議**（PRD §4.1）。"
+    st.caption("不即時抓單股資料（PRD 明定的紅線）。攤開數據讓人／AI 判斷，"
+               "**不打分、不給買賣建議**（PRD §4.1）。"
                "雲端只服務 bundle 內的股票（約 1000-1980 檔，視資料表而定——不是只有候選池"
                "篩選用的前 500 大，帶哪一檔的代號都可以查）。")
     _disclaimer()
