@@ -1,0 +1,14 @@
+{
+ "schema": 1,
+ "asof": "2026-10-29",
+ "lines": {
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}
