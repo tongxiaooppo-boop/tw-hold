@@ -1,12 +1,14 @@
 # tw-hold — 長波段／價值／定存決策支援工具 · 產品需求文件 (PRD)
 
 
-> ⚠️ **資料層（自建上游／官方口徑母表）以 [`docs/updatePRD-opus.md`](docs/updatePRD-opus.md) 為準**（2026-10-08）：本 PRD 描述的是 v1 產品需求，其中「資料來源 = tw-swing bundle（他人 data_pack）」的敘述在 2026-10-24 預定切換後會改成自建官方口徑；資料管線、備援、監控、切換流程、No-Go 條件都寫在該檔與 `docs/DATA_FLOW.md`。本 PRD 的資料管線章節（§10.2 等）可能與現況不符，**交給資料層文件系統性核對前不要當現況引用**。
+> ⚠️ **資料層（自建上游／官方口徑母表）以 [`docs/updatePRD-opus.md`](docs/updatePRD-opus.md) 與 [`docs/DATA_FLOW.md`](docs/DATA_FLOW.md) 為準**。自建資料包已上線：tw-swing 自 2026-10-13 起 `PACK_SOURCE=selfhost`（比原訂 10/24 提前），bundle 仍由 tw-swing `publish_bundle.yml` 發到 tw-swing 私有 Release、tw-hold 照舊用 PAT 拉。
+>
+> 🟢 **2026-10-29 已對照 main 程式做過一輪現況同步**：分頁、排程、PAT 的**現況總表在 §12**；§1.3、§3、§8 的「tw-data 三 repo」架構從未實作，保留為歷史設計。本 PRD 其餘章節（§5–§7 選股規則）與程式一致的部分已抽查（見 §12.4）。
 
 | | |
 | :--- | :--- |
-| 文件版本 | **3.1-draft（未定案）**（1.0 → 2.0 → 2.1 opus 審核 → 3.0 範圍重定 → **3.1 波段軌道復活成「主動選股候選池」**，皆 2026-09-07；變更記錄見 §11） |
-| 日期 | 2026-09-07 |
+| 文件版本 | **3.2**（1.0 → 2.0 → 2.1 opus 審核 → 3.0 範圍重定 → 3.1 波段軌道復活成「主動選股候選池」，皆 2026-09-07 → **3.2 對照程式現況同步，2026-10-29**；變更記錄見 §11） |
+| 日期 | 2026-09-07（v3.1 定稿）／2026-10-29（v3.2 現況同步） |
 | 需求來源 | `me`（`taiwan-stock-analyzer-v3`）升級討論，2026-09-07 |
 | 證據來源 | `me` 驗屍、tw-swing `twswing.value.factors/screen`、被動式市值型 + 高股息低波動 ETF（0050／00713／00878）的指數建構規則 |
 | 撰寫視角 | **被動式指數團隊**（規則透明、定期換股、陷阱硬剔除、換手可控）＋ 高股息 ETF 分析師（殖利率永續性、填息率、總報酬） |
@@ -61,7 +63,9 @@
 | **主動選股候選池**（§5） | 週 | **資訊**——候選 + 支持/反對證據 + 風險量化。**不給 verdict、不給買價**，買賣由人決定 |
 | **價值清單**（§6） | 月看、季換 | 推薦清單（買入區間 + 不推薦原因） |
 | **定存清單**（§7） | 季 | 同上。用途是**接手美元收益部位**（§7.0） |
-| 個股查詢（§4） | 隨時 | 不打分，數據 + 圖表 |
+| 個股查詢（§4） | 隨時 | 不打分，數據 + 圖表；最上方「估值速覽」試算（§4.4，2026-10-29） |
+
+> **2026-10-29 現況**：網頁實際有 **8 個分頁**（`app/streamlit_app.py` 的 `NAV`）：總經導航、短線、長波段、價值、定存、個股查詢、多軌體檢、主動式 ETF。上表四個是本 PRD 的核心範圍；其餘四個是上線後陸續加的，各自的定位與資料來源見 **§12.1**。
 
 > v3.1：波段那條從 v3.0 的「移出」改回「留下但換形態」。**它跟另外兩條的性質不同**
 > ——那兩條給建議（有回測門檻要過），這條只給資訊（所以不宣稱報酬）。
@@ -80,6 +84,8 @@
 | **估值靠外推疊外推** | forward EPS 外推 × 市況調整 PE × 安全邊際，誤差相乘卻只顯示一個數字 | 估值錨到**個股自身歷史**與**當下買點鎖進的殖利率**，不外推、不做市場擇時 |
 
 ### 1.3 三個 repo 的分工（v2.2）
+
+> 🔴 **歷史設計，從未實作**（2026-10-29 再確認）：沒有 `tw-data`。實際是 tw-swing（私有）抓取＋打包＋發佈 bundle，tw-hold（**公開**）用 PAT 拉；另有私有資料 repo `tw-hold-data` 放自建上游與參考資料。現況見 §3 開頭更正框與 §12。
 
 | | **tw-data**（公開） | **tw-swing**（私有） | **tw-hold**（私有） |
 | :--- | :--- | :--- | :--- |
@@ -305,6 +311,7 @@ tw-data 是新 repo，但**不是從零抓**——tw-swing 已經有的直接搬
 
 - 輸入代號 → **前 500 大**：讀 bundle（雲端走 §3.2 的執行期拉取 + 按需讀取路徑）；
   **不在**（僅本地）：即時打 FinMind 補那一支 → `data/cache/<ticker>/`。
+  ⚠️ **2026-10-29 現況：本地即時補抓（§3.3）尚未實作**，頁面只顯示「本地進階模式可即時補抓（尚未實作）」；雲端與本地都只服務 bundle 內的股票。
   雲端版只服務前 500 大——**八類圖表在雲端都畫得出來**，bundle 的欄位是齊的。
 - **不給評分、不給買賣 verdict**。給：原始數據表 + 圖表（§4.2）+ Piotroski F-Score
   9 分項當診斷清單（打勾/打叉，**不加總**）。
@@ -329,6 +336,19 @@ tw-data 是新 repo，但**不是從零抓**——tw-swing 已經有的直接搬
 ### 4.3 AI 敘事層（選配，後期）
 
 「複製給 AI」：數據 + 因子整理成文字 → 貼給 GPT/Gemini/DeepSeek。只傳整理過的數據。
+
+### 4.4 估值速覽（2026-10-29 新增，`app/valuation.py` + `_valuation_block`）
+
+起因：使用者自己的 Excel 估值表（單月營收×3、含最新季業外、×4 年化、× 產業本益比）地基不穩。改成一套**攤開推導、不給目標價**的試算，放在個股查詢最上方（K 線之前）。
+
+- **摘要三欄**：營收（近 3 月合計／vs 上季／YoY）｜EPS（年化試算排除業外／含業外對照／近 4 季實際／今年預估＋年增）｜股價（現價、三段價、合理成長價）。
+- **口徑**：營業費用＝最新季**費用率** × 試算營收；業外主版本歸零；稅用近 4 季「歸母淨利 ÷ 稅前」；股數＝近 4 季「淨利 ÷ EPS」中位數；今年預估 EPS＝已公布季實際＋未公布季 × 試算單季 EPS。
+- **三段價（便宜／合理／昂貴）**＝**近 5 年各年平均本益比**（排除虧損日）的最低／中位數／最高 × 今年預估 EPS；最高 > 4×最低 → 卡片不列（展開照列）。
+- **合理成長價**＝今年預估 EPS × 交易所目前本益比（使用者 Excel 口徑：倍數不變、讓獲利成長推股價）。
+- 展開區：推導表、營收 × 毛利率敏感度、各年平均本益比、外資 PE band（平均 ±1σ）對照、近 8 季業外。
+- 不試算：財報 < 4 季、金融業（無毛利欄）、月營收不足 3 個連續月。
+
+**跟 §4.1「不給 verdict」的關係**：三段價與合理成長價是**歷史倍數的條件試算**，頁面標明「非全年預測、非目標價」，不產生買賣判斷、不進任何清單排序；trailing 倍數 × 預估 EPS 的口徑錯配在展開區以文字揭露。這是對 §1.2「估值靠外推疊外推」批評的**有意識例外**：使用者要求看到三段價，所以把每一步假設攤開、讓人自己判斷。
 
 ---
 
@@ -728,6 +748,7 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 > **fine-grained PAT**（`TWSWING_BUNDLE_PAT`，contents:read）拉，dispatch 用 `TWHOLD_DISPATCH_PAT`
 > ——兩顆 PAT 都活著（守門員 G6 沒刪，到期日見 `reference/UPSTREAM.md`）。
 > 「零 token / 匿名下載 / tw-data 公開」那套沒發生。下面保留原文供對照。
+> **2026-10-29 補**：PAT 實際有 6 顆（清單見 §12.3）；Streamlit 雲端除了 `TWSWING_BUNDLE_PAT` 還需要 `DATA_READ_PAT`（唯讀 `tw-hold-data`，還原 PCF 快照與總經序列，`_ensure_refdata`），沒有它總經導航與主動式 ETF 會缺資料。repo 沒有 `runtime.txt`，Python 版本由 Streamlit Cloud 設定決定（下面「3.14」未驗證）。
 
 - Python 3.14、Streamlit、**plotly**、pandas、pyarrow、requests。
 - repo（**同一個 GitHub 帳號，不開新帳號**，§9 已定 10）：
@@ -877,7 +898,7 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 | **G1** | **schema 漂移**：tw-swing 改欄位名/型別，tw-hold 隔天算出錯的數字 | `_meta.json` 帶 `schema_version` + 每檔欄位清單；`fetch_bundle.py` 開場 assert，**不符就 fail**，不要「盡力而為」 |
 | **G2** | 🔴 **還原 / 未還原搞混**：`prices_raw_close` 若被誤填成還原序列，**填息率恆等於 100%、定存清單全綠、沒有任何東西會報錯** | 一條 assertion test：抽 `0056` / `2412` 的除息日，檢查 **raw 序列有跳空、adj 序列沒有**（tw-swing PRD §5.2.1 實測 0056 除息日 +0.36%～+1.14%）。跳空不見了就 fail |
 | **G3** | **bundle 是舊的**：tw-hold 排在 tw-swing publish 之前跑，吃到昨天的資料 | `_meta.json` 帶 `trading_date`；tw-hold 比對「預期最新交易日」，不符**不是失敗、是在清單頁標記資料日期** |
-| **G4** | **tw-hold 的 Action 靜默斷掉**：連續失敗沒人看，60 天後 GitHub 自動停用排程 | 抄 `daily.yml` 的 `heartbeat` + `notify-failure` job（⚠️ 告警 job 自己絕對不可以失敗） |
+| **G4** | **tw-hold 的 Action 靜默斷掉**：連續失敗沒人看，60 天後 GitHub 自動停用排程 | 抄 `daily.yml` 的 `heartbeat` + `notify-failure` job（⚠️ 告警 job 自己絕對不可以失敗）。**現況（2026-10-29）**：tw-hold 有自己的 `heartbeat.yml`（cron 平日 UTC 00:28＝台北 08:28，「開盤前新鮮度守門」），但實測 GitHub 排程常延遲到 13 點後才跑、只查三清單＋0050／006201 三項——要不要調整待使用者決定 |
 | **G5** | **複製碼漂移**：`regime` / `indicators` / `finmind_client` 上游改了、這邊沒跟 | `reference/UPSTREAM.md` 記「檔案 / 來源路徑 / commit」＋ `check_upstream_drift.py` 比 hash（**只提醒，不自動同步**） |
 | **G6** | **PAT 過期**：fine-grained PAT 最長 1 年，過期後 bundle 拉不到 | 到期日寫進 `UPSTREAM.md` 與 `_meta.json` 的註記；G4 的告警會先叫 |
 
@@ -894,10 +915,12 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 | **G7** | **`rebuild.yml` 觸發單點依賴**：原本只靠 tw-swing `publish_bundle.yml` 尾端的 `repository_dispatch`，dispatch 沒送到（PAT 過期、tw-swing 失敗、網路問題）rebuild 就不會失敗，只是不再跑 | `rebuild.yml` 加 `schedule` 備援（平日 UTC 08:17＝台北 16:17，早過大部分情況的正常落地時間）；bundle 沒變的日子 `git diff --cached --quiet` 擋掉，不洗出空 commit。**只解決「這次剛好沒送到」，系統性故障（PAT 真的過期）每天一樣會失敗**——認知記在 memory，不做連續失敗計數器，改走 G10 的絕對新鮮度顯示 |
 | **G8** | **PCF（主動式 ETF 申購買回清單）沒有歷史回補 API**：五檔投信官網任一家當天反爬擋/網路抖動沒抓到，**永久缺一格**，不像 bundle/yfinance 隔天重抓自動補；且「有沒有抓到」≠「抓對了沒」——holdings 筆數異常少但沒丟例外時照樣落地，下游差分會產出假的全體 consensus_sell/buy | 獨立輕量 `.github/workflows/pcf_retry.yml`：平日台北 17:13/19:13（排在 `rebuild.yml` 主排程之後），條件是 `_index.json.missing` 非空**或今天完全沒有任何一檔的日期**才補跑，避免對投信官網一天多打幾次。資料品質再加兩層：`snapshot_pcf.py` 的 `MIN_HOLDINGS=10`（異常少當抓失敗、記進 `missing`，順帶讓補跑機制自動接住）＋ `build_active_etf_flags.py` 的 `MIN_SYNC_HOLDINGS=5`（今天筆數掉到前一份一半以下就當沒同步、不算差分） |
 | **G9** | **多條 workflow 同天各自 `git push` 回 `main` 會撞車**：`rebuild.yml`／`global_macro.yml`／`pcf_retry.yml` 三條獨立 `concurrency.group`（不互斥，刻意不共用一組——GitHub 的 concurrency group 第三個 run 進來時會直接取消 pending 那個，不是排隊，共用反而可能靜默丟掉 PCF 這種不可回復的資料）；三條都會 commit 到 `main`，同時觸發時 push 互相拒絕 | 三份 workflow 的 push 步驟都是「push 失敗 → `git pull --rebase` → 重試，最多 5 次；衝突時該批『產出檔』一律取自己這輪的版本（`git checkout --theirs`）」。🔴 這段本身曾經有 bug：`for...; do git push && break; git pull --rebase; done` 這種寫法，三次 push 全失敗但最後一次 `pull` 成功時，迴圈 exit code 是那個成功的 `pull`——job 綠燈但資料沒推上 `main`，是這一輪最想解決的「靜默失敗」的翻版。已改用 `$pushed` 旗標明確判斷、5 次都不成功就 `exit 1` 讓 `notify-failure`（G4 那套）真的接住 |
-| **G10** | **`_check_staleness()`（原本的過期偵測）只比「這批自己最大日期」**：如果整批連續好幾天一起卡住沒跑成功，批內彼此沒有落差，偵測不到，app 上不會有任何 ⚠️ | `scripts/fetch_global_macro.py` 新增**絕對新鮮度** `snapshot_lag_days`（跟營業日比、跳過週末），寫進 `global_macro_meta.json`；`app/streamlit_app.py` 在國際指數/波動度/美股個股整段前面加警示（落後 > 2 個營業日才顯示）。日經/恆生/KOSPI 因為當地連假較長另放寬到 7 天門檻（`_ASIA_STALE_THRESHOLD_DAYS`），避免連續誤報。這是使用者裁決「警報掛在程式註明新鮮度」而不是外部告警的具體做法——PAT 真的過期時，app 上會直接表現成「資料日卡住不動」，不需要額外的連續失敗計數器 |
+| **G10** | **`_check_staleness()`（原本的過期偵測）只比「這批自己最大日期」**：如果整批連續好幾天一起卡住沒跑成功，批內彼此沒有落差，偵測不到，app 上不會有任何 ⚠️ | `scripts/fetch_global_macro.py` 新增**絕對新鮮度** `snapshot_lag_days`（跟營業日比、跳過週末），寫進 `global_macro_meta.json`；`app/streamlit_app.py` 在國際指數/波動度/美股個股整段前面加警示（落後 > 2 個營業日才顯示）。日經/恆生/KOSPI 因為當地連假較長另放寬到 7 天門檻（`_ASIA_STALE_THRESHOLD_DAYS`），避免連續誤報。這是使用者裁決「警報掛在程式註明新鮮度」而不是外部告警的具體做法——PAT 真的過期時，app 上會直接表現成「資料日卡住不動」，不需要額外的連續失敗計數器。**2026-09-16 另加**表頭徽章「清單資料 YYYY-MM-DD」（`_freshness_badge_html`，看 bundle 的 `trading_date`）。⚠️ **已知缺口（2026-10-20 Opus 指出、未修）**：`snapshot_lag_days` 在抓取當下寫入，排程整個沒跑時值停在 0，「整批落後」警告實際不會觸發；建議改成 App 端用 `reference_date` 對台北今天算營業日差 |
 | **G11** | **總經導航頁的手動重整按鈕**（`_macro_refresh_button`，打 GitHub `workflow_dispatch` REST API 觸發 `rebuild.yml`/`global_macro.yml`）**沒有身份驗證**——app 是公開連結，任何拿到連結的人都能按，原本只用 `st.session_state` 做 60 秒冷卻（per-browser-session，換瀏覽器/無痕模式形同虛設） | 改用 `st.cache_resource` 的**行程級**冷卻（15 分鐘，跨訪客共用、繞不過）＋ 觸發前先查 GitHub Actions runs API 確認上一輪真的跑完，兩層都比原本的 session 冷卻更權威。判定為「真隱患但中等」（Opus 審核 2026-09-22）：爆炸半徑有限（公開 repo Actions 分鐘數不計費、workflow 冪等、無意義 commit 會被 diff 擋掉），不是最優先項，但仍需修 |
 
 ### 10.3 `prices_raw_close` 的資料來源（M2 之前必須定，否則填息率做不出來）
+
+> 🟢 **已解決（2026-10-29 註）**：自建上游上線後，未還原收盤來自官方每日資料（`scripts/selfhost_raw_prices.py` 收集），由 `scripts/selfhost_to_datapack.py` 打包進自建資料包、再經 tw-swing bundle 帶過來；`fetch_bundle.py` 把 `prices_raw_close.parquet` 列在 u1b 檔案清單，`build_factors.py` 讀它算填息率。下面是 2026-09-07 當時的分析，保留供對照。
 
 🔴 **這條現在完全沒有人在抓，而且它是定存兩道新硬門檻之一的原料。**
 
@@ -931,6 +954,13 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
 ---
 
 ## 11. 變更記錄
+
+- **2026-10-29 v3.2 現況同步（文件對齊程式，非設計變更）＋ 估值速覽**——
+  雲端 Sonnet 對照 main 程式列出 21 條差異，Opus 逐條到程式核實後修訂：
+  頂端更正框改寫（自建資料包 10/13 已上線）；§1.1 補 8 分頁現況；§1.3 標歷史設計；
+  §4.1 註明本地即時補抓尚未實作；新增 §4.4 估值速覽；§8 補 6 顆 PAT 與 `DATA_READ_PAT`；
+  §10.2 G4 補 tw-hold 自己的 heartbeat、G10 補表頭徽章與「整批落後警告不會觸發」缺口；
+  §10.3 標已解決；新增 §12 現況總表（分頁、排程、PAT、選股門檻抽查）。
 
 - **2026-09-22 資料管線備援/自癒機制 + Opus 審核追加修正（實作校正，非設計變更）**——
   起因：使用者回報「hold 資料沒更新」，查出 `fetch_global_macro.py` 對過期 symbol
@@ -1069,3 +1099,56 @@ v1.0 的 `4%` 是隨手訂的，在 v3.0 的用途下太低——它要對標的
   7. **長波段加 `positions.json` 持倉登錄**（§5.3 出場檢查表沒它算不出來）
      ＋ 措辭改「條件成立區間」＋ v1.5 補跑一次回測（§5）。
   8. **「新進/移除」明確讀上一期 `lists/*.json`**，不靠 git diff（§3.2）。
+
+---
+
+## 12. 現況總表（2026-10-29 對照 main 程式）
+
+> 這節只記「現在程式長什麼樣」，設計理由在前面各章。有出入時以程式為準，並回頭更新這節。
+
+### 12.1 網頁分頁（`app/streamlit_app.py` 的 `NAV`）
+
+| 分頁 | 進入函式 | 定位 | 資料來源 |
+| :--- | :--- | :--- | :--- |
+| 總經導航 | `_macro_compass_page` | 台股／國際總經卡片、台指期夜盤、外資期貨淨空單、三大法人 | `global_macro.yml`（`scripts/fetch_global_macro.py`）、期交所 CSV、私有參考資料（`DATA_READ_PAT`） |
+| 短線 | `_shortterm_page` | tw-swing 每日清單轉呈＋**第四名單「條件掃描」**（tw-hold 自己用多軌體檢 ⚡短線檢核表掃 universe，全部沒缺口的列出） | tw-swing `share-latest.json`；`build_short_scan.py` → `data/derived/short_scan.json` |
+| 長波段 | （主動選股候選池，§5） | 狀態型候選池，不給 verdict | bundle → `build_lists.py` |
+| 價值 | §6 | 推薦清單 | bundle → `build_factors.py`／`build_lists.py` |
+| 定存 | §7 | 推薦清單 | 同上 |
+| 個股查詢 | `_stock_page` | 估值速覽（§4.4）＋圖表（§4.2）＋F-Score | bundle（執行期拉 Release） |
+| 多軌體檢 | `_checklist_page` | 同一檔、四套判準（⚡短線／🟠波段／🔵價值／🟢定存）逐條攤開，不加總、不給 verdict | bundle、`app/checklist.py` |
+| 主動式 ETF | `_active_etf_page` | 6 檔主動式 ETF 每日 PCF 差分 → 個股加減碼旗標（00406A 晚一天，不進共識旗標） | `scripts/snapshot_pcf.py`、`pcf_fetchers.py`、`build_active_etf_flags.py`；`pcf_retry.yml` |
+
+### 12.2 排程（tw-hold `.github/workflows/`，時間為 UTC；台北＝UTC+8）
+
+| workflow | 名稱 | 觸發 |
+| :--- | :--- | :--- |
+| `rebuild.yml` | 每日重算三清單 | `repository_dispatch: bundle-published`（tw-swing `publish_bundle.yml` 送）＋ cron `17 8 * * 1-5` 備援 |
+| `heartbeat.yml` | 心跳（開盤前新鮮度守門） | cron `28 0 * * 1-5`（實際常延遲數小時） |
+| `global_macro.yml` | 國際總經快照 | cron `37 22 * * 1-5` |
+| `chip_flow_evening.yml` | 籌碼流向（傍晚） | cron `28 10 * * 1-5` |
+| `openapi_daily.yml` | 官方 OpenAPI 每日收集 | cron 平日 UTC 08／10／12／15／20 時 02 分 |
+| `selfhost_collect.yml` | 自建上游收集 | cron `58 15 * * 1-5` |
+| `selfhost_datapack.yml` | 自建資料包（官方口徑 zip） | `workflow_run`（收集完成後）；完成後若 repo 變數 `TRIGGER_SWING=true`（2026-10-13 起）用 `TWSWING_DISPATCH_PAT` 接力觸發 tw-swing `daily.yml` |
+| `pcf_retry.yml` | 主動式 ETF PCF 補跑 | cron `13 9`、`13 11`（平日） |
+| `check_secrets.yml`／`check_swing_dispatch_pat.yml`／`pcf_repair.yml` | 手動維運 | 只有 `workflow_dispatch` |
+
+資料流全貌、救援指令、補不回清單見 `docs/DATA_FLOW.md`。
+
+### 12.3 秘密與 PAT
+
+6 顆 fine-grained PAT（`TWSWING_BUNDLE_PAT`、`TWHOLD_DISPATCH_PAT`、`DATA_REPO_PAT`、`DATA_READ_PAT`、`TWHOLD_DATA_READ_PAT`、`TWSWING_DISPATCH_PAT`）的用途、放置位置與到期日，總表放在專案外的交接檔 `d:\g\claude\HANDOFF.md` §0-1（含提醒日）；`reference/UPSTREAM.md` 也有登錄。**最近到期：`TWSWING_BUNDLE_PAT` 約 2026-12-07**。另有 `FINMIND_TOKEN`（Actions secret）。
+
+### 12.4 選股門檻抽查（PRD 數字 vs 程式常數）
+
+| PRD | 程式 | 結果 |
+| :--- | :--- | :--- |
+| F-Score ≥ 6（§5） | `screener/candidate_pool.py` `FSCORE_MIN = 6` | 一致 |
+| CANSLIM EPS YoY > 25%（§5.2） | `candidate_pool.py` `EPS_YOY_MIN = 0.25` | 一致 |
+| 填息率 ≥ 60%（§7.1） | `screener/deposit_pricing.py` `FILL_RATE_MIN = 0.60` | 一致 |
+| 殖利率硬底線 5%（§7.0.1） | `deposit_pricing.py` `YIELD_FLOOR = 0.05` | 一致（目標 5.5% 是揭露用，程式沒有獨立常數） |
+| 負債比 ≤ 0.75 或產業中位數 × 1.5（§7.1） | `screener/screen.py`：一般 0.75；**高槓桿產業（金融）改用產業中位數 × 1.1** | 程式比 PRD 嚴（1.1 而非 1.5），理由寫在程式註解（金融業結構性高負債） |
+| 單一產業上限 40%（§6.1／§7.4） | `build_lists.py` `INDUSTRY_CAP = 0.40` | 一致 |
+| 移動停損 2×ATR（§5.3） | `screener/swing_stops.py` `TRAIL_ATR_MULT = 2.0` | 一致 |
+
+未抽查：候選池檔數、價值 verdict 細則、長波段 1×ATR 緩衝的停損擋板（2026-10-20 加）。
