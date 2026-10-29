@@ -9,16 +9,16 @@
 {
   "built_at":   "2026-10-29T18:52:00+08:00",
   "price_date": "2026-10-29",          # 現價／均線用到的最後收盤日
-  "universe_note": "市值前500（universe.parquet in_mktcap500，asof 2026-10-19）",
+  "universe_note": "市值前500∪成交值前500（universe.parquet in_universe，與其他清單一致，asof 2026-10-19）",
   "periods": [                         # 最新的營收月份在前，固定 2 期（見 periods_to_show）
     {
       "month": "2026-09",              # 營收月份
       "pub_month": "2026-10",          # 公布月份＝month 的下一個月
       "source": "mops" | "bundle",     # 這期營收數字的來源（mops＝data/revenue_mops/<month>.parquet）
       "has_first_seen": false,         # 這期有沒有逐家「第一次看到」時間（2026-10 營收起才有）
-      "n_universe": 500,
-      "n_published": 498,              # 前500大裡已公布的家數
-      "rows": [Row, ...]               # 前500大裡已公布的每一家（排序／取前 30 是 UI 的事）
+      "n_universe": 650,
+      "n_published": 498,              # universe 裡已公布的家數
+      "rows": [Row, ...]               # universe 裡已公布的每一家（排序／取前 30 是 UI 的事）
     }
   ]
 }

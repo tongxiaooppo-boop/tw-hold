@@ -2,7 +2,7 @@
 
 步驟（Cline 照這個順序實作，不准改步驟與輸出格式）：
 1. `bundle_data.ensure_assets()`；讀 `data/upstream/fundamentals/universe.parquet`，
-   universe ＝ `in_mktcap500` 為真的 ticker（裸代號）。檔案不在 → 印錯誤、回 1、不覆寫舊 JSON。
+   universe ＝ `in_universe` 為真的 ticker（裸代號；市值前500∪成交值前500，與價值／定存清單一致，使用者 2026-10-29 指定）。檔案不在 → 印錯誤、回 1、不覆寫舊 JSON。
 2. **一次**把 bundle 的 prices_adj / per / revenue / income / balance / cashflow 讀進記憶體，
    用 `_install_preloaded_reader()` 換掉 `bundle_data._read`，之後照常呼叫
    `bundle_data.prices(code)`、`per_history`、`revenue`、`financials`——正規化沿用原函式，
@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         print("錯誤：找不到 universe.parquet，中止且不覆寫舊 JSON。", file=sys.stderr)
         return 1
     uni = pd.read_parquet(uni_path)
-    in500 = uni[uni["in_mktcap500"] == True]  # noqa: E712
+    in500 = uni[uni["in_universe"] == True]  # noqa: E712
     codes = [bd._t(str(t)) for t in in500["ticker"]]
     uni_by_code = {bd._t(str(r["ticker"])): r for r in uni.to_dict("records")}
     n_universe = int(len(in500))
@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     doc = {
         "built_at": now.replace(microsecond=0).isoformat(),
         "price_date": price_date,
-        "universe_note": f"市值前500（universe.parquet in_mktcap500，asof {asof}）",
+        "universe_note": f"市值前500∪成交值前500（universe.parquet in_universe，與其他清單一致，asof {asof}）",
         "periods": out_periods,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
