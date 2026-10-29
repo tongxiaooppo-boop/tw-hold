@@ -2074,8 +2074,8 @@ def _valuation_block(d: dict, label: str = "") -> None:
             tiers = f"便宜 {b['low']:,.1f}｜合理 **{b['mid']:,.1f}**｜昂貴 {b['high']:,.1f}"
         else:
             tiers = "三段價：—（本益比年數不足或預估 EPS ≤ 0）"
-        grow = (f"合理成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
-                else "合理成長價：—")
+        grow = (f"成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
+                else "成長價：—")
         yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
                     f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
@@ -2120,7 +2120,7 @@ def _valuation_block(d: dict, label: str = "") -> None:
                  f"去年 {_fmt_x(yb['last'])}，年增 {_fmt_pct(yb['growth'])}"),
             ]
         if r["growth_price"]:
-            rows.append(("合理成長價 ＝ 預估 EPS × 目前本益比", _fmt_x(r["growth_price"], 1),
+            rows.append(("成長價 ＝ 預估 EPS × 目前本益比", _fmt_x(r["growth_price"], 1),
                          f"交易所本益比 {r['cur_pe']['pe']:.1f} 倍（{r['cur_pe']['date']}）；"
                          "倍數不變、讓獲利成長推股價，成長越陡越樂觀"))
         if r["implied_pe"]:
@@ -2250,7 +2250,7 @@ def _rev_view_growth(rows: list[dict]) -> None:
 
 def _rev_view_value(rows: list[dict]) -> None:
     from screener.revenue_watch import UPSIDE_GOAL, rank
-    basis = st.segmented_control("估值口徑", ["合理價", "合理成長價"], default="合理價",
+    basis = st.segmented_control("估值口徑", ["合理價", "成長價"], default="合理價",
                                  key="_rev_basis") or "合理價"
     cyc = st.toggle("含景氣循環股／歷史本益比不穩定", value=False, key="_rev_cyc")
     st.caption("不排除時前 30 名多半是景氣循環股（記憶體股價差動輒 +500%～+1100%），"
@@ -2282,7 +2282,7 @@ def _rev_view_value(rows: list[dict]) -> None:
             "近 3 個月營收 → 最新一季毛利率與費用率 → 稅後 → 股數 → 年化 EPS。\n\n"
             "今年預估 EPS＝已公布季＋未公布季×試算。\n\n"
             "合理價＝近 5 年各年平均本益比的中間值 × 今年預估 EPS；"
-            "合理成長價＝目前本益比 × 今年預估 EPS。\n\n"
+            "成長價＝目前本益比 × 今年預估 EPS。\n\n"
             "景氣循環股（⚠）在獲利高峰時估值會偏高。**試算不是預測、不是目標價。**")
 
 

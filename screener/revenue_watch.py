@@ -43,7 +43,7 @@ Row（`make_row` 回傳；金額單位元、比例用小數 0.123＝12.3%、缺�
 | est_ok, est_reason | valuation.estimate 的 ok／reason |
 | run_eps, est_eps | estimate 的 eps.run_ex（年化試算）／year.est（今年預估） |
 | band_low, band_mid, band_high | estimate 的 band（便宜／合理／昂貴） |
-| growth_price | estimate 的 growth_price（合理成長價） |
+| growth_price | estimate 的 growth_price（成長價） |
 | upside_mid, upside_growth | band_mid / price − 1、growth_price / price − 1 |
 | at_valuation | price ≥ band_mid；任一缺 → None |
 | cyclical | estimate 的 cycle.pct ≥ 0.8（營益率在歷史高檔，景氣循環股警示） |

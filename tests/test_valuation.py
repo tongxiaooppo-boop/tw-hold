@@ -65,7 +65,7 @@ def test_基本試算_手算對得上():
     assert y["reported_q"] == 2 and y["est"] == pytest.approx(4.928, rel=0.01)
     assert y["growth"] == pytest.approx(4.928 / 4.48 - 1, rel=0.02)
     assert r["band"]["mid"] == pytest.approx(12 * 4.928, rel=0.02)
-    # 合理成長價 ＝ 預估 EPS × 最新本益比（12）
+    # 成長價 ＝ 預估 EPS × 最新本益比（12）
     assert r["growth_price"] == pytest.approx(12 * 4.928, rel=0.02)
     assert r["warns"] == []
 

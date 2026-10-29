@@ -325,7 +325,7 @@ def test_月營收分頁_循環股開關與條件都不炸():
     at.session_state["_nav"] = "月營收"
     at.session_state["_rev_view"] = "估值價差"
     at.session_state["_rev_cyc"] = True
-    at.session_state["_rev_basis"] = "合理成長價"
+    at.session_state["_rev_basis"] = "成長價"
     at.run()
     assert not at.exception
     at.session_state["_rev_view"] = "營收成長"

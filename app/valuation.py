@@ -15,7 +15,7 @@
 - 今年預估 EPS：已公布季實際 ＋ 未公布季 × 試算單季 EPS（2026-10-29 使用者要求）。
 - 三段價：近 5 年各年平均 trailing PE（排除虧損日）的最低/中間/最高 × 今年預估 EPS
   ＝便宜/合理/昂貴（使用者指定；外資的平均 ±1σ 在展開當對照）。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
-- 合理成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
+- 成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
   讓獲利成長推股價；成長越陡越樂觀。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
@@ -150,7 +150,7 @@ def _year_block(q: pd.DataFrame, year: int, run_q_eps: float | None) -> dict | N
 
 
 def _current_pe(per: pd.DataFrame) -> dict | None:
-    """交易所公布的最新 trailing PER（>0 才算）；使用者 Excel 的「合理成長價」用這個倍數。"""
+    """交易所公布的最新 trailing PER（>0 才算）；使用者 Excel 的「成長價」用這個倍數。"""
     if per is None or per.empty:
         return None
     p = per[["date", "per"]].copy()
@@ -243,7 +243,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     band = None
     if pe and est_eps and est_eps > 0:
         band = {k: pe[k] * est_eps for k in ("low", "mid", "high")}
-    # 合理成長價（使用者 Excel 口徑）＝ 今年預估 EPS × 目前本益比：倍數不變、讓獲利成長推股價
+    # 成長價（使用者 Excel 口徑）＝ 今年預估 EPS × 目前本益比：倍數不變、讓獲利成長推股價
     cur_pe = _current_pe(per)
     growth_price = cur_pe["pe"] * est_eps if (cur_pe and est_eps and est_eps > 0) else None
     if pe and pe["wide"]:
