@@ -1058,6 +1058,9 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .ir-tag{display:inline-block;margin-left:.5rem;font-size:.7rem;color:var(--thc-soft);
   background:var(--thc-surface2,var(--thc-line));border:1px solid var(--thc-line);
   border-radius:4px;padding:.05rem .4rem;white-space:nowrap;}
+/* 估值速覽三欄卡等高（2026-10-29）：欄撐滿列高、卡片撐滿欄高；手機堆疊時不影響 */
+.st-key-valcards [data-testid="stColumn"] [data-testid="stLayoutWrapper"]{flex:1 1 auto;}
+.st-key-valcards [class*="st-key-valcard_"]{height:100%;}
 /* 推薦回顧的「◀ 日期 ▶」一列：Streamlit 的 st.columns 在窄螢幕（<640px）會疊成直的，
    手機上變三行。用 st.container(key=histnav_*) 產生的 class 鎖住這一列不換行（2026-10-16 使用者要求）。 */
 [class*="st-key-histnav_"] [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;gap:.4rem !important;
@@ -2049,20 +2052,20 @@ def _valuation_block(d: dict, label: str = "") -> None:
                f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
 
     rv, e, pe, yb = r["rev"], r["eps"], r["pe"], r["year"]
-    c1, c2, c3 = st.columns(3)
-    with c1.container(border=True):
+    c1, c2, c3 = st.container(key="valcards").columns(3)
+    with c1.container(border=True, key="valcard_rev"):
         st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
                     f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**  \n"
                     f"vs 上季 {a['fin_q']}：{_fmt_pct(rv['vs_last_q'])}  \n"
                     f"年增：{_fmt_pct(rv['yoy'])}")
-    with c2.container(border=True):
+    with c2.container(border=True, key="valcard_eps"):
         st.markdown(f"**EPS**（年化試算）  \n"
                     f"排除業外 **{_fmt_x(e['run_ex'])}**  \n"
                     f"含近 4 季平均業外：{_fmt_x(e['run_incl'])}  \n"
                     f"近 4 季實際：{_fmt_x(e['ttm'])}  \n" + (
                         f"{yb['year']} 預估 **{_fmt_x(yb['est'])}**（年增 {_fmt_pct(yb['growth'])}）"
                         if yb else "今年預估：—"))
-    with c3.container(border=True):
+    with c3.container(border=True, key="valcard_px"):
         b, gpx, px0 = r["band"], r["growth_price"], r["price"]
 
         def _vs(v):
