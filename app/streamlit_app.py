@@ -2034,9 +2034,9 @@ def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = fr
     st.markdown("".join(html) + "</table>", unsafe_allow_html=True)
 
 
-def _valuation_block(d: dict) -> None:
+def _valuation_block(d: dict, label: str = "") -> None:
     """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
-    計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。"""
+    計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。label＝「代號 股名」，放股價欄最前面。"""
     import valuation as va
 
     r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
@@ -2077,7 +2077,8 @@ def _valuation_block(d: dict) -> None:
         grow = (f"合理成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
                 else "合理成長價：—")
         yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
-        st.markdown(f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
+        st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
+                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
                     f"<span style='font-size:.8rem;opacity:.7'>近五年 PE 倍數變化：{yrs}<br>"
                     f"三段＝各年平均 PE 最低／中間／最高 × 今年預估 EPS；成長價＝今年預估 EPS"
                     f" × 目前本益比"
@@ -2394,7 +2395,9 @@ def _stock_page() -> None:
         _disclaimer()
         return
 
-    name = code
+    name = code       # 圖表標題用
+    stock_name = ((_factor_row("value", code) or _factor_row("deposit", code) or {}).get("name")
+                  or "")
 
     _aflags = _active_flags()
     _aef = _active_of(code, _aflags)
@@ -2404,7 +2407,7 @@ def _stock_page() -> None:
         st.caption((_sx or _ox) + "　—　" + _active_legend(_aflags))
 
     try:
-        _valuation_block(d)
+        _valuation_block(d, f"{code} {stock_name}".strip())
     except Exception as e:  # noqa: BLE001  試算掛掉不連累下面的圖
         st.warning(f"估值速覽算不出來：{type(e).__name__}: {e}")
 
