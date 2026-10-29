@@ -1,5 +1,8 @@
 # 任務書：「月營收」分頁（2026-10-29，Opus 定框架）
 
+> **狀態（2026-10-29 14:30）**：第 1、2 步已完成並 commit（Cline 寫、Opus 驗收）。**只剩第 3 步（UI）**，下個 session 派 Sonnet 子代理（worktree）。
+> 第 1、2 步的檔案不准再讀或修改，除了第 3 步清單列的函式介面。
+
 做完要讓 `pytest` 全綠、`python build_revenue_watch.py` 在本機跑得出 JSON、app 的「月營收」分頁可以正常顯示。
 介面（函式簽名、JSON 格式、Row 欄位）已經 commit，**不准改**；覺得介面有問題就停下來，寫進 `collab/from-cline.md`。
 
@@ -65,8 +68,10 @@
 
 ③ **估值價差**
 - `st.segmented_control("估值口徑", ["合理價","合理成長價"], key="_rev_basis")` → key 用 `upside_mid` 或 `upside_growth`；`rank(rows, key, require=("est_ok",))`。
+- 〔2026-10-29 Opus 追加〕`st.toggle("含景氣循環股／歷史本益比不穩定", value=False, key="_rev_cyc")`：關（預設）→ `rank(..., require=("est_ok",), exclude=("cyclical","pe_wide"))`；開 → 不帶 exclude。理由：9 月實測不排除時前 30 名有 23 檔景氣循環股（記憶體股價差 +500%～+1100%），那是「近 5 年平均本益比 × 高峰 EPS」的方法極限。開關下方 caption 寫這句理由。
 - 欄位：代號＋名稱、現價、估值（band_mid 或 growth_price，`_fmt_x(v,1)`）、價差（`_fmt_pct`；≥ `UPSIDE_GOAL` 的在前面加「★ 」）、今年預估 EPS、年增、提醒（cyclical 或 warns 不空 → 「⚠」）。
 - 表格下面加 `st.expander("怎麼估的")`，內容寫：近 3 個月營收 → 最新一季毛利率與費用率 → 稅後 → 股數 → 年化 EPS；今年預估 EPS＝已公布季＋未公布季×試算；合理價＝近 5 年各年平均本益比的中間值 × 今年預估 EPS；合理成長價＝目前本益比 × 今年預估 EPS。景氣循環股（⚠）在獲利高峰時估值會偏高。**試算不是預測、不是目標價。**
+- 提醒欄：cyclical 或 pe_wide 為真、或 warns 不空 → 「⚠」。
 - 「⚠」的原文：每一列可以收進 `st.expander(f"{代號} {名稱} 的提醒")`；只列前 30 名裡有 ⚠ 的。
 
 ④ **持有提示**
