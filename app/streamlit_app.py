@@ -898,6 +898,21 @@ div[data-testid="stMarkdownContainer"] table th{
 .thc-details td:first-child{color:var(--thc-faint);white-space:nowrap;padding-right:.9rem;}
 .thc-details td:last-child{font-family:var(--thc-mono);text-align:right;
   font-variant-numeric:tabular-nums;color:var(--thc-ink);}
+/* 估值速覽展開表：取代 st.dataframe（手機會截欄、要內捲）。文字欄換行、數字欄靠右不換行 */
+.thc-vt{width:100%;border-collapse:collapse;font-size:.86rem;margin:.1rem 0 .6rem;
+  border:1px solid var(--thc-line);}
+.thc-vt th{font-size:.72rem;color:var(--thc-faint);font-weight:600;text-align:left;
+  background:var(--thc-surface2);padding:.35rem .55rem;}
+.thc-vt td{padding:.4rem .55rem;border-top:1px solid var(--thc-line);color:var(--thc-ink);
+  vertical-align:top;overflow-wrap:anywhere;}
+.thc-vt .n{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;text-align:right;
+  white-space:nowrap;}
+.thc-vt th.n{font-family:inherit;}
+.thc-vt .note{display:block;font-size:.75rem;color:var(--thc-faint);margin-top:.1rem;}
+@media (max-width:640px){
+  .thc-vt{font-size:.8rem;}
+  .thc-vt th,.thc-vt td{padding:.35rem .4rem;}
+}
 /* 多軌體檢：檢核清單。桌面＝四欄類表格（不動）；手機＝堆疊，狀態永遠靠右可見 */
 .thc-cl{border:1px solid var(--thc-line);border-radius:8px;overflow:hidden;margin:.15rem 0 .1rem;}
 .thc-cl-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,2fr) minmax(0,.9fr) minmax(0,.85fr);
@@ -1977,6 +1992,24 @@ def _fmt_x(v, nd: int = 2) -> str:
     return "—" if v is None else f"{v:,.{nd}f}"
 
 
+def _vtable(head: list[str], rows: list[list], num: set[int]) -> None:
+    """估值展開用的 HTML 表（.thc-vt）。cell 可為 (主字, 小字註解)；`num` 是數字欄的 index。
+    不用 st.dataframe：手機上它會截欄、要在表格內左右／上下捲（2026-10-29 使用者回報）。"""
+    def _cell(v, i, tag):
+        cls = ' class="n"' if i in num else ""
+        if isinstance(v, tuple):
+            main, note = v
+            body = _esc(main) + (f'<span class="note">{_esc(note)}</span>' if note else "")
+        else:
+            body = _esc(v)
+        return f"<{tag}{cls}>{body}</{tag}>"
+    html = ['<table class="thc-vt"><tr>'
+            + "".join(_cell(h, i, "th") for i, h in enumerate(head)) + "</tr>"]
+    for r in rows:
+        html.append("<tr>" + "".join(_cell(v, i, "td") for i, v in enumerate(r)) + "</tr>")
+    st.markdown("".join(html) + "</table>", unsafe_allow_html=True)
+
+
 def _valuation_block(d: dict) -> None:
     """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
     計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。"""
@@ -2034,13 +2067,16 @@ def _valuation_block(d: dict) -> None:
     inp = r["inputs"]
     with st.expander("🔍 試算細節（推導表／敏感度／本益比區間／業外）"):
         gp = rv["m3_sum"] * inp["gm"] if inp["gm"] is not None else None
-        op = gp - inp["opex"] if gp is not None else None
+        op = gp - inp["opex_est"] if (gp is not None and inp["opex_est"] is not None) else None
         net = op * inp["conv"] if (op is not None and inp["conv"] is not None) else None
         rows = [
             ("近 3 月營收合計", _fmt_yi(rv["m3_sum"]), f"月營收 {rv['first_month']}–{rv['last_month']}"),
             ("× 毛利率", _fmt_pct(inp["gm"], False), f"{a['fin_q']} 財報"),
             ("＝ 毛利", _fmt_yi(gp), ""),
-            ("－ 營業費用", _fmt_yi(inp["opex"]), f"{a['fin_q']} 金額，固定不隨營收縮放"),
+            ("－ 營業費用", _fmt_yi(inp["opex_est"]),
+             f"{a['fin_q']} 費用率 {_fmt_pct(inp['opex_ratio'], False)} × 試算營收"
+             f"（若固定為 {a['fin_q']} 金額 {_fmt_yi(inp['opex'])}，年化 EPS 會是 "
+             f"{_fmt_x(inp['run_fixed_opex'])}）"),
             ("＝ 營業利益（試算）", _fmt_yi(op), ""),
             ("＋ 業外", "0（排除）",
              f"對照版加回近 4 季平均 {_fmt_yi(inp['nonop_avg4'])}；最新一季 {_fmt_yi(inp['nonop_latest'])}"),
@@ -2065,35 +2101,30 @@ def _valuation_block(d: dict) -> None:
         if r["implied_pe"]:
             rows.append(("現價 ÷ 年化試算 EPS", f"{r['implied_pe']:.1f} 倍", "現價隱含的前瞻本益比"))
         st.markdown("**推導表**")
-        st.dataframe(pd.DataFrame(rows, columns=["步驟", "數值", "來源／假設"]),
-                     hide_index=True, use_container_width=True)
+        _vtable(["步驟（小字＝來源／假設）", "數值"],
+                [[(stp, note), val] for stp, val, note in rows], {1})
 
         if r["sens"]:
             s = r["sens"]
             st.markdown("**敏感度：營收 × 毛利率 → 年化試算 EPS（排除業外）**")
-            st.dataframe(pd.DataFrame(
-                [[_fmt_x(v) for v in row] for row in s["eps"]],
-                index=[f"營收 {x:+.0%}" for x in s["rev"]],
-                columns=[f"毛利率 {x * 100:+.0f}pp" for x in s["gm"]]),
-                use_container_width=True)
+            _vtable(["營收＼毛利率"] + [f"{x * 100:+.0f}pp" for x in s["gm"]],
+                    [[f"{dr:+.0%}"] + [_fmt_x(v) for v in row]
+                     for dr, row in zip(s["rev"], s["eps"])], {1, 2, 3})
 
         st.markdown("**三段價：近 5 年各年平均本益比 × 今年預估 EPS**")
         if pe:
-            st.dataframe(pd.DataFrame([{
-                "年": y["year"], "平均本益比": f"{y['pe']:.1f} 倍", "有效交易日": y["days"],
-            } for y in pe["years"]]), hide_index=True, use_container_width=True)
+            _vtable(["年", "平均本益比", "有效交易日"],
+                    [[str(y["year"]), f"{y['pe']:.1f} 倍", str(y["days"])] for y in pe["years"]],
+                    {1, 2})
         if pe and r["band"]:
             est = yb["est"] if yb else None
             lo_sd = max(pe["mean"] - pe["sd"], 0)
-            st.dataframe(pd.DataFrame({
-                "段": ["便宜（最低年）", "合理（中間）", "昂貴（最高年）",
-                      "對照：平均 −1σ", "對照：平均", "對照：平均 +1σ"],
-                "本益比": [f"{v:.1f} 倍" for v in (pe["low"], pe["mid"], pe["high"],
-                                                  lo_sd, pe["mean"], pe["mean"] + pe["sd"])],
-                "股價": [_fmt_x(r["band"][k], 1) for k in ("low", "mid", "high")]
-                       + [_fmt_x(v * est, 1) if est else "—"
-                          for v in (lo_sd, pe["mean"], pe["mean"] + pe["sd"])],
-            }), hide_index=True, use_container_width=True)
+            mults = (pe["low"], pe["mid"], pe["high"], lo_sd, pe["mean"], pe["mean"] + pe["sd"])
+            labels = ("便宜（最低年）", "合理（中間）", "昂貴（最高年）",
+                      "對照：平均 −1σ", "對照：平均", "對照：平均 +1σ")
+            _vtable(["段", "本益比", "股價"],
+                    [[lb, f"{m:.1f} 倍", _fmt_x(m * est, 1) if est else "—"]
+                     for lb, m in zip(labels, mults)], {1, 2})
             st.caption("各年平均本益比＝該年每天交易所 trailing PE 的平均（排除虧損日；有效日 "
                        "<20 天的年份不算）。「平均 ±1σ」是外資本益比區間圖（PE band）的口徑，"
                        "但外資用的是前瞻本益比，這裡只有 trailing。trailing 倍數 × 預估 EPS "
@@ -2102,10 +2133,10 @@ def _valuation_block(d: dict) -> None:
             st.caption("本益比年數不足（少於 3 年）或預估 EPS ≤ 0，不套倍數。")
 
         st.markdown("**近 8 季業外**")
-        st.dataframe(pd.DataFrame([{
-            "季": h["q"], "業外": _fmt_yi(h["nonop"]), "稅前": _fmt_yi(h["pretax"]),
-            "業外占稅前": (_fmt_pct(h["nonop"] / abs(h["pretax"])) if h["pretax"] else "—"),
-        } for h in r["nonop_hist"]]), hide_index=True, use_container_width=True)
+        _vtable(["季", "業外", "稅前", "占稅前"],
+                [[h["q"], _fmt_yi(h["nonop"]), _fmt_yi(h["pretax"]),
+                  _fmt_pct(h["nonop"] / abs(h["pretax"])) if h["pretax"] else "—"]
+                 for h in r["nonop_hist"]], {1, 2, 3})
         st.caption("業外＝稅前 − 營業利益（匯兌、投資、處分、利息都在裡面）。排除業外"
                    "也一併拿掉了利息費用，有大額借款的公司會偏樂觀。")
 

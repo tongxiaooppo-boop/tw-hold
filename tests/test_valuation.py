@@ -12,14 +12,14 @@ SHARES = 5e8
 
 
 def _qf(n: int = 8, nonop: float = 0.0, last_nonop: float | None = None,
-        gp_nan: bool = False) -> pd.DataFrame:
-    """每季營收 25 億、毛利率 40%、營業費用 3 億、稅後轉換率 80%、股數 5 億。"""
+        gp_nan: bool = False, last_opex: float | None = None) -> pd.DataFrame:
+    """每季營收 25 億、毛利率 40%、營業費用 3 億（費用率 12%）、稅後轉換率 80%、股數 5 億。"""
     pe = pd.date_range("2024-09-30", periods=n, freq="QE")
     rows = []
     for i, p in enumerate(pe):
         no = last_nonop if (last_nonop is not None and i == n - 1) else nonop
         rev, gp = 2.5e9, 1.0e9
-        op = gp - 3e8
+        op = gp - (last_opex if (last_opex is not None and i == n - 1) else 3e8)
         pretax = op + no
         net = pretax * 0.8
         rows.append({"period_end": p, "revenue": rev, "gross_profit": np.nan if gp_nan else gp,
@@ -50,23 +50,23 @@ def _per(n: int = 1400, lo: float = 12, hi: float = 12):
 def test_基本試算_手算對得上():
     r = va.estimate(_qf(), _rev(), _px(), _per())
     assert r["ok"]
-    # 近 3 月 30 億 × 40% − 3 億 = 9 億 → × 0.8 = 7.2 億 ÷ 5 億股 = 1.44 → × 4
+    # 近 3 月 30 億 × (40% − 費用率 12%) = 8.4 億 → × 0.8 = 6.72 億 ÷ 5 億股 = 1.344 → × 4
     assert r["rev"]["m3_sum"] == pytest.approx(3e9)
     assert r["rev"]["vs_last_q"] == pytest.approx(0.2)
     assert r["rev"]["yoy"] == pytest.approx(1.0)
     assert r["inputs"]["conv"] == pytest.approx(0.8)
     assert r["inputs"]["shares"] == pytest.approx(SHARES, rel=0.01)
-    assert r["eps"]["run_ex"] == pytest.approx(5.76, rel=0.01)
-    assert r["implied_pe"] == pytest.approx(100 / 5.76, rel=0.01)
+    assert r["eps"]["run_ex"] == pytest.approx(5.376, rel=0.01)
+    assert r["implied_pe"] == pytest.approx(100 / 5.376, rel=0.01)
     assert r["pe"]["mid"] == pytest.approx(12, rel=0.01)
     assert [y["year"] for y in r["pe"]["years"]] == [2022, 2023, 2024, 2025, 2026]
-    # 今年（2026）已公布 Q1、Q2 各 1.12 ＋ 未公布 2 季 × 1.44 = 5.12；去年 4 × 1.12 = 4.48
+    # 今年（2026）已公布 Q1、Q2 各 1.12 ＋ 未公布 2 季 × 1.344 = 4.928；去年 4 × 1.12 = 4.48
     y = r["year"]
-    assert y["reported_q"] == 2 and y["est"] == pytest.approx(5.12, rel=0.01)
-    assert y["growth"] == pytest.approx(5.12 / 4.48 - 1, rel=0.02)
-    assert r["band"]["mid"] == pytest.approx(12 * 5.12, rel=0.02)
+    assert y["reported_q"] == 2 and y["est"] == pytest.approx(4.928, rel=0.01)
+    assert y["growth"] == pytest.approx(4.928 / 4.48 - 1, rel=0.02)
+    assert r["band"]["mid"] == pytest.approx(12 * 4.928, rel=0.02)
     # 合理成長價 ＝ 預估 EPS × 最新本益比（12）
-    assert r["growth_price"] == pytest.approx(12 * 5.12, rel=0.02)
+    assert r["growth_price"] == pytest.approx(12 * 4.928, rel=0.02)
     assert r["warns"] == []
 
 
@@ -112,7 +112,8 @@ def test_近三月就是最新一季財報期間():
 
 
 def test_試算虧損_不給本益比與價格區間():
-    r = va.estimate(_qf(), _rev(val=2e8), _px(), _per())
+    # 最新季費用率 44% > 毛利率 40% → 試算單季虧損（近 4 季稅前合計仍為正）
+    r = va.estimate(_qf(last_opex=1.1e9), _rev(), _px(), _per())
     assert r["ok"] and r["eps"]["run_ex"] < 0
     assert r["implied_pe"] is None
     # 今年預估 ＝ 已公布實際 ＋ 負的試算季 → 比已公布的少；三段價只在預估 > 0 時給
@@ -147,7 +148,7 @@ def test_三段價_各年平均本益比的最低中間最高():
     pe = d.year.map({2022: 8, 2023: 10, 2024: 12, 2025: 14, 2026: 20}).astype(float)
     r = va.estimate(_qf(), _rev(), _px(), pd.DataFrame({"date": d, "per": pe}))
     assert (r["pe"]["low"], r["pe"]["mid"], r["pe"]["high"]) == (8, 12, 20)
-    assert r["band"]["low"] == pytest.approx(8 * 5.12, rel=0.01)
+    assert r["band"]["low"] == pytest.approx(8 * 4.928, rel=0.01)
     assert not r["pe"]["wide"]
 
 
@@ -157,3 +158,13 @@ def test_虧損年不算進三段價():
     r = va.estimate(_qf(), _rev(), _px(), pd.DataFrame({"date": d, "per": pe}))
     assert [y["year"] for y in r["pe"]["years"]] == [2022, 2023, 2025, 2026]
     assert r["pe"]["mid"] == pytest.approx(12)
+
+
+def test_營業費用用費用率_固定金額只當對照():
+    r = va.estimate(_qf(), _rev(), _px(), _per())
+    inp = r["inputs"]
+    assert inp["opex_ratio"] == pytest.approx(0.12)
+    assert inp["opex_est"] == pytest.approx(3e9 * 0.12)
+    # 固定 3 億：30 億 × 40% − 3 億 = 9 億 → 7.2 億 ÷ 5 億 × 4 = 5.76（營收升時比費用率版樂觀）
+    assert inp["run_fixed_opex"] == pytest.approx(5.76, rel=0.01)
+    assert inp["run_fixed_opex"] > r["eps"]["run_ex"]

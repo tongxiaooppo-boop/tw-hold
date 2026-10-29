@@ -5,7 +5,8 @@
 
 - 營收：近 3 個月月營收合計（不用單月×3）。
 - 毛利率：最新一季；敏感度矩陣另外 ±3pp。
-- 營業費用：最新一季金額，**固定不隨營收縮放**（營收升時偏樂觀、降時偏悲觀）。
+- 營業費用：最新一季**費用率** × 試算營收（2026-10-29 使用者拍板；原本固定金額
+  會在營收升時偏樂觀，留在推導表當對照）。
 - 業外：主版本「排除業外」＝業外歸零（也一併拿掉利息費用，所以不叫「核心」）；
   對照版本加回近 4 季平均業外。
 - 稅：不估稅率，用 TTM「歸母淨利 ÷ 稅前」轉換率（含稅與非控制權益），原值攤開。
@@ -187,6 +188,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     last8["nonop"] = last8["pretax_income"] - last8["op_income"]
     gm = float(lq["gross_profit"]) / float(lq["revenue"]) if lq["revenue"] else None
     opex = float(lq["gross_profit"]) - float(lq["op_income"])
+    opex_ratio = opex / float(lq["revenue"]) if lq["revenue"] else None
     nonop_latest = float(lq["pretax_income"]) - float(lq["op_income"])
     nonop_avg4 = float(last8["nonop"].tail(4).mean())
     lq_pretax = float(lq["pretax_income"])
@@ -211,11 +213,17 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     def _run_eps(rev_q: float, gm_: float, nonop: float = 0.0) -> float | None:
         if conv is None or shares is None or gm_ is None:
             return None
-        return (rev_q * gm_ - opex + nonop) * conv / shares * 4
+        if opex_ratio is None:
+            return None
+        # 營業費用＝最新季費用率 × 試算營收（2026-10-29 使用者拍板，取代固定金額）
+        return (rev_q * (gm_ - opex_ratio) + nonop) * conv / shares * 4
 
     m3 = rv["m3_sum"]
     run_ex = _run_eps(m3, gm)
     run_incl = _run_eps(m3, gm, nonop_avg4)
+    # 對照：營業費用固定為最新季金額（營收升時偏樂觀）
+    run_fixed_opex = ((m3 * gm - opex) * conv / shares * 4
+                      if (conv is not None and shares is not None and gm is not None) else None)
     ttm_eps = float(t4["eps"].sum()) if t4["eps"].notna().all() else None
 
     sens = None
@@ -255,7 +263,9 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         "asof": {"fin_q": _qlabel(lq["period_end"]), "rev_month": rv["last_month"],
                  "px_date": px_date},
         "rev": rv,
-        "inputs": {"gm": gm, "opex": opex, "nonop_latest": nonop_latest,
+        "inputs": {"gm": gm, "opex": opex, "opex_ratio": opex_ratio,
+                   "opex_est": m3 * opex_ratio if opex_ratio is not None else None,
+                   "run_fixed_opex": run_fixed_opex, "nonop_latest": nonop_latest,
                    "nonop_avg4": nonop_avg4, "conv": conv, "shares": shares},
         "nonop_hist": [{"q": _qlabel(r.period_end), "nonop": float(r.nonop),
                         "pretax": float(r.pretax_income)} for r in last8.itertuples()],
