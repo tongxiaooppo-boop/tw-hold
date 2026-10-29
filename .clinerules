@@ -1,0 +1,33 @@
+# 專案規則（給 Cline）
+
+本專案是「股市雷達」（repo 名 tw-hold）：Python ＋ Streamlit，台股資料整理與清單，不下單。
+
+## 讀檔紀律（最重要，違反就是浪費額度）
+
+- **只讀 `collab/to-cline.md`「要讀的檔案」清單列出的檔案與行數範圍**，其他一律不讀。不要讀 `PRD.md`、`PLAN.md`、`docs/`、`research/`，不要瀏覽目錄樹，不要為了「了解專案」到處 grep。
+- `app/streamlit_app.py` 有 3700 多行：**只能用 `grep -n` 定位後讀需要的行數範圍**，不准整檔讀。
+- 任務書沒列、但實作時真的需要的資訊：先用一次精確的 `grep -n`（指定檔案與關鍵字）查，不要整檔讀大檔（超過 300 行的檔案只讀需要的範圍）。
+- 查了還是不清楚：**停下**，寫進 `collab/from-cline.md`「需要 Opus 決定」，不要自己摸索或猜。
+- `data/` 底下的 parquet 只能用程式讀，不准把整張表印出來。
+
+## 分工
+
+| 誰 | 負責 |
+|---|---|
+| **Cline** | 照任務書寫程式、測試、報告；本機 `git commit` |
+| **Claude（Opus）** | 框架／介面、驗收、`git push`、GitHub Actions |
+
+Cline **不得**：
+- `git push`、`gh` 任何指令、改寫歷史（rebase／reset --hard／force）。
+- 修改 `.clinerules`、`collab/to-cline.md`、`.github/`、任務書標為「不准改」的介面。
+- 讀取或印出任何 `.env`、PAT、secret。
+- 在專案目錄以外建立任何檔案（含暫存檔、一次性腳本、log）：一律放專案目錄內，用完刪掉。系統區（`C:\Windows`、`Program Files`、`AppData`／Temp、`/tmp`）與各磁碟根目錄絕對不准寫。
+- **使用網路搜尋、網頁抓取、瀏覽器工具**（可能產生費用）；不准連 `mopsov.twse.com.tw`（會封 IP）。
+
+## 技術約定
+
+- Windows；執行 python 一律先設 `PYTHONIOENCODING=utf-8`。
+- 使用者看得到的文字一律**繁體中文（台灣用語）**。
+- 讀 CI 產出的 JSON 一律用 `.get()`（app 部署比資料快，舊 JSON 沒有新欄位）。
+- 表格用現成的 `_vtable`，不准用 `st.dataframe`（手機會截欄）。
+- 測試必須呼叫產品程式本身，不准在測試裡重寫一份業務邏輯；預期值照任務書，不拿程式輸出回填。

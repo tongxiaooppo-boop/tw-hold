@@ -1,0 +1,69 @@
+name: 月營收當晚公告
+
+# OpenAPI 月營收 10 號後才整批換期（2026-10 實測 10/13 才出現 9 月）。公布期（每月 1～14 號）每晚：
+# ① 抓 MOPS 彙總頁，記每家第一次出現的時間 → data/revenue_mops/（漏抓補不回來）
+# ② 重算「月營收」分頁 → data/derived/revenue_watch.json
+# 2026-10-29 從 tw-swing 搬來（tw-swing 那份已刪，避免兩邊重複打 MOPS）。
+on:
+  schedule:
+    # 一條 cron 一個時間點；分鐘避開 :00/:30/:59，與兩個 repo 其他排程至少相隔 10 分鐘（test_workflow_schedules）。
+    - cron: "47 10 1-14 * *"   # UTC 10:47 = 台北 18:47
+    - cron: "43 13 1-14 * *"   # UTC 13:43 = 台北 21:43
+    - cron: "23 15 1-14 * *"   # UTC 15:23 = 台北 23:23
+    - cron: "47 23 1-14 * *"   # UTC 23:47 = 台北隔日 07:47（補抓前一晚較晚申報的）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: revenue-watch
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 抓 MOPS 月營收彙總頁
+        id: collect
+        continue-on-error: true
+        run: python scripts/revenue_mops_collect.py
+      - name: 拉上游 bundle
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: python fetch_bundle.py
+      - name: 重算月營收分頁
+        id: build
+        continue-on-error: true
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: python build_revenue_watch.py
+      - name: commit 回 repo
+        if: always()
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
+          if git diff --cached --quiet; then echo "無變更"; exit 0; fi
+          git commit -m "月營收當晚公告 $(TZ=Asia/Taipei date +%F\ %H:%M)"
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            if ! git pull --rebase origin main; then
+              git checkout --theirs -- data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
+              git add -A data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
+            fi
+          done
+          [ "$pushed" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
+      - name: 收集或重算失敗就讓 job 變紅
+        if: always() && (steps.collect.outcome == 'failure' || steps.build.outcome == 'failure')
+        run: exit 1

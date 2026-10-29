@@ -1080,8 +1080,9 @@ def _nav_badge_css(nav: str) -> str:
     - 用 `nth-of-type` 對到選中的那個 `stRadioOption`（react-aria 把 `NAV` 幾個選項
       渲染成 radiogroup 底下對應數量的相鄰 `<label>`，順序由 `NAV` 保證），不用去猜
       BaseWeb 內部的 checked 狀態怎麼反映在 DOM 上。
-    - 掃描扇形照 NAV 在「8 方位環」上的順位轉：`NAV[0]`＝正上方(0°)，
-      之後每項順時針 +45°（跟著 `NAV` 排序自動轉，不寫死是哪一頁）。
+    - `NAV[0]`（總經導航）＝瞄準中心：不畫掃描扇形，中心點放大成靶心（2026-10-29
+      使用者指定）。其餘 8 頁照順位排在「8 方位環」上：`NAV[1]`＝正上方(0°)，之後每項
+      順時針 +45°（跟著 `NAV` 排序自動轉，不寫死是哪一頁）。
     - 🔴 圓圈的半徑一定要寫死 `circle 23px`：不寫的話 radial-gradient 預設是
       farthest-corner（23√2 = 32.5px），百分比停點會算到盒子外——外圈整圈被
       `border-radius:50%` 裁掉、內圈只剩 0.5px（2026-09-11 修）。
@@ -1092,15 +1093,22 @@ def _nav_badge_css(nav: str) -> str:
     sel = (f'div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]'
            f':nth-of-type({i + 1})')
     ring = "rgba(var(--thc-up-rgb),.38)"
+    if i == 0:
+        dot = "radial-gradient(circle 23px at center, var(--thc-up) 0 4.5px, transparent 4.5px)"
+        sweep = ("radial-gradient(circle 23px at center, "
+                 "rgba(var(--thc-up-rgb),.22) 0 11.5px, transparent 11.5px)")
+    else:
+        dot = "radial-gradient(circle 23px at center, var(--thc-up) 0 2px, transparent 2px)"
+        sweep = (f"conic-gradient(from {(i - 1) * 45 - 22.5}deg, "
+                 "rgba(var(--thc-up-rgb),.30) 0deg 45deg, transparent 45deg 360deg)")
     return f"""<style>
 {sel} {{ position: relative; z-index: 0; overflow: visible; }}
 {sel}::before {{
   content: ""; position: absolute; left: 50%; top: 50%; z-index: -1; pointer-events: none;
   width: 46px; height: 46px; transform: translate(-50%, -50%); border-radius: 50%;
   background:
-    radial-gradient(circle 23px at center, var(--thc-up) 0 2px, transparent 2px),
-    conic-gradient(from {i * 45 - 22.5}deg,
-      rgba(var(--thc-up-rgb),.30) 0deg 45deg, transparent 45deg 360deg),
+    {dot},
+    {sweep},
     radial-gradient(circle 23px at center,
       transparent 0 11.5px, {ring} 11.5px 12.5px,
       transparent 12.5px 19px, {ring} 19px 20px, transparent 20px);
@@ -2147,6 +2155,16 @@ def _valuation_block(d: dict) -> None:
                  for h in r["nonop_hist"]], {1, 2, 3})
         st.caption("業外＝稅前 − 營業利益（匯兌、投資、處分、利息都在裡面）。排除業外"
                    "也一併拿掉了利息費用，有大額借款的公司會偏樂觀。")
+
+
+def _revenue_page(data: dict | None) -> None:
+    """「月營收」分頁（2026-10-29 框架；Cline 實作，規格見 collab/to-cline.md）。
+
+    資料：`data/derived/revenue_watch.json`（格式見 screener/revenue_watch.py 開頭）。
+    上方「期別」切換（periods[0]／periods[1]），下方四個子畫面：
+    ① 公布清單 ② 營收成長排行 ③ 估值價差排行 ④ 持有提示。
+    """
+    st.info("月營收分頁建置中。")
 
 
 def _stock_page() -> None:
@@ -3628,7 +3646,7 @@ def _macro_compass_page() -> None:
 
 
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
-NAV = ["總經導航", "短線", "長波段", "價值", "定存", "個股查詢", "多軌體檢", "主動式 ETF"]
+NAV = ["總經導航", "短線", "長波段", "價值", "定存", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
 
 
 def _freshness_badge_html() -> str:
@@ -3727,6 +3745,8 @@ def main() -> None:
     elif nav == "短線":
         _shortterm_page()
         _history_section(["swing", "short"], "short")
+    elif nav == "月營收":
+        _revenue_page(_load("revenue_watch.json"))
     elif nav == "個股查詢":
         _stock_page()
     elif nav == "多軌體檢":

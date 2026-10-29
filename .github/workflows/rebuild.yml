@@ -114,6 +114,11 @@ jobs:
         continue-on-error: true
         run: python build_short_scan.py           # → data/derived/short_scan.json（scanned < 90% × universe 會失敗且不覆寫）
 
+      # 月營收分頁（公布期外也每天重算：現價、均線、估值價差會變）。掛了不擋三清單。
+      - name: 月營收分頁
+        continue-on-error: true
+        run: python build_revenue_watch.py        # → data/derived/revenue_watch.json
+
       - name: 短線掃描失敗告警（scanned 過少等）
         if: steps.short_scan.outcome == 'failure'
         env:
@@ -212,7 +217,7 @@ jobs:
                data/derived/value_list.json \
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
-               data/derived/short_scan.json \
+               data/derived/short_scan.json                data/derived/revenue_watch.json \
                data/history/ \
                reference/corporate_actions_resolved.json; then
             # data/history/ 也要算：swing 線的 asof 取自 tw-swing 的外部分享檔，隔天就換成下一天，這輪不 commit 就永遠補不回來。
