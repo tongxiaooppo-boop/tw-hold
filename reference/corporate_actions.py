@@ -337,13 +337,15 @@ def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
         return q
     d = q.copy()
     pe_all = pd.to_datetime(d[period_col])
-    ni_cols = [c for c in ("equity_parent", "net_income") if c in d.columns]
+    # 隱含股數用損益表的歸母淨利 `ni_parent`（逐列缺值退用 net_income）。**不能用
+    # `equity_parent`**：它在 load_quarterly（三清單）是資產負債表的業主權益、在
+    # bundle_data.financials（個股頁）是歸母淨利，同名不同義（2026-10-29 抓到）。
+    ni_cols = [c for c in ("ni_parent", "net_income") if c in d.columns]
     for t in hit:
         idx = d.index[(tks == t).to_numpy()]
         order = pe_all.loc[idx].sort_values().index
         pe = pe_all.loc[order]
         eps0 = pd.to_numeric(d.loc[order, col], errors="coerce").to_numpy(dtype=float)
-        # 逐列：歸母淨利優先、缺值退用淨利（133 檔只有淨利，例 5904；2026-10-30 審查）
         ni = np.full(len(order), np.nan)
         for c in reversed(ni_cols):
             v = pd.to_numeric(d.loc[order, c], errors="coerce").to_numpy(dtype=float)

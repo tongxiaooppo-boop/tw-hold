@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -174,6 +175,8 @@ def financials(code: str) -> pd.DataFrame:
     df = inc.merge(bal, on=["ticker", "period_end"], how="left", suffixes=("", "_b")) \
             .merge(cf, on=["ticker", "period_end"], how="left", suffixes=("", "_c"))
     df["period_end"] = pd.to_datetime(df["period_end"])
+    # 損益表的歸母淨利另存 ni_parent（equity_parent 在三清單流程是權益，同名不同義）
+    df["ni_parent"] = df["equity_parent"] if "equity_parent" in df.columns else np.nan
     return df.sort_values("period_end").reset_index(drop=True)
 
 

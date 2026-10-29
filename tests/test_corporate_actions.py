@@ -183,7 +183,7 @@ def test_新格式_小事件不進價格還原(monkeypatch):
 
 def _q(periods, eps, ni):
     return pd.DataFrame({"ticker": "9993", "period_end": pd.to_datetime(periods),
-                         "eps": eps, "equity_parent": ni})
+                         "eps": eps, "ni_parent": ni})
 
 
 def test_adjust_eps_期限前事件全除_季末後不動(monkeypatch):
@@ -261,7 +261,7 @@ def test_adjust_eps_歸母淨利缺值逐列退用淨利(monkeypatch):
                                              "m": 3.0, "pf": None}])
     q = pd.DataFrame({"ticker": "9993",
                       "period_end": pd.to_datetime(["2026-03-31", "2026-06-30", "2026-09-30"]),
-                      "eps": [30.0, 30.0, 10.0], "equity_parent": [np.nan] * 3,
+                      "eps": [30.0, 30.0, 10.0], "ni_parent": [np.nan] * 3,
                       "net_income": [300.0] * 3})
     assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([10.0, 10.0, 10.0])
 

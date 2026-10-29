@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,8 @@ def load_quarterly() -> pd.DataFrame:
     # **只採資產負債表那份，永不退回損益表的**：非金融的 balance `equity_parent`
     # 100% 有值（2330/1301/2412… 實測），損益表那份是多餘的；金融的 balance 沒有
     # （金控用不同 XBRL），退回總權益 `equity` 才對——退回損益表的會把淨利當權益。
+    # 損益表那份（歸母淨利）另存 ni_parent：corporate_actions.adjust_eps 算隱含股數用
+    q["ni_parent"] = q["equity_parent"] if "equity_parent_b" in q.columns else np.nan
     if "equity_parent_b" in q.columns:
         q["equity_parent"] = q["equity_parent_b"]
     q["equity_parent"] = q["equity_parent"].fillna(q.get("equity"))
