@@ -5,7 +5,7 @@
 財報的每股 EPS、股利表的每股股利都是「當時的股數」；股數一變（分割、面額變更、減資彌補
 虧損、盈餘／公積轉增資配股），事件日之前的每股數字就跟現在的股價不是同一把尺：
 6669 緯穎 2026-09-02 配股 ×2.98，試算 EPS 變成市場預估的 3～4 倍（2026-10-29 使用者抓到）。
-交易所的本益比／股價淨值比／殖利率在配股後也會沿用舊股數一段時間（見 `fix_exchange_ratios`）。
+交易所的本益比在配股後也會沿用舊股數一段時間（見 `fix_exchange_ratios`）；只修 PER，PBR、殖利率定義未驗證、暫不修。
 
 ## 來源（2026-10-30 起）
 
@@ -98,13 +98,23 @@ def _pf(e: dict):
     return e.get("pf") if ("pf" in e or "type" in e) else e.get("factor")
 
 
-def _events(ticker: str) -> list[tuple[pd.Timestamp, float]]:
-    """每股數字用的事件 `[(日期, m)]`（現金減資等 m=None 的不列）。"""
+def _events(ticker: str, types: tuple[str, ...] | None = None,
+            upto: pd.Timestamp | None = None) -> list[tuple[pd.Timestamp, float]]:
+    """每股數字用的事件 `[(日期, m)]`（現金減資等 m=None 的不列）。
+
+    types 給了 → 只留 e.get("type") in types 的事件（沒有 type 的舊格式事件一律排除）；
+    upto 給了 → 只留事件日 <= upto 的事件。其他行為不變。
+    """
     out = []
     for e in SPLITS.get(str(ticker).split(".")[0], []):
+        if types is not None and e.get("type") not in types:
+            continue
         m = _m(e)
         if m is not None and m > 0 and abs(np.log(float(m))) > 1e-9:
-            out.append((pd.Timestamp(e["date"]), float(m)))
+            ts = pd.Timestamp(e["date"])
+            if upto is not None and ts > upto:
+                continue
+            out.append((ts, float(m)))
     return out
 
 
@@ -317,7 +327,9 @@ def _observed_boundary(pe: pd.Series, eps: np.ndarray, sh: np.ndarray, ts, m,
 
 
 def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
-               period_col: str = "period_end") -> pd.DataFrame:
+               period_col: str = "period_end",
+               types: tuple[str, ...] | None = None,
+               upto: pd.Timestamp | None = None) -> pd.DataFrame:
     """季 EPS 搬到最新股本基準。財報 EPS 用的是**公布當時**的股數（IAS 33.64：期後、
     公布前的配股／分割會追溯重編）。分界優先**看資料**：`_observed_boundary` 在事件前
     9 個月～後 4 個月內找隱含股數（歸母淨利 ÷ EPS）跳動 ≈ m 的相鄰兩季；看不到才用日期規則：
@@ -353,9 +365,9 @@ def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
         with np.errstate(divide="ignore", invalid="ignore"):
             sh = ni / eps0
         div = np.ones(len(order))
-        types = {pd.Timestamp(e["date"]): e.get("type") for e in SPLITS.get(t, [])}
-        for ts, m in _events(t):
-            b = _observed_boundary(pe, eps0, sh, ts, m, types.get(ts))
+        ev_types = {pd.Timestamp(e["date"]): e.get("type") for e in SPLITS.get(t, [])}
+        for ts, m in _events(t, types=types, upto=upto):
+            b = _observed_boundary(pe, eps0, sh, ts, m, ev_types.get(ts))
             if b is not None:                      # 資料看得到換基準那一季 → 以它為準
                 div[:b] *= m
                 continue
@@ -397,39 +409,44 @@ def adjust_dividends(div: pd.DataFrame, cols, ticker_col: str = "ticker",
 
 # ── 交易所本益比／淨值比／殖利率 ─────────────────────────────────────────
 
-#: 偵測「交易所換成新股數」：隱含每股數字掉到事件後初值的 m^-0.5 以下。只對 m ≥ 這個值做，
-#: 小配股的 √m 落在一般季 EPS 波動裡，偵測不可靠 → 走日曆退路。
-_DETECT_MIN_M = 1.15
-_DETECT_DAYS = 420
 
+def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None,
+                        raw_close: pd.DataFrame | None = None) -> pd.DataFrame:
+    """交易所每日 PER 修回最新股本基準（只修 `per` 欄；pbr、dividend_yield 原樣）。
 
-def fix_exchange_ratios(per: pd.DataFrame, raw_close: pd.DataFrame | None = None) -> pd.DataFrame:
-    """交易所 PER／PBR／殖利率在**配股**後沿用舊股數的每股數字（2026-10-30 實測）：
-      - PER、PBR：事件日起「新價 ÷ 舊 EPS／淨值」→ 低估 m 倍，直到下一份財報公布
-        （多在 8/14、11/14、3/31 附近，偶爾拖到年報）。6669 9/2 PER 25.0 → 8.4。
-      - 殖利率：「舊每股現金 ÷ 新價」→ 高估 m 倍，直到隔年新股利公布。
-    分割／面額變更交易所當天就換好（5904、4747、8476 實測 PER 連續），不修。
+    實證（2026-10-29）：交易所 PER 的 EPS＝最近四季「當初公布值」加總，舊季不重編；
+    配股（ex_rights／ex_both）後要四季才滾完。面額變更／分割交易所已重編，不修。
+    修法：PER × 原始四季加總 ÷ 調整後四季加總（調整只計配股類、且事件日 ≤ 當天的事件）。
 
-    修法：事件日起到「交易所換基準」為止，PER/PBR × m、殖利率 ÷ m。換基準日：
-      有原始收盤 `raw_close [ticker,date,close]` 且 m ≥ 1.15 → 偵測隱含每股數字
-      （收盤 ÷ PER、收盤 ÷ PBR、殖利率 × 收盤）掉到事件後初值的 m^-0.5 以下的第一天；
-      偵測不到 → 退路：PER/PBR 到下一個財報期限、殖利率 365 天。
-    `per` 欄：`[ticker, date, per, pbr?, dividend_yield?]`；非破壞性。
+    per：[ticker, date, per, ...]；quarterly：[ticker, period_end, eps, ni_parent?, net_income?]
+    （原始、未調整的季 EPS）；raw_close：[ticker, date, close]（未還原收盤）。
+    quarterly 沒給或空 → 原樣返回。非破壞性。
     """
     if per is None or per.empty or "ticker" not in per.columns or "date" not in per.columns:
         return per
+    if quarterly is None or quarterly.empty or "per" not in per.columns \
+            or not {"ticker", "period_end", "eps"} <= set(quarterly.columns):
+        return per
+
     tks = per["ticker"].astype(str).str.split(".").str[0]
     evmap = {}
     for t in tks.unique():
-        evs = [(pd.Timestamp(e["date"]), float(e["m"]))
-               for e in SPLITS.get(t, [])
-               if e.get("type") in EXCHANGE_LAG_TYPES and e.get("m") and e["m"] > 1.0]
+        evs = []
+        for e in SPLITS.get(t, []):
+            if e.get("type") not in EXCHANGE_LAG_TYPES:
+                continue
+            m = _m(e)
+            if m is not None and float(m) > 1.0:
+                evs.append(pd.Timestamp(e["date"]))
         if evs:
-            evmap[t] = evs
+            evmap[t] = sorted(set(evs))
     if not evmap:
         return per
+
     d = per.copy()
+    d["per"] = pd.to_numeric(d["per"], errors="coerce").astype(float)
     dates_all = pd.to_datetime(d["date"])
+
     closes: dict[str, pd.Series] = {}
     if raw_close is not None and not raw_close.empty:
         rc = raw_close[["ticker", "date", "close"]].copy()
@@ -438,66 +455,90 @@ def fix_exchange_ratios(per: pd.DataFrame, raw_close: pd.DataFrame | None = None
         rc["date"] = pd.to_datetime(rc["date"])
         for t, g in rc.groupby("ticker", sort=False):
             closes[t] = g.drop_duplicates("date").set_index("date")["close"]
-    specs = [("per", True, lambda c, v: c / v, "deadline"),
-             ("pbr", True, lambda c, v: c / v, "deadline"),
-             ("dividend_yield", False, lambda c, v: c * v, "year")]
-    cols = [c for c, *_ in specs if c in d.columns]
-    for c in cols:
-        d[c] = pd.to_numeric(d[c], errors="coerce").astype(float)
-    # 一次分組（整張全市場 PER 表數百萬列，逐檔布林篩選會慢到 rebuild 逾時）
-    groups = pd.Series(np.arange(len(d)), index=tks.to_numpy()).groupby(level=0).indices
-    pos_of = {t: groups[t] for t in evmap if t in groups}
+
+    qtks = quarterly["ticker"].astype(str).str.split(".").str[0]
+    qsel = quarterly[qtks.isin(evmap)]
+    qsel_tk = qtks[qtks.isin(evmap)].to_numpy()
+    qmap = {t: g.sort_values("period_end").reset_index(drop=True)
+            for t, g in qsel.groupby(qsel_tk, sort=False)}
+
+    pos_of = pd.Series(np.arange(len(d)), index=tks.to_numpy()).groupby(level=0).indices
+    ci = d.columns.get_loc("per")
+
     for t, evs in evmap.items():
-        if t not in pos_of:
+        if t not in pos_of or t not in qmap:
             continue
+        qt = qmap[t]
+        raw_eps = pd.to_numeric(qt["eps"], errors="coerce").to_numpy(dtype=float)
+        pe_arr = pd.to_datetime(qt["period_end"]).to_numpy(dtype="datetime64[ns]")
+        nq = len(pe_arr)
+        deadline = np.array([report_deadline(p).to_datetime64() for p in pe_arr],
+                            dtype="datetime64[ns]")
+
         pos = pos_of[t]
-        dts = pd.DatetimeIndex(dates_all.to_numpy()[pos])
-        close = closes.get(t)
-        for col, mul, implied_fn, fallback in specs:
-            if col not in cols:
+        dts = dates_all.to_numpy()[pos]
+        per0 = d.iloc[pos, ci].to_numpy(dtype=float).copy()
+        close_s = closes.get(t)
+
+        # 事件分段 [E1,E2)、[E2,E3)、…、[Ek,∞)；E1 之前不修
+        for j, Ej in enumerate(evs):
+            Ej64 = Ej.to_datetime64()
+            if j + 1 < len(evs):
+                seg = (dts >= Ej64) & (dts < evs[j + 1].to_datetime64())
+            else:
+                seg = dts >= Ej64
+            if not seg.any():
                 continue
-            ci = d.columns.get_loc(col)
-            v0 = d.iloc[pos, ci].to_numpy(dtype=float)
-            v = v0.copy()
-            for ts, m in evs:
-                # 偵測一律用原始值：用前一事件修過的值會讓重疊窗口漏判（2026-10-30 審查）
-                end = _exchange_switch(dts, v0, close, ts, m, implied_fn)
-                if end is None:
-                    end = (report_deadline(_next_quarter_end(ts)) if fallback == "deadline"
-                           else ts + pd.Timedelta(days=365))
-                win = (dts >= ts) & (dts < end)
-                if win.any():
-                    v[win] = v[win] * m if mul else v[win] / m
-            d.iloc[pos, ci] = v
+            seg_dts = dts[seg]
+            seg_per = per0[seg]
+            adj_eps = pd.to_numeric(
+                adjust_eps(qt, types=EXCHANGE_LAG_TYPES, upto=Ej)["eps"],
+                errors="coerce").to_numpy(dtype=float)
+
+            n = np.searchsorted(deadline, seg_dts, side="left")
+
+            c_raw = np.concatenate([[0.0], np.cumsum(np.where(np.isfinite(raw_eps), raw_eps, 0.0))])
+            cc_raw = np.concatenate([[0], np.cumsum((~np.isfinite(raw_eps)).astype(np.int64))])
+            c_adj = np.concatenate([[0.0], np.cumsum(np.where(np.isfinite(adj_eps), adj_eps, 0.0))])
+            cc_adj = np.concatenate([[0], np.cumsum((~np.isfinite(adj_eps)).astype(np.int64))])
+
+            loA = np.clip(n - 4, 0, nq - 1)
+            hiA = np.clip(n - 1, 0, nq - 1)
+            loB = np.clip(n - 3, 0, nq - 1)
+            hiB = np.clip(n, 0, nq - 1)
+
+            rawA = c_raw[hiA + 1] - c_raw[loA]
+            adjA = c_adj[hiA + 1] - c_adj[loA]
+            okA = ((n >= 4) & (cc_raw[hiA + 1] - cc_raw[loA] == 0)
+                   & (cc_adj[hiA + 1] - cc_adj[loA] == 0) & (rawA > 0) & (adjA > 0))
+
+            n_pe = np.clip(n, 0, nq - 1)
+            b_ok = (n >= 3) & (n < nq) & (pe_arr[n_pe] < seg_dts)
+            rawB = c_raw[hiB + 1] - c_raw[loB]
+            adjB = c_adj[hiB + 1] - c_adj[loB]
+            okB = (b_ok & (cc_raw[hiB + 1] - cc_raw[loB] == 0)
+                   & (cc_adj[hiB + 1] - cc_adj[loB] == 0) & (rawB > 0) & (adjB > 0))
+
+            if close_s is not None:
+                c = close_s.reindex(pd.DatetimeIndex(seg_dts)).to_numpy(dtype=float)
+            else:
+                c = np.full(len(seg_dts), np.nan)
+
+            with np.errstate(divide="ignore", invalid="ignore"):
+                x = c / seg_per
+                errA = np.abs(np.log(x / rawA))
+                errB = np.abs(np.log(x / rawB))
+            ea = np.where(np.isfinite(errA), errA, np.inf)
+            eb = np.where(np.isfinite(errB), errB, np.inf)
+            useB = (b_ok & np.isfinite(c) & (seg_per > 0) & (eb < ea))
+            raw4 = np.where(useB, rawB, rawA)
+            adj4 = np.where(useB, adjB, adjA)
+            ok = np.where(useB, okB, okA)
+
+            with np.errstate(divide="ignore", invalid="ignore"):
+                fixed = np.where(ok, seg_per * raw4 / adj4, seg_per)
+            per0[seg] = fixed
+
+        d.iloc[pos, ci] = per0
+
     return d
-
-
-def _next_quarter_end(ts: pd.Timestamp) -> pd.Timestamp:
-    """事件日之後第一份會用新股數的財報的季末＝期限 ≥ 事件日的最早一季。"""
-    q = (pd.Timestamp(ts) - pd.DateOffset(months=6)).to_period("Q").end_time.normalize()
-    for _ in range(8):
-        if report_deadline(q) >= ts:
-            return q
-        q = (q + pd.DateOffset(days=1)).to_period("Q").end_time.normalize()
-    return q
-
-
-def _exchange_switch(dates: pd.Series, vals: pd.Series, close, ts, m, implied_fn):
-    if close is None or close.empty or m < _DETECT_MIN_M:
-        return None
-    s = pd.Series(np.asarray(vals, dtype=float), index=pd.DatetimeIndex(dates))
-    s = s[(s.index >= ts - pd.Timedelta(days=30))
-          & (s.index < ts + pd.Timedelta(days=_DETECT_DAYS)) & (s > 0)]
-    j = pd.concat([s.rename("v"), close.rename("c")], axis=1, join="inner").dropna()
-    j = j[j["c"] > 0]
-    imp = implied_fn(j["c"], j["v"])
-    pre, post = imp[imp.index < ts], imp[imp.index >= ts]
-    if len(post) < 6:
-        return None
-    # 基準用事件「前」的隱含值（事件前後本來連續，實測 39 件中位 1.00）；事件後馬上換基準時，
-    # 拿事件後前 5 天當基準會把換過的值也算進去而漏判（2026-10-30 審查）
-    ref = float(pre.iloc[-5:].median()) if len(pre) >= 3 else float(post.iloc[:5].median())
-    if not (ref > 0):
-        return None
-    hit = post[post / ref < m ** -0.5]
-    return pd.Timestamp(hit.index[0]) if len(hit) else None

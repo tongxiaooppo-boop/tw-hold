@@ -108,7 +108,8 @@ def _read_bundle_price_history(lookback_weeks: int = 160) -> pd.DataFrame | None
     return d[d["date"] >= cutoff].reset_index(drop=True)
 
 
-def _read_bundle_per_history() -> pd.DataFrame | None:
+def _read_bundle_per_history(q: pd.DataFrame | None = None,
+                             raw_close: pd.DataFrame | None = None) -> pd.DataFrame | None:
     """bundle `fundamentals/per.parquet` → `[ticker, date, per, dividend_yield]`
     （每日 PE / 殖利率，估值分位 + §7.3 殖利率門檻用）。"""
     p = BUNDLE_DIR / "fundamentals" / "per.parquet"
@@ -116,9 +117,11 @@ def _read_bundle_per_history() -> pd.DataFrame | None:
         return None
     d = pd.read_parquet(p, columns=["ticker", "date", "per", "dividend_yield"])
     d["date"] = pd.to_datetime(d["date"])
-    # 配股後交易所沿用舊股數一段時間 → 修回同一把尺（見 corporate_actions.fix_exchange_ratios）
+    # 配股後交易所 PER 沿用舊股數一段時間 → 修回同一把尺（見 corporate_actions.fix_exchange_ratios）
+    if q is None:
+        return d
     from reference.corporate_actions import fix_exchange_ratios
-    return fix_exchange_ratios(d, _read_bundle_raw_close_history())
+    return fix_exchange_ratios(d, quarterly=q, raw_close=raw_close)
 
 
 def scan_price_jumps(lookback_days: int = 400) -> list[dict]:
@@ -315,7 +318,7 @@ def screen_all() -> dict:
     prices = _read_bundle_prices()
     price_hist = _read_bundle_price_history()
     raw_close_hist = _read_bundle_raw_close_history()
-    per_hist = _read_bundle_per_history()
+    per_hist = _read_bundle_per_history(q, raw_close_hist)
     vol = _weekly_vol(price_hist)
 
     # G2：未還原 / 還原搞混會讓填息率恆等 100% 且不報錯（PRD §10.2）

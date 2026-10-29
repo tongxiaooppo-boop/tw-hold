@@ -152,16 +152,20 @@ def margin(code: str, lookback_days: int = 120) -> pd.DataFrame:
 
 
 def per_history(code: str) -> pd.DataFrame:
-    """交易所每日 PER／PBR／殖利率。配股後交易所沿用舊股數一段時間 → 用原始收盤偵測、
-    修回同一把尺（`reference.corporate_actions.fix_exchange_ratios`）。"""
+    """交易所每日 PER／PBR／殖利率。配股後交易所 PER 沿用舊股數一段時間 → 用原始季 EPS
+    修回同一把尺（`reference.corporate_actions.fix_exchange_ratios`）；只修 PER，PBR、殖利率
+    定義未驗證、暫不修。"""
     d = _read("per.parquet", code, False, ["date", "ticker", "per", "pbr", "dividend_yield"])
     if d.empty:
         return d
     d["date"] = pd.to_datetime(d["date"])
     from reference.corporate_actions import EXCHANGE_LAG_TYPES, SPLITS, fix_exchange_ratios
     if any(e.get("type") in EXCHANGE_LAG_TYPES for e in SPLITS.get(_t(code), [])):
-        d = fix_exchange_ratios(d, _read("prices_raw_close.parquet", code, True,
-                                         ["date", "ticker", "close"]))
+        fin = financials(code)
+        if not fin.empty:
+            d = fix_exchange_ratios(d, quarterly=fin,
+                                    raw_close=_read("prices_raw_close.parquet", code, True,
+                                                    ["date", "ticker", "close"]))
     return d.sort_values("date").reset_index(drop=True)
 
 

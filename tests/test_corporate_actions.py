@@ -219,39 +219,80 @@ def test_adjust_dividends_除息日當天也除(monkeypatch):
     assert ca.adjust_dividends(dv, ["cash_earnings"])["cash_earnings"].tolist() == [4.0, 4.0, 5.0]
 
 
-def test_fix_exchange_ratios_偵測換基準日(monkeypatch):
+def test_fix_per_配股後逐季混合(monkeypatch):
     monkeypatch.setitem(ca.SPLITS, "9989", [{"date": "2026-09-02", "type": "ex_rights",
-                                             "m": 3.0, "pf": None}])
-    d = pd.bdate_range("2026-08-25", "2026-12-31")
-    close = np.where(d < "2026-09-02", 7800.0, 2600.0)
-    eps = np.where(d < "2026-11-10", 300.0, 100.0)        # 交易所 11/10 才換成新股數 EPS
-    per = pd.DataFrame({"ticker": "9989", "date": d, "per": close / eps,
-                        "dividend_yield": 78.0 / close * 100})   # 舊每股現金 78 ÷ 新價 → 跳 3 倍
-    raw = pd.DataFrame({"ticker": "9989", "date": d, "close": close})
-    out = ca.fix_exchange_ratios(per, raw).set_index("date")
-    assert out.loc["2026-08-31", "per"] == pytest.approx(26.0)       # 事件前不動
-    assert out.loc["2026-09-03", "per"] == pytest.approx(26.0)       # 8.67 × 3
-    assert out.loc["2026-11-10", "per"] == pytest.approx(26.0)       # 換基準後原樣
-    assert out.loc["2026-09-03", "dividend_yield"] == pytest.approx(1.0)        # 3.0 ÷ 3
+                                             "m": 2.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9989",
+                      "period_end": pd.to_datetime(["2025-09-30", "2025-12-31", "2026-03-31",
+                                                    "2026-06-30", "2026-09-30", "2026-12-31",
+                                                    "2027-03-31", "2027-06-30"]),
+                      "eps": [4.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0, 2.0],
+                      "ni_parent": [400.0] * 8})
+    per = pd.DataFrame({"ticker": "9989",
+                        "date": pd.to_datetime(["2026-09-01", "2026-10-01", "2026-11-20",
+                                                "2027-09-01"]),
+                        "per": [10.0, 10.0, 10.0, 10.0]})
+    out = ca.fix_exchange_ratios(per, quarterly=q).set_index("date")["per"]
+    assert out.loc["2026-09-01"] == pytest.approx(10.0)    # 事件前不修
+    assert out.loc["2026-10-01"] == pytest.approx(20.0)    # A 組 2509~2606：raw 16、adj 8
+    assert out.loc["2026-11-20"] == pytest.approx(17.5)    # 2512~2609：raw 14、adj 8
+    assert out.loc["2027-09-01"] == pytest.approx(10.0)    # 2609~2706：raw 8、adj 8
 
 
-def test_fix_exchange_ratios_面額變更不修(monkeypatch):
+def test_fix_per_提早公布挑B組(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9989", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 2.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9989",
+                      "period_end": pd.to_datetime(["2025-09-30", "2025-12-31", "2026-03-31",
+                                                    "2026-06-30", "2026-09-30", "2026-12-31",
+                                                    "2027-03-31", "2027-06-30"]),
+                      "eps": [4.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0, 2.0],
+                      "ni_parent": [400.0] * 8})
+    per = pd.DataFrame({"ticker": "9989", "date": pd.to_datetime(["2026-11-05"]),
+                        "per": [10.0]})
+    raw = pd.DataFrame({"ticker": "9989", "date": pd.to_datetime(["2026-11-05"]),
+                        "close": [140.0]})
+    # c/per = 14 = B 組 raw4 → 挑 B；不給收盤 → A
+    assert ca.fix_exchange_ratios(per, quarterly=q, raw_close=raw)["per"].iloc[0] \
+        == pytest.approx(17.5)
+    assert ca.fix_exchange_ratios(per, quarterly=q)["per"].iloc[0] == pytest.approx(20.0)
+
+
+def test_fix_per_面額變更不修(monkeypatch):
     monkeypatch.setitem(ca.SPLITS, "9988", [{"date": "2026-08-10", "type": "par_change",
                                              "m": 10, "pf": 10}])
+    q = pd.DataFrame({"ticker": "9988", "period_end": pd.to_datetime(["2025-12-31", "2026-06-30"]),
+                      "eps": [10.0, 10.0]})
     per = pd.DataFrame({"ticker": "9988", "date": pd.bdate_range("2026-08-10", periods=3),
                         "per": [23.0, 23.5, 24.0]})
-    pd.testing.assert_frame_equal(ca.fix_exchange_ratios(per, None), per)
+    pd.testing.assert_frame_equal(ca.fix_exchange_ratios(per, quarterly=q), per)
 
 
-def test_fix_exchange_ratios_沒收盤走日曆退路(monkeypatch):
-    monkeypatch.setitem(ca.SPLITS, "9987", [{"date": "2026-09-02", "type": "ex_rights",
-                                             "m": 1.1, "pf": None}])
-    per = pd.DataFrame({"ticker": "9987",
-                        "date": pd.to_datetime(["2026-09-01", "2026-09-02", "2026-11-13",
-                                                "2026-11-16"]),
-                        "per": [10.0, 10.0, 10.0, 10.0]})
-    out = ca.fix_exchange_ratios(per, None)["per"].round(6).tolist()
-    assert out == [10.0, 11.0, 11.0, 10.0]          # 到 Q3 期限 11/14 為止
+def test_fix_per_pbr殖利率不動(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9989", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 2.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9989",
+                      "period_end": pd.to_datetime(["2025-09-30", "2025-12-31", "2026-03-31",
+                                                    "2026-06-30", "2026-09-30", "2026-12-31",
+                                                    "2027-03-31", "2027-06-30"]),
+                      "eps": [4.0, 4.0, 4.0, 4.0, 2.0, 2.0, 2.0, 2.0],
+                      "ni_parent": [400.0] * 8})
+    per = pd.DataFrame({"ticker": "9989",
+                        "date": pd.to_datetime(["2026-09-01", "2026-10-01", "2026-11-20",
+                                                "2027-09-01"]),
+                        "per": [10.0, 10.0, 10.0, 10.0],
+                        "pbr": [1.0, 1.0, 1.0, 1.0],
+                        "dividend_yield": [5.0, 5.0, 5.0, 5.0]})
+    out = ca.fix_exchange_ratios(per, quarterly=q)
+    assert out["pbr"].tolist() == [1.0, 1.0, 1.0, 1.0]
+    assert out["dividend_yield"].tolist() == [5.0, 5.0, 5.0, 5.0]
+    assert out.set_index("date")["per"].loc["2026-10-01"] == pytest.approx(20.0)
+
+
+def test_fix_per_沒給quarterly原樣():
+    per = pd.DataFrame({"ticker": "9989", "date": pd.to_datetime(["2026-10-01"]),
+                        "per": [10.0]})
+    pd.testing.assert_frame_equal(ca.fix_exchange_ratios(per), per)
 
 
 # ── 2026-10-30 gpt-6.1-sol 審查後補 ─────────────────────────────────────
@@ -273,27 +314,23 @@ def test_adjust_eps_寬限區判不了當舊(monkeypatch):
     assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([10.0])
 
 
-def test_fix_exchange_ratios_事件後隔天就換基準也抓得到(monkeypatch):
-    monkeypatch.setitem(ca.SPLITS, "9986", [{"date": "2026-08-10", "type": "ex_rights",
-                                             "m": 2.0, "pf": None}])
-    d = pd.bdate_range("2026-07-27", "2026-09-30")
-    close = np.where(d < "2026-08-10", 200.0, 100.0)
-    eps = np.where(d < "2026-08-11", 10.0, 5.0)              # 8/11 交易所就換成新股數
-    per = pd.DataFrame({"ticker": "9986", "date": d, "per": close / eps})
-    raw = pd.DataFrame({"ticker": "9986", "date": d, "close": close})
-    out = ca.fix_exchange_ratios(per, raw).set_index("date")["per"]
-    assert out.loc["2026-08-10"] == pytest.approx(20.0)      # 10 × 2
-    assert out.loc["2026-08-12"] == pytest.approx(20.0)      # 已換基準，不能再 × 2
+def test_adjust_eps_types篩選(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9995", [
+        {"date": "2026-01-05", "type": "par_change", "m": 10, "pf": None},
+        {"date": "2026-09-02", "type": "ex_rights", "m": 2.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9995",
+                      "period_end": pd.to_datetime(["2025-06-30", "2026-12-31"]),
+                      "eps": [20.0, 1.0]})
+    out = ca.adjust_eps(q, types=ca.EXCHANGE_LAG_TYPES)["eps"].tolist()
+    assert out == pytest.approx([10.0, 1.0])       # 只 ÷2（配股）
 
 
-def test_fix_exchange_ratios_重疊事件用原始值偵測(monkeypatch):
-    monkeypatch.setitem(ca.SPLITS, "9985", [
-        {"date": "2025-08-01", "type": "ex_both", "m": 1.2, "pf": None},
-        {"date": "2026-07-01", "type": "ex_both", "m": 1.2, "pf": None}])
-    d = pd.bdate_range("2025-07-01", "2026-12-31")
-    close = np.full(len(d), 100.0)
-    cash = np.where(d < "2026-08-17", 6.0, 6.0 / 1.2)       # 只有第二事件後 8/17 才換
-    raw = pd.DataFrame({"ticker": "9985", "date": d, "close": close})
-    per = pd.DataFrame({"ticker": "9985", "date": d, "dividend_yield": cash / close * 100})
-    out = ca.fix_exchange_ratios(per, raw).set_index("date")["dividend_yield"]
-    assert out.loc["2026-09-01"] == pytest.approx(5.0)       # 8/17 後原樣，不多除
+def test_adjust_eps_upto篩選(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9995", [
+        {"date": "2026-01-05", "type": "par_change", "m": 10, "pf": None},
+        {"date": "2026-09-02", "type": "ex_rights", "m": 2.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9995",
+                      "period_end": pd.to_datetime(["2025-06-30", "2026-12-31"]),
+                      "eps": [20.0, 1.0]})
+    out = ca.adjust_eps(q, upto=pd.Timestamp("2026-06-30"))["eps"].tolist()
+    assert out == pytest.approx([2.0, 1.0])        # 只 ÷10（面額變更）
