@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-10-28",
-    "rebuilt_at": "2026-10-29T03:23:25+00:00",
+    "rebuilt_at": "2026-10-29T10:49:56+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：610 檔",
@@ -1217,8 +1217,8 @@
       "c_roe": true,
       "c_gm_not_deteriorating": true,
       "c_fscore": true,
-      "eps_yoy_q": 4.3125,
-      "eps_yoy_base": 0.32,
+      "eps_yoy_q": 4.8448125,
+      "eps_yoy_base": 0.28540497297830314,
       "eps_yoy_low_base": true,
       "roe": 0.2570994718133339,
       "f_score": 7.0,
@@ -1270,11 +1270,11 @@
         }
       ],
       "support": [
-        "季 EPS YoY +431%（基期過低，數字供參考）",
+        "季 EPS YoY +484%（基期過低，數字供參考）",
         "法人 20 日淨買超 24,105 張"
       ],
       "oppose": [
-        "去年同期單季 EPS 僅 0.32 元（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）",
+        "去年同期單季 EPS 僅 0.29 元（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）",
         "月營收 YoY 僅 +4%（勉強過門檻）",
         "月營收 YoY 較上月減速",
         "距 52 週高僅 +0%（追高風險）"
