@@ -410,42 +410,53 @@ def adjust_dividends(div: pd.DataFrame, cols, ticker_col: str = "ticker",
 # ── 交易所本益比／淨值比／殖利率 ─────────────────────────────────────────
 
 
+def _restating_quarter(ts: pd.Timestamp) -> pd.Timestamp:
+    """涵蓋事件日的那一季季末（事件日 ≤ 季末）；這份財報才會把舊季重編成新股數。"""
+    return (ts.normalize() + pd.offsets.QuarterEnd(0)).normalize()
+
+
+#: 交易所反推 EPS（收盤÷PER）變動多少以上算「換了一份財報」（切段用）
+_STALE_TOL = 0.01
+
+
 def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None,
                         raw_close: pd.DataFrame | None = None) -> pd.DataFrame:
-    """交易所每日 PER 修回最新股本基準（只修 `per` 欄；pbr、dividend_yield 原樣）。
+    """交易所每日 PER 修回當天股本基準（只修 `per` 欄；pbr、dividend_yield 原樣）。
 
-    實證（2026-10-29）：交易所 PER 的 EPS＝最近四季「當初公布值」加總，舊季不重編；
-    配股（ex_rights／ex_both）後要四季才滾完。面額變更／分割交易所已重編，不修。
-    修法：PER × 原始四季加總 ÷ 調整後四季加總（調整只計配股類、且事件日 ≤ 當天的事件）。
+    實證（2026-10-30，67 件配股逐日拆）：配股（ex_rights／ex_both）除權日當天交易所 PER 仍用
+    舊股數的四季 EPS（反推 EPS 前後一日比值中位數 1.000）；之後**某一份財報公布時**舊季全部
+    重編成新股數，之後不必修。哪一份不固定：7 月配股有的 8 月 Q2 財報就重編，6 月底／9 月配股
+    有的拖到下一季甚至年報（推測跟新股交付日有關）。面額變更／分割交易所當天就調好，不修。
+    （10/29 的「舊季不重編、四季才滾完」是驗證腳本拿今天股數當基準造成的誤判。）
+
+    修法（逐段看資料）：令 Q＝涵蓋事件日 E 的季末，窗口＝E ～ Q 下一季的法定期限。
+    窗口內交易所反推 EPS（未還原收盤÷PER）在兩份財報之間是常數 → 依變動 ≥1% 切段；每段跟
+    「新股數四季加總 S」（`adjust_eps(upto=E)`，最近四季或提早公布多一季取最吻合）比：
+    比 m×S 近 → 舊股數 → PER × m；比 S 近 → 已重編，該段起之後都不修。
+    判不了（沒收盤、沒季 EPS、S ≤ 0）的段：季末 Q 的法定期限之前當舊、之後當已重編。
+    同檔多次事件依序套用，窗口重疊時倍數相乘。
 
     per：[ticker, date, per, ...]；quarterly：[ticker, period_end, eps, ni_parent?, net_income?]
-    （原始、未調整的季 EPS）；raw_close：[ticker, date, close]（未還原收盤）。
-    quarterly 沒給或空 → 原樣返回。非破壞性。
+    （原始季 EPS，給 `adjust_eps` 用）；raw_close：[ticker, date, close]（未還原收盤）。
+    quarterly／raw_close 沒給 → 全部走「判不了」規則。非破壞性。
     """
-    if per is None or per.empty or "ticker" not in per.columns or "date" not in per.columns:
-        return per
-    if quarterly is None or quarterly.empty or "per" not in per.columns \
-            or not {"ticker", "period_end", "eps"} <= set(quarterly.columns):
+    if per is None or per.empty or not {"ticker", "date", "per"} <= set(per.columns):
         return per
 
     tks = per["ticker"].astype(str).str.split(".").str[0]
     evmap = {}
     for t in tks.unique():
-        evs = []
-        for e in SPLITS.get(t, []):
-            if e.get("type") not in EXCHANGE_LAG_TYPES:
-                continue
-            m = _m(e)
-            if m is not None and float(m) > 1.0:
-                evs.append(pd.Timestamp(e["date"]))
+        evs = sorted((pd.Timestamp(e["date"]), float(_m(e))) for e in SPLITS.get(t, [])
+                     if e.get("type") in EXCHANGE_LAG_TYPES and _m(e) is not None
+                     and float(_m(e)) > 1.0)
         if evs:
-            evmap[t] = sorted(set(evs))
+            evmap[t] = evs
     if not evmap:
         return per
 
     d = per.copy()
     d["per"] = pd.to_numeric(d["per"], errors="coerce").astype(float)
-    dates_all = pd.to_datetime(d["date"])
+    dates_all = pd.to_datetime(d["date"]).to_numpy()
 
     closes: dict[str, pd.Series] = {}
     if raw_close is not None and not raw_close.empty:
@@ -456,89 +467,72 @@ def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None
         for t, g in rc.groupby("ticker", sort=False):
             closes[t] = g.drop_duplicates("date").set_index("date")["close"]
 
-    qtks = quarterly["ticker"].astype(str).str.split(".").str[0]
-    qsel = quarterly[qtks.isin(evmap)]
-    qsel_tk = qtks[qtks.isin(evmap)].to_numpy()
-    qmap = {t: g.sort_values("period_end").reset_index(drop=True)
-            for t, g in qsel.groupby(qsel_tk, sort=False)}
+    qmap: dict[str, pd.DataFrame] = {}
+    if quarterly is not None and not quarterly.empty             and {"ticker", "period_end", "eps"} <= set(quarterly.columns):
+        qtks = quarterly["ticker"].astype(str).str.split(".").str[0]
+        sel = qtks.isin(evmap)
+        qsel = quarterly[sel].assign(ticker=qtks[sel])
+        qsel["period_end"] = pd.to_datetime(qsel["period_end"])
+        qmap = {t: g.sort_values("period_end").reset_index(drop=True)
+                for t, g in qsel.groupby("ticker", sort=False)}
 
     pos_of = pd.Series(np.arange(len(d)), index=tks.to_numpy()).groupby(level=0).indices
     ci = d.columns.get_loc("per")
 
     for t, evs in evmap.items():
-        if t not in pos_of or t not in qmap:
+        if t not in pos_of:
             continue
-        qt = qmap[t]
-        raw_eps = pd.to_numeric(qt["eps"], errors="coerce").to_numpy(dtype=float)
-        pe_arr = pd.to_datetime(qt["period_end"]).to_numpy(dtype="datetime64[ns]")
-        nq = len(pe_arr)
-        deadline = np.array([report_deadline(p).to_datetime64() for p in pe_arr],
-                            dtype="datetime64[ns]")
-
         pos = pos_of[t]
-        dts = dates_all.to_numpy()[pos]
-        per0 = d.iloc[pos, ci].to_numpy(dtype=float).copy()
-        close_s = closes.get(t)
+        pos = pos[np.argsort(dates_all[pos], kind="stable")]
+        dts = dates_all[pos]
+        per0 = d.iloc[pos, ci].to_numpy(dtype=float)
+        mult = np.ones(len(pos))
+        cs = closes.get(t)
+        c = (cs.reindex(pd.DatetimeIndex(dts)).to_numpy(dtype=float) if cs is not None
+             else np.full(len(pos), np.nan))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            x = np.where(per0 > 0, c / per0, np.nan)      # 交易所反推 EPS
+        qt = qmap.get(t)
 
-        # 事件分段 [E1,E2)、[E2,E3)、…、[Ek,∞)；E1 之前不修
-        for j, Ej in enumerate(evs):
-            Ej64 = Ej.to_datetime64()
-            if j + 1 < len(evs):
-                seg = (dts >= Ej64) & (dts < evs[j + 1].to_datetime64())
-            else:
-                seg = dts >= Ej64
-            if not seg.any():
+        for E, m in evs:
+            Q = _restating_quarter(E)
+            dQ = report_deadline(Q)
+            end = report_deadline((Q + pd.offsets.QuarterEnd(1)).normalize())
+            win = np.flatnonzero((dts >= E.to_datetime64()) & (dts < end.to_datetime64()))
+            if len(win) == 0:
                 continue
-            seg_dts = dts[seg]
-            seg_per = per0[seg]
-            adj_eps = pd.to_numeric(
-                adjust_eps(qt, types=EXCHANGE_LAG_TYPES, upto=Ej)["eps"],
-                errors="coerce").to_numpy(dtype=float)
+            fallback = dts[win] < dQ.to_datetime64()
+            stale = fallback.copy()
+            xw = x[win]
+            if qt is not None and np.isfinite(xw).any():
+                eps = pd.to_numeric(adjust_eps(qt, upto=E)["eps"], errors="coerce").to_numpy(float)
+                ttm = pd.Series(eps).rolling(4).sum().to_numpy()        # ttm[k]：第 k-3～k 季
+                dl = np.array([report_deadline(p).to_datetime64() for p in qt["period_end"]])
+                n = np.searchsorted(np.sort(dl), dts[win], side="left")  # 期限已過的季數
+                # 切段：反推 EPS 變動 ≥1% 換段（缺值沿用上一段）
+                xf = pd.Series(xw).ffill().to_numpy()
+                lx = np.log(np.where(xf > 0, xf, np.nan))
+                brk = np.r_[True, ~(np.abs(np.diff(lx)) < _STALE_TOL)]
+                seg = np.cumsum(brk)
+                lm = np.log(m)
+                verdict = np.full(len(win), np.nan)                    # 1＝舊股數、0＝已重編
+                for i in range(len(win)):
+                    if not np.isfinite(lx[i]):
+                        continue
+                    cand = [ttm[k - 1] for k in (n[i], n[i] + 1) if 4 <= k <= len(ttm)]
+                    cand = [v for v in cand if np.isfinite(v) and v > 0]
+                    if not cand:
+                        continue
+                    e_new = min(abs(lx[i] - np.log(v)) for v in cand)
+                    e_old = min(abs(lx[i] - np.log(v) - lm) for v in cand)
+                    verdict[i] = 1.0 if e_old < e_new else 0.0
+                sv = pd.Series(verdict).groupby(seg).transform("mean").to_numpy()
+                known = np.isfinite(sv)
+                stale = np.where(known, sv > 0.5, fallback)
+            # 一旦判已重編，之後都不修
+            stale &= np.cumsum(~stale) == 0
+            mult[win[stale]] *= m
 
-            n = np.searchsorted(deadline, seg_dts, side="left")
-
-            c_raw = np.concatenate([[0.0], np.cumsum(np.where(np.isfinite(raw_eps), raw_eps, 0.0))])
-            cc_raw = np.concatenate([[0], np.cumsum((~np.isfinite(raw_eps)).astype(np.int64))])
-            c_adj = np.concatenate([[0.0], np.cumsum(np.where(np.isfinite(adj_eps), adj_eps, 0.0))])
-            cc_adj = np.concatenate([[0], np.cumsum((~np.isfinite(adj_eps)).astype(np.int64))])
-
-            loA = np.clip(n - 4, 0, nq - 1)
-            hiA = np.clip(n - 1, 0, nq - 1)
-            loB = np.clip(n - 3, 0, nq - 1)
-            hiB = np.clip(n, 0, nq - 1)
-
-            rawA = c_raw[hiA + 1] - c_raw[loA]
-            adjA = c_adj[hiA + 1] - c_adj[loA]
-            okA = ((n >= 4) & (cc_raw[hiA + 1] - cc_raw[loA] == 0)
-                   & (cc_adj[hiA + 1] - cc_adj[loA] == 0) & (rawA > 0) & (adjA > 0))
-
-            n_pe = np.clip(n, 0, nq - 1)
-            b_ok = (n >= 3) & (n < nq) & (pe_arr[n_pe] < seg_dts)
-            rawB = c_raw[hiB + 1] - c_raw[loB]
-            adjB = c_adj[hiB + 1] - c_adj[loB]
-            okB = (b_ok & (cc_raw[hiB + 1] - cc_raw[loB] == 0)
-                   & (cc_adj[hiB + 1] - cc_adj[loB] == 0) & (rawB > 0) & (adjB > 0))
-
-            if close_s is not None:
-                c = close_s.reindex(pd.DatetimeIndex(seg_dts)).to_numpy(dtype=float)
-            else:
-                c = np.full(len(seg_dts), np.nan)
-
-            with np.errstate(divide="ignore", invalid="ignore"):
-                x = c / seg_per
-                errA = np.abs(np.log(x / rawA))
-                errB = np.abs(np.log(x / rawB))
-            ea = np.where(np.isfinite(errA), errA, np.inf)
-            eb = np.where(np.isfinite(errB), errB, np.inf)
-            useB = (b_ok & np.isfinite(c) & (seg_per > 0) & (eb < ea))
-            raw4 = np.where(useB, rawB, rawA)
-            adj4 = np.where(useB, adjB, adjA)
-            ok = np.where(useB, okB, okA)
-
-            with np.errstate(divide="ignore", invalid="ignore"):
-                fixed = np.where(ok, seg_per * raw4 / adj4, seg_per)
-            per0[seg] = fixed
-
-        d.iloc[pos, ci] = per0
+        d.iloc[pos, ci] = per0 * mult
 
     return d
