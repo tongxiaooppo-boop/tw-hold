@@ -226,13 +226,13 @@ def test_fix_exchange_ratios_偵測換基準日(monkeypatch):
     close = np.where(d < "2026-09-02", 7800.0, 2600.0)
     eps = np.where(d < "2026-11-10", 300.0, 100.0)        # 交易所 11/10 才換成新股數 EPS
     per = pd.DataFrame({"ticker": "9989", "date": d, "per": close / eps,
-                        "dividend_yield": 1.0})
+                        "dividend_yield": 78.0 / close * 100})   # 舊每股現金 78 ÷ 新價 → 跳 3 倍
     raw = pd.DataFrame({"ticker": "9989", "date": d, "close": close})
     out = ca.fix_exchange_ratios(per, raw).set_index("date")
     assert out.loc["2026-08-31", "per"] == pytest.approx(26.0)       # 事件前不動
     assert out.loc["2026-09-03", "per"] == pytest.approx(26.0)       # 8.67 × 3
     assert out.loc["2026-11-10", "per"] == pytest.approx(26.0)       # 換基準後原樣
-    assert out.loc["2026-09-03", "dividend_yield"] == pytest.approx(1 / 3)
+    assert out.loc["2026-09-03", "dividend_yield"] == pytest.approx(1.0)        # 3.0 ÷ 3
 
 
 def test_fix_exchange_ratios_面額變更不修(monkeypatch):
@@ -252,3 +252,48 @@ def test_fix_exchange_ratios_沒收盤走日曆退路(monkeypatch):
                         "per": [10.0, 10.0, 10.0, 10.0]})
     out = ca.fix_exchange_ratios(per, None)["per"].round(6).tolist()
     assert out == [10.0, 11.0, 11.0, 10.0]          # 到 Q3 期限 11/14 為止
+
+
+# ── 2026-10-30 gpt-6.1-sol 審查後補 ─────────────────────────────────────
+
+def test_adjust_eps_歸母淨利缺值逐列退用淨利(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9993", [{"date": "2026-07-25", "type": "ex_rights",
+                                             "m": 3.0, "pf": None}])
+    q = pd.DataFrame({"ticker": "9993",
+                      "period_end": pd.to_datetime(["2026-03-31", "2026-06-30", "2026-09-30"]),
+                      "eps": [30.0, 30.0, 10.0], "equity_parent": [np.nan] * 3,
+                      "net_income": [300.0] * 3})
+    assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([10.0, 10.0, 10.0])
+
+
+def test_adjust_eps_寬限區判不了當舊(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9993", [{"date": "2026-09-02", "type": "ex_rights",
+                                             "m": 3.0, "pf": None}])
+    q = _q(["2026-06-30"], [30.0], [np.nan])           # 期限 8/14 已過、只有一季判不了
+    assert ca.adjust_eps(q)["eps"].tolist() == pytest.approx([10.0])
+
+
+def test_fix_exchange_ratios_事件後隔天就換基準也抓得到(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9986", [{"date": "2026-08-10", "type": "ex_rights",
+                                             "m": 2.0, "pf": None}])
+    d = pd.bdate_range("2026-07-27", "2026-09-30")
+    close = np.where(d < "2026-08-10", 200.0, 100.0)
+    eps = np.where(d < "2026-08-11", 10.0, 5.0)              # 8/11 交易所就換成新股數
+    per = pd.DataFrame({"ticker": "9986", "date": d, "per": close / eps})
+    raw = pd.DataFrame({"ticker": "9986", "date": d, "close": close})
+    out = ca.fix_exchange_ratios(per, raw).set_index("date")["per"]
+    assert out.loc["2026-08-10"] == pytest.approx(20.0)      # 10 × 2
+    assert out.loc["2026-08-12"] == pytest.approx(20.0)      # 已換基準，不能再 × 2
+
+
+def test_fix_exchange_ratios_重疊事件用原始值偵測(monkeypatch):
+    monkeypatch.setitem(ca.SPLITS, "9985", [
+        {"date": "2025-08-01", "type": "ex_both", "m": 1.2, "pf": None},
+        {"date": "2026-07-01", "type": "ex_both", "m": 1.2, "pf": None}])
+    d = pd.bdate_range("2025-07-01", "2026-12-31")
+    close = np.full(len(d), 100.0)
+    cash = np.where(d < "2026-08-17", 6.0, 6.0 / 1.2)       # 只有第二事件後 8/17 才換
+    raw = pd.DataFrame({"ticker": "9985", "date": d, "close": close})
+    per = pd.DataFrame({"ticker": "9985", "date": d, "dividend_yield": cash / close * 100})
+    out = ca.fix_exchange_ratios(per, raw).set_index("date")["dividend_yield"]
+    assert out.loc["2026-09-01"] == pytest.approx(5.0)       # 8/17 後原樣，不多除

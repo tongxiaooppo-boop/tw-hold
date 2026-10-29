@@ -272,10 +272,55 @@ def _basis_switched_at(sh: np.ndarray, i: int, m: float):
     return bool(new < old)
 
 
+#: 找「換基準那一季」的窗口：分界後第一季的季末落在 [事件日−N 個月, 事件日+4 個月]。
+#: 減資、面額變更的財報換股數常比 corp_actions 的日期（恢復買賣日）早 1～2 季
+#: （2208 2018-07-30 減資，Q1 2018 隱含股數已從 743M 掉到 313M；2026-10-30 全市場驗證）→ 9 個月。
+#: 配股要等股東會（約 6 月）通過，最早只能是事件前最後一季 → 4 個月；放寬會抓到同期的
+#: 現增／轉換（6596 2018 配股，1803 季股本 +10% 是現增，真正配股在 1809 季）。
+_OBS_BEFORE = pd.DateOffset(months=9)
+_OBS_BEFORE_BONUS = pd.DateOffset(months=4)
+_OBS_AFTER = pd.DateOffset(months=4)
+_OBS_TOL = 0.2            # |ln(跳動) − ln m| < 0.2·|ln m| 才算看到
+_OBS_MIN_M = 1.05         # 小於 5% 的股數變化跟一般股數雜訊分不開 → 只用日期規則
+_OBS_MIN_EPS = 0.05       # EPS 太小，隱含股數不可靠
+
+
+def _observed_boundary(pe: pd.Series, eps: np.ndarray, sh: np.ndarray, ts, m,
+                       typ: str | None = None):
+    """資料裡看得到的換基準分界：回傳 b（b 之前的季是舊股數）；看不到 → None。
+    在窗口內每一對相鄰季算隱含股數跳動，取最接近 m 的那對（容差 `_OBS_TOL`），
+    而且下一季要維持在新水位（濾掉 Q4＝全年−前三季算出來的單季離群值）。"""
+    lm = np.log(m)
+    if abs(lm) < np.log(_OBS_MIN_M):
+        return None
+    before = _OBS_BEFORE_BONUS if typ in ("ex_rights", "ex_both") else _OBS_BEFORE
+    lo, hi = pd.Timestamp(ts) - before, pd.Timestamp(ts) + _OBS_AFTER
+    best, best_err = None, _OBS_TOL * abs(lm)
+    pev = pe.to_numpy()
+    for b in range(1, len(pev)):
+        if not (lo <= pev[b] <= hi):
+            continue
+        a0, a1, e0, e1 = sh[b - 1], sh[b], eps[b - 1], eps[b]
+        if not (np.isfinite(a0) and np.isfinite(a1) and a0 > 0 and a1 > 0):
+            continue
+        if e0 * e1 <= 0 or min(abs(e0), abs(e1)) < _OBS_MIN_EPS:
+            continue
+        err = abs(np.log(a1 / a0) - lm)
+        if err >= best_err:
+            continue
+        if b + 1 < len(pev):
+            a2, e2 = sh[b + 1], eps[b + 1]
+            if np.isfinite(a2) and a2 > 0 and e2 * e1 > 0 and abs(e2) >= _OBS_MIN_EPS                     and abs(np.log(a2 / a1)) > 0.5 * abs(lm):
+                continue                       # 下一季又跳走 → 單季離群，不是換基準
+        best, best_err = b, err
+    return best
+
+
 def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
                period_col: str = "period_end") -> pd.DataFrame:
     """季 EPS 搬到最新股本基準。財報 EPS 用的是**公布當時**的股數（IAS 33.64：期後、
-    公布前的配股／分割會追溯重編），所以分界看公布日，不是季末：
+    公布前的配股／分割會追溯重編）。分界優先**看資料**：`_observed_boundary` 在事件前
+    9 個月～後 4 個月內找隱含股數（歸母淨利 ÷ EPS）跳動 ≈ m 的相鄰兩季；看不到才用日期規則：
       - 公布期限（＋寬限）< 事件日 → 舊基準 → ÷ m；
       - 季末 ≥ 事件日 → 新基準 → 不動；
       - 中間（季末 < 事件日 ≤ 期限＋寬限）：公司早公布就是舊、晚公布就是新（實測
@@ -292,26 +337,36 @@ def adjust_eps(q: pd.DataFrame, col: str = "eps", ticker_col: str = "ticker",
         return q
     d = q.copy()
     pe_all = pd.to_datetime(d[period_col])
-    ni_col = next((c for c in ("equity_parent", "net_income") if c in d.columns), None)
+    ni_cols = [c for c in ("equity_parent", "net_income") if c in d.columns]
     for t in hit:
         idx = d.index[(tks == t).to_numpy()]
         order = pe_all.loc[idx].sort_values().index
         pe = pe_all.loc[order]
         eps0 = pd.to_numeric(d.loc[order, col], errors="coerce").to_numpy(dtype=float)
-        if ni_col is not None:
-            ni = pd.to_numeric(d.loc[order, ni_col], errors="coerce").to_numpy(dtype=float)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                sh = ni / eps0
-        else:
-            sh = np.full(len(order), np.nan)
+        # 逐列：歸母淨利優先、缺值退用淨利（133 檔只有淨利，例 5904；2026-10-30 審查）
+        ni = np.full(len(order), np.nan)
+        for c in reversed(ni_cols):
+            v = pd.to_numeric(d.loc[order, c], errors="coerce").to_numpy(dtype=float)
+            ni = np.where(np.isfinite(v), v, ni)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sh = ni / eps0
         div = np.ones(len(order))
+        types = {pd.Timestamp(e["date"]): e.get("type") for e in SPLITS.get(t, [])}
         for ts, m in _events(t):
+            b = _observed_boundary(pe, eps0, sh, ts, m, types.get(ts))
+            if b is not None:                      # 資料看得到換基準那一季 → 以它為準
+                div[:b] *= m
+                continue
             for i, p in enumerate(pe):
                 if p >= ts:
                     continue
-                if report_deadline(p) + _DEADLINE_SLACK < ts:
+                dl = report_deadline(p)
+                if dl + _DEADLINE_SLACK < ts:
                     div[i] *= m
-                elif _basis_switched_at(sh, i, m) is False:
+                    continue
+                sw = _basis_switched_at(sh, i, m)
+                # 判不了：事件在法定期限內 → 多半已用新股數公布；過了期限（寬限區）→ 舊
+                if sw is False or (sw is None and ts > dl):
                     div[i] *= m
         d.loc[order, col] = eps0 / div
     return d
@@ -400,9 +455,11 @@ def fix_exchange_ratios(per: pd.DataFrame, raw_close: pd.DataFrame | None = None
             if col not in cols:
                 continue
             ci = d.columns.get_loc(col)
-            v = d.iloc[pos, ci].to_numpy(dtype=float).copy()
+            v0 = d.iloc[pos, ci].to_numpy(dtype=float)
+            v = v0.copy()
             for ts, m in evs:
-                end = _exchange_switch(dts, pd.Series(v), close, ts, m, implied_fn)
+                # 偵測一律用原始值：用前一事件修過的值會讓重疊窗口漏判（2026-10-30 審查）
+                end = _exchange_switch(dts, v0, close, ts, m, implied_fn)
                 if end is None:
                     end = (report_deadline(_next_quarter_end(ts)) if fallback == "deadline"
                            else ts + pd.Timedelta(days=365))
@@ -427,14 +484,18 @@ def _exchange_switch(dates: pd.Series, vals: pd.Series, close, ts, m, implied_fn
     if close is None or close.empty or m < _DETECT_MIN_M:
         return None
     s = pd.Series(np.asarray(vals, dtype=float), index=pd.DatetimeIndex(dates))
-    s = s[(s.index >= ts) & (s.index < ts + pd.Timedelta(days=_DETECT_DAYS)) & (s > 0)]
+    s = s[(s.index >= ts - pd.Timedelta(days=30))
+          & (s.index < ts + pd.Timedelta(days=_DETECT_DAYS)) & (s > 0)]
     j = pd.concat([s.rename("v"), close.rename("c")], axis=1, join="inner").dropna()
     j = j[j["c"] > 0]
-    if len(j) < 6:
-        return None
     imp = implied_fn(j["c"], j["v"])
-    ref = float(imp.iloc[:5].median())
+    pre, post = imp[imp.index < ts], imp[imp.index >= ts]
+    if len(post) < 6:
+        return None
+    # 基準用事件「前」的隱含值（事件前後本來連續，實測 39 件中位 1.00）；事件後馬上換基準時，
+    # 拿事件後前 5 天當基準會把換過的值也算進去而漏判（2026-10-30 審查）
+    ref = float(pre.iloc[-5:].median()) if len(pre) >= 3 else float(post.iloc[:5].median())
     if not (ref > 0):
         return None
-    hit = imp[imp / ref < m ** -0.5]
+    hit = post[post / ref < m ** -0.5]
     return pd.Timestamp(hit.index[0]) if len(hit) else None

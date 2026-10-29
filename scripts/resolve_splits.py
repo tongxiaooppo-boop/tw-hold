@@ -67,6 +67,13 @@ def _nice(f: float) -> float:
     return round(f, 6)
 
 
+def _ok(v) -> bool:
+    try:
+        return bool(np.isfinite(float(v)) and float(v) >= 0)
+    except (TypeError, ValueError):
+        return False
+
+
 def _key(tk: str, d) -> str:
     return f"{tk}:{pd.Timestamp(d).date()}"
 
@@ -137,7 +144,7 @@ def _fetch_twse(keys: list[str], cap: int) -> dict[str, float]:
     for k in keys[:cap]:
         tk, d = k.split(":")
         r = fetch(tk, pd.Timestamp(d), s)
-        if r is not None:
+        if r is not None and _ok(r["bonus_per_1000"]):
             got[k] = float(r["bonus_per_1000"])
         time.sleep(0.6)
     return got
@@ -152,6 +159,10 @@ def _diff(old: dict, new: dict) -> list[str]:
             lines.append(f"+ {tk} {k[0]} {k[1]} m={b[k].get('m')} pf={b[k].get('pf')}")
         for k in sorted(set(a) - set(b)):
             lines.append(f"- {tk} {k[0]} {k[1]}")
+        for k in sorted(set(a) & set(b)):
+            if (a[k].get("m"), a[k].get("pf")) != (b[k].get("m"), b[k].get("pf")):
+                lines.append(f"~ {tk} {k[0]} {k[1]} m={a[k].get('m')}→{b[k].get('m')} "
+                             f"pf={a[k].get('pf')}→{b[k].get('pf')}")
     return lines
 
 
@@ -169,15 +180,18 @@ def main(argv=None) -> int:
         return 0
     corp = pd.read_parquet(cp)
     old = json.loads(RESOLVED.read_text(encoding="utf-8")) if RESOLVED.exists() else {}
-    cache = {k: float(v) for k, v in old.get("twse_bonus", {}).items()}
+    cache = {k: float(v) for k, v in old.get("twse_bonus", {}).items() if _ok(v)}
     if TWSE_DETAIL.exists():
         det = pd.read_parquet(TWSE_DETAIL, columns=["ticker", "date", "bonus_per_1000"])
         for r in det.itertuples(index=False):
-            cache.setdefault(_key(str(r.ticker), r.date), float(r.bonus_per_1000 or 0))
+            if _ok(r.bonus_per_1000):        # NaN＝沒查到，不能當「查過、0」
+                cache.setdefault(_key(str(r.ticker), r.date), float(r.bonus_per_1000))
 
     events, missing = build_events(corp, cache)
     if missing:
-        got = _fetch_twse(sorted(missing, reverse=True), args.max_fetch)   # 新的先查
+        # 依事件日新到舊（不是代號）：查不到的老事件不會卡住每次額度
+        got = _fetch_twse(sorted(missing, key=lambda k: k.split(":")[1], reverse=True),
+                          args.max_fetch)
         cache.update(got)
         events, missing = build_events(corp, cache)
         print(f"TWT49UDetail：查 {len(got)} 筆；仍缺 {len(missing)} 筆（下次再查）")

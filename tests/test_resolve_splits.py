@@ -48,3 +48,13 @@ def test_build_events_各類規則():
     assert ev["9950"][0]["m"] == 1.03
     assert "1234" not in ev and "2330" not in ev
     assert missing == ["7777:2026-08-05"]
+
+
+def test_diff_m值更正也算差異():
+    old = {"5904": [{"date": "2026-08-10", "type": "par_change", "m": 10, "pf": 10}]}
+    new = {"5904": [{"date": "2026-08-10", "type": "par_change", "m": 5, "pf": 5}]}
+    assert any(ln.startswith("~ 5904") for ln in rs._diff(old, new))
+
+
+def test_配股率NaN不算查過():
+    assert not rs._ok(float("nan")) and not rs._ok(None) and rs._ok(0.0) and rs._ok(30)
