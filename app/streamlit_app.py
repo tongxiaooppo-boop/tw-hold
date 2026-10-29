@@ -2157,14 +2157,184 @@ def _valuation_block(d: dict) -> None:
                    "也一併拿掉了利息費用，有大額借款的公司會偏樂觀。")
 
 
+def _rev_name(r: dict) -> str:
+    return f"{r.get('code', '')} {r.get('name', '')}" + ("（更正）" if r.get("revised") else "")
+
+
+def _rev_note(r: dict) -> str:
+    n = r.get("note") or ""
+    return n if len(n) <= 20 else n[:20] + "…"
+
+
+def _rev_time(r: dict) -> str:
+    """first_seen_at 'YYYY-MM-DD HH:MM' → 'MM/DD HH:MM'。"""
+    s = r.get("first_seen_at") or ""
+    return f"{s[5:7]}/{s[8:10]} {s[11:16]}" if len(s) >= 16 else "—"
+
+
+def _rev_view_list(rows: list[dict], has_fs: bool) -> None:
+    head = ["代號", "公布時間", "營收", "月增", "年增", "累計年增", "備註"]
+    if not has_fs:
+        head.remove("公布時間")
+
+    def _row(r: dict) -> list:
+        # 手機收掉「公布時間／累計年增／備註」欄，改放名稱下方小字（_vtable 的 src 機制）
+        mob = " · ".join(x for x in ((_rev_time(r) if has_fs else ""),
+                                     "累計 " + _fmt_pct(r.get("cum_yoy")), _rev_note(r)) if x)
+        cells = [(_rev_name(r), mob)]
+        if has_fs:
+            cells.append(_rev_time(r))
+        cells += [_fmt_yi(r.get("revenue")), _fmt_pct(r.get("mom")), _fmt_pct(r.get("yoy")),
+                  _fmt_pct(r.get("cum_yoy")), _rev_note(r)]
+        return cells
+
+    k = 1 if has_fs else 0
+    num = {1 + k, 2 + k, 3 + k}
+    src = ({1} if has_fs else set()) | {4 + k, 5 + k}
+    if not has_fs:
+        srt = sorted(rows, key=lambda r: -(r.get("yoy") if r.get("yoy") is not None else -9e9))
+        _vtable(head, [_row(r) for r in srt], num, src)
+        return
+    # 依 first_seen_at 新到舊，同時間依 yoy 大到小；沒時間的排最後
+    srt = sorted(rows, key=lambda r: (r.get("first_seen_at") or "",
+                                      r.get("yoy") if r.get("yoy") is not None else -9e9),
+                 reverse=True)
+    groups: dict[str, list[dict]] = {}
+    for r in srt:
+        groups.setdefault((r.get("first_seen_at") or "")[:10] or "未知", []).append(r)
+    items = list(groups.items())
+
+    def _show(sub):
+        for day, rs in sub:
+            st.markdown(f"**{day}**　{len(rs)} 家")
+            _vtable(head, [_row(r) for r in rs], num, src)
+
+    _show(items[:3])
+    if items[3:]:
+        with st.expander("更早公布"):
+            _show(items[3:])
+
+
+def _rev_view_growth(rows: list[dict]) -> None:
+    from screener.revenue_watch import rank
+    low = st.toggle("含低基期（去年同月 < 1 億）", value=False, key="_rev_lowbase")
+    cond = st.segmented_control("條件", ["全部", "連續年增 ≥3 個月", "創歷史新高"],
+                                default="全部", key="_rev_cond") or "全部"
+    if cond == "連續年增 ≥3 個月":
+        rows = [r for r in rows if (r.get("yoy_streak") or 0) >= 3]
+    elif cond == "創歷史新高":
+        rows = [r for r in rows if r.get("record_high")]
+    top = rank(rows, "yoy", exclude_low_base=not low)
+    if not top:
+        st.caption("沒有符合的公司。")
+        return
+    _vtable(["代號", "年增", "月增", "累計年增", "連續年增", "創新高", "營收"],
+            [[(_rev_name(r), f"累計 {_fmt_pct(r.get('cum_yoy'))} · 營收 {_fmt_yi(r.get('revenue'))}"
+                           + (" · 創新高" if r.get("record_high") else "")),
+              _fmt_pct(r.get("yoy")), _fmt_pct(r.get("mom")),
+              _fmt_pct(r.get("cum_yoy")), f"{r.get('yoy_streak') or 0} 個月",
+              "✓" if r.get("record_high") else "", _fmt_yi(r.get("revenue"))] for r in top],
+            {1, 2}, {3, 5, 6})
+
+
+def _rev_view_value(rows: list[dict]) -> None:
+    from screener.revenue_watch import UPSIDE_GOAL, rank
+    basis = st.segmented_control("估值口徑", ["合理價", "合理成長價"], default="合理價",
+                                 key="_rev_basis") or "合理價"
+    cyc = st.toggle("含景氣循環股／歷史本益比不穩定", value=False, key="_rev_cyc")
+    st.caption("不排除時前 30 名多半是景氣循環股（記憶體股價差動輒 +500%～+1100%），"
+               "那是「近 5 年平均本益比 × 高峰 EPS」的方法極限，所以預設排除。")
+    key, pkey = (("upside_mid", "band_mid") if basis == "合理價"
+                 else ("upside_growth", "growth_price"))
+    top = rank(rows, key, require=("est_ok",),
+               **({} if cyc else {"exclude": ("cyclical", "pe_wide")}))
+    if not top:
+        st.caption("沒有符合的公司。")
+    else:
+        def _warn(r):
+            return "⚠" if (r.get("cyclical") or r.get("pe_wide") or r.get("warns")) else ""
+        _vtable(["代號", "現價", basis, "價差", "今年預估 EPS", "年增", "提醒"],
+                [[(_rev_name(r), f"預估 EPS {_fmt_x(r.get('est_eps'))} · 年增 {_fmt_pct(r.get('yoy'))}"),
+                  _fmt_x(r.get("price"), 1), _fmt_x(r.get(pkey), 1),
+                  ("★ " if (r.get(key) or 0) >= UPSIDE_GOAL else "") + _fmt_pct(r.get(key)),
+                  _fmt_x(r.get("est_eps")), _fmt_pct(r.get("yoy")), _warn(r)] for r in top],
+                {1, 2, 3}, {4, 5})
+        for r in top:
+            if r.get("cyclical") or r.get("pe_wide") or r.get("warns"):
+                with st.expander(f"{r.get('code')} {r.get('name')} 的提醒"):
+                    tags = [t for t, f in (("景氣循環股（營益率在歷史高檔）", r.get("cyclical")),
+                                           ("歷史本益比差距大，倍數不可靠", r.get("pe_wide"))) if f]
+                    for t in tags + list(r.get("warns") or []):
+                        st.markdown(f"- {t}")
+    with st.expander("怎麼估的"):
+        st.markdown(
+            "近 3 個月營收 → 最新一季毛利率與費用率 → 稅後 → 股數 → 年化 EPS。\n\n"
+            "今年預估 EPS＝已公布季＋未公布季×試算。\n\n"
+            "合理價＝近 5 年各年平均本益比的中間值 × 今年預估 EPS；"
+            "合理成長價＝目前本益比 × 今年預估 EPS。\n\n"
+            "景氣循環股（⚠）在獲利高峰時估值會偏高。**試算不是預測、不是目標價。**")
+
+
+def _rev_view_hold(rows: list[dict]) -> None:
+    from screener.revenue_watch import UPSIDE_GOAL, hold_signal
+    st.caption("app 不知道你持有什麼。這裡列出估值價差 ≥40% 或已到合理價的股票，給你對照手上的持股。"
+               "口徑：到估值先賣一些、跌破月線／季線再全賣。不是建議。")
+    order = {"跌破季線": 0, "跌破月線": 1, "已到估值": 2, "續抱（線上）": 3}
+    sel = []
+    for r in rows:
+        if r.get("est_ok") and ((r.get("upside_mid") or -9) >= UPSIDE_GOAL or r.get("at_valuation")):
+            sel.append((hold_signal(r) or "續抱（線上）", r))
+    if not sel:
+        st.caption("目前沒有符合的公司。")
+        return
+    sel.sort(key=lambda t: (order[t[0]], -(t[1].get("market_cap") or 0)))
+    _vtable(["代號", "提示", "現價", "月線", "季線", "合理價", "價差"],
+            [[(_rev_name(r), f"月線 {_fmt_x(r.get('ma20'), 1)} · 季線 {_fmt_x(r.get('ma60'), 1)}"), s,
+              _fmt_x(r.get("price"), 1), _fmt_x(r.get("ma20"), 1),
+              _fmt_x(r.get("ma60"), 1), _fmt_x(r.get("band_mid"), 1),
+              _fmt_pct(r.get("upside_mid"))] for s, r in sel], {2, 5, 6}, {3, 4})
+
+
 def _revenue_page(data: dict | None) -> None:
-    """「月營收」分頁（2026-10-29 框架；Cline 實作，規格見 collab/to-cline.md）。
+    """「月營收」分頁（2026-10-29 框架；實作規格見 collab/to-cline.md 第 3 步）。
 
     資料：`data/derived/revenue_watch.json`（格式見 screener/revenue_watch.py 開頭）。
     上方「期別」切換（periods[0]／periods[1]），下方四個子畫面：
     ① 公布清單 ② 營收成長排行 ③ 估值價差排行 ④ 持有提示。
     """
-    st.info("月營收分頁建置中。")
+    if not data or not data.get("periods"):
+        st.info("還沒有月營收資料。")
+        return
+    st.header("月營收")
+    _disclaimer()
+    periods = data["periods"]
+
+    def _label(p: dict) -> str:
+        pm, m = str(p.get("pub_month", "")), str(p.get("month", ""))
+        s = f"{int(pm[5:7])}月公布（{int(m[5:7])}月營收）" if len(pm) >= 7 and len(m) >= 7 else m
+        if (p.get("n_published") or 0) < (p.get("n_universe") or 0):
+            s += f" · 公布中 {p.get('n_published')}/{p.get('n_universe')}"
+        return s
+
+    labels = [_label(p) for p in periods]
+    pick = st.segmented_control("期別", labels, default=labels[0], key="_rev_period") or labels[0]
+    p = periods[labels.index(pick)] if pick in labels else periods[0]
+    rows = p.get("rows") or []
+    has_fs = bool(p.get("has_first_seen"))
+    cap = f"現價日期 {data.get('price_date') or '—'}｜{data.get('universe_note') or ''}"
+    if not has_fs:
+        cap += "｜這期沒有逐家公布時間（2026-10 營收起才開始收集）"
+    st.caption(cap)
+    view = st.segmented_control("檢視", ["公布清單", "營收成長", "估值價差", "持有提示"],
+                                default="公布清單", key="_rev_view") or "公布清單"
+    if view == "公布清單":
+        _rev_view_list(rows, has_fs)
+    elif view == "營收成長":
+        _rev_view_growth(rows)
+    elif view == "估值價差":
+        _rev_view_value(rows)
+    else:
+        _rev_view_hold(rows)
 
 
 def _stock_page() -> None:

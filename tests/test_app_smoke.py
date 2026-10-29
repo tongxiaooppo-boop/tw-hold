@@ -300,3 +300,36 @@ def test_總經導航_外資空單與三大法人卡出現_TXO已移除():
         assert "外資淨空單" in blob
     if Path("data/reference/inst_flow.parquet").exists():
         assert "三大法人買賣超" in blob
+
+
+def test_月營收分頁_四個檢視都不炸():
+    at = AppTest.from_file(REPO_APP, default_timeout=60)
+    at.session_state["_nav"] = "月營收"
+    at.run()
+    assert not at.exception
+    p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
+    if not p.exists():
+        assert "還沒有月營收資料" in " ".join(i.value for i in at.info)
+        return
+    for view in ["公布清單", "營收成長", "估值價差", "持有提示"]:
+        at.session_state["_rev_view"] = view
+        at.run()
+        assert not at.exception, view
+
+
+def test_月營收分頁_循環股開關與條件都不炸():
+    p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
+    if not p.exists():
+        pytest.skip("沒有 revenue_watch.json")
+    at = AppTest.from_file(REPO_APP, default_timeout=60)
+    at.session_state["_nav"] = "月營收"
+    at.session_state["_rev_view"] = "估值價差"
+    at.session_state["_rev_cyc"] = True
+    at.session_state["_rev_basis"] = "合理成長價"
+    at.run()
+    assert not at.exception
+    at.session_state["_rev_view"] = "營收成長"
+    for cond in ["全部", "連續年增 ≥3 個月", "創歷史新高"]:
+        at.session_state["_rev_cond"] = cond
+        at.run()
+        assert not at.exception, cond
