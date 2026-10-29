@@ -50,7 +50,10 @@ jobs:
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
-          git add data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
+          # 分開 add：任一路徑不存在（公布期外沒有 data/revenue_mops）會讓整行 add 失敗、另一個也沒加到（10/29 踩到）
+          for f in data/revenue_mops data/derived/revenue_watch.json; do
+            [ -e "$f" ] && git add "$f"
+          done
           if git diff --cached --quiet; then echo "無變更"; exit 0; fi
           git commit -m "月營收當晚公告 $(TZ=Asia/Taipei date +%F\ %H:%M)"
           pushed=0
