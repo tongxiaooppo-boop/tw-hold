@@ -2010,18 +2010,20 @@ def _valuation_block(d: dict) -> None:
 
         def _vs(v):
             return f"（{v / px0 - 1:+.0%}）" if (v and px0) else ""
-        # 自身 PE 區間太寬（P70 > 2×P30）→ 卡片不列三段價，免得 88～360 這種區間誤導；展開裡照列
+        # 各年平均 PE 差太多（最高 > 4×最低）→ 卡片不列三段價，免得 88～360 這種區間誤導；展開裡照列
         if b and pe and pe.get("wide"):
-            tiers = "三段價：本益比區間太寬，不列（見試算細節）"
+            tiers = "三段價：各年本益比差太多，不列（見試算細節）"
         elif b:
-            tiers = f"便宜 {b['p30']:,.1f}｜合理 **{b['p50']:,.1f}**｜昂貴 {b['p70']:,.1f}"
+            tiers = f"便宜 {b['low']:,.1f}｜合理 **{b['mid']:,.1f}**｜昂貴 {b['high']:,.1f}"
         else:
-            tiers = "三段價：—（本益比樣本不足或預估 EPS ≤ 0）"
+            tiers = "三段價：—（本益比年數不足或預估 EPS ≤ 0）"
         grow = (f"合理成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
                 else "合理成長價：—")
+        yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
         st.markdown(f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
-                    f"<span style='font-size:.8rem;opacity:.7'>三段＝自身 PE P30/50/70 × "
-                    f"今年預估 EPS；成長價＝今年預估 EPS × 目前本益比"
+                    f"<span style='font-size:.8rem;opacity:.7'>近五年 PE 倍數變化：{yrs}<br>"
+                    f"三段＝各年平均 PE 最低／中間／最高 × 今年預估 EPS；成長價＝今年預估 EPS"
+                    f" × 目前本益比"
                     f"{' ' + format(r['cur_pe']['pe'], '.1f') + ' 倍' if r['cur_pe'] else ''}"
                     f"</span>", unsafe_allow_html=True)
     for w in r["warns"]:
@@ -2075,18 +2077,29 @@ def _valuation_block(d: dict) -> None:
                 columns=[f"毛利率 {x * 100:+.0f}pp" for x in s["gm"]]),
                 use_container_width=True)
 
-        st.markdown("**三段價：自身本益比區間 × 今年預估 EPS**")
+        st.markdown("**三段價：近 5 年各年平均本益比 × 今年預估 EPS**")
+        if pe:
+            st.dataframe(pd.DataFrame([{
+                "年": y["year"], "平均本益比": f"{y['pe']:.1f} 倍", "有效交易日": y["days"],
+            } for y in pe["years"]]), hide_index=True, use_container_width=True)
         if pe and r["band"]:
+            est = yb["est"] if yb else None
+            lo_sd = max(pe["mean"] - pe["sd"], 0)
             st.dataframe(pd.DataFrame({
-                "段": ["便宜（P30）", "合理（P50）", "昂貴（P70）"],
-                "本益比": [f"{pe[k]:.1f} 倍" for k in ("p30", "p50", "p70")],
-                "股價": [_fmt_x(r["band"][k], 1) for k in ("p30", "p50", "p70")],
+                "段": ["便宜（最低年）", "合理（中間）", "昂貴（最高年）",
+                      "對照：平均 −1σ", "對照：平均", "對照：平均 +1σ"],
+                "本益比": [f"{v:.1f} 倍" for v in (pe["low"], pe["mid"], pe["high"],
+                                                  lo_sd, pe["mean"], pe["mean"] + pe["sd"])],
+                "股價": [_fmt_x(r["band"][k], 1) for k in ("low", "mid", "high")]
+                       + [_fmt_x(v * est, 1) if est else "—"
+                          for v in (lo_sd, pe["mean"], pe["mean"] + pe["sd"])],
             }), hide_index=True, use_container_width=True)
-            st.caption(f"本益比取 {pe['since']} 起 {pe['n_days']} 個交易日（排除虧損日）的 "
-                       "trailing PE。trailing 倍數 × 預估 EPS 口徑不一致，只能讀成"
-                       "「如果市場照過去的倍數給今年的獲利」，不是目標價。")
+            st.caption("各年平均本益比＝該年每天交易所 trailing PE 的平均（排除虧損日；有效日 "
+                       "<20 天的年份不算）。「平均 ±1σ」是外資本益比區間圖（PE band）的口徑，"
+                       "但外資用的是前瞻本益比，這裡只有 trailing。trailing 倍數 × 預估 EPS "
+                       "口徑不一致，只能讀成「如果市場照過去的倍數給今年的獲利」，不是目標價。")
         else:
-            st.caption("本益比樣本不足或預估 EPS ≤ 0，不套倍數。")
+            st.caption("本益比年數不足（少於 3 年）或預估 EPS ≤ 0，不套倍數。")
 
         st.markdown("**近 8 季業外**")
         st.dataframe(pd.DataFrame([{

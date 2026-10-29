@@ -12,8 +12,8 @@
 - 股數：近 4 季「歸母淨利 ÷ EPS」中位數（EPS 近零的季不算），不用股本÷10
   （非 10 元面額會錯）。
 - 今年預估 EPS：已公布季實際 ＋ 未公布季 × 試算單季 EPS（2026-10-29 使用者要求）。
-- 三段價：自身近 5 年 trailing PE（排除虧損日）P30/P50/P70 × 今年預估 EPS＝便宜/合理/
-  昂貴。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
+- 三段價：近 5 年各年平均 trailing PE（排除虧損日）的最低/中間/最高 × 今年預估 EPS
+  ＝便宜/合理/昂貴（使用者指定；外資的平均 ±1σ 在展開當對照）。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
 - 合理成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
   讓獲利成長推股價；成長越陡越樂觀。
 
@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-PE_LOOKBACK_DAYS = 365 * 5
-PE_MIN_DAYS = 120               # 有效（per>0）交易日少於這個數 → 不給本益比區間
-PE_WIDE_RATIO = 2.0             # P70 > P30 × 這個 → 警示區間太寬
+PE_YEARS = 5                    # 近 5 個日曆年（含今年到資料日）
+PE_MIN_YEAR_DAYS = 20           # 某年有效（per>0）交易日少於這個 → 該年不算（多半是虧損年）
+PE_MIN_YEARS = 3                # 有效年數少於這個 → 不給三段價
+PE_WIDE_RATIO = 4.0             # 最高年均 > 最低年均 × 這個 → 區間太寬，卡片不列
 CYCLE_QUARTERS = 24             # 營益率歷史位置看近 24 季（跟 stockcharts.QUARTERS_LOOKBACK 同尺度）
 CYCLE_MIN_QUARTERS = 8
 NONOP_WARN_RATIO = 0.20         # |最新季業外| / |最新季稅前| 超過 → 警示
@@ -95,18 +96,27 @@ def _revenue_block(rev: pd.DataFrame, q: pd.DataFrame) -> dict | None:
 
 
 def _pe_block(per: pd.DataFrame, px: pd.DataFrame) -> dict | None:
+    """近 5 個日曆年「各年平均本益比」（排除 per≤0 的日子）→ 最低／中間／最高＝三段倍數
+    （使用者 2026-10-29 指定）。另給全期日資料的平均 ±1σ（外資 PE band 口徑）當對照。"""
     if per is None or per.empty:
         return None
     p = per[["date", "per"]].copy()
     p["date"] = pd.to_datetime(p["date"])
-    p = p[p["date"] >= p["date"].max() - pd.Timedelta(days=PE_LOOKBACK_DAYS)]
-    p = p[pd.to_numeric(p["per"], errors="coerce") > 0]
-    if len(p) < PE_MIN_DAYS:
+    p["per"] = pd.to_numeric(p["per"], errors="coerce")
+    y0 = int(p["date"].max().year) - (PE_YEARS - 1)
+    p = p[(p["date"].dt.year >= y0) & (p["per"] > 0)]
+    g = p.groupby(p["date"].dt.year)["per"].agg(["mean", "size"])
+    g = g[g["size"] >= PE_MIN_YEAR_DAYS]
+    if len(g) < PE_MIN_YEARS:
         return None
-    qs = p["per"].astype(float).quantile([0.3, 0.5, 0.7])
-    return {"p30": float(qs.loc[0.3]), "p50": float(qs.loc[0.5]), "p70": float(qs.loc[0.7]),
-            "n_days": int(len(p)),
-            "since": p["date"].min().strftime("%Y/%m")}
+    m = g["mean"]
+    days = p[p["date"].dt.year.isin(g.index)]["per"]
+    low, high = float(m.min()), float(m.max())
+    return {"years": [{"year": int(y), "pe": float(v), "days": int(n)}
+                      for y, v, n in zip(g.index, g["mean"], g["size"])],
+            "low": low, "mid": float(m.median()), "high": high,
+            "mean": float(days.mean()), "sd": float(days.std()),
+            "wide": high > low * PE_WIDE_RATIO}
 
 
 def _cycle_block(q: pd.DataFrame) -> dict | None:
@@ -221,17 +231,15 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     implied_pe = price / run_ex if (price and run_ex and run_ex > 0) else None
     yb = _year_block(q, int(rv["last_month"][:4]), run_ex / 4 if run_ex is not None else None)
     est_eps = yb["est"] if yb else None
-    # 三段價（便宜/合理/昂貴）＝ 自身 PE P30/P50/P70 × 今年預估 EPS
+    # 三段價（便宜/合理/昂貴）＝ 近 5 年各年平均 PE 最低/中間/最高 × 今年預估 EPS
     band = None
     if pe and est_eps and est_eps > 0:
-        band = {k: pe[k] * est_eps for k in ("p30", "p50", "p70")}
+        band = {k: pe[k] * est_eps for k in ("low", "mid", "high")}
     # 合理成長價（使用者 Excel 口徑）＝ 今年預估 EPS × 目前本益比：倍數不變、讓獲利成長推股價
     cur_pe = _current_pe(per)
     growth_price = cur_pe["pe"] * est_eps if (cur_pe and est_eps and est_eps > 0) else None
-    if pe:
-        pe["wide"] = pe["p70"] > pe["p30"] * PE_WIDE_RATIO
     if pe and pe["wide"]:
-        warns.append(f"自身本益比區間很寬（P30 {pe['p30']:.0f} 倍～P70 {pe['p70']:.0f} 倍），"
+        warns.append(f"近 5 年各年平均本益比差很大（{pe['low']:.0f}～{pe['high']:.0f} 倍），"
                      "多半是過去獲利很薄時本益比被撐高；歷史倍數參考性低。")
 
     cyc = _cycle_block(q)

@@ -41,7 +41,8 @@ def _px(price: float = 100.0):
     return pd.DataFrame({"date": [pd.Timestamp("2026-10-22")], "close": [price]})
 
 
-def _per(n: int = 300, lo: float = 10, hi: float = 14):
+def _per(n: int = 1400, lo: float = 12, hi: float = 12):
+    """預設 2021 起每天 PE 12 倍（涵蓋近 5 個日曆年）；lo≠hi → 逐日線性變化。"""
     d = pd.date_range(end="2026-10-22", periods=n, freq="B")
     return pd.DataFrame({"date": d, "per": np.linspace(lo, hi, n)})
 
@@ -57,14 +58,15 @@ def test_基本試算_手算對得上():
     assert r["inputs"]["shares"] == pytest.approx(SHARES, rel=0.01)
     assert r["eps"]["run_ex"] == pytest.approx(5.76, rel=0.01)
     assert r["implied_pe"] == pytest.approx(100 / 5.76, rel=0.01)
-    assert r["pe"]["p50"] == pytest.approx(12, rel=0.01)
+    assert r["pe"]["mid"] == pytest.approx(12, rel=0.01)
+    assert [y["year"] for y in r["pe"]["years"]] == [2022, 2023, 2024, 2025, 2026]
     # 今年（2026）已公布 Q1、Q2 各 1.12 ＋ 未公布 2 季 × 1.44 = 5.12；去年 4 × 1.12 = 4.48
     y = r["year"]
     assert y["reported_q"] == 2 and y["est"] == pytest.approx(5.12, rel=0.01)
     assert y["growth"] == pytest.approx(5.12 / 4.48 - 1, rel=0.02)
-    assert r["band"]["p50"] == pytest.approx(12 * 5.12, rel=0.02)
-    # 合理成長價 ＝ 預估 EPS × 最新本益比（_per 最後一天 14）
-    assert r["growth_price"] == pytest.approx(14 * 5.12, rel=0.02)
+    assert r["band"]["mid"] == pytest.approx(12 * 5.12, rel=0.02)
+    # 合理成長價 ＝ 預估 EPS × 最新本益比（12）
+    assert r["growth_price"] == pytest.approx(12 * 5.12, rel=0.02)
     assert r["warns"] == []
 
 
@@ -125,8 +127,10 @@ def test_本益比樣本不足():
 
 
 def test_本益比區間太寬_警示():
-    r = va.estimate(_qf(), _rev(), _px(), _per(lo=5, hi=60))
-    assert any("本益比區間很寬" in w for w in r["warns"])
+    d = pd.date_range("2022-01-03", "2026-10-22", freq="B")
+    pe = d.year.map({2022: 5, 2023: 8, 2024: 12, 2025: 20, 2026: 30}).astype(float)
+    r = va.estimate(_qf(), _rev(), _px(), pd.DataFrame({"date": d, "per": pe}))
+    assert any("各年平均本益比差很大" in w for w in r["warns"])
     assert r["pe"]["wide"] and r["band"] is not None      # 卡片不列、展開照列
     assert not va.estimate(_qf(), _rev(), _px(), _per())["pe"]["wide"]
 
@@ -136,3 +140,20 @@ def test_股數跳過EPS近零的季():
     q.loc[q.index[-2], "eps"] = 0.01                  # 這季淨利/EPS 會推出離譜股數
     r = va.estimate(q, _rev(), _px(), _per())
     assert r["inputs"]["shares"] == pytest.approx(SHARES, rel=0.01)
+
+
+def test_三段價_各年平均本益比的最低中間最高():
+    d = pd.date_range("2022-01-03", "2026-10-22", freq="B")
+    pe = d.year.map({2022: 8, 2023: 10, 2024: 12, 2025: 14, 2026: 20}).astype(float)
+    r = va.estimate(_qf(), _rev(), _px(), pd.DataFrame({"date": d, "per": pe}))
+    assert (r["pe"]["low"], r["pe"]["mid"], r["pe"]["high"]) == (8, 12, 20)
+    assert r["band"]["low"] == pytest.approx(8 * 5.12, rel=0.01)
+    assert not r["pe"]["wide"]
+
+
+def test_虧損年不算進三段價():
+    d = pd.date_range("2022-01-03", "2026-10-22", freq="B")
+    pe = d.year.map({2022: 8, 2023: 10, 2024: 0, 2025: 14, 2026: 20}).astype(float)
+    r = va.estimate(_qf(), _rev(), _px(), pd.DataFrame({"date": d, "per": pe}))
+    assert [y["year"] for y in r["pe"]["years"]] == [2022, 2023, 2025, 2026]
+    assert r["pe"]["mid"] == pytest.approx(12)
