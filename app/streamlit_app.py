@@ -909,9 +909,15 @@ div[data-testid="stMarkdownContainer"] table th{
   white-space:nowrap;}
 .thc-vt th.n{font-family:inherit;}
 .thc-vt .note{display:block;font-size:.75rem;color:var(--thc-faint);margin-top:.1rem;}
+.thc-vt .src{color:var(--thc-soft);font-size:.8rem;}
+.thc-vt .m-only{display:none;}
+.thc-vt:not(.w3){max-width:640px;}      /* 小表（敏感度／各年 PE／業外）桌面不拉滿 */
+.thc-vt.w3 .n{width:1%;}                 /* 推導表：數值欄貼字寬，空間留給步驟與來源 */
 @media (max-width:640px){
   .thc-vt{font-size:.8rem;}
   .thc-vt th,.thc-vt td{padding:.35rem .4rem;}
+  .thc-vt .src{display:none;}          /* 手機：來源欄收掉，改顯示步驟下方的小字 */
+  .thc-vt .m-only{display:block;}
 }
 /* 多軌體檢：檢核清單。桌面＝四欄類表格（不動）；手機＝堆疊，狀態永遠靠右可見 */
 .thc-cl{border:1px solid var(--thc-line);border-radius:8px;overflow:hidden;margin:.15rem 0 .1rem;}
@@ -1992,18 +1998,20 @@ def _fmt_x(v, nd: int = 2) -> str:
     return "—" if v is None else f"{v:,.{nd}f}"
 
 
-def _vtable(head: list[str], rows: list[list], num: set[int]) -> None:
-    """估值展開用的 HTML 表（.thc-vt）。cell 可為 (主字, 小字註解)；`num` 是數字欄的 index。
+def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = frozenset()
+            ) -> None:
+    """估值展開用的 HTML 表（.thc-vt）。`num`＝數字欄 index；`src`＝來源欄 index（桌面顯示、
+    手機收掉）。cell 可為 (主字, 手機才顯示的小字)——搭配 src 欄，手機把來源改放主字下方。
     不用 st.dataframe：手機上它會截欄、要在表格內左右／上下捲（2026-10-29 使用者回報）。"""
     def _cell(v, i, tag):
-        cls = ' class="n"' if i in num else ""
+        cls = ' class="n"' if i in num else (' class="src"' if i in src else "")
         if isinstance(v, tuple):
             main, note = v
-            body = _esc(main) + (f'<span class="note">{_esc(note)}</span>' if note else "")
+            body = _esc(main) + (f'<span class="note m-only">{_esc(note)}</span>' if note else "")
         else:
             body = _esc(v)
         return f"<{tag}{cls}>{body}</{tag}>"
-    html = ['<table class="thc-vt"><tr>'
+    html = [f'<table class="thc-vt{" w3" if src else ""}"><tr>'
             + "".join(_cell(h, i, "th") for i, h in enumerate(head)) + "</tr>"]
     for r in rows:
         html.append("<tr>" + "".join(_cell(v, i, "td") for i, v in enumerate(r)) + "</tr>")
@@ -2101,8 +2109,8 @@ def _valuation_block(d: dict) -> None:
         if r["implied_pe"]:
             rows.append(("現價 ÷ 年化試算 EPS", f"{r['implied_pe']:.1f} 倍", "現價隱含的前瞻本益比"))
         st.markdown("**推導表**")
-        _vtable(["步驟（小字＝來源／假設）", "數值"],
-                [[(stp, note), val] for stp, val, note in rows], {1})
+        _vtable(["步驟", "數值", "來源／假設"],
+                [[(stp, note), val, note] for stp, val, note in rows], {1}, {2})
 
         if r["sens"]:
             s = r["sens"]
