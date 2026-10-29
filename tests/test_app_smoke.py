@@ -348,3 +348,16 @@ def test_月營收持有提示_代號篩選與開關不炸():
     at.session_state["_rev_hold_codes"] = "2330, 2454 9999"
     at.run()
     assert not at.exception
+
+
+def test_月營收代號連到個股查詢():
+    p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
+    if not p.exists():
+        pytest.skip("沒有 revenue_watch.json")
+    at = AppTest.from_file(REPO_APP, default_timeout=60)
+    at.session_state["_nav"] = "月營收"
+    at.session_state["_rev_view"] = "估值價差"
+    at.run()
+    assert not at.exception
+    html = "".join(m.value for m in at.markdown)
+    assert 'href="?code=' in html and "&lt;a" not in html

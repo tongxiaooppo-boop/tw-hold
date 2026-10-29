@@ -2007,18 +2007,25 @@ def _fmt_x(v, nd: int = 2) -> str:
     return "—" if v is None else f"{v:,.{nd}f}"
 
 
+class _RawHtml(str):
+    """_vtable 的 cell 若是這個型別就不跳脫（呼叫端自己保證已 _esc）。"""
+
+
 def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = frozenset()
             ) -> None:
     """估值展開用的 HTML 表（.thc-vt）。`num`＝數字欄 index；`src`＝來源欄 index（桌面顯示、
     手機收掉）。cell 可為 (主字, 手機才顯示的小字)——搭配 src 欄，手機把來源改放主字下方。
     不用 st.dataframe：手機上它會截欄、要在表格內左右／上下捲（2026-10-29 使用者回報）。"""
+    def _e(x):
+        return x if isinstance(x, _RawHtml) else _esc(x)
+
     def _cell(v, i, tag):
         cls = ' class="n"' if i in num else (' class="src"' if i in src else "")
         if isinstance(v, tuple):
             main, note = v
-            body = _esc(main) + (f'<span class="note m-only">{_esc(note)}</span>' if note else "")
+            body = _e(main) + (f'<span class="note m-only">{_esc(note)}</span>' if note else "")
         else:
-            body = _esc(v)
+            body = _e(v)
         return f"<{tag}{cls}>{body}</{tag}>"
     html = [f'<table class="thc-vt{" w3" if src else ""}"><tr>'
             + "".join(_cell(h, i, "th") for i, h in enumerate(head)) + "</tr>"]
@@ -2159,7 +2166,9 @@ def _valuation_block(d: dict) -> None:
 
 
 def _rev_name(r: dict) -> str:
-    return f"{r.get('code', '')} {r.get('name', '')}" + ("（更正）" if r.get("revised") else "")
+    # 代號連到個股查詢（同一套 valuation.estimate，完整試算細節在那邊；使用者 10/29 要求跳轉）
+    return _RawHtml(_tk_link(r.get("code") or "") + " " + _esc(r.get("name") or "")
+                    + ("（更正）" if r.get("revised") else ""))
 
 
 def _rev_note(r: dict) -> str:
