@@ -333,3 +333,18 @@ def test_月營收分頁_循環股開關與條件都不炸():
         at.session_state["_rev_cond"] = cond
         at.run()
         assert not at.exception, cond
+
+
+def test_月營收持有提示_代號篩選與開關不炸():
+    p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
+    if not p.exists():
+        pytest.skip("沒有 revenue_watch.json")
+    at = AppTest.from_file(REPO_APP, default_timeout=60)
+    at.session_state["_nav"] = "月營收"
+    at.session_state["_rev_view"] = "持有提示"
+    at.session_state["_rev_hold_cyc"] = True
+    at.run()
+    assert not at.exception
+    at.session_state["_rev_hold_codes"] = "2330, 2454 9999"
+    at.run()
+    assert not at.exception

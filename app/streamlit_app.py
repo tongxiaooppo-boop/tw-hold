@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -2280,19 +2281,37 @@ def _rev_view_hold(rows: list[dict]) -> None:
     st.caption("app 不知道你持有什麼。這裡列出估值價差 ≥40% 或已到合理價的股票，給你對照手上的持股。"
                "口徑：到估值先賣一些、跌破月線／季線再全賣。不是建議。")
     order = {"跌破季線": 0, "跌破月線": 1, "已到估值": 2, "續抱（線上）": 3}
-    sel = []
-    for r in rows:
-        if r.get("est_ok") and ((r.get("upside_mid") or -9) >= UPSIDE_GOAL or r.get("at_valuation")):
-            sel.append((hold_signal(r) or "續抱（線上）", r))
+    # 9 月實測範圍內 288 檔、排除景氣循環後仍 124 檔：給代號篩選＋分組收合，不然整頁沒法看
+    mine = st.text_input("只看這些代號（空白或逗號分隔）", key="_rev_hold_codes")
+    codes = {c for c in re.split(r"[\s,，、]+", mine.strip()) if c}
+    if codes:
+        pool = [r for r in rows if str(r.get("code")) in codes and r.get("est_ok")]
+    else:
+        cyc = st.toggle("含景氣循環股／歷史本益比不穩定", value=False, key="_rev_hold_cyc")
+        pool = [r for r in rows if r.get("est_ok")
+                and ((r.get("upside_mid") or -9) >= UPSIDE_GOAL or r.get("at_valuation"))
+                and (cyc or not (r.get("cyclical") or r.get("pe_wide")))]
+    sel = [(hold_signal(r) or "續抱（線上）", r) for r in pool]
     if not sel:
-        st.caption("目前沒有符合的公司。")
+        st.caption("目前沒有符合的公司。" + ("（代號不在名單或估不出來）" if codes else ""))
         return
     sel.sort(key=lambda t: (order[t[0]], -(t[1].get("market_cap") or 0)))
-    _vtable(["代號", "提示", "現價", "月線", "季線", "合理價", "價差"],
-            [[(_rev_name(r), f"月線 {_fmt_x(r.get('ma20'), 1)} · 季線 {_fmt_x(r.get('ma60'), 1)}"), s,
-              _fmt_x(r.get("price"), 1), _fmt_x(r.get("ma20"), 1),
-              _fmt_x(r.get("ma60"), 1), _fmt_x(r.get("band_mid"), 1),
-              _fmt_pct(r.get("upside_mid"))] for s, r in sel], {2, 5, 6}, {3, 4})
+
+    def _tbl(items):
+        _vtable(["代號", "提示", "現價", "月線", "季線", "合理價", "價差"],
+                [[(_rev_name(r), f"月線 {_fmt_x(r.get('ma20'), 1)} · 季線 {_fmt_x(r.get('ma60'), 1)}"), s,
+                  _fmt_x(r.get("price"), 1), _fmt_x(r.get("ma20"), 1),
+                  _fmt_x(r.get("ma60"), 1), _fmt_x(r.get("band_mid"), 1),
+                  _fmt_pct(r.get("upside_mid"))] for s, r in items], {2, 5, 6}, {3, 4})
+
+    if codes:
+        _tbl(sel)
+        return
+    for cat in order:
+        items = [t for t in sel if t[0] == cat]
+        if items:
+            with st.expander(f"{cat}　{len(items)} 家", expanded=(cat != "跌破季線")):
+                _tbl(items)
 
 
 def _revenue_page(data: dict | None) -> None:
@@ -2312,7 +2331,8 @@ def _revenue_page(data: dict | None) -> None:
     def _label(p: dict) -> str:
         pm, m = str(p.get("pub_month", "")), str(p.get("month", ""))
         s = f"{int(pm[5:7])}月公布（{int(m[5:7])}月營收）" if len(pm) >= 7 and len(m) >= 7 else m
-        if (p.get("n_published") or 0) < (p.get("n_universe") or 0):
+        # 少數公司整期都不公布：完成度 ≥98% 就不再標「公布中」
+        if (p.get("n_published") or 0) < 0.98 * (p.get("n_universe") or 0):
             s += f" · 公布中 {p.get('n_published')}/{p.get('n_universe')}"
         return s
 
