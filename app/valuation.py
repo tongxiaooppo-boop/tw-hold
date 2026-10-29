@@ -11,8 +11,11 @@
 - 稅：不估稅率，用 TTM「歸母淨利 ÷ 稅前」轉換率（含稅與非控制權益），原值攤開。
 - 股數：近 4 季「歸母淨利 ÷ EPS」中位數（EPS 近零的季不算），不用股本÷10
   （非 10 元面額會錯）。
-- 本益比：自身近 5 年 trailing PE（排除虧損日）的 P30/P50/P70。trailing PE 乘
-  「年化試算 EPS」是口徑錯配，只能當「如果市場照過去倍數給這個獲利速度」的條件試算。
+- 今年預估 EPS：已公布季實際 ＋ 未公布季 × 試算單季 EPS（2026-10-29 使用者要求）。
+- 三段價：自身近 5 年 trailing PE（排除虧損日）P30/P50/P70 × 今年預估 EPS＝便宜/合理/
+  昂貴。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
+- 合理成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
+  讓獲利成長推股價；成長越陡越樂觀。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
 """
@@ -117,6 +120,37 @@ def _cycle_block(q: pd.DataFrame) -> dict | None:
             "n": int(len(om)), "pct": float((om < cur).mean())}
 
 
+def _year_block(q: pd.DataFrame, year: int, run_q_eps: float | None) -> dict | None:
+    """今年預估 EPS ＝ 今年已公布季的實際 EPS ＋ 未公布季數 × 試算單季 EPS（排除業外）。
+    使用者 Excel 是「已公布累計 × 4/n」；這裡改用近 3 月營收的速度補未公布的季。
+    去年 4 季不齊 → 不給成長率；試算單季 EPS 推不出來且今年還有季沒公布 → None。"""
+    yr = q[q["period_end"].dt.year == year]
+    ly = q[q["period_end"].dt.year == year - 1]
+    n = int(len(yr))
+    if n < 4 and run_q_eps is None:
+        return None
+    if yr["eps"].isna().any():
+        return None
+    est = float(yr["eps"].sum()) + (4 - n) * (run_q_eps or 0.0)
+    last = float(ly["eps"].sum()) if len(ly) == 4 and ly["eps"].notna().all() else None
+    return {"year": year, "reported_q": n, "reported_eps": float(yr["eps"].sum()),
+            "est": est, "last": last,
+            "growth": (est / last - 1) if (last and last > 0) else None}
+
+
+def _current_pe(per: pd.DataFrame) -> dict | None:
+    """交易所公布的最新 trailing PER（>0 才算）；使用者 Excel 的「合理成長價」用這個倍數。"""
+    if per is None or per.empty:
+        return None
+    p = per[["date", "per"]].copy()
+    p["per"] = pd.to_numeric(p["per"], errors="coerce")
+    p = p.dropna().sort_values("date")
+    if p.empty or p["per"].iloc[-1] <= 0:
+        return None
+    return {"pe": float(p["per"].iloc[-1]),
+            "date": pd.Timestamp(p["date"].iloc[-1]).strftime("%Y/%m/%d")}
+
+
 def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
              per: pd.DataFrame) -> dict:
     """回 `{"ok": bool, "reason": str|None, ...}`。
@@ -185,9 +219,15 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         price, px_date = _num(last["close"]), pd.Timestamp(last["date"]).strftime("%Y/%m/%d")
     pe = _pe_block(per, px)
     implied_pe = price / run_ex if (price and run_ex and run_ex > 0) else None
+    yb = _year_block(q, int(rv["last_month"][:4]), run_ex / 4 if run_ex is not None else None)
+    est_eps = yb["est"] if yb else None
+    # 三段價（便宜/合理/昂貴）＝ 自身 PE P30/P50/P70 × 今年預估 EPS
     band = None
-    if pe and run_ex and run_ex > 0:
-        band = {k: pe[k] * run_ex for k in ("p30", "p50", "p70")}
+    if pe and est_eps and est_eps > 0:
+        band = {k: pe[k] * est_eps for k in ("p30", "p50", "p70")}
+    # 合理成長價（使用者 Excel 口徑）＝ 今年預估 EPS × 目前本益比：倍數不變、讓獲利成長推股價
+    cur_pe = _current_pe(per)
+    growth_price = cur_pe["pe"] * est_eps if (cur_pe and est_eps and est_eps > 0) else None
     if pe and pe["p70"] > pe["p30"] * PE_WIDE_RATIO:
         warns.append(f"自身本益比區間很寬（P30 {pe['p30']:.0f} 倍～P70 {pe['p70']:.0f} 倍），"
                      "多半是過去獲利很薄時本益比被撐高；歷史倍數參考性低。")
@@ -210,6 +250,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         "nonop_hist": [{"q": _qlabel(r.period_end), "nonop": float(r.nonop),
                         "pretax": float(r.pretax_income)} for r in last8.itertuples()],
         "eps": {"ttm": ttm_eps, "run_ex": run_ex, "run_incl": run_incl},
+        "year": yb, "cur_pe": cur_pe, "growth_price": growth_price,
         "price": price, "implied_pe": implied_pe, "pe": pe, "band": band,
         "sens": sens, "cycle": cyc, "warns": warns, "infos": infos,
     }

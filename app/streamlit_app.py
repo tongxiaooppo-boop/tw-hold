@@ -1991,7 +1991,7 @@ def _valuation_block(d: dict) -> None:
     st.caption(f"營運速度年化試算，**非全年預測、非目標價**　｜　財報 {a['fin_q']}｜"
                f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
 
-    rv, e, pe = r["rev"], r["eps"], r["pe"]
+    rv, e, pe, yb = r["rev"], r["eps"], r["pe"], r["year"]
     c1, c2, c3 = st.columns(3)
     with c1.container(border=True):
         st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
@@ -2002,15 +2002,23 @@ def _valuation_block(d: dict) -> None:
         st.markdown(f"**EPS**（年化試算）  \n"
                     f"排除業外 **{_fmt_x(e['run_ex'])}**  \n"
                     f"含近 4 季平均業外：{_fmt_x(e['run_incl'])}  \n"
-                    f"近 4 季實際：{_fmt_x(e['ttm'])}")
+                    f"近 4 季實際：{_fmt_x(e['ttm'])}  \n" + (
+                        f"{yb['year']} 預估 **{_fmt_x(yb['est'])}**（年增 {_fmt_pct(yb['growth'])}）"
+                        if yb else "今年預估：—"))
     with c3.container(border=True):
-        pe_txt = (f"自身近 5 年中位數：{pe['p50']:.1f} 倍" if pe
-                  else "自身本益比樣本不足")
-        imp = (f"**{r['implied_pe']:.1f} 倍**" if r["implied_pe"]
-               else "—（試算 EPS ≤ 0）")
-        st.markdown(f"**股價**  \n"
-                    f"現價 **{_fmt_x(r['price'], 1)}**  \n"
-                    f"現價 ÷ 年化試算 EPS：{imp}  \n{pe_txt}")
+        b, gpx, px0 = r["band"], r["growth_price"], r["price"]
+
+        def _vs(v):
+            return f"（{v / px0 - 1:+.0%}）" if (v and px0) else ""
+        tiers = (f"便宜 {b['p30']:,.1f}｜合理 **{b['p50']:,.1f}**｜昂貴 {b['p70']:,.1f}"
+                 if b else "三段價：—（本益比樣本不足或預估 EPS ≤ 0）")
+        grow = (f"合理成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
+                else "合理成長價：—")
+        st.markdown(f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
+                    f"<span style='font-size:.8rem;opacity:.7'>三段＝自身 PE P30/50/70 × "
+                    f"今年預估 EPS；成長價＝今年預估 EPS × 目前本益比"
+                    f"{' ' + format(r['cur_pe']['pe'], '.1f') + ' 倍' if r['cur_pe'] else ''}"
+                    f"</span>", unsafe_allow_html=True)
     for w in r["warns"]:
         st.warning(w, icon="⚠️")
     for i in r["infos"]:
@@ -2035,6 +2043,20 @@ def _valuation_block(d: dict) -> None:
              "近 4 季「歸母淨利 ÷ EPS」中位數"),
             ("× 4 ＝ 年化試算 EPS", _fmt_x(e["run_ex"]), "把這一季的速度延長成一年"),
         ]
+        if yb:
+            rows += [
+                (f"{yb['year']} 已公布 {yb['reported_q']} 季 EPS", _fmt_x(yb["reported_eps"]), "財報實際（含業外）"),
+                (f"＋ 未公布 {4 - yb['reported_q']} 季 × 試算單季 EPS",
+                 _fmt_x(yb["est"] - yb["reported_eps"]), "年化試算 EPS ÷ 4（排除業外）"),
+                (f"＝ {yb['year']} 預估 EPS", _fmt_x(yb["est"]),
+                 f"去年 {_fmt_x(yb['last'])}，年增 {_fmt_pct(yb['growth'])}"),
+            ]
+        if r["growth_price"]:
+            rows.append(("合理成長價 ＝ 預估 EPS × 目前本益比", _fmt_x(r["growth_price"], 1),
+                         f"交易所本益比 {r['cur_pe']['pe']:.1f} 倍（{r['cur_pe']['date']}）；"
+                         "倍數不變、讓獲利成長推股價，成長越陡越樂觀"))
+        if r["implied_pe"]:
+            rows.append(("現價 ÷ 年化試算 EPS", f"{r['implied_pe']:.1f} 倍", "現價隱含的前瞻本益比"))
         st.markdown("**推導表**")
         st.dataframe(pd.DataFrame(rows, columns=["步驟", "數值", "來源／假設"]),
                      hide_index=True, use_container_width=True)
@@ -2048,18 +2070,18 @@ def _valuation_block(d: dict) -> None:
                 columns=[f"毛利率 {x * 100:+.0f}pp" for x in s["gm"]]),
                 use_container_width=True)
 
-        st.markdown("**自身本益比區間 × 年化試算 EPS**")
+        st.markdown("**三段價：自身本益比區間 × 今年預估 EPS**")
         if pe and r["band"]:
             st.dataframe(pd.DataFrame({
-                "分位": ["P30", "P50", "P70"],
+                "段": ["便宜（P30）", "合理（P50）", "昂貴（P70）"],
                 "本益比": [f"{pe[k]:.1f} 倍" for k in ("p30", "p50", "p70")],
-                "套用後股價": [_fmt_x(r["band"][k], 1) for k in ("p30", "p50", "p70")],
+                "股價": [_fmt_x(r["band"][k], 1) for k in ("p30", "p50", "p70")],
             }), hide_index=True, use_container_width=True)
             st.caption(f"本益比取 {pe['since']} 起 {pe['n_days']} 個交易日（排除虧損日）的 "
-                       "trailing PE。trailing 倍數 × 年化試算 EPS 口徑不一致，只能讀成"
-                       "「如果市場照過去的倍數給這個獲利速度」，**不是合理價**。")
+                       "trailing PE。trailing 倍數 × 預估 EPS 口徑不一致，只能讀成"
+                       "「如果市場照過去的倍數給今年的獲利」，不是目標價。")
         else:
-            st.caption("本益比樣本不足或試算 EPS ≤ 0，不套倍數。")
+            st.caption("本益比樣本不足或預估 EPS ≤ 0，不套倍數。")
 
         st.markdown("**近 8 季業外**")
         st.dataframe(pd.DataFrame([{

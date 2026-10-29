@@ -58,8 +58,20 @@ def test_基本試算_手算對得上():
     assert r["eps"]["run_ex"] == pytest.approx(5.76, rel=0.01)
     assert r["implied_pe"] == pytest.approx(100 / 5.76, rel=0.01)
     assert r["pe"]["p50"] == pytest.approx(12, rel=0.01)
-    assert r["band"]["p50"] == pytest.approx(12 * 5.76, rel=0.02)
+    # 今年（2026）已公布 Q1、Q2 各 1.12 ＋ 未公布 2 季 × 1.44 = 5.12；去年 4 × 1.12 = 4.48
+    y = r["year"]
+    assert y["reported_q"] == 2 and y["est"] == pytest.approx(5.12, rel=0.01)
+    assert y["growth"] == pytest.approx(5.12 / 4.48 - 1, rel=0.02)
+    assert r["band"]["p50"] == pytest.approx(12 * 5.12, rel=0.02)
+    # 合理成長價 ＝ 預估 EPS × 最新本益比（_per 最後一天 14）
+    assert r["growth_price"] == pytest.approx(14 * 5.12, rel=0.02)
     assert r["warns"] == []
+
+
+def test_今年四季都公布_預估就是實際():
+    r = va.estimate(_qf(n=10), _rev(), _px(), _per())   # 2024Q3..2026Q4
+    assert r["year"]["reported_q"] == 4
+    assert r["year"]["est"] == pytest.approx(4 * 1.12, rel=0.01)
 
 
 def test_敏感度矩陣中間格等於主試算():
@@ -100,7 +112,11 @@ def test_近三月就是最新一季財報期間():
 def test_試算虧損_不給本益比與價格區間():
     r = va.estimate(_qf(), _rev(val=2e8), _px(), _per())
     assert r["ok"] and r["eps"]["run_ex"] < 0
-    assert r["implied_pe"] is None and r["band"] is None
+    assert r["implied_pe"] is None
+    # 今年預估 ＝ 已公布實際 ＋ 負的試算季 → 比已公布的少；三段價只在預估 > 0 時給
+    y = r["year"]
+    assert y["est"] < y["reported_eps"]
+    assert (r["band"] is None) == (y["est"] <= 0)
 
 
 def test_本益比樣本不足():
