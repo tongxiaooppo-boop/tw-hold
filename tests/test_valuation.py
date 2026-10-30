@@ -206,18 +206,26 @@ def test_週ATR_每週高低差4():
     assert va.weekly_atr(_ohlcv(n=40)) is None          # 8 週不足 15 週
 
 
-def test_停損_沒支撐就用2倍週ATR():
-    rk = va.risk_levels(_ohlcv())
-    assert rk["by"] == "watr" and rk["stop"] == pytest.approx(92.0, rel=0.01)
-
-
-def test_停損_下方大量區_改用支撐下緣減半個週ATR():
+def test_停損只看波動_不被下方大量區改動():
+    """停損與支撐分開（2026-10-30 定案）：有大量區也維持現價 − 2×週ATR。"""
     rk = va.risk_levels(_ohlcv(hot_lo=95.0))            # 大量區約 93～97，現價 100
-    z = rk["support"]
-    assert z is not None and z["hi"] < 100 and z["share"] > 0.5
-    assert rk["by"] == "support"
-    assert rk["stop"] == pytest.approx(z["lo"] - 0.5 * rk["watr"])
-    assert 92.0 < rk["stop"] < 100 - rk["watr"]
+    assert rk["stop"] == pytest.approx(100 - 2 * rk["watr"])
+    assert rk["support"] is not None                  # 有支撐候選，但停損照樣不動
+    assert rk["sup_far"] is (rk["sup_px"] < rk["stop"])
+
+
+def test_停損距離_提示不改價():
+    rk = va.risk_levels(_ohlcv())                       # 週ATR 4 → 停損 92（−8%）
+    assert rk["stop"] == pytest.approx(92.0, rel=0.01)
+    d = _ohlcv(base=20.0)                               # 週ATR 4 占 20% → 停損 −40%
+    rk = va.risk_levels(d)
+    assert rk["stop"] == pytest.approx(12.0, rel=0.01) and "波動大" in rk["hint"]
+
+
+def test_週ATR_未收完的週不算():
+    d = _ohlcv()                                        # 最後一天 10/22 是週四 → 該週不算
+    d.loc[d.index[-1], "high"] = 200.0
+    assert va.weekly_atr(d) == pytest.approx(4.0, rel=0.01)
 
 
 def test_現價不低於成長價_不算買點():
@@ -226,3 +234,43 @@ def test_現價不低於成長價_不算買點():
     assert r["growth_price"] < 100 and r["risk"]["buyable"] is False
     r = va.estimate(q, _rev(), _ohlcv(base=40.0), _per())
     assert r["growth_price"] > 40 and r["risk"]["buyable"] is True
+
+
+def _wave(n: int = 300):
+    """收盤 100 ± 10 正弦擺盪、最後一天收 100；|收盤−100| < 5 的日子量 5 倍（大量區約 95～105）。"""
+    d = pd.bdate_range(end="2026-10-22", periods=n)
+    close = 100 + 10 * np.sin(np.arange(n) / 8)
+    close[-1] = 100.0
+    vol = np.where(np.abs(close - 100) < 5, 5000.0, 1000.0)
+    return pd.DataFrame({"date": d, "open": close, "high": close + 1, "low": close - 1,
+                         "close": close, "volume": vol})
+
+
+def test_現價在大量區內_支撐壓力是該區下緣上緣():
+    rk = va.risk_levels(_wave())
+    at = rk["at"]
+    assert at is not None and at["lo"] < 100 < at["hi"]
+    assert rk["support"] is at and rk["sup_px"] == pytest.approx(at["lo"])
+    assert rk["resist"] is at and rk["res_px"] == pytest.approx(at["hi"])
+    assert rk["stop"] == pytest.approx(100 - 2 * rk["watr"])
+
+
+def test_上方沒有大量區_壓力候選留空_另給近一年高():
+    """130 線性跌到 100、量平均 → 沒有大量區；壓力候選 None，近一年高 131 另列。"""
+    n = 300
+    close = np.linspace(130, 100, n)
+    d = pd.DataFrame({"date": pd.bdate_range(end="2026-10-22", periods=n), "open": close,
+                      "high": close + 1, "low": close - 1, "close": close, "volume": 1000.0})
+    rk = va.risk_levels(d)
+    assert rk["resist"] is None and rk["res_px"] is None and rk["at"] is None
+    assert rk["high"] == pytest.approx(close[-250] + 1)
+
+
+def test_大量區占量_等於區間內實際的量():
+    """合併時中間橋接箱的量也要算（sol 審查 2026-10-30）：占量＝典型價落在區內那些天的量。"""
+    d = _wave()
+    tp = (d["high"] + d["low"] + d["close"]) / 3
+    tot = d["volume"].sum()
+    for z in va.volume_zones(d):
+        inside = d["volume"][(tp >= z["lo"] - 1e-9) & (tp < z["hi"] - 1e-9)].sum()
+        assert z["share"] == pytest.approx(inside / tot, abs=0.02)

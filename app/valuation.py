@@ -17,12 +17,14 @@
   ＝便宜/合理/昂貴（使用者指定；外資的平均 ±1σ 在展開當對照）。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
 - 成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
   讓獲利成長推股價；成長越陡越樂觀。
-- 停損參考與大量區（2026-10-30 使用者要求，`risk_levels`）：只替**現價**算，且現價要低於
-  成長價才給（使用者 2026-10-30：「需在成長價下，不一定是合理價下」）。
-  停損＝現價 − 2×週 ATR14；下方若有大量支撐區，改用「支撐區下緣 − 0.5 週 ATR」（離現價要 ≥ 1 週 ATR）
-  （跌破支撐＝買進理由失效，比較早出場）。大量區＝近 250 日成交量分布（典型價分箱）裡量
-  ≥ 平均 1.5 倍的連續價格帶；現價上方最近一塊＝壓力區（減碼參考）。日線 2×ATR 只有
-  5～8%，長抱型股票正常拉回就被洗掉，所以用週線。只是參考，沒有回測。
+- 停損參考與支撐／壓力候選（2026-10-30 使用者要求，`risk_levels`）：只替**現價**算，現價
+  低於成長價才給停損（使用者：「需在成長價下，不一定是合理價下」）。停損參考＝現價 −
+  2×週 ATR14（已收完週、Wilder），**跟支撐分開**、不被大量區改動；距現價 <8% 或 >20% 只提示、
+  不改價。倍數由 2015～2026、603 檔、15 萬個買點的 26 週模擬定案：2× 讓「虧 >30%」從 3.5%
+  降到 0.4%、2022／2025 空頭最差 5% 少虧約 10 個百分點；2.5×、3× 保護明顯變差，1.5× 半年內
+  一半以上會被停掉。這是現價快照，不是持倉的移動停損。
+  支撐／壓力候選＝近 250 日「日 K 估計」大量區（典型價分 40 箱、量 ≥ 平均 1.5 倍），價格換算
+  到目前基準；現價所在區的下／上緣優先，否則下方／上方最近一區。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
 """
@@ -42,8 +44,8 @@ SENS_REV = (-0.10, 0.0, 0.10)
 SENS_GM = (-0.03, 0.0, 0.03)
 STOP_WATR_MULT = 2.0            # 停損＝現價 − 2×週 ATR14
 WATR_WEEKS = 14
-SUPPORT_BUFFER_WATR = 0.5       # 支撐停損＝支撐區下緣 − 0.5 週 ATR
-SUPPORT_MIN_WATR = 1.0          # 支撐區下緣離現價不到 1 週 ATR → 太近，不拿來當停損
+HINT_NEAR = 0.08                # 停損距現價 < 8% → 提示太近（不改價）
+HINT_WIDE = 0.20                # 停損距現價 > 20% → 提示太寬（不改價）
 VP_DAYS = 250                   # 成交量分布看近 250 個交易日（約一年）
 VP_BINS = 40
 VP_NODE_RATIO = 1.5             # 某價格箱的量 ≥ 平均 × 這個 → 大量區
@@ -181,28 +183,37 @@ def _current_pe(per: pd.DataFrame) -> dict | None:
 
 
 def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
-    """週 K（週五收）的 Wilder ATR。週數不足 weeks+1 → None。px＝[date, high, low, close]。"""
+    """已收完週 K（週五收）的 Wilder ATR：前 weeks 個 TR 平均起算、之後遞迴。
+    最後一天不是週五 → 該週還沒收完，不算。週數不足 → None。px＝[date, high, low, close]。"""
     if px is None or px.empty or not {"date", "high", "low", "close"} <= set(px.columns):
         return None
     d = px[["date", "high", "low", "close"]].copy()
     d["date"] = pd.to_datetime(d["date"])
     for c in ("high", "low", "close"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
-    w = (d.dropna().set_index("date").sort_index()
-          .resample("W-FRI").agg({"high": "max", "low": "min", "close": "last"}).dropna())
+    d = d.dropna().set_index("date").sort_index()
+    if d.empty:
+        return None
+    w = d.resample("W-FRI").agg({"high": "max", "low": "min", "close": "last"}).dropna()
+    if d.index[-1].weekday() != 4:                   # 本週還沒收完（週五休市時會少算一週，可接受）
+        w = w.iloc[:-1]
     if len(w) < weeks + 1:
         return None
     pc = w["close"].shift()
     tr = pd.concat([w["high"] - w["low"], (w["high"] - pc).abs(), (w["low"] - pc).abs()],
-                   axis=1).max(axis=1).iloc[1:]
-    v = float(tr.ewm(alpha=1 / weeks, adjust=False).mean().iloc[-1])
-    return v if v > 0 else None
+                   axis=1).max(axis=1).iloc[1:].to_numpy()
+    a = float(tr[:weeks].mean())
+    for x in tr[weeks:]:
+        a = (a * (weeks - 1) + float(x)) / weeks
+    return a if a > 0 else None
 
 
 def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
                  ratio: float = VP_NODE_RATIO) -> list[dict]:
-    """近 days 日成交量分布：典型價 (H+L+C)/3 分 bins 箱，量 ≥ 平均×ratio 的相鄰箱併成一區。
-    回 `[{"lo", "hi", "share"}]`（share＝該區量占全期），由低到高。資料不足 60 日 → []。"""
+    """日 K 估計的大量區：近 days 日，典型價 (H+L+C)/3 分 bins 箱、整天量歸到該箱（不是實際
+    分價成交），量 ≥ 平均×ratio 的相鄰箱併成一區；中間只隔一箱、且那箱量 ≥ 平均的兩區再合併。
+    回 `[{"lo", "hi", "share"}]`（share＝區內所有箱、含橋接箱的量占全期），由低到高。
+    還原價＝換算到目前價格基準。資料不足 60 日 → []。"""
     need = {"date", "high", "low", "close", "volume"}
     if px is None or px.empty or not need <= set(px.columns):
         return []
@@ -220,47 +231,67 @@ def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
     width = (hi - lo) / bins
     idx = ((tp - lo) / width).astype(int).clip(0, bins - 1)
     vol = d["volume"].groupby(idx).sum().reindex(range(bins), fill_value=0.0)
-    total = float(vol.sum())
-    hot = vol >= vol.mean() * ratio
-    zones, start = [], None
+    total, mean = float(vol.sum()), float(vol.mean())
+    hot = (vol >= mean * ratio).to_numpy()
+    spans, start = [], None                          # [起箱, 迄箱)
     for i in range(bins + 1):
-        if i < bins and hot.iloc[i]:
+        if i < bins and hot[i]:
             start = i if start is None else start
         elif start is not None:
-            zones.append({"lo": lo + start * width, "hi": lo + i * width,
-                          "share": float(vol.iloc[start:i].sum()) / total})
+            spans.append([start, i])
             start = None
-    return zones
+    merged: list[list[int]] = []
+    for s, e in spans:
+        if merged and s - merged[-1][1] == 1 and vol.iloc[merged[-1][1]] >= mean:
+            merged[-1][1] = e
+        else:
+            merged.append([s, e])
+    return [{"lo": lo + s * width, "hi": lo + e * width,
+             "share": float(vol.iloc[s:e].sum()) / total} for s, e in merged]
 
 
 def risk_levels(px: pd.DataFrame) -> dict | None:
-    """現價的停損參考＋上下最近的大量區。週 ATR 算不出來 → None。
-    回 `{"watr", "price", "stop", "risk", "by", "anchor", "mult", "support", "resist", "at"}`；
-    stop＝anchor − mult×watr（anchor＝現價或支撐區下緣，畫面拿來顯示算式）；
-    by＝"watr"（現價 − 2×週 ATR）或 "support"（支撐區下緣 − 0.5 週 ATR）；support＝現價下方最近一塊
-    （hi < 現價）、resist＝上方最近（lo > 現價）、at＝現價所在的區（沒有就 None）。"""
+    """現價快照的停損參考＋支撐／壓力候選。停損與支撐分開：停損只看波動，不被大量區改動
+    （2026-10-30 使用者＋sol／DeepSeek 討論、2015～2026 模擬定案）。週 ATR 算不出來 → None。
+    回 `{"watr", "price", "stop", "risk", "hint", "support", "sup_px", "sup_far", "at",
+    "resist", "res_px", "high", "days"}`：
+      stop＝現價 − 2×週ATR（≤0 → None）；hint＝距離 <8%／>20% 的提示（不改價）；
+      support＝現價所在區，不在區內就是下方最近一區；sup_px＝所在區下緣／下方區上緣；
+      sup_far＝支撐在停損參考之下（離太遠，不是近端支撐）；
+      res_px＝所在區上緣，不在區內就是上方最近一區下緣；沒有 → None（另給近一年高 high）。"""
     watr = weekly_atr(px)
-    price = _num(px.sort_values("date").iloc[-1]["close"]) if watr is not None else None
-    if watr is None or price is None or price <= 0:
+    if watr is None:
+        return None
+    p = px.sort_values("date")
+    price = _num(p.iloc[-1]["close"])
+    if price is None or price <= 0:
         return None
     zones = volume_zones(px)
+    at = next((z for z in zones if z["lo"] <= price <= z["hi"]), None)
     below = [z for z in zones if z["hi"] < price]
     above = [z for z in zones if z["lo"] > price]
-    at = next((z for z in zones if z["lo"] <= price <= z["hi"]), None)
-    stop, by = price - STOP_WATR_MULT * watr, "watr"
-    # 支撐區下緣再留 0.5 週 ATR（防下影線洗掉）；離現價不到 1 週 ATR 的不用（太近）
-    anchor = price
-    los = [z["lo"] for z in zones
-           if z["lo"] - SUPPORT_BUFFER_WATR * watr <= price - SUPPORT_MIN_WATR * watr]
-    if los and max(los) - SUPPORT_BUFFER_WATR * watr > stop:
-        anchor = max(los)
-        stop, by = anchor - SUPPORT_BUFFER_WATR * watr, "support"
+    stop = price - STOP_WATR_MULT * watr
     stop = stop if stop > 0 else None
-    return {"watr": watr, "price": price, "stop": stop,
-            "risk": (stop / price - 1) if stop else None, "by": by,
-            "anchor": anchor, "mult": SUPPORT_BUFFER_WATR if by == "support" else STOP_WATR_MULT,
-            "support": below[-1] if below else None, "resist": above[0] if above else None,
-            "at": at}
+    risk = (stop / price - 1) if stop else None
+    hint = None
+    if risk is not None and risk > -HINT_NEAR:
+        hint = f"距現價不到 {HINT_NEAR:.0%}，正常波動就可能碰到"
+    elif risk is not None and risk < -HINT_WIDE:
+        hint = f"距現價超過 {HINT_WIDE:.0%}：這檔波動大，停損本來就寬，可用較小部位"
+    support = at if at is not None else (below[-1] if below else None)
+    sup_px = None if support is None else (support["lo"] if support is at else support["hi"])
+    if at is not None and at["hi"] > price:
+        res_zone, res_px = at, at["hi"]
+    elif above:
+        res_zone, res_px = above[0], above[0]["lo"]
+    else:
+        res_zone, res_px = None, None
+    high = float(pd.to_numeric(p.tail(VP_DAYS)["high"], errors="coerce").max())
+    return {"watr": watr, "price": price, "stop": stop, "risk": risk, "hint": hint,
+            "support": support, "sup_px": sup_px,
+            "sup_far": bool(sup_px is not None and stop is not None and sup_px < stop),
+            "at": at, "resist": res_zone, "res_px": res_px, "high": high,
+            "days": int(min(len(p), VP_DAYS))}
 
 
 def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
