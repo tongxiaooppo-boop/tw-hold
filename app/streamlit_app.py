@@ -2037,6 +2037,29 @@ def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = fr
     st.markdown("".join(html) + "</table>", unsafe_allow_html=True)
 
 
+def _zone(z: dict | None) -> str:
+    return f"{z['lo']:,.1f}～{z['hi']:,.1f}（{z['share']:.0%}）" if z else "—"
+
+
+def _risk_lines(rk: dict | None) -> tuple[str, str]:
+    """回（卡片裡的停損／大量區兩行，含結尾換行；卡片下方的停損算式說明）。
+    rk＝valuation.risk_levels 的結果。算式放卡片下方，卡片才不會變高（使用者 2026-10-30）。"""
+    if not rk:
+        return "", ""
+    how = ""
+    if rk.get("buyable") and rk.get("stop"):
+        src = "支撐區下緣" if rk["by"] == "support" else "現價"
+        how = (f"停損 {rk['stop']:,.1f}＝{src} {rk['anchor']:,.1f} − {rk['mult']:g}×週ATR "
+               f"{rk['watr']:,.1f}")
+        stop = f"停損 **{rk['stop']:,.1f}**（{rk['risk']:+.0%}）"
+    else:
+        stop = "停損：現價不低於成長價，不列"
+
+    def zs(z):
+        return f"{z['lo']:,.0f}～{z['hi']:,.0f}" if z else "—"
+    return f"{stop}  \n支撐 {zs(rk.get('support'))}｜壓力 {zs(rk.get('resist'))}  \n", how
+
+
 def _valuation_block(d: dict, label: str = "") -> None:
     """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
     計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。label＝「代號 股名」，放股價欄最前面。"""
@@ -2052,7 +2075,9 @@ def _valuation_block(d: dict, label: str = "") -> None:
                f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
 
     rv, e, pe, yb = r["rev"], r["eps"], r["pe"], r["year"]
-    c1, c2, c3 = st.container(key="valcards").columns(3)
+    # 股價（建議價）排第一張（使用者 2026-10-30）；手機堆疊也是它在最上面
+    c3, c1, c2 = st.container(key="valcards").columns(3)
+    risk_txt, risk_how = _risk_lines(r.get("risk"))
     with c1.container(border=True, key="valcard_rev"):
         st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
                     f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**  \n"
@@ -2082,11 +2107,15 @@ def _valuation_block(d: dict, label: str = "") -> None:
         yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
                     f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
+                    f"{risk_txt}"
                     f"<span style='font-size:.8rem;opacity:.7'>近五年 PE 倍數變化：{yrs}<br>"
                     f"三段＝各年平均 PE 最低／中間／最高 × 今年預估 EPS；成長價＝今年預估 EPS"
                     f" × 目前本益比"
                     f"{' ' + format(r['cur_pe']['pe'], '.1f') + ' 倍' if r['cur_pe'] else ''}"
                     f"</span>", unsafe_allow_html=True)
+    if risk_how:
+        st.caption(f"🛑 {risk_how}。支撐／壓力＝近一年成交量最集中的"
+                   "價格帶（細節見下方「停損與大量區」）。只是參考，沒有回測。")
     for w in r["warns"]:
         st.warning(w, icon="⚠️")
     for i in r["infos"]:
@@ -2159,6 +2188,30 @@ def _valuation_block(d: dict, label: str = "") -> None:
                        "口徑不一致，只能讀成「如果市場照過去的倍數給今年的獲利」，不是目標價。")
         else:
             st.caption("本益比年數不足（少於 3 年）或預估 EPS ≤ 0，不套倍數。")
+
+        rk = r.get("risk")
+        if rk:
+            st.markdown("**停損與大量區（只替現價算，現價低於成長價才給停損）**")
+            rows = [
+                ("停損參考", (_fmt_x(rk["stop"], 1) + f"（{rk['risk']:+.1%}）")
+                 if (rk["buyable"] and rk["stop"]) else "—",
+                 ("現價不低於成長價，不算買點、不列停損" if not rk["buyable"] else
+                  f"支撐區下緣 {rk['anchor']:,.1f} − {rk['mult']:g}×週ATR（比現價 − 2×週ATR "
+                  f"{rk['price'] - 2 * rk['watr']:,.1f} 近；跌破支撐＝買進理由失效）"
+                  if rk["by"] == "support" else
+                  f"現價 {rk['anchor']:,.1f} − {rk['mult']:g}×週ATR（下方沒有夠遠的大量支撐區）")),
+                ("週 ATR14", _fmt_x(rk["watr"], 1),
+                 f"占現價 {rk['watr'] / rk['price']:.1%}；週 K 的平均真實波幅"),
+                ("下方支撐區", _zone(rk["support"]), "現價下方最近的大量區"),
+                ("現價所在", _zone(rk["at"]), "現價正落在大量區內（上下都可能拉鋸）"),
+                ("上方壓力區", _zone(rk["resist"]), "現價上方最近的大量區：套牢量，減碼參考"),
+            ]
+            # 手機把說明收到項目下方（同推導表），不然第一欄被擠成一字一行
+            _vtable(["項目", "價位", "說明"],
+                    [[(it, note), val, note] for it, val, note in rows], {1}, {2})
+            st.caption("大量區＝近 250 個交易日依典型價 (高+低+收)/3 分 40 箱累計成交量，量 ≥ 平均 "
+                       "1.5 倍的相鄰箱併成一區，括號是占全期量。價格用還原價。日線 2×ATR 只有 "
+                       "5～8%，長抱型股票正常拉回就被洗出去，所以用週線。只是參考，沒有回測。")
 
         st.markdown("**近 8 季業外**")
         _vtable(["季", "業外", "稅前", "占稅前"],

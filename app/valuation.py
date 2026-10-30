@@ -17,6 +17,12 @@
   ＝便宜/合理/昂貴（使用者指定；外資的平均 ±1σ 在展開當對照）。trailing 倍數乘預估 EPS 是口徑錯配，只能當「市場照過去倍數給今年獲利」的試算。
 - 成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
   讓獲利成長推股價；成長越陡越樂觀。
+- 停損參考與大量區（2026-10-30 使用者要求，`risk_levels`）：只替**現價**算，且現價要低於
+  成長價才給（使用者 2026-10-30：「需在成長價下，不一定是合理價下」）。
+  停損＝現價 − 2×週 ATR14；下方若有大量支撐區，改用「支撐區下緣 − 0.5 週 ATR」（離現價要 ≥ 1 週 ATR）
+  （跌破支撐＝買進理由失效，比較早出場）。大量區＝近 250 日成交量分布（典型價分箱）裡量
+  ≥ 平均 1.5 倍的連續價格帶；現價上方最近一塊＝壓力區（減碼參考）。日線 2×ATR 只有
+  5～8%，長抱型股票正常拉回就被洗掉，所以用週線。只是參考，沒有回測。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
 """
@@ -34,6 +40,13 @@ NONOP_WARN_RATIO = 0.20         # |最新季業外| / |最新季稅前| 超過 �
 EPS_NEAR_ZERO = 0.05            # |EPS| 小於這個的季不拿來推股數
 SENS_REV = (-0.10, 0.0, 0.10)
 SENS_GM = (-0.03, 0.0, 0.03)
+STOP_WATR_MULT = 2.0            # 停損＝現價 − 2×週 ATR14
+WATR_WEEKS = 14
+SUPPORT_BUFFER_WATR = 0.5       # 支撐停損＝支撐區下緣 − 0.5 週 ATR
+SUPPORT_MIN_WATR = 1.0          # 支撐區下緣離現價不到 1 週 ATR → 太近，不拿來當停損
+VP_DAYS = 250                   # 成交量分布看近 250 個交易日（約一年）
+VP_BINS = 40
+VP_NODE_RATIO = 1.5             # 某價格箱的量 ≥ 平均 × 這個 → 大量區
 
 
 def _qlabel(ts) -> str:
@@ -167,6 +180,89 @@ def _current_pe(per: pd.DataFrame) -> dict | None:
             "date": pd.Timestamp(p["date"].iloc[-1]).strftime("%Y/%m/%d")}
 
 
+def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
+    """週 K（週五收）的 Wilder ATR。週數不足 weeks+1 → None。px＝[date, high, low, close]。"""
+    if px is None or px.empty or not {"date", "high", "low", "close"} <= set(px.columns):
+        return None
+    d = px[["date", "high", "low", "close"]].copy()
+    d["date"] = pd.to_datetime(d["date"])
+    for c in ("high", "low", "close"):
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+    w = (d.dropna().set_index("date").sort_index()
+          .resample("W-FRI").agg({"high": "max", "low": "min", "close": "last"}).dropna())
+    if len(w) < weeks + 1:
+        return None
+    pc = w["close"].shift()
+    tr = pd.concat([w["high"] - w["low"], (w["high"] - pc).abs(), (w["low"] - pc).abs()],
+                   axis=1).max(axis=1).iloc[1:]
+    v = float(tr.ewm(alpha=1 / weeks, adjust=False).mean().iloc[-1])
+    return v if v > 0 else None
+
+
+def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
+                 ratio: float = VP_NODE_RATIO) -> list[dict]:
+    """近 days 日成交量分布：典型價 (H+L+C)/3 分 bins 箱，量 ≥ 平均×ratio 的相鄰箱併成一區。
+    回 `[{"lo", "hi", "share"}]`（share＝該區量占全期），由低到高。資料不足 60 日 → []。"""
+    need = {"date", "high", "low", "close", "volume"}
+    if px is None or px.empty or not need <= set(px.columns):
+        return []
+    d = px[list(need)].copy()
+    for c in ("high", "low", "close", "volume"):
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+    d = d.dropna().sort_values("date").tail(days)
+    d = d[d["volume"] > 0]
+    if len(d) < 60:
+        return []
+    lo, hi = float(d["low"].min()), float(d["high"].max())
+    if not hi > lo:
+        return []
+    tp = (d["high"] + d["low"] + d["close"]) / 3
+    width = (hi - lo) / bins
+    idx = ((tp - lo) / width).astype(int).clip(0, bins - 1)
+    vol = d["volume"].groupby(idx).sum().reindex(range(bins), fill_value=0.0)
+    total = float(vol.sum())
+    hot = vol >= vol.mean() * ratio
+    zones, start = [], None
+    for i in range(bins + 1):
+        if i < bins and hot.iloc[i]:
+            start = i if start is None else start
+        elif start is not None:
+            zones.append({"lo": lo + start * width, "hi": lo + i * width,
+                          "share": float(vol.iloc[start:i].sum()) / total})
+            start = None
+    return zones
+
+
+def risk_levels(px: pd.DataFrame) -> dict | None:
+    """現價的停損參考＋上下最近的大量區。週 ATR 算不出來 → None。
+    回 `{"watr", "price", "stop", "risk", "by", "anchor", "mult", "support", "resist", "at"}`；
+    stop＝anchor − mult×watr（anchor＝現價或支撐區下緣，畫面拿來顯示算式）；
+    by＝"watr"（現價 − 2×週 ATR）或 "support"（支撐區下緣 − 0.5 週 ATR）；support＝現價下方最近一塊
+    （hi < 現價）、resist＝上方最近（lo > 現價）、at＝現價所在的區（沒有就 None）。"""
+    watr = weekly_atr(px)
+    price = _num(px.sort_values("date").iloc[-1]["close"]) if watr is not None else None
+    if watr is None or price is None or price <= 0:
+        return None
+    zones = volume_zones(px)
+    below = [z for z in zones if z["hi"] < price]
+    above = [z for z in zones if z["lo"] > price]
+    at = next((z for z in zones if z["lo"] <= price <= z["hi"]), None)
+    stop, by = price - STOP_WATR_MULT * watr, "watr"
+    # 支撐區下緣再留 0.5 週 ATR（防下影線洗掉）；離現價不到 1 週 ATR 的不用（太近）
+    anchor = price
+    los = [z["lo"] for z in zones
+           if z["lo"] - SUPPORT_BUFFER_WATR * watr <= price - SUPPORT_MIN_WATR * watr]
+    if los and max(los) - SUPPORT_BUFFER_WATR * watr > stop:
+        anchor = max(los)
+        stop, by = anchor - SUPPORT_BUFFER_WATR * watr, "support"
+    stop = stop if stop > 0 else None
+    return {"watr": watr, "price": price, "stop": stop,
+            "risk": (stop / price - 1) if stop else None, "by": by,
+            "anchor": anchor, "mult": SUPPORT_BUFFER_WATR if by == "support" else STOP_WATR_MULT,
+            "support": below[-1] if below else None, "resist": above[0] if above else None,
+            "at": at}
+
+
 def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
              per: pd.DataFrame) -> dict:
     """回 `{"ok": bool, "reason": str|None, ...}`。
@@ -256,6 +352,11 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         warns.append(f"近 5 年各年平均本益比差很大（{pe['low']:.0f}～{pe['high']:.0f} 倍），"
                      "多半是過去獲利很薄時本益比被撐高；歷史倍數參考性低。")
 
+    # 停損只替現價算，且現價要低於成長價才給（使用者 2026-10-30：不必低於合理價）
+    risk = risk_levels(px) if (px is not None and not px.empty) else None
+    if risk is not None:
+        risk["buyable"] = bool(price and growth_price and price < growth_price)
+
     cyc = _cycle_block(q)
     if cyc and cyc["pct"] >= 0.8:
         infos.append(f"最新一季營益率 {cyc['current']:.1%}，在近 {cyc['n']} 季裡贏過 "
@@ -276,7 +377,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         "nonop_hist": [{"q": _qlabel(r.period_end), "nonop": float(r.nonop),
                         "pretax": float(r.pretax_income)} for r in last8.itertuples()],
         "eps": {"ttm": ttm_eps, "run_ex": run_ex, "run_incl": run_incl},
-        "year": yb, "cur_pe": cur_pe, "growth_price": growth_price,
+        "year": yb, "cur_pe": cur_pe, "growth_price": growth_price, "risk": risk,
         "price": price, "implied_pe": implied_pe, "pe": pe, "band": band,
         "sens": sens, "cycle": cyc, "warns": warns, "infos": infos,
     }

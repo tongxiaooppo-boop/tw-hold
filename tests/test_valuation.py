@@ -187,3 +187,42 @@ def test_最新一天交易所本益比空白_不給成長價():
     per.loc[per.index[-1], "per"] = np.nan
     r = va.estimate(_qf(), _rev(), _px(), per)
     assert r["cur_pe"] is None and r["growth_price"] is None
+
+
+def _ohlcv(n: int = 300, base: float = 100.0, hot_lo: float | None = None):
+    """每天高低 ±2、收在 base；hot_lo 給值 → 最後 120 天改在 hot_lo 附近、量放大 5 倍（造一塊大量區）。"""
+    d = pd.bdate_range(end="2026-10-22", periods=n)
+    close = np.full(n, base)
+    vol = np.full(n, 1000.0)
+    if hot_lo is not None:
+        close[-120:-20] = hot_lo
+        vol[-120:-20] = 5000.0
+    return pd.DataFrame({"date": d, "open": close, "high": close + 2, "low": close - 2,
+                         "close": close, "volume": vol})
+
+
+def test_週ATR_每週高低差4():
+    assert va.weekly_atr(_ohlcv()) == pytest.approx(4.0, rel=0.01)
+    assert va.weekly_atr(_ohlcv(n=40)) is None          # 8 週不足 15 週
+
+
+def test_停損_沒支撐就用2倍週ATR():
+    rk = va.risk_levels(_ohlcv())
+    assert rk["by"] == "watr" and rk["stop"] == pytest.approx(92.0, rel=0.01)
+
+
+def test_停損_下方大量區_改用支撐下緣減半個週ATR():
+    rk = va.risk_levels(_ohlcv(hot_lo=95.0))            # 大量區約 93～97，現價 100
+    z = rk["support"]
+    assert z is not None and z["hi"] < 100 and z["share"] > 0.5
+    assert rk["by"] == "support"
+    assert rk["stop"] == pytest.approx(z["lo"] - 0.5 * rk["watr"])
+    assert 92.0 < rk["stop"] < 100 - rk["watr"]
+
+
+def test_現價不低於成長價_不算買點():
+    q = _qf()
+    r = va.estimate(q, _rev(), _ohlcv(base=100.0), _per())
+    assert r["growth_price"] < 100 and r["risk"]["buyable"] is False
+    r = va.estimate(q, _rev(), _ohlcv(base=40.0), _per())
+    assert r["growth_price"] > 40 and r["risk"]["buyable"] is True
