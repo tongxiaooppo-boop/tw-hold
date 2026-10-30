@@ -1,137 +1,159 @@
-# 任務書：A8 交易所 PER 修正重做（2026-10-29，Opus 定框架）
+# 任務書：B1 個股估值標籤（轉機股／景氣循環股／一般）＋全市場分類掃描（2026-10-30，Opus 定框架）
 
-> 背景一句話：個股遇到「配股」後，交易所每日本益比（PER）用的 EPS 是**最近四季「當初公布值」直接相加**（舊季不會改成新股數），所以配股後約一年內 PER 被低估、逐季混合。我們的季 EPS 已經用 `adjust_eps` 換成最新股數；要把交易所 PER 修回同一把尺。
-> 舊做法（偵測換基準日、整段 ×m）已驗證是錯的，**整段刪掉重寫**。股價淨值比（pbr）、殖利率（dividend_yield）**這次不修**，原樣保留。
+> 背景一句話：估值速覽的「成長價」＝預估 EPS × 目前本益比，會跟股價等比例變動；對「剛轉盈、近四季微利」和「景氣循環股」特別失真。之後要依標籤給不同的估值卡。**這一輪只做：標籤函式＋測試＋全市場分類報表。不改買進區間、不改 UI。**
 
-做完要：`pytest` 全綠、驗證腳本達標、清單重建並產出比對表、本機 `git commit`（不 push）。
+做完要：`pytest` 全綠、分類報表產出、本機 `git commit`（不 push）、寫回報到 `collab/from-cline.md`（整檔覆蓋）。
 
-## 要讀的檔案（只准讀這些；.clinerules 的「不准讀 research/」這次對下列兩個檔案例外）
+**不准用網路搜尋、網頁抓取、瀏覽器工具。** 檔案只能建在本專案目錄內。
+
+## 要讀的檔案（只准讀這些）
 
 | 檔案 | 範圍 |
 |---|---|
-| `reference/corporate_actions.py` | 第 95–130 行（`_events` 等）、第 240–376 行（`report_deadline`、`_observed_boundary`、`adjust_eps`）、第 398–503 行（舊的交易所修正，要刪掉重寫） |
-| `tests/test_corporate_actions.py` | 第 1–20 行（import 與 fixture）、第 215–300 行（舊的 `test_fix_exchange_ratios_*`，要換掉） |
-| `app/bundle_data.py` | 第 150–185 行（`per_history`、`financials`） |
-| `build_factors.py` | 第 108–125 行（`_read_bundle_per_history`）、第 305–325 行（`screen_all` 開頭的載入） |
-| `research/share_events_verify/verify_per.py` | 全檔（約 80 行，第 30 行要改呼叫方式） |
-| `research/share_events_verify/compare.py` | 不用讀，照下面指令執行即可 |
+| `app/valuation.py` | 第 38–64 行（常數）、第 79–95 行（`_quarters`）、第 156–165 行（`_cycle_block`，寫法參考）、第 423–432 行與第 495–560 行（`estimate` 開頭與回傳） |
+| `tests/test_valuation.py` | 第 1–12 行（import）、第 312–316 行（`test_estimate_有買進區間欄位`，寫法參考） |
 
-不准讀其他檔案。不准讀 `reference/corporate_actions_resolved.json`（30 萬字元的資料檔）。
+不准讀其他檔案。`app/bundle_data.py`、`factors/factors.py` 不用讀，照第 3 步貼的程式呼叫即可。
 
-## 第 1 步：`adjust_eps` 加兩個篩選參數（只加參數，不准改判斷邏輯）
+## 第 1 步：`app/valuation.py` 新增常數與 `stock_label`（介面不准改）
+
+常數放在現有常數區最後（`VP_NODE_RATIO` 下面）：
 
 ```python
-def _events(ticker: str, types: tuple[str, ...] | None = None,
-            upto: pd.Timestamp | None = None) -> list[tuple[pd.Timestamp, float]]:
-    # types 給了 → 只留 e.get("type") in types 的事件（沒有 type 的舊格式事件一律排除）
-    # upto 給了 → 只留事件日 <= upto 的事件
-    # 其他行為完全不變（m=None、m≈1 的照舊排除）
-
-def adjust_eps(q, col="eps", ticker_col="ticker", period_col="period_end",
-               types: tuple[str, ...] | None = None,
-               upto: pd.Timestamp | None = None) -> pd.DataFrame:
-    # 只把 types／upto 傳給 _events；其他一行都不准動
+TURN_GROWTH_X = 2.0             # 今年預估 EPS ≥ 近四季 × 這個 → 轉機股（基期太低）
+CYCLE_OM_SPREAD = 0.20          # 近 24 季營益率 最高 − 最低 ≥ 20 個百分點 → 景氣循環股
+CYCLE_EPS_DROP = 0.40           # 近 6 個完整年度裡，某年 EPS 比之前最高年少 ≥ 40% → 景氣循環股
+LABEL_EPS_YEARS = 6
+LABEL_MIN_EPS_YEARS = 3
 ```
-`adjust_eps` 裡建 `types = {...}` 那個區域變數名稱會跟新參數撞名，改叫 `ev_types`。
 
-## 第 2 步：重寫 `fix_exchange_ratios`
-
-刪掉：舊的 `fix_exchange_ratios`、`_next_quarter_end`、`_exchange_switch`、`_DETECT_MIN_M`、`_DETECT_DAYS`。保留 `EXCHANGE_LAG_TYPES`、`report_deadline`。新簽名與行為（docstring 照抄、可補充）：
+函式放在 `buy_range` 前面，docstring 照抄：
 
 ```python
-def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None,
-                        raw_close: pd.DataFrame | None = None) -> pd.DataFrame:
-    """交易所每日 PER 修回最新股本基準（只修 `per` 欄；pbr、dividend_yield 原樣）。
+def stock_label(q: pd.DataFrame, est_eps: float | None) -> dict:
+    """估值標籤（2026-10-30 使用者與 Opus 討論定案，門檻待全市場掃描後再調）：
+    轉機股優先於景氣循環股，兩者都不符合＝一般。q 是 `_quarters()` 的輸出（用到 period_end、
+    revenue、op_income、eps）。
 
-    實證（2026-10-29）：交易所 PER 的 EPS＝最近四季「當初公布值」加總，舊季不重編；
-    配股（ex_rights／ex_both）後要四季才滾完。面額變更／分割交易所已重編，不修。
-    修法：PER × 原始四季加總 ÷ 調整後四季加總（調整只計配股類、且事件日 ≤ 當天的事件）。
+    轉機股（turn_why，任一成立）：
+      - 近四季 EPS 合計 ≤ 0
+      - 近四季有任一季 EPS < 0（要連續 4 季獲利才脫離，等於自帶緩衝）
+      - 近四季合計 > 0 且 今年預估 EPS ≥ 近四季合計 × TURN_GROWTH_X
+      「近四季」＝q 最後 4 列，必須首尾相隔正好 3 季且 eps 都不是 NaN，否則 ttm_eps=None、
+      這三條都不判。
+    景氣循環股（cycle_why，任一成立）：
+      - 近 CYCLE_QUARTERS 季（revenue > 0 的季，營益率＝op_income/revenue，去掉 NaN）
+        至少 CYCLE_MIN_QUARTERS 季，且 最高 − 最低 ≥ CYCLE_OM_SPREAD
+        （om_n＝實際季數；不足 CYCLE_MIN_QUARTERS 季 → om_min、om_max 都給 None、不判）
+      - 完整年度（該年 4 季都在、eps 都不是 NaN）取最後 LABEL_EPS_YEARS 年，至少
+        LABEL_MIN_EPS_YEARS 年；依年份排序，對第 2 年起每一年 i：之前各年最高 EPS > 0 時，
+        跌幅＝1 − EPS_i ÷ 之前最高（EPS_i ≤ 0 時跌幅 ≥ 1，照公式算即可）；
+        max_drop＝所有跌幅的最大值（都沒有可算的 → 0.0）；max_drop ≥ CYCLE_EPS_DROP 成立。
+        年數不足 → max_drop=None、不判。
 
-    per：[ticker, date, per, ...]；quarterly：[ticker, period_end, eps, ni_parent?, net_income?]
-    （原始、未調整的季 EPS）；raw_close：[ticker, date, close]（未還原收盤）。
-    quarterly 沒給或空 → 原樣返回。非破壞性。
+    回傳：
+      {"label": "turnaround" | "cyclical" | "normal",
+       "turn_why": list[str], "cycle_why": list[str],
+       "ttm_eps": float | None,
+       "om_min": float | None, "om_max": float | None, "om_n": int,
+       "eps_years": [{"year": int, "eps": float}, ...],   # 最後 LABEL_EPS_YEARS 個完整年度（不足 3 年也照列），依年份
+       "max_drop": float | None,
+       "drop_from": int | None, "drop_to": int | None}    # 最大跌幅是哪一年（之前最高）→ 哪一年
+    why 字串（給 UI 直接顯示，照這個格式）：
+      "近四季 EPS 合計 {ttm:.2f} ≤ 0"
+      "近四季有虧損季"
+      "今年預估 EPS {est:.2f} ≥ 近四季 {ttm:.2f} 的 2 倍"
+      "近 {n} 季營益率 {min:.0%}～{max:.0%}"
+      "年 EPS 從 {drop_from} 年 {a:.2f} 掉到 {drop_to} 年 {b:.2f}"
     """
 ```
-演算法（每一檔「有配股類事件、m>1」的股票各做一次；其他股票不碰）：
 
-1. `qt`＝該檔 quarterly 依 `period_end` 排序；`raw_eps = qt.eps`（數值化）；`deadline[i] = report_deadline(period_end[i])`。
-2. 該檔配股類事件日期排序成 `E1 < E2 < …`。PER 的日期分段：`[E1, E2)`、`[E2, E3)`、…、`[Ek, ∞)`；**E1 之前的日期不修**。
-3. 每一段以該段起點 `Ej` 為 `upto`：`adj_eps = adjust_eps(qt, types=EXCHANGE_LAG_TYPES, upto=Ej)["eps"]`。
-4. 段內每個日期 d：
-   - `n` ＝ `deadline < d` 的季數（用 `np.searchsorted(deadline, d, side="left")`，deadline 要已排序；季別排序後 deadline 本來就遞增）。
-   - A 組＝第 `n-4`～`n-1` 季（共 4 季）；B 組＝第 `n-3`～`n` 季，**只有當 `n < 季數` 且 `period_end[n] < d`** 才有 B 組（那季已結束、可能提早公布了）。
-   - 每組算 `raw4 = Σraw_eps`、`adj4 = Σadj_eps`；一組有效＝剛好 4 季、全部有限值、`raw4 > 0` 且 `adj4 > 0`。
-   - 選組：有 B 組、且 `raw_close` 有該檔當天收盤 c、且當天 per > 0 → 取 `|ln((c/per)/raw4)|` 較小的那組；否則用 A 組。選到的組無效 → 這天不修。
-   - `per_fixed = per × raw4 / adj4`。
-5. 必須向量化到「每檔、每段」層級（用 numpy 陣列，不准對每一天跑 python 迴圈）。效能要求：全市場 `build_factors._read_bundle_per_history(...)` ≤ 30 秒（約 480 萬列）。
+`estimate()` 只加一件事：回傳 dict 多一個鍵 `"label": stock_label(q, est_eps)`。**其他邏輯（buy_range、growth_price、risk）一行都不准動。**
 
-## 第 3 步：接呼叫端
+## 第 2 步：`tests/test_valuation.py` 加測試（預期值照抄，不准拿程式輸出回填）
 
-- `app/bundle_data.py::per_history(code)`：維持「該檔有配股類事件才修」的判斷；改成
-  `fix_exchange_ratios(d, quarterly=fin, raw_close=<原本那個 prices_raw_close 讀法>)`，`fin = financials(code)`；`fin` 空的話就不修。
-- `build_factors.py`：`_read_bundle_per_history(q=None, raw_close=None)`，把 `q`、`raw_close` 傳進 `fix_exchange_ratios(d, quarterly=q, raw_close=raw_close)`；`q` 是 None 時不修。`screen_all` 裡改成 `per_hist = _read_bundle_per_history(q, raw_close_hist)`（`q`、`raw_close_hist` 在第 309、317 行已載入）。**用 `grep -n "_read_bundle_per_history" -r --include=*.py .` 確認沒有其他呼叫端**；有的話停下回報。
-- 更新 `app/bundle_data.py::per_history` 的 docstring 和 `reference/corporate_actions.py` 檔頭說明裡提到「PBR／殖利率會修」的句子：改成「只修 PER；PBR、殖利率定義未驗證，暫不修」。
-
-## 第 4 步：測試
-
-刪掉 `tests/test_corporate_actions.py` 裡全部 5 個 `test_fix_exchange_ratios_*`，換成下面這些（預期值已手算，**不准拿程式輸出回填**）。共用資料：
+在檔案最後加一個建資料的 helper 和下列測試：
 
 ```python
-# 代號 9989，2026-09-02 配股 m=2（monkeypatch.setitem(ca.SPLITS, "9989", [{"date":"2026-09-02","type":"ex_rights","m":2.0,"pf":None}])）
-# quarterly：period_end / eps / ni_parent
-#   2025-09-30 4 400；2025-12-31 4 400；2026-03-31 4 400；2026-06-30 4 400；
-#   2026-09-30 2 400；2026-12-31 2 400；2027-03-31 2 400；2027-06-30 2 400
-# → adjust_eps 後：2026-06-30 以前各 2；2026-09-30 以後各 2（2609 季隱含股數 200 vs 前季 100，分界在 2609）
-```
-1. `test_fix_per_配股後逐季混合`：per 每天 10（日期 2026-09-01、2026-10-01、2026-11-20、2027-09-01），不給 raw_close。預期：09-01 → 10（事件前不修）；10-01 → 20（A 組 2509～2606：raw 16、adj 8）；11-20 → 17.5（2512～2609：raw 14、adj 8）；2027-09-01 → 10（2609～2706：raw 8、adj 8）。
-2. `test_fix_per_提早公布挑B組`：日期 2026-11-05（Q3 季末已過、期限 11/14 未到），per＝10，raw_close 當天 close＝140 → c/per＝14＝B 組 raw4 → 預期 17.5；同一天不給 raw_close → 20。
-3. `test_fix_per_面額變更不修`：只有 par_change m=10 的代號，per 原樣。
-4. `test_fix_per_pbr殖利率不動`：同測試 1 的資料加 `pbr`、`dividend_yield` 欄，這兩欄完全不變。
-5. `test_fix_per_沒給quarterly原樣`：`fix_exchange_ratios(per)` 等於輸入。
-6. `test_adjust_eps_types篩選`：同一代號有 `par_change m=10`（2026-01-05）和 `ex_rights m=2`（2026-09-02），季別 2025-06-30（eps 20、ni_parent 無）、2026-12-31（eps 1）；`adjust_eps(q, types=EXCHANGE_LAG_TYPES)` → 2025-06-30 變 10（只 ÷2）、2026-12-31 不變。
-7. `test_adjust_eps_upto篩選`：同上資料、不給 types、`upto=2026-06-30` → 2025-06-30 變 2（只 ÷10）。
-
-## 第 5 步：驗證與比對（照指令跑，把輸出存檔）
-
-```bash
-export PYTHONIOENCODING=utf-8
-python -m pytest -q -p no:cacheprovider            # 要全綠，記下 passed 數
-```
-改 `research/share_events_verify/verify_per.py` 第 30 行為：
-`fixed = ca.fix_exchange_ratios(per_t, quarterly=inc[inc.ticker.isin(tks)].assign(ni_parent=lambda x: x.equity_parent), raw_close=raw[raw.ticker.isin(tks)])`
-（income.parquet 的 equity_parent 就是歸母淨利，所以這裡可以直接 assign。）然後：
-```bash
-python research/share_events_verify/verify_per.py > research/share_events_verify/verify_per_out.txt
-```
-**達標條件**：輸出的「修正後」裡 `≈m 錯` ≤ 取樣總數的 5%；「原本對、被改錯的事件」≤ 5 件。沒達標 → **不准自己改演算法**，停下回報。
-
-清單重建（約 3 分鐘＋5 分鐘；**不准跑 fetch_bundle.py 或任何下載**，本機資料必須跟 before/ 同一份）：
-```bash
-time python build_lists.py > research/share_events_verify/build_lists.log 2>&1
-python build_revenue_watch.py > research/share_events_verify/build_rw.log 2>&1
-mkdir -p research/share_events_verify/after
-cp data/derived/value_list.json data/derived/deposit_list.json data/derived/revenue_watch.json research/share_events_verify/after/
-python research/share_events_verify/compare.py > research/share_events_verify/compare_out.txt 2>&1
-git checkout -- data/derived/
-```
-build_lists 要 < 4 分鐘（記下 real 時間）。
-
-## 第 6 步：commit（不 push）
-
-只 add 這些：`reference/corporate_actions.py`、`app/bundle_data.py`、`build_factors.py`、`tests/test_corporate_actions.py`。research/ 底下的檔案**不要 add**。commit 訊息：
-```
-股數事件：交易所 PER 改用「原始四季÷調整後四季」修正（PBR、殖利率暫不修）
-
-Co-Authored-By: Cline (DeepSeek V4 Pro) <noreply@cline.bot>
+def _lq(eps: list[float], om: list[float] | None = None, end: str = "2025-12-31") -> pd.DataFrame:
+    """每季營收 10 億；eps 依序到 end 那一季；om 沒給＝每季 20%。"""
+    pe = pd.date_range(end=end, periods=len(eps), freq="QE")
+    om = om or [0.2] * len(eps)
+    return pd.DataFrame({"period_end": pe, "revenue": 1e9, "op_income": [1e9 * m for m in om],
+                         "eps": eps})
 ```
 
-## 不准做
+| 測試名 | 輸入 | 預期 |
+|---|---|---|
+| `test_標籤_穩定_一般` | `_lq([1.0]*24)`, est=4.0 | label=normal；om_min=om_max=0.2；max_drop=0.0；ttm_eps=4.0；eps_years 6 年 |
+| `test_標籤_近四季虧損_轉機` | `_lq([1.0]*20 + [-0.5, -0.2, 0.1, 0.1])`, est=0.5 | label=turnaround；turn_why 含「近四季 EPS 合計 -0.50 ≤ 0」與「近四季有虧損季」 |
+| `test_標籤_預估是近四季2倍_轉機_邊界含等號` | `_lq([1.0]*20 + [0.1]*4)`, est=0.8 | label=turnaround，turn_why 只有一條「今年預估 EPS 0.80 ≥ 近四季 0.40 的 2 倍」 |
+| `test_標籤_預估不到2倍_不是轉機` | 同上，est=0.79 | turn_why == []（注意：這組年 EPS 從 4 掉到 0.4，cycle_why 會成立，label=cyclical） |
+| `test_標籤_年EPS大跌_景氣循環` | 年 EPS [2,4,8,4,5,6]（每年 4 季平均分配，2020～2025），est=6.0 | label=cyclical；max_drop=0.5（pytest.approx）；drop_from=2022、drop_to=2023；cycle_why 只有一條「年 EPS 從 2022 年 8.00 掉到 2023 年 4.00」 |
+| `test_標籤_成長股_年EPS只升不跌_一般` | 年 EPS [2,3,4,5,6,7]，est=7.0 | label=normal；max_drop=0.0 |
+| `test_標籤_跌30%_不算景氣循環` | 年 EPS [4,6,8,5.6,6,7]，est=7.0 | label=normal；max_drop=0.3（approx） |
+| `test_標籤_營益率起伏大_景氣循環` | `_lq([1.0]*24, om=[0.05, 0.30]*12)`, est=4.0 | label=cyclical；cycle_why 只有一條「近 24 季營益率 5%～30%」 |
+| `test_標籤_循環又有虧損季_轉機優先` | 年 EPS [2,4,8,4,5,6] 但最後一季改成 -0.1，est=6.0 | label=turnaround；cycle_why 仍非空（兩邊都記，label 取轉機） |
+| `test_標籤_資料太短_不判循環` | `_lq([1.0]*6)`, est=4.0 | label=normal；om_n=6、om_min=None；max_drop=None；eps_years 只有 1 年（2025） |
+| `test_標籤_近四季漏一季_不判轉機` | `_lq([1.0]*20 + [-1.0]*4)` 再刪掉倒數第 2 列，est=-1.0 | ttm_eps=None；turn_why == [] |
+| `test_estimate_有標籤欄位` | 照 `test_estimate_有買進區間欄位` 的寫法呼叫 `va.estimate(...)` | `r["label"]["label"] in {"turnaround", "cyclical", "normal"}` |
 
-- 改 `adjust_eps` 的判斷邏輯、`_observed_boundary`、`adjust_dividends`、`adjust_prices`、`scripts/resolve_splits.py`、`reference/corporate_actions_resolved.json`、`.github/`、其他測試檔。
-- 網路搜尋、網頁抓取、瀏覽器、任何下載；`git push`、`gh`。
-- 在 `D:\g\claude\tw-hold` 以外寫任何檔案；暫存檔放專案內、結束前刪掉。
-- 不確定就停下，寫進 `collab/from-cline.md`「需要 Opus 決定」。
+年 EPS 列表轉季：`[e / 4 for e in years for _ in range(4)]`。`stock_label` 直接吃 `va._quarters(...)` 不行（`_lq` 沒有其他欄），測試裡直接把 `_lq(...)` 傳給 `va.stock_label`。
 
-## 回報（寫進 `collab/from-cline.md`，精簡、不貼程式碼）
+## 第 3 步：全市場分類掃描 `research/valuation_labels_2026-10-30/classify_all.py`
 
-1. commit hash；2. pytest passed 數；3. `verify_per_out.txt` 的「修正前／修正後」兩行原文＋「原本對、被改錯」件數；4. build_lists real 時間；5. `compare_out.txt` 前 40 行原文；6. 有沒有偏離任務書、需要 Opus 決定的事。
+（`.clinerules` 的「不准讀 research/」不影響這個新資料夾，你是建立它。）照下面骨架寫，執行時 `cd` 到專案根目錄、`PYTHONIOENCODING=utf-8`：
+
+```python
+import sys, warnings; warnings.filterwarnings("ignore")
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "app"))
+import pandas as pd, pyarrow.parquet as pq, pyarrow.compute as pc
+import bundle_data as bd, valuation as v
+from factors.factors import quarterly_factors
+tickers = sorted(set(pc.unique(pq.read_table(ROOT / "data/upstream/per.parquet", columns=["ticker"])["ticker"]).to_pylist()))
+for t in tickers:
+    try:
+        fin = bd.financials(t)
+        if fin.empty: continue
+        r = v.estimate(quarterly_factors(fin), bd.revenue(t), bd.prices(t), bd.per_history(t))
+        if not r.get("ok"): continue
+        ...  # 收集欄位
+    except Exception:
+        continue   # 計數，最後印出失敗幾檔
+```
+
+每檔收集：`ticker, label, turn_why（用「；」接）, cycle_why（同）, ttm_eps, est（r["year"]["est"]，year 為 None 給 NaN）, om_min, om_max, max_drop, cur_pe（r["cur_pe"]["pe"]）, buy_state（r["buy"]["state"]，buy 為 None 給空字串）, growth_price, price（r["price"]）`。
+
+產出（都放在 `research/valuation_labels_2026-10-30/`）：
+1. `labels.csv`：上面的全部欄位。
+2. `summary.md`（中文），內容依序：
+   - 掃描檔數、失敗檔數。
+   - 三類檔數與占比。
+   - 各類 × buy_state 的交叉表（檔數）。
+   - 特徵分布：全體的 `om_max − om_min` 與 `max_drop` 的 10/25/50/75/90 百分位；以及「如果 CYCLE_OM_SPREAD 改 0.15／0.20／0.25、CYCLE_EPS_DROP 改 0.3／0.4／0.5」各組合下 cyclical 會有幾檔（3×3 表；轉機優先的規則照舊，只重算非轉機的那群）。
+   - 指定檔：`2330 2317 2454 2603 2609 2615 1802 2408 2002 3481 6669 6588 8422 1301 2412`，每檔一列：代號、label、turn_why、cycle_why、ttm_eps、est、max_drop、om 區間、buy_state。
+   - 每一類用 `random_state=0` 抽 10 檔，同上欄位。
+   表格用 markdown 表格，數字取 2 位小數、百分比取整數。
+
+`labels.csv` 和 `summary.md` 要 commit（小檔）；不要 commit 其他產物。
+
+## 第 4 步：驗證與 commit
+
+- `python -m pytest -q -p no:cacheprovider` 全綠（原本 759 passed，加上新測試）。
+- `git add app/valuation.py tests/test_valuation.py research/valuation_labels_2026-10-30/`，commit 訊息：`估值標籤：轉機股／景氣循環股／一般（stock_label）＋全市場分類掃描`，結尾加一行 `Co-Authored-By: Cline <noreply@cline.bot>`。
+- 不准 push。
+
+## 回報（覆寫 `collab/from-cline.md`，要精簡，不貼程式碼）
+
+1. commit hash、pytest 數字。
+2. 三類檔數。
+3. 指定檔那張表（直接貼）。
+4. 需要 Opus 決定的事（例如某條規則在實際資料上邊界不清）。
+
+## 不准做的事
+
+- 不准改 `buy_range`、`growth_price`、`risk_levels`、`hold_stop`、任何 UI（`app/streamlit_app.py` 不准碰）。
+- 不准改上面定的常數值、函式簽名、why 字串格式；覺得有問題寫進「需要 Opus 決定」。
+- 測試預期值照表，跑不過先檢查實作，不准改預期值；確定是任務書寫錯就停下回報。
