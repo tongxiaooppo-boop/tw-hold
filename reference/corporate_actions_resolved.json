@@ -1,7 +1,7 @@
 {
 "version": 2,
 "_note": "scripts/resolve_splits.py 從 corp_actions.parquet 自動產出——手動改請改 reference/corporate_actions.py 的 _MANUAL（同代號整檔覆蓋這裡）",
-"corp_actions_max_date": "2026-10-27",
+"corp_actions_max_date": "2026-11-09",
 "events": {
 "0050": [
 {
@@ -3131,6 +3131,13 @@
 "date": "2016-07-28",
 "type": "ex_both",
 "m": 1.040006,
+"pf": null,
+"src": "tpex_ex"
+},
+{
+"date": "2026-10-28",
+"type": "ex_both",
+"m": 1.1,
 "pf": null,
 "src": "tpex_ex"
 }
@@ -11461,6 +11468,13 @@
 "m": 1.06,
 "pf": null,
 "src": "tpex_ex"
+},
+{
+"date": "2026-11-09",
+"type": "cap_reduction",
+"m": null,
+"pf": 0.975177,
+"src": "tpex_red"
 }
 ],
 "4303": [
@@ -13781,6 +13795,15 @@
 "type": "cap_reduction",
 "m": null,
 "pf": 0.983213,
+"src": "tpex_red"
+}
+],
+"5355": [
+{
+"date": "2026-11-09",
+"type": "cap_reduction",
+"m": 0.466667,
+"pf": 0.466667,
 "src": "tpex_red"
 }
 ],
@@ -19602,6 +19625,13 @@
 "m": 0.91638,
 "pf": 0.91638,
 "src": "tpex_red"
+},
+{
+"date": "2026-11-09",
+"type": "cap_reduction",
+"m": 0.833907,
+"pf": 0.833907,
+"src": "tpex_red"
 }
 ],
 "8201": [
@@ -21656,6 +21686,7 @@
 "2023:2019-08-27": 20.0,
 "2023:2022-08-30": 50.0,
 "2023:2024-08-28": 20.0,
+"2025:2026-10-28": 0.0,
 "2027:2015-08-07": 41.0,
 "2027:2016-07-28": 30.0,
 "2027:2017-07-26": 29.9,

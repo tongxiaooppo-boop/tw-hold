@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-10-30",
-    "rebuilt_at": "2026-10-30T15:10:45+00:00",
+    "rebuilt_at": "2026-10-30T21:34:01+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：612 檔",
@@ -10,6 +10,7 @@
     "has_fill_rate": true,
     "has_industry": true,
     "g2_note": "G2 通過（未還原序列有除息跳空）：2412 2021-08-25：raw -4.8%；1216 2021-09-09：raw -5.2%；2884 2021-08-31：raw -4.5%；2892 2021-08-26：raw -4.1%",
+    "split_warning": "5355 2026-11-09 ×0.466667：登記日前後缺資料，未還原價格",
     "period": "2026-08-14",
     "frozen": true,
     "n_target": 15,
