@@ -61,6 +61,15 @@ HINT_WIDE = 0.20                # 停損距現價 > 20% → 提示太寬（不�
 VP_DAYS = 250                   # 成交量分布看近 250 個交易日（約一年）
 VP_BINS = 40
 VP_NODE_RATIO = 1.5             # 某價格箱的量 ≥ 平均 × 這個 → 大量區
+TURN_GROWTH_X = 2.0             # 今年預估 EPS ≥ 近四季 × 這個 → 轉機股（基期太低）
+CYCLE_OM_SPREAD = 0.20          # 近 24 季營益率 最高 − 最低 ≥ 20 個百分點 → 景氣循環股
+CYCLE_EPS_DROP = 0.40           # 近 6 個完整年度裡，某年 EPS 比之前最高年少 ≥ 40% → 景氣循環股
+LABEL_EPS_YEARS = 6
+LABEL_MIN_EPS_YEARS = 3
+HIGH_PE_GATE = 30.0             # 近 3 年「每一年」年均本益比都 > 這個 → 長年高本益比
+HIGH_PE_CAP = 50.0              # 參考本益比上限
+HIGH_PE_YEARS = 3
+HIGH_PE_MIN_GROWTH = 1 / BUY_C - 1   # 今年預估 EPS 至少比近四季多約 11%（跟買進區間同門檻）
 
 
 def _qlabel(ts) -> str:
@@ -387,6 +396,218 @@ def risk_levels(px: pd.DataFrame) -> dict | None:
             "days": int(min(len(p), VP_DAYS))}
 
 
+def stock_label(q: pd.DataFrame, est_eps: float | None) -> dict:
+    """估值標籤（2026-10-30 使用者與 Opus 討論定案，門檻待全市場掃描後再調）：
+    轉機股優先於景氣循環股，兩者都不符合＝一般。q 是 `_quarters()` 的輸出（用到 period_end、
+    revenue、op_income、eps）。
+
+    轉機股（turn_why，任一成立）：
+      - 近四季 EPS 合計 ≤ 0
+      - 近四季有任一季 EPS < 0（要連續 4 季獲利才脫離，等於自帶緩衝）
+      - 近四季合計 > 0 且 今年預估 EPS ≥ 近四季合計 × TURN_GROWTH_X
+      「近四季」＝q 最後 4 列，必須首尾相隔正好 3 季且 eps 都不是 NaN，否則 ttm_eps=None、
+      這三條都不判。
+    景氣循環股（cycle_why，任一成立）：
+      - 近 CYCLE_QUARTERS 季（revenue > 0 的季，營益率＝op_income/revenue，去掉 NaN）
+        至少 CYCLE_MIN_QUARTERS 季，且 最高 − 最低 ≥ CYCLE_OM_SPREAD
+        （om_n＝實際季數；不足 CYCLE_MIN_QUARTERS 季 → om_min、om_max 都給 None、不判）
+      - 完整年度（該年 4 季都在、eps 都不是 NaN）取最後 LABEL_EPS_YEARS 年，至少
+        LABEL_MIN_EPS_YEARS 年；依年份排序，對第 2 年起每一年 i：之前各年最高 EPS > 0 時，
+        跌幅＝1 − EPS_i ÷ 之前最高（EPS_i ≤ 0 時跌幅 ≥ 1，照公式算即可）；
+        max_drop＝所有跌幅的最大值（都沒有可算的 → 0.0）；max_drop ≥ CYCLE_EPS_DROP 成立。
+        年數不足 → max_drop=None、不判。
+
+    回傳：
+      {"label": "turnaround" | "cyclical" | "normal",
+       "turn_why": list[str], "cycle_why": list[str],
+       "ttm_eps": float | None,
+       "om_min": float | None, "om_max": float | None, "om_n": int,
+       "eps_years": [{"year": int, "eps": float}, ...],   # 最後 LABEL_EPS_YEARS 個完整年度（不足 3 年也照列），依年份
+       "max_drop": float | None,
+       "drop_from": int | None, "drop_to": int | None}    # 最大跌幅是哪一年（之前最高）→ 哪一年
+    why 字串（給 UI 直接顯示，照這個格式）：
+      "近四季 EPS 合計 {ttm:.2f} ≤ 0"
+      "近四季有虧損季"
+      "今年預估 EPS {est:.2f} ≥ 近四季 {ttm:.2f} 的 2 倍"
+      "近 {n} 季營益率 {min:.0%}～{max:.0%}"
+      "年 EPS 從 {drop_from} 年 {a:.2f} 掉到 {drop_to} 年 {b:.2f}"
+    """
+    turn_why: list[str] = []
+    cycle_why: list[str] = []
+
+    # 近四季（轉機股判定）
+    ttm_eps: float | None = None
+    if q is not None and not q.empty and len(q) >= 4:
+        t4 = q.tail(4)
+        eps = t4["eps"]
+        span = (t4["period_end"].iloc[-1].to_period("Q")
+                - t4["period_end"].iloc[0].to_period("Q")).n
+        if span == 3 and eps.notna().all():
+            ttm = float(eps.sum())
+            ttm_eps = ttm
+            if ttm <= 0:
+                turn_why.append(f"近四季 EPS 合計 {ttm:.2f} ≤ 0")
+            if (eps < 0).any():
+                turn_why.append("近四季有虧損季")
+            if ttm > 0 and est_eps is not None and est_eps >= ttm * TURN_GROWTH_X:
+                turn_why.append(f"今年預估 EPS {est_eps:.2f} ≥ 近四季 {ttm:.2f} 的 2 倍")
+
+    # 近 24 季營益率（景氣循環股判定）
+    om_min: float | None = None
+    om_max: float | None = None
+    om_n = 0
+    if q is not None and not q.empty:
+        t = q.tail(CYCLE_QUARTERS)
+        t = t[t["revenue"] > 0]
+        om = (t["op_income"] / t["revenue"]).dropna()
+        om_n = int(len(om))
+        if om_n >= CYCLE_MIN_QUARTERS:
+            om_min = float(om.min())
+            om_max = float(om.max())
+            if om_max - om_min >= CYCLE_OM_SPREAD:
+                cycle_why.append(f"近 {om_n} 季營益率 {om_min:.0%}～{om_max:.0%}")
+
+    # 完整年度 EPS 跌幅（景氣循環股判定）
+    eps_years: list[dict] = []
+    max_drop: float | None = None
+    drop_from: int | None = None
+    drop_to: int | None = None
+    if q is not None and not q.empty and "period_end" in q.columns and "eps" in q.columns:
+        qq = q.copy()
+        qq["year"] = qq["period_end"].dt.year
+        annual: list[dict] = []
+        for year, grp in qq.groupby("year"):
+            grp = grp.dropna(subset=["eps"])
+            if len(grp) == 4:
+                annual.append({"year": int(year), "eps": float(grp["eps"].sum())})
+        annual.sort(key=lambda d: d["year"])
+        eps_years = annual[-LABEL_EPS_YEARS:]
+        if len(annual) >= LABEL_MIN_EPS_YEARS:
+            years = annual[-LABEL_EPS_YEARS:]
+            best_drop = 0.0
+            best_from = best_to = None
+            best_a = best_b = None
+            for i in range(1, len(years)):
+                prior = years[:i]
+                prior_max = max(d["eps"] for d in prior)
+                if prior_max > 0:
+                    drop = max(0.0, 1.0 - years[i]["eps"] / prior_max)
+                    if drop > best_drop:
+                        best_drop = drop
+                        best_from = next(d["year"] for d in prior if d["eps"] == prior_max)
+                        best_to = years[i]["year"]
+                        best_a = prior_max
+                        best_b = years[i]["eps"]
+            max_drop = best_drop
+            drop_from = best_from
+            drop_to = best_to
+            if best_from is not None and max_drop >= CYCLE_EPS_DROP:
+                cycle_why.append(
+                    f"年 EPS 從 {best_from} 年 {best_a:.2f} 掉到 {best_to} 年 {best_b:.2f}")
+
+    label = "turnaround" if turn_why else ("cyclical" if cycle_why else "normal")
+    return {"label": label, "turn_why": turn_why, "cycle_why": cycle_why,
+            "ttm_eps": ttm_eps, "om_min": om_min, "om_max": om_max, "om_n": om_n,
+            "eps_years": eps_years, "max_drop": max_drop,
+            "drop_from": drop_from, "drop_to": drop_to}
+
+
+def high_pe_price(pe: dict | None, est_eps: float | None, label: dict,
+                  price: float | None) -> dict:
+    """高本益比情境價（2026-10-30 使用者提議、Opus 定框架；只顯示、不進買進區間）。
+    pe 是 `_pe_block()` 的輸出（用 pe["years"]，可為 None）；label 是 `stock_label()` 的輸出
+    （用 ttm_eps、eps_years）。
+
+    計算（能算就算，不管是否 eligible，方便掃描）：
+      pe_years_3y  ＝pe["years"] 最後 HIGH_PE_YEARS 筆的 [{"year","pe"}]（pe 為 None → []）
+      pe_min_3y    ＝剛好 3 筆且年份連續（最後一年 − 第一年 == 2）時取最小 pe，否則 None
+      pe_ref_high  ＝min(pe_min_3y, HIGH_PE_CAP)；pe_min_3y 為 None → None
+      eps_fwd_growth＝est_eps / ttm_eps − 1（est_eps 不是 None 且 ttm_eps > 0 才算，否則 None）
+      eps_cagr_3y  ＝eps_years 至少 4 年時：(最後一年 ÷ 倒數第 4 年) ** (1/3) − 1，兩者都 > 0
+                     才算，否則 None
+      price_high_pe＝est_eps × pe_ref_high（est_eps > 0 且 pe_ref_high 不是 None），否則 None
+      upside_high_pe＝price_high_pe / price − 1（兩者都有、price > 0），否則 None
+
+    fail（依下列順序檢查，每條不過就 append 一句；fail 為空 ⇔ eligible）：
+      1. pe_min_3y 為 None         → "近 3 年年均本益比不足 3 年或不連續"
+         pe_min_3y ≤ HIGH_PE_GATE  → "近 3 年最低年均本益比 {pe_min_3y:.1f} ≤ 30"
+      2. eps_years 最後 3 年有任一 eps ≤ 0，或不足 3 年 → "近 3 年有虧損年或年度不足"
+      3. eps_cagr_3y 為 None       → "算不出近 3 年 EPS 年複合成長"
+         eps_cagr_3y ≤ 0           → "近 3 年 EPS 年複合成長 {eps_cagr_3y:.0%} ≤ 0"
+      4. eps_fwd_growth 為 None    → "沒有今年預估 EPS 或近四季 EPS ≤ 0"
+         eps_fwd_growth < HIGH_PE_MIN_GROWTH − 1e-9 → "預估成長 {eps_fwd_growth:.0%} 未達 11%"
+      5. price_high_pe 或 price 為 None → "算不出情境價"
+         price_high_pe ≤ price     → "情境價 {price_high_pe:.0f} ≤ 現價 {price:.0f}"
+
+    回傳：
+      {"eligible": bool, "fail": list[str], "pe_years_3y": list[dict], "pe_min_3y": float | None,
+       "pe_ref_high": float | None, "eps_fwd_growth": float | None, "eps_cagr_3y": float | None,
+       "price_high_pe": float | None, "upside_high_pe": float | None}
+    """
+    ttm_eps = label.get("ttm_eps") if label else None
+    eps_years = (label.get("eps_years") or []) if label else []
+
+    pe_years_3y: list[dict] = []
+    if pe and pe.get("years"):
+        pe_years_3y = pe["years"][-HIGH_PE_YEARS:]
+
+    pe_min_3y: float | None = None
+    if len(pe_years_3y) == HIGH_PE_YEARS:
+        ys = [d["year"] for d in pe_years_3y]
+        if ys[-1] - ys[0] == 2:
+            pe_min_3y = float(min(d["pe"] for d in pe_years_3y))
+
+    pe_ref_high = min(pe_min_3y, HIGH_PE_CAP) if pe_min_3y is not None else None
+
+    eps_fwd_growth: float | None = None
+    if est_eps is not None and ttm_eps is not None and ttm_eps > 0:
+        eps_fwd_growth = est_eps / ttm_eps - 1.0
+
+    eps_cagr_3y: float | None = None
+    if len(eps_years) >= 4:
+        last_eps = eps_years[-1]["eps"]
+        base_eps = eps_years[-4]["eps"]
+        if last_eps > 0 and base_eps > 0:
+            eps_cagr_3y = (last_eps / base_eps) ** (1.0 / 3.0) - 1.0
+
+    price_high_pe: float | None = None
+    if est_eps is not None and est_eps > 0 and pe_ref_high is not None:
+        price_high_pe = est_eps * pe_ref_high
+
+    upside_high_pe: float | None = None
+    if price_high_pe is not None and price is not None and price > 0:
+        upside_high_pe = price_high_pe / price - 1.0
+
+    fail: list[str] = []
+    if pe_min_3y is None:
+        fail.append("近 3 年年均本益比不足 3 年或不連續")
+    elif pe_min_3y <= HIGH_PE_GATE:
+        fail.append(f"近 3 年最低年均本益比 {pe_min_3y:.1f} ≤ 30")
+
+    if len(eps_years) < 3 or any(d["eps"] <= 0 for d in eps_years[-3:]):
+        fail.append("近 3 年有虧損年或年度不足")
+
+    if eps_cagr_3y is None:
+        fail.append("算不出近 3 年 EPS 年複合成長")
+    elif eps_cagr_3y <= 0:
+        fail.append(f"近 3 年 EPS 年複合成長 {eps_cagr_3y:.0%} ≤ 0")
+
+    if eps_fwd_growth is None:
+        fail.append("沒有今年預估 EPS 或近四季 EPS ≤ 0")
+    elif eps_fwd_growth < HIGH_PE_MIN_GROWTH - 1e-9:
+        fail.append(f"預估成長 {eps_fwd_growth:.0%} 未達 11%")
+
+    if price_high_pe is None or price is None:
+        fail.append("算不出情境價")
+    elif price_high_pe <= price:
+        fail.append(f"情境價 {price_high_pe:.0f} ≤ 現價 {price:.0f}")
+
+    return {"eligible": not fail, "fail": fail, "pe_years_3y": pe_years_3y,
+            "pe_min_3y": pe_min_3y, "pe_ref_high": pe_ref_high,
+            "eps_fwd_growth": eps_fwd_growth, "eps_cagr_3y": eps_cagr_3y,
+            "price_high_pe": price_high_pe, "upside_high_pe": upside_high_pe}
+
+
 def buy_range(price: float | None, fair: float | None, growth: float | None,
               cycle_peak: bool = False, nonop_high: bool = False) -> dict | None:
     """買進區間（2026-10-30 使用者定義、sol／DeepSeek／Sonnet 討論後採 Claude 建議）：
@@ -500,6 +721,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     implied_pe = price / run_ex if (price and run_ex and run_ex > 0) else None
     yb = _year_block(q, int(rv["last_month"][:4]), run_ex / 4 if run_ex is not None else None)
     est_eps = yb["est"] if yb else None
+    label = stock_label(q, est_eps)
     # 三段價（便宜/合理/昂貴）＝ 近 5 年各年平均 PE 最低/中間/最高 × 今年預估 EPS
     band = None
     if pe and est_eps and est_eps > 0:
@@ -543,6 +765,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         "eps": {"ttm": ttm_eps, "run_ex": run_ex, "run_incl": run_incl},
         "year": yb, "cur_pe": cur_pe, "growth_price": growth_price, "risk": risk,
         "buy": buy,
+        "label": label, "high_pe": high_pe_price(pe, est_eps, label, price),
         "price": price, "implied_pe": implied_pe, "pe": pe, "band": band,
         "sens": sens, "cycle": cyc, "warns": warns, "infos": infos,
     }

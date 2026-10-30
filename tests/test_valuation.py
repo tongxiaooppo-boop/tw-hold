@@ -367,3 +367,166 @@ def test_不在買進區間_給持股停損_在區間內不給():
     assert r["buy"]["impl"] == pytest.approx(g / (g * 0.97) - 1)   # 卡片「預估獲利成長約」＝成長價/現價−1
     assert r["buy"]["impl"] < r["buy"]["min_growth"]
     assert r["risk"]["buyable"] is False and r["risk"]["hold"] is not None
+
+
+def _lq(eps: list[float], om: list[float] | None = None, end: str = "2025-12-31") -> pd.DataFrame:
+    """每季營收 10 億；eps 依序到 end 那一季；om 沒給＝每季 20%。"""
+    pe = pd.date_range(end=end, periods=len(eps), freq="QE")
+    om = om or [0.2] * len(eps)
+    return pd.DataFrame({"period_end": pe, "revenue": 1e9, "op_income": [1e9 * m for m in om],
+                         "eps": eps})
+
+
+def _pe3(vals, years=(2023, 2024, 2025)):
+    return {"years": [{"year": y, "pe": v, "days": 200} for y, v in zip(years, vals)]}
+
+
+def _lab(eps=(2.0, 2.5, 3.0, 4.0), ttm=4.0):
+    return {"ttm_eps": ttm, "eps_years": [{"year": 2022 + i, "eps": e} for i, e in enumerate(eps)]}
+
+
+def test_標籤_穩定_一般():
+    r = va.stock_label(_lq([1.0] * 24), 4.0)
+    assert r["label"] == "normal"
+    assert r["om_min"] == pytest.approx(0.2) and r["om_max"] == pytest.approx(0.2)
+    assert r["max_drop"] == 0.0
+    assert r["ttm_eps"] == pytest.approx(4.0)
+    assert len(r["eps_years"]) == 6
+
+
+def test_標籤_近四季虧損_轉機():
+    r = va.stock_label(_lq([1.0] * 20 + [-0.5, -0.2, 0.1, 0.1]), 0.5)
+    assert r["label"] == "turnaround"
+    assert "近四季 EPS 合計 -0.50 ≤ 0" in r["turn_why"]
+    assert "近四季有虧損季" in r["turn_why"]
+
+
+def test_標籤_預估是近四季2倍_轉機_邊界含等號():
+    r = va.stock_label(_lq([1.0] * 20 + [0.1] * 4), 0.8)
+    assert r["label"] == "turnaround"
+    assert r["turn_why"] == ["今年預估 EPS 0.80 ≥ 近四季 0.40 的 2 倍"]
+
+
+def test_標籤_預估不到2倍_不是轉機():
+    r = va.stock_label(_lq([1.0] * 20 + [0.1] * 4), 0.79)
+    assert r["turn_why"] == []
+    assert r["label"] == "cyclical"
+
+
+def test_標籤_年EPS大跌_景氣循環():
+    r = va.stock_label(_lq([e / 4 for e in [2, 4, 8, 4, 5, 6] for _ in range(4)]), 6.0)
+    assert r["label"] == "cyclical"
+    assert r["max_drop"] == pytest.approx(0.5)
+    assert r["drop_from"] == 2022 and r["drop_to"] == 2023
+    assert r["cycle_why"] == ["年 EPS 從 2022 年 8.00 掉到 2023 年 4.00"]
+
+
+def test_標籤_成長股_年EPS只升不跌_一般():
+    r = va.stock_label(_lq([e / 4 for e in [2, 3, 4, 5, 6, 7] for _ in range(4)]), 7.0)
+    assert r["label"] == "normal"
+    assert r["max_drop"] == 0.0
+
+
+def test_標籤_跌30趴_不算景氣循環():
+    r = va.stock_label(_lq([e / 4 for e in [4, 6, 8, 5.6, 6, 7] for _ in range(4)]), 7.0)
+    assert r["label"] == "normal"
+    assert r["max_drop"] == pytest.approx(0.3)
+
+
+def test_標籤_營益率起伏大_景氣循環():
+    r = va.stock_label(_lq([1.0] * 24, om=[0.05, 0.30] * 12), 4.0)
+    assert r["label"] == "cyclical"
+    assert r["cycle_why"] == ["近 24 季營益率 5%～30%"]
+
+
+def test_標籤_循環又有虧損季_轉機優先():
+    q = _lq([e / 4 for e in [2, 4, 8, 4, 5, 6] for _ in range(4)])
+    q.loc[q.index[-1], "eps"] = -0.1
+    r = va.stock_label(q, 6.0)
+    assert r["label"] == "turnaround"
+    assert r["cycle_why"] != []
+
+
+def test_標籤_資料太短_不判循環():
+    r = va.stock_label(_lq([1.0] * 6), 4.0)
+    assert r["label"] == "normal"
+    assert r["om_n"] == 6 and r["om_min"] is None and r["om_max"] is None
+    assert r["max_drop"] is None
+    assert [d["year"] for d in r["eps_years"]] == [2025]
+
+
+def test_標籤_近四季漏一季_不判轉機():
+    q = _lq([1.0] * 20 + [-1.0] * 4)
+    q = q.drop(q.index[-2]).reset_index(drop=True)
+    r = va.stock_label(q, -1.0)
+    assert r["ttm_eps"] is None
+    assert r["turn_why"] == []
+
+
+def test_estimate_有標籤欄位():
+    r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())
+    assert r["label"]["label"] in {"turnaround", "cyclical", "normal"}
+
+
+def test_高PE_全過():
+    r = va.high_pe_price(_pe3([40, 45, 35]), 6.0, _lab(), 150)
+    assert r["eligible"] and r["fail"] == []
+    assert r["pe_min_3y"] == 35 and r["pe_ref_high"] == 35
+    assert r["price_high_pe"] == 210
+    assert r["upside_high_pe"] == pytest.approx(0.4)
+    assert r["eps_fwd_growth"] == pytest.approx(0.5)
+    assert r["eps_cagr_3y"] == pytest.approx(2 ** (1 / 3) - 1)
+
+
+def test_高PE_倍數上限50():
+    r = va.high_pe_price(_pe3([60, 70, 80]), 6.0, _lab(), 150)
+    assert r["eligible"]
+    assert r["pe_ref_high"] == 50 and r["price_high_pe"] == 300
+
+
+def test_高PE_有一年不到30():
+    r = va.high_pe_price(_pe3([40, 28, 45]), 6.0, _lab(), 150)
+    assert not r["eligible"]
+    assert r["fail"] == ["近 3 年最低年均本益比 28.0 ≤ 30"]
+    assert r["price_high_pe"] == 168
+
+
+def test_高PE_年份不連續():
+    r = va.high_pe_price(_pe3([40, 45, 35], years=(2021, 2023, 2025)), 6.0, _lab(), 150)
+    assert "近 3 年年均本益比不足 3 年或不連續" in r["fail"]
+    assert r["pe_min_3y"] is None
+    assert r["price_high_pe"] is None
+    assert "算不出情境價" in r["fail"]
+
+
+def test_高PE_pe為None():
+    r = va.high_pe_price(None, 6.0, _lab(), 150)
+    assert r["pe_years_3y"] == []
+    assert not r["eligible"]
+
+
+def test_高PE_預估成長不足():
+    r = va.high_pe_price(_pe3([40, 45, 35]), 4.4, _lab(), 150)
+    assert r["fail"] == ["預估成長 10% 未達 11%"]
+
+
+def test_高PE_情境價不高於現價():
+    r = va.high_pe_price(_pe3([40, 45, 35]), 6.0, _lab(), 250)
+    assert r["fail"] == ["情境價 210 ≤ 現價 250"]
+
+
+def test_高PE_有虧損年():
+    r = va.high_pe_price(_pe3([40, 45, 35]), 6.0, _lab(eps=(2.0, -0.5, 3.0, 4.0)), 150)
+    assert r["fail"] == ["近 3 年有虧損年或年度不足"]
+
+
+def test_高PE_EPS衰退():
+    r = va.high_pe_price(_pe3([40, 45, 35]), 6.0, _lab(eps=(5.0, 4.0, 4.5, 4.0)), 150)
+    assert r["fail"] == ["近 3 年 EPS 年複合成長 -7% ≤ 0"]
+
+
+def test_estimate_有高PE欄位():
+    r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())
+    assert isinstance(r["high_pe"]["eligible"], bool)
+    assert isinstance(r["high_pe"]["fail"], list)
+
