@@ -329,19 +329,24 @@ def _flat_fri(n: int = 200, end: str = "2026-10-23", tail: list[float] | None = 
 def test_持股停損_近22週高減2倍週ATR_線上():
     hd = va.hold_stop(_flat_fri())
     assert hd["line"] == pytest.approx(94.0, rel=0.01)
-    assert hd["state"] == "above" and hd["weeks_below"] == 0 and hd["under_now"] is False
-    assert hd["dist"] == pytest.approx(-0.06, abs=0.005)
+    assert hd["state"] == "above" and hd["reset"] is False and hd["under_now"] is False
+    assert hd["dist"] == pytest.approx(-0.06, abs=0.005) and hd["brk_date"] is None
     assert va.hold_stop(_ohlcv(n=60)) is None            # 週數不足 22＋1
 
 
-def test_持股停損_本週收盤剛跌破_才是新訊號():
+def test_持股停損_本週收盤剛跌破_紅字用跌破的那條線_另給新線():
     hd = va.hold_stop(_flat_fri(tail=[80.0] * 5))        # 最後一整週收 80 < 上週線 94
-    assert hd["state"] == "new" and hd["weeks_below"] == 1
+    assert hd["state"] == "new" and hd["brk_line"] == pytest.approx(94.0, rel=0.01)
+    assert hd["reset"] is True and hd["line"] < 80       # 新線從跌破那週的高點 82 起算
+    assert hd["hh"] == pytest.approx(82.0)
 
 
-def test_持股停損_連續兩週在線下_不適用():
-    hd = va.hold_stop(_flat_fri(tail=[80.0] * 10))
-    assert hd["state"] == "below" and hd["weeks_below"] == 2
+def test_持股停損_跌破後沒賣_線從跌破那週重算_不會卡在舊高點():
+    """2317 案例（2026-10-30）：舊版 22 週高 − 2×ATR 卡在現價上方 20 週、顯示「不適用」。"""
+    hd = va.hold_stop(_flat_fri(tail=[80.0] * 10))       # 跌破後又盤 1 週
+    assert hd["state"] == "above" and hd["reset"] is True
+    assert hd["line"] < 80 and hd["dist"] < 0            # 線在現價下方，可以用
+    assert hd["brk_line"] == pytest.approx(94.0, rel=0.01) and hd["brk_date"] is not None
 
 
 def test_持股停損_週中跌破還沒週收盤_只標現價在線下():
@@ -359,4 +364,6 @@ def test_不在買進區間_給持股停損_在區間內不給():
     g = r["growth_price"]                                 # 低於成長價、但高於上緣（成長價×c）
     r = va.estimate(q, _rev(), _ohlcv(base=g * 0.97), _per())
     assert r["buy"]["state"] not in va.BUY_IN_STATES
+    assert r["buy"]["impl"] == pytest.approx(g / (g * 0.97) - 1)   # 卡片「預估獲利成長約」＝成長價/現價−1
+    assert r["buy"]["impl"] < r["buy"]["min_growth"]
     assert r["risk"]["buyable"] is False and r["risk"]["hold"] is not None

@@ -2061,24 +2061,37 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
         stop = "停損參考：—（波動太大，算不出）"
         lines.append("🛑 **停損參考**＝現價 − 2×週ATR14；這檔週波動超過現價一半，算出來 ≤ 0，不列。")
     elif hd:
-        # 不在買進區間 → 給已持有的人（2026-10-30 使用者拍板：22週高 − 2×週ATR、週收盤、無狀態）；
-        # 使用者要求持股停損在卡片上要清楚 → 🛡️＋粗體＋同一行寫觸發方式
+        # 不在買進區間 → 給已持有的人（2026-10-30 使用者拍板：混合版，週收盤、不存使用者狀態）；
+        # 使用者要求持股停損在卡片上要清楚、跟其他字不能互相矛盾
+        ln, dist = _px(hd["line"]), f"{hd['dist']:+.0%}"
         if hd["state"] == "new":
-            stop = f":red[**🛡️ 持股停損 {_px(hd['line'])}：本週收盤已跌破**]"
-        elif hd["state"] == "below":
-            stop = (f":gray[🛡️ 持股停損 {_px(hd['line'])}：已在線下 {hd['weeks_below']} 週，"
-                    "不適用]")
+            stop = (f":red[**🛡️ 本週收盤跌破持股停損 {_px(hd['brk_line'])}**]  \n"
+                    f"　沒賣的話，新參考線 **{ln}**（距現價 {dist}"
+                    + ("，現價已在線下，看週五收盤）" if hd["line"] >= hd["price"] else "）"))
+        elif hd["state"] == "na":
+            stop = f":gray[🛡️ 持股停損：暫無（重算後的線 {ln} 仍高於上週收盤，下週再看）]"
         else:
-            stop = (f"🛡️ **持股停損 {_px(hd['line'])}**（距現價 {hd['dist']:+.0%}）"
+            stop = (f"🛡️ **持股停損 {ln}**（{'跌破後重算，' if hd['reset'] else ''}距現價 {dist}）"
                     + ("｜:orange[**現價已在線下，看週五收盤**]" if hd["under_now"]
                        else "｜週收盤跌破才算"))
+        base = (f"{hd['since']} 起的最高 {_px(hd['hh'])}" if hd["reset"] and hd["since"]
+                else f"近 22 週最高 {_px(hd['hh'])}")
+        if not (hd["reset"] and hd.get("brk_date")):
+            last = ""
+        elif hd["since"] and hd["since"] != hd["brk_date"]:
+            # 最近一次跌破的是 22 週那條線，重算線的起點是更早那次跌破（sol 審查 2026-10-30）
+            last = (f"最近一次跌破：{hd['brk_date']}（{_px(hd['brk_line'])}）；目前這條線從 "
+                    f"{hd['since']} 那次跌破起算。")
+        else:
+            last = f"{hd['brk_date']} 週收盤跌破 {_px(hd['brk_line'])}，線從那週起重算。"
         lines.append(
             f"🛡️ **持股停損**（現價不在買進區間時列，給已持有的人；**不知道你的成本**）"
-            f"＝近 22 週最高 {_px(hd['hh'])} − 2×週ATR14 {_px(hd['watr'])} ＝ {_px(hd['line'])}。  \n"
+            f"＝{base} − 2×週ATR14 {_px(hd['watr'])} ＝ {ln}。  \n"
             "　・**看週收盤**：週五收盤跌破 → 下週一處理；盤中跌破不算。  \n"
-            "　・**只有「本週剛跌破」是訊號**。已在線下兩週以上的股票，歷史上續抱跟沒跌破的差不多，"
-            "**這條線已不適用，不是叫你現在賣**。  \n"
-            "　・2015～2026 年 603 檔模擬：最差 5% 從 −26% 縮到 −13%；代價是**半年內約 96% 會出場、"
+            "　・**跌破後重新起算**：22 週高點的線跑到價格上方時，改從近期跌破那週往後算，"
+            "線會往下一次。**這不是取消停損**——跌破那週的訊號照算，新線是給「當時沒賣、現在還抱著」"
+            f"的人。{last}  \n"
+            "　・2015～2026 年 603 檔模擬：最差 5% 從 −26% 縮到約 −14%；代價是**半年內約 96% 會出場、"
             "約六成賣後又漲回**。")
     else:
         why = "沒有成長價" if rk.get("no_growth") else "現價不在買進區間"
@@ -2114,23 +2127,28 @@ def _buy_lines(b: dict | None) -> tuple[str, str]:
     g = f"{b['min_growth']:.0%}"
     hi = _px(b["hi"])
     st_ = b["state"]
+    # 不寫「預估獲利成長」：EPS 卡的「年增」比的是去年全年，會看起來互相矛盾（2353：年增 +24% vs −5%）
+    # 成長幅度四捨五入後跟門檻一樣（10.8% vs 11.1% 都顯示 +11%）會看起來像過了 → 多給一位小數
+    im = f"{b['impl']:+.0%}" + ("，差一點未達" if round(b["impl"] * 100) >= round(b["min_growth"] * 100)
+                                 else "")
     if st_ == "in":
         line = f"買進區間 **{_px(b['lo'])}～{hi}**"
     elif st_ == "in_above_fair":
         line = f"買進區間 **{_px(b['lo'])}～{hi}**（現價高於合理價）"
     elif st_ == "above":
-        line = f"買進區間 {_px(b['lo'])}～{hi}：現價不在區間（預估獲利成長未達 {g}）"
+        line = f"買進區間 {_px(b['lo'])}～{hi}：現價不在區間（成長價需比現價高 {g}，目前 {im}）"
     elif st_ == "none":
-        line = f"無買進區間（上限 {hi} 低於合理價，預估獲利成長未達 {g}）"
+        line = f"不在買進區間（成長價需比現價高 {g}，目前 {im}）"
     elif st_ == "cap_in":
         line = f"買進上限 **{hi}**（沒有合理價）"
     else:
-        line = f"買進上限 {hi}：現價高於上限（預估獲利成長未達 {g}）"
+        line = f"買進上限 {hi}：現價高於上限（成長價需比現價高 {g}，目前 {im}）"
     c = f"{b['c']:g}"
     why = f"這檔{('、'.join(b['why']))}，試算 EPS 容易偏高，所以用 0.8" if b["why"] else "一般用 0.9"
     how = (f"🛒 **買進區間**＝合理價（現價更低就用現價）～ 成長價 × {c}（{why}；營益率在歷史高峰或"
            f"業外占稅前 >20% 時改 0.8）。上限的意思是「預估獲利至少比近四季多 {g}」——這是**成長門檻**，"
-           "不是估值打折；它會跟著現價一起動，不是等回檔的固定買點。便宜程度看合理價。不是進場訊號。")
+           "不是估值打折；它會跟著現價一起動，不是等回檔的固定買點。卡片上「目前 X%」＝成長價 ÷ 現價 − 1（＝成長價後面括號那個數），"
+           "約等於今年預估 EPS 比**近四季**多多少；EPS 卡的「年增」是跟**去年全年**比，兩個數不同。便宜程度看合理價。不是進場訊號。")
     return f"{line}  \n", how
 
 
@@ -2276,11 +2294,14 @@ def _valuation_block(d: dict, label: str = "") -> None:
             show = bool(rk["buyable"] and rk["stop"])
             sup, at, hd = rk["support"], rk["at"], rk.get("hold")
             hold_row = [] if not hd else [(
-                "持股停損", _px(hd["line"]) + f"（距現價 {hd['dist']:+.1%}）",
-                f"近 22 週最高 {_px(hd['hh'])} − 2×週ATR14；"
-                + {"above": "上週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
-                   "new": "本週收盤剛跌破",
-                   "below": f"已連續 {hd['weeks_below']} 週在線下，不適用"}[hd["state"]])]
+                "持股停損", (_px(hd["line"]) + f"（距現價 {hd['dist']:+.1%}）") if hd["state"] != "na" else "—",
+                ("跌破後重算：" + (f"{hd['since']} 起" if hd["since"] else "近 22 週") if hd["reset"]
+                 else "近 22 週") + f"最高 {_px(hd['hh'])} − 2×週ATR14"
+                + {"above": "；週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
+                   "new": f"；本週收盤剛跌破 {_px(hd['brk_line'])}",
+                   "na": "；重算後仍高於上週收盤，暫無"}[hd["state"]]
+                + (f"（最近一次跌破 {hd['brk_date']}）" if hd.get("brk_date") and hd["reset"]
+                   and hd["state"] != "new" else ""))]
             rows = hold_row + [
                 ("停損參考", (_px(rk["stop"]) + f"（距現價 {rk['risk']:+.1%}）") if show else "—",
                  (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"

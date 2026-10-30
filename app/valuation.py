@@ -29,8 +29,9 @@
   個股查詢也沒有「開始追蹤」的起點，所以**無狀態**：每次直接算近 22 週最高 − 2×週ATR14，週收盤
   跌破上週的線才算。模擬（research/stop_design_2026-10-30/holdsim2.py）：無狀態跟「只上移」差
   <1pp；線上組最差 5% −26%→−13%、虧 >20% 8.7%→1.0%，代價半年內 96% 出場、六成賣後又漲回；
-  2.5×／3× 尾端明顯變差。**已在線下的股票續抱 26 週跟線上的差不多**，所以只有「本週剛跌破」
-  是訊號，在線下 ≥2 週就標「不適用」、不叫賣。
+  2.5×／3× 尾端明顯變差。只有「本週剛跌破」是訊號。固定 22 週高會讓 56% 的股票線卡在現價上方
+  （2317 盤整 20 週還顯示 273 > 248），所以改混合版：固定線在價格上方時改用跌破後的高點重算，
+  原本線上的結果不變、原本沒保護的那群最差 5% −26.7%→−15.2%（holdsim4）。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
 """
@@ -240,35 +241,64 @@ def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
 
 
 def hold_stop(px: pd.DataFrame) -> dict | None:
-    """持股停損（給已持有、成本未知的人；無狀態）：每週的線＝近 22 週最高 − 2×週ATR14。
-    第 q 週收盤 < 第 q−1 週的線 ＝「跌破」。回
-    `{"line", "hh", "watr", "price", "dist", "state", "weeks_below", "under_now"}`：
-      line＝最新已收完週算出的線（下一次週收盤拿它比）；dist＝line/現價−1；
-      state＝"above"（上週收盤沒跌破）／"new"（最近一週收盤剛跌破）／"below"（連續 ≥2 週在線下）；
-      weeks_below＝連續幾週週收盤在線下；under_now＝最新日收盤已低於 line（還沒週收盤確認）。
-    週數不足、線 ≤ 0 → None。"""
+    """持股停損（給已持有、成本未知的人；不存使用者狀態，全由價格歷史推出）。混合版
+    （2026-10-30 使用者拍板，sol 建議、research/stop_design_2026-10-30/holdsim4.py 模擬）：
+      固定線 F_q＝近 22 週最高 − 2×週ATR14；
+      重算線 R_q＝max(週高[max(b, q−21)..q]) − 2×週ATR14，b＝最近一次「週收盤 < R_{q−1}」的週；
+      採用線 L_q＝F_q（F_q < 該週收盤）否則 R_q——固定線還在價格下方就用固定線（原本線上的
+      結果完全不變），固定線跑到價格上方（舊高點卡住）才改用跌破後的高點重算。
+    第 q 週收盤 < L_{q−1} ＝「跌破」→ 下週一處理；已觸發的跌破不會被新線取消。
+    回 `{"line", "hh", "since", "watr", "price", "dist", "state", "reset", "brk_line",
+    "brk_date", "under_now"}`：
+      line＝最新已收完週的 L（下一次週收盤拿它比）；hh／since＝算這條線用的最高價與起算週
+      （since＝None 表示就是近 22 週）；dist＝line/現價−1；
+      state＝"new"（最近一週收盤剛跌破 brk_line）／"above"（線在現價下方）／
+      "na"（線仍高於最近已收完週的收盤：暫無可用參考線）；
+      reset＝線是跌破後重算的；brk_line／brk_date＝最近一次跌破的那條線與那週（22 週內，沒有＝None）；
+      under_now＝日收盤已低於線、還沒週收盤確認。週數不足、線 ≤ 0 → None。"""
     w = _weekly_bars(px)
     if w is None or len(w) < max(HOLD_WEEKS, WATR_WEEKS + 1) + 1:
         return None
-    line = w["high"].rolling(HOLD_WEEKS).max() - HOLD_WATR_MULT * _watr_series(w)
-    if not line.iloc[-1] > 0:
+    atr = _watr_series(w).to_numpy()
+    hi, cl = w["high"].to_numpy(), w["close"].to_numpy()
+    n = len(w)
+    fixed = w["high"].rolling(HOLD_WEEKS).max().to_numpy() - HOLD_WATR_MULT * atr
+    re = [float("nan")] * n
+    re_lo = [0] * n
+    b = 0
+    for q in range(n):
+        if q >= 1 and re[q - 1] > 0 and cl[q] < re[q - 1]:
+            b = q                                         # 本週收盤跌破重算線 → 從本週重新起算
+        lo = max(b, q - HOLD_WEEKS + 1)
+        re_lo[q] = lo
+        if q >= HOLD_WEEKS - 1 and atr[q] == atr[q]:      # atr 非 NaN
+            re[q] = float(hi[lo:q + 1].max()) - HOLD_WATR_MULT * float(atr[q])
+    use_fixed = [bool(fixed[q] < cl[q]) for q in range(n)]   # NaN 比較為 False
+    line = [float(fixed[q]) if use_fixed[q] else re[q] for q in range(n)]
+    if not line[-1] > 0:
         return None
-    cl, prev = w["close"].to_numpy(), line.shift().to_numpy()
-    n = 0
-    for q in range(len(w) - 1, -1, -1):
-        if prev[q] > 0 and cl[q] < prev[q]:            # NaN 比較為 False，自然停下
-            n += 1
-        else:
-            break
+    brk = next((q for q in range(n - 1, max(n - HOLD_WEEKS - 1, 0), -1)   # 最近 22 週
+                if line[q - 1] > 0 and cl[q] < line[q - 1]), None)
     p = px.sort_values("date")
     price = _num(p.iloc[-1]["close"])
     if price is None or price <= 0:
         return None
-    lv = float(line.iloc[-1])
-    return {"line": lv, "hh": float(w["high"].tail(HOLD_WEEKS).max()),
-            "watr": float(_watr_series(w).iloc[-1]), "price": price, "dist": lv / price - 1,
-            "state": "above" if n == 0 else ("new" if n == 1 else "below"),
-            "weeks_below": n, "under_now": bool(n == 0 and price < lv)}
+    lv = line[-1]
+    if brk == n - 1:
+        state = "new"
+    elif cl[-1] < lv:
+        state = "na"
+    else:
+        state = "above"
+    reset = not use_fixed[-1]
+    since = w.index[re_lo[-1]] if reset and re_lo[-1] > n - HOLD_WEEKS else None
+    hh = float(hi[re_lo[-1]:].max()) if reset else float(hi[-HOLD_WEEKS:].max())
+    return {"line": lv, "hh": hh, "since": None if since is None else since.strftime("%m/%d"),
+            "watr": float(atr[-1]), "price": price, "dist": lv / price - 1,
+            "state": state, "reset": reset,
+            "brk_line": None if brk is None else line[brk - 1],
+            "brk_date": None if brk is None else w.index[brk].strftime("%m/%d"),
+            "under_now": bool(state == "above" and price < lv)}
 
 
 def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
@@ -365,7 +395,8 @@ def buy_range(price: float | None, fair: float | None, growth: float | None,
     下緣 L＝合理價；現價已低於合理價就用現價。成長價 ≈ 現價 × 預估EPS ÷ 近四季EPS，所以
     「現價 ≤ U」⇔ 預估 EPS 至少比近四季多 1/c − 1（11%／25%）：這是**成長門檻**，不是估值折價，
     而且 U 會跟著現價移動，不是固定的等待買點。
-    成長價或現價算不出來 → None。回 `{"c", "why", "min_growth", "lo", "hi", "fair", "state"}`：
+    成長價或現價算不出來 → None。回 `{"c", "why", "min_growth", "lo", "hi", "fair", "impl", "state"}`
+    （impl＝成長價/現價−1 ≈ 預估獲利成長；現價 ≤ U ⇔ impl ≥ min_growth）：
       state＝"in"（現價 ≤ 合理價，區間 現價～U）／"in_above_fair"（合理價 < 現價 ≤ U）／
       "above"（現價 > U、合理價 ≤ U）／"none"（U < 合理價且現價 > U：區間不成立）／
       "cap_in"／"cap_above"（沒有合理價，只有上限；現價 ≤／> U）。"""
@@ -374,7 +405,8 @@ def buy_range(price: float | None, fair: float | None, growth: float | None,
     why = [w for w, on in (("營益率在歷史高峰", cycle_peak), ("業外占稅前 >20%", nonop_high)) if on]
     c = BUY_C_CAUTIOUS if why else BUY_C
     hi = c * growth
-    out = {"c": c, "why": why, "min_growth": 1 / c - 1, "hi": hi, "fair": fair, "lo": None}
+    out = {"c": c, "why": why, "min_growth": 1 / c - 1, "hi": hi, "fair": fair, "lo": None,
+           "impl": growth / price - 1}
     if fair is None or fair <= 0:
         out["state"] = "cap_in" if price <= hi else "cap_above"
         out["fair"] = None
