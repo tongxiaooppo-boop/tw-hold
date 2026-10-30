@@ -1,20 +1,15 @@
 {
-  "_asof": "2026-10-29",
+  "_asof": "2026-10-30",
   "_pool": [
     "2006",
     "2027",
-    "2031",
-    "2377",
     "2535",
-    "3014",
     "3045",
     "6491",
     "6782",
     "9933"
   ],
   "_prev_pool": [
-    "1560",
-    "1714",
     "2006",
     "2027",
     "2031",
@@ -22,71 +17,11 @@
     "2535",
     "3014",
     "3045",
-    "3265",
-    "6196",
     "6491",
     "6782",
     "9933"
   ],
   "_prev_tickers": {
-    "1560": {
-      "first_seen": "2026-10-28",
-      "streak_days": 1
-    },
-    "1714": {
-      "first_seen": "2026-10-28",
-      "streak_days": 1
-    },
-    "2006": {
-      "first_seen": "2026-09-17",
-      "streak_days": 25
-    },
-    "2027": {
-      "first_seen": "2026-09-24",
-      "streak_days": 20
-    },
-    "2031": {
-      "first_seen": "2026-10-15",
-      "streak_days": 8
-    },
-    "2377": {
-      "first_seen": "2026-10-12",
-      "streak_days": 11
-    },
-    "2535": {
-      "first_seen": "2026-10-27",
-      "streak_days": 2
-    },
-    "3014": {
-      "first_seen": "2026-10-28",
-      "streak_days": 1
-    },
-    "3045": {
-      "first_seen": "2026-10-15",
-      "streak_days": 8
-    },
-    "3265": {
-      "first_seen": "2026-10-28",
-      "streak_days": 1
-    },
-    "6196": {
-      "first_seen": "2026-09-14",
-      "streak_days": 28
-    },
-    "6491": {
-      "first_seen": "2026-09-07",
-      "streak_days": 33
-    },
-    "6782": {
-      "first_seen": "2026-10-12",
-      "streak_days": 11
-    },
-    "9933": {
-      "first_seen": "2026-10-02",
-      "streak_days": 16
-    }
-  },
-  "tickers": {
     "2006": {
       "first_seen": "2026-09-17",
       "streak_days": 26
@@ -126,6 +61,36 @@
     "9933": {
       "first_seen": "2026-10-02",
       "streak_days": 17
+    }
+  },
+  "tickers": {
+    "2006": {
+      "first_seen": "2026-09-17",
+      "streak_days": 27
+    },
+    "2027": {
+      "first_seen": "2026-09-24",
+      "streak_days": 22
+    },
+    "2535": {
+      "first_seen": "2026-10-27",
+      "streak_days": 4
+    },
+    "3045": {
+      "first_seen": "2026-10-15",
+      "streak_days": 10
+    },
+    "6491": {
+      "first_seen": "2026-09-07",
+      "streak_days": 35
+    },
+    "6782": {
+      "first_seen": "2026-10-12",
+      "streak_days": 13
+    },
+    "9933": {
+      "first_seen": "2026-10-02",
+      "streak_days": 18
     }
   }
 }
