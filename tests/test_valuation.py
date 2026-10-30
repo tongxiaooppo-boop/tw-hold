@@ -289,3 +289,26 @@ def test_近四季中間漏一季_不算轉換率():
     q = _qf().drop(index=5).reset_index(drop=True)                    # 抽掉倒數第三季
     r = va.estimate(q, _rev(), _px(), _per())
     assert r["ok"] and r["inputs"]["conv"] is None
+
+
+def test_買進區間_各狀態():
+    b = va.buy_range(100, 120, 150)                       # 現價 < 合理 → 現價～135
+    assert b["c"] == 0.9 and b["state"] == "in" and b["lo"] == 100 and b["hi"] == pytest.approx(135)
+    assert va.buy_range(125, 120, 150)["state"] == "in_above_fair"   # 合理 < 現價 ≤ 135
+    assert va.buy_range(140, 120, 150)["state"] == "above"           # 現價 > 上限，合理 ≤ 上限
+    assert va.buy_range(140, 138, 150)["state"] == "none"            # 上限 135 < 合理 138
+    assert va.buy_range(100, None, 150)["state"] == "cap_in"
+    assert va.buy_range(140, None, 150)["state"] == "cap_above"
+    assert va.buy_range(100, 120, None) is None
+
+
+def test_買進區間_景氣高峰或業外大改用08_不疊加():
+    b = va.buy_range(100, 120, 150, cycle_peak=True, nonop_high=True)
+    assert b["c"] == 0.8 and b["hi"] == pytest.approx(120) and len(b["why"]) == 2
+    assert b["min_growth"] == pytest.approx(0.25)
+    assert va.buy_range(100, 120, 150)["min_growth"] == pytest.approx(1 / 0.9 - 1)
+
+
+def test_estimate_有買進區間欄位():
+    r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())
+    assert r["buy"] is not None and r["buy"]["hi"] == pytest.approx(0.9 * r["growth_price"])

@@ -2092,6 +2092,33 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
     return f"{stop}  \n{sup_s}｜{res_s}  \n", "  \n".join(lines)
 
 
+def _buy_lines(b: dict | None) -> tuple[str, str]:
+    """回（卡片裡買進區間一行，含結尾換行；展開裡的規則說明）。b＝valuation.buy_range 的結果。"""
+    if not b:
+        return "", ""
+    g = f"{b['min_growth']:.0%}"
+    hi = _px(b["hi"])
+    st_ = b["state"]
+    if st_ == "in":
+        line = f"買進區間 **{_px(b['lo'])}～{hi}**"
+    elif st_ == "in_above_fair":
+        line = f"買進區間 **{_px(b['lo'])}～{hi}**（現價高於合理價）"
+    elif st_ == "above":
+        line = f"買進區間 {_px(b['lo'])}～{hi}：現價不在區間（預估獲利成長未達 {g}）"
+    elif st_ == "none":
+        line = f"無買進區間（上限 {hi} 低於合理價，預估獲利成長未達 {g}）"
+    elif st_ == "cap_in":
+        line = f"買進上限 **{hi}**（沒有合理價）"
+    else:
+        line = f"買進上限 {hi}：現價高於上限（預估獲利成長未達 {g}）"
+    c = f"{b['c']:g}"
+    why = f"這檔{('、'.join(b['why']))}，試算 EPS 容易偏高，所以用 0.8" if b["why"] else "一般用 0.9"
+    how = (f"🛒 **買進區間**＝合理價（現價更低就用現價）～ 成長價 × {c}（{why}；營益率在歷史高峰或"
+           f"業外占稅前 >20% 時改 0.8）。上限的意思是「預估獲利至少比近四季多 {g}」——這是**成長門檻**，"
+           "不是估值打折；它會跟著現價一起動，不是等回檔的固定買點。便宜程度看合理價。不是進場訊號。")
+    return f"{line}  \n", how
+
+
 def _px(v: float) -> str:
     """價位顯示：≥100 取整數、以下留一位（估計值不給假精確）。"""
     return f"{v:,.0f}" if abs(v) >= 100 else f"{v:,.1f}"
@@ -2115,6 +2142,7 @@ def _valuation_block(d: dict, label: str = "") -> None:
     # 股價（建議價）排第一張（使用者 2026-10-30）；手機堆疊也是它在最上面
     c3, c1, c2 = st.container(key="valcards").columns(3)
     risk_txt, risk_how = _risk_lines(r.get("risk"))
+    buy_txt, buy_how = _buy_lines(r.get("buy"))
     with c1.container(border=True, key="valcard_rev"):
         st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
                     f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**  \n"
@@ -2145,13 +2173,14 @@ def _valuation_block(d: dict, label: str = "") -> None:
         # 卡片只放數字；公式與 PE 倍數變化收進下方展開（使用者 2026-10-30：股價說明太多）
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
                     f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
-                    f"{risk_txt}", unsafe_allow_html=True)
+                    f"{buy_txt}{risk_txt}", unsafe_allow_html=True)
     cur = f"（目前 {r['cur_pe']['pe']:.1f} 倍）" if r["cur_pe"] else ""
-    with st.expander("📐 股價怎麼算：三段價、成長價、停損參考、支撐壓力（點開看規則）"):
+    with st.expander("📐 股價怎麼算：三段價、成長價、買進區間、停損參考、支撐壓力（點開看規則）"):
         st.caption(f"💲 **三段價**＝近 5 年各年平均本益比的最低／中間／最高 × 今年預估 EPS"
                    f"（＝便宜／合理／昂貴）。近五年各年平均 PE：{yrs}。  \n"
                    f"📈 **成長價**＝今年預估 EPS × 交易所目前本益比{cur}：假設本益比不變、讓獲利"
                    "成長推股價，成長越陡越樂觀。"
+                   + (f"  \n{buy_how}" if buy_how else "")
                    + (f"  \n{risk_how}" if risk_how else ""))
     for w in r["warns"]:
         st.warning(w, icon="⚠️")

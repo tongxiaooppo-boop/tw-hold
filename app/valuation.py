@@ -44,6 +44,8 @@ SENS_REV = (-0.10, 0.0, 0.10)
 SENS_GM = (-0.03, 0.0, 0.03)
 STOP_WATR_MULT = 2.0            # 停損＝現價 − 2×週 ATR14
 WATR_WEEKS = 14
+BUY_C = 0.9                     # 買進上緣＝成長價 × 0.9（預估獲利至少比近四季多 11%）
+BUY_C_CAUTIOUS = 0.8            # 景氣高峰或業外 >20% 時改 0.8（至少多 25%）
 HINT_NEAR = 0.08                # 停損距現價 < 8% → 提示太近（不改價）
 HINT_WIDE = 0.20                # 停損距現價 > 20% → 提示太寬（不改價）
 VP_DAYS = 250                   # 成交量分布看近 250 個交易日（約一年）
@@ -297,6 +299,37 @@ def risk_levels(px: pd.DataFrame) -> dict | None:
             "days": int(min(len(p), VP_DAYS))}
 
 
+def buy_range(price: float | None, fair: float | None, growth: float | None,
+              cycle_peak: bool = False, nonop_high: bool = False) -> dict | None:
+    """買進區間（2026-10-30 使用者定義、sol／DeepSeek／Sonnet 討論後採 Claude 建議）：
+    上緣 U＝成長價 × c；c＝0.9，最新季營益率在近 24 季前 20%（景氣高峰）或業外占稅前 >20%
+    任一成立改 0.8（不疊加）——這兩種情況試算 EPS 容易偏高。三段價太寬不影響 c（只影響合理價）。
+    下緣 L＝合理價；現價已低於合理價就用現價。成長價 ≈ 現價 × 預估EPS ÷ 近四季EPS，所以
+    「現價 ≤ U」⇔ 預估 EPS 至少比近四季多 1/c − 1（11%／25%）：這是**成長門檻**，不是估值折價，
+    而且 U 會跟著現價移動，不是固定的等待買點。
+    成長價或現價算不出來 → None。回 `{"c", "why", "min_growth", "lo", "hi", "fair", "state"}`：
+      state＝"in"（現價 ≤ 合理價，區間 現價～U）／"in_above_fair"（合理價 < 現價 ≤ U）／
+      "above"（現價 > U、合理價 ≤ U）／"none"（U < 合理價且現價 > U：區間不成立）／
+      "cap_in"／"cap_above"（沒有合理價，只有上限；現價 ≤／> U）。"""
+    if not price or not growth or price <= 0 or growth <= 0:
+        return None
+    why = [w for w, on in (("營益率在歷史高峰", cycle_peak), ("業外占稅前 >20%", nonop_high)) if on]
+    c = BUY_C_CAUTIOUS if why else BUY_C
+    hi = c * growth
+    out = {"c": c, "why": why, "min_growth": 1 / c - 1, "hi": hi, "fair": fair, "lo": None}
+    if fair is None or fair <= 0:
+        out["state"] = "cap_in" if price <= hi else "cap_above"
+        out["fair"] = None
+        return out
+    lo = min(price, fair)
+    out["lo"] = lo
+    if price <= hi:
+        out["state"] = "in" if price <= fair else "in_above_fair"
+    else:
+        out["state"] = "above" if fair <= hi else "none"
+    return out
+
+
 def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
              per: pd.DataFrame) -> dict:
     """回 `{"ok": bool, "reason": str|None, ...}`。
@@ -399,6 +432,9 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         infos.append(f"最新一季營益率 {cyc['current']:.1%}，在近 {cyc['n']} 季裡贏過 "
                      f"{cyc['pct']:.0%} 的季（區間 {cyc['min']:.1%}～{cyc['max']:.1%}）。"
                      "景氣循環股在獲利高峰時，市場給的本益比通常偏低。")
+    nonop_hi = bool(lq_pretax != 0 and abs(nonop_latest) / abs(lq_pretax) > NONOP_WARN_RATIO)
+    buy = buy_range(price, band["mid"] if (band and not (pe and pe["wide"])) else None,
+                    growth_price, cycle_peak=bool(cyc and cyc["pct"] >= 0.8), nonop_high=nonop_hi)
     if rv["same_as_reported_q"]:
         infos.append("近 3 個月就是最新一季財報期間：試算只是把已公布的那一季換算，不是新資訊。")
 
@@ -415,6 +451,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
                         "pretax": float(r.pretax_income)} for r in last8.itertuples()],
         "eps": {"ttm": ttm_eps, "run_ex": run_ex, "run_incl": run_incl},
         "year": yb, "cur_pe": cur_pe, "growth_price": growth_price, "risk": risk,
+        "buy": buy,
         "price": price, "implied_pe": implied_pe, "pe": pe, "band": band,
         "sens": sens, "cycle": cyc, "warns": warns, "infos": infos,
     }
