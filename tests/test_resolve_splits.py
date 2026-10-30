@@ -58,3 +58,18 @@ def test_diff_m值更正也算差異():
 
 def test_配股率NaN不算查過():
     assert not rs._ok(float("nan")) and not rs._ok(None) and rs._ok(0.0) and rs._ok(30)
+
+
+def test_事件數大減_不覆寫既有json(tmp_path, monkeypatch):
+    """壞檔／空表讓事件從 10 筆掉到 1 筆 → 維持既有 json，不能把歷史事件全刪。"""
+    old = {"version": 2, "events": {f"{1000 + i}": [{"date": "2020-01-01", "type": "split",
+                                                     "m": 2, "pf": 2, "src": "x"}]
+                                    for i in range(10)}, "twse_bonus": {}}
+    res = tmp_path / "resolved.json"
+    res.write_text(json.dumps(old), encoding="utf-8")
+    monkeypatch.setattr(rs, "RESOLVED", res)
+    monkeypatch.setattr(rs, "TWSE_DETAIL", tmp_path / "none.parquet")
+    cp = tmp_path / "corp.parquet"
+    pd.DataFrame([_row("5904", "2026-08-10", "par_change", 720.0, 72.0, "tpex_par")]).to_parquet(cp)
+    assert rs.main(["--write", "--corp-actions", str(cp)]) == 0
+    assert json.loads(res.read_text(encoding="utf-8")) == old

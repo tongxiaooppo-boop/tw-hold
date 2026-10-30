@@ -58,6 +58,10 @@ def _quarters(qf: pd.DataFrame) -> pd.DataFrame:
     q["period_end"] = pd.to_datetime(q["period_end"])
     for c in need[1:]:
         q[c] = pd.to_numeric(q[c], errors="coerce")
+    # 轉換率與股數都要用「歸母」淨利：net_income 是合併淨利（含非控制權益），2317 用它推股數
+    # 會多出 15%（2026-10-30 抓到）。ni_parent（損益表歸母淨利）缺值的季才退回 net_income。
+    if "ni_parent" in qf.columns:
+        q["net_income"] = pd.to_numeric(qf["ni_parent"], errors="coerce").fillna(q["net_income"])
     return (q.dropna(subset=["revenue"]).drop_duplicates("period_end", keep="last")
              .sort_values("period_end").reset_index(drop=True))
 
@@ -155,8 +159,9 @@ def _current_pe(per: pd.DataFrame) -> dict | None:
         return None
     p = per[["date", "per"]].copy()
     p["per"] = pd.to_numeric(p["per"], errors="coerce")
-    p = p.dropna().sort_values("date")
-    if p.empty or p["per"].iloc[-1] <= 0:
+    # 不先 dropna：最新一天交易所 PER 空白（虧損時顯示「-」）就該不給，不能退回舊的正值
+    p = p.dropna(subset=["date"]).sort_values("date")
+    if p.empty or not p["per"].iloc[-1] > 0:
         return None
     return {"pe": float(p["per"].iloc[-1]),
             "date": pd.Timestamp(p["date"].iloc[-1]).strftime("%Y/%m/%d")}
@@ -199,10 +204,11 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
             f"{last8['nonop'].max() / 1e8:+.2f} 億），主試算已排除業外。")
 
     t4 = q.tail(4)
+    t4ok = t4[["pretax_income", "net_income"]].notna().all(axis=1).all()   # 缺一季就不湊
     ttm_pretax, ttm_net = float(t4["pretax_income"].sum()), float(t4["net_income"].sum())
-    conv = ttm_net / ttm_pretax if ttm_pretax > 0 else None
+    conv = ttm_net / ttm_pretax if (t4ok and ttm_pretax > 0) else None
     if conv is None:
-        warns.append("近 4 季稅前合計 ≤ 0，推不出「歸母淨利 ÷ 稅前」轉換率，不試算 EPS。")
+        warns.append("近 4 季稅前合計 ≤ 0 或有季缺稅前／淨利，推不出「歸母淨利 ÷ 稅前」轉換率，不試算 EPS。")
     elif not 0.6 <= conv <= 1.0:
         warns.append(f"近 4 季歸母淨利 ÷ 稅前 = {conv:.0%}，偏離一般稅負範圍"
                      "（非控制權益、遞延稅、虧損扣抵…），EPS 試算受影響。")

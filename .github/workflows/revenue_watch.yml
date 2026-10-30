@@ -25,7 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # ref: main＝開跑當下的最新版，不是觸發當下的 SHA：排隊等 concurrency 的那一輪若用舊 SHA，
+      # 會拿舊的 revenue_mops 合併、把較早的 first_seen_at 蓋掉（衝突時本輪版本贏）
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -52,7 +56,7 @@ jobs:
           git config user.email "noreply@github.com"
           # 分開 add：任一路徑不存在（公布期外沒有 data/revenue_mops）會讓整行 add 失敗、另一個也沒加到（10/29 踩到）
           for f in data/revenue_mops data/derived/revenue_watch.json; do
-            [ -e "$f" ] && git add "$f"
+            if [ -e "$f" ]; then git add "$f"; fi
           done
           if git diff --cached --quiet; then echo "無變更"; exit 0; fi
           git commit -m "月營收當晚公告 $(TZ=Asia/Taipei date +%F\ %H:%M)"
@@ -61,8 +65,11 @@ jobs:
             if git push; then pushed=1; break; fi
             sleep $(( (RANDOM % 5) + i * 3 ))
             if ! git pull --rebase origin main; then
-              git checkout --theirs -- data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
-              git add -A data/revenue_mops data/derived/revenue_watch.json 2>/dev/null || true
+              # 同上：逐路徑處理，不存在的路徑不能讓另一個也沒解掉
+              for f in data/revenue_mops data/derived/revenue_watch.json; do
+                git checkout --theirs -- "$f" 2>/dev/null || true
+                if [ -e "$f" ]; then git add -A "$f"; fi
+              done
               GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }
             fi
           done

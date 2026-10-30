@@ -168,3 +168,22 @@ def test_營業費用用費用率_固定金額只當對照():
     # 固定 3 億：30 億 × 40% − 3 億 = 9 億 → 7.2 億 ÷ 5 億 × 4 = 5.76（營收升時比費用率版樂觀）
     assert inp["run_fixed_opex"] == pytest.approx(5.76, rel=0.01)
     assert inp["run_fixed_opex"] > r["eps"]["run_ex"]
+
+
+def test_有非控制權益_轉換率與股數用歸母淨利():
+    """net_income（合併）比歸母多 25% → 只看 net_income 會推出 6.25 億股、轉換率 100%；
+    用 ni_parent 才回到 5 億股、80%。兩種算法的單季 EPS 剛好抵銷，所以比 conv／shares。"""
+    q = _qf()
+    q["ni_parent"] = q["net_income"]
+    q["net_income"] = q["net_income"] * 1.25
+    r = va.estimate(q, _rev(), _px(), _per())
+    assert r["ok"]
+    assert abs(r["inputs"]["conv"] - 0.8) < 1e-9
+    assert abs(r["inputs"]["shares"] - SHARES) / SHARES < 0.01
+
+
+def test_最新一天交易所本益比空白_不給成長價():
+    per = _per()
+    per.loc[per.index[-1], "per"] = np.nan
+    r = va.estimate(_qf(), _rev(), _px(), per)
+    assert r["cur_pe"] is None and r["growth_price"] is None

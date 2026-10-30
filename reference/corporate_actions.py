@@ -507,6 +507,7 @@ def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None
             if qt is not None and np.isfinite(xw).any():
                 eps = pd.to_numeric(adjust_eps(qt, upto=E)["eps"], errors="coerce").to_numpy(float)
                 ttm = pd.Series(eps).rolling(4).sum().to_numpy()        # ttm[k]：第 k-3～k 季
+                pend = qt["period_end"].to_numpy()
                 dl = np.array([report_deadline(p).to_datetime64() for p in qt["period_end"]])
                 n = np.searchsorted(np.sort(dl), dts[win], side="left")  # 期限已過的季數
                 # 切段：反推 EPS 變動 ≥1% 換段（缺值沿用上一段）
@@ -519,7 +520,9 @@ def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None
                 for i in range(len(win)):
                     if not np.isfinite(lx[i]):
                         continue
-                    cand = [ttm[k - 1] for k in (n[i], n[i] + 1) if 4 <= k <= len(ttm)]
+                    # 多一季（提早公布）的候選至少要季末已過，不能拿還沒結束的季去比
+                    cand = [ttm[k - 1] for k in (n[i], n[i] + 1) if 4 <= k <= len(ttm)
+                            and (k == n[i] or pend[k - 1] < dts[win[i]])]
                     cand = [v for v in cand if np.isfinite(v) and v > 0]
                     if not cand:
                         continue
