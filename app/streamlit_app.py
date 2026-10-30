@@ -2049,22 +2049,42 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
     # 停損與支撐分開（2026-10-30 定案）：停損只看波動；支撐／壓力是日 K 估計的大量區，各自列
     # 卡片裡只放數字；規則與註解全部寫在框外（使用者 2026-10-30：卡片不要變大、規則要寫清楚）
     lines = []
+    hd = rk.get("hold")
     if rk.get("buyable") and rk.get("stop"):
         stop = f"停損參考 約 **{_px(rk['stop'])}**（距現價 {rk['risk']:+.0%}）"
         lines.append(
-            f"🛑 **停損參考**＝現價 {_px(rk['price'])} − 2 × 週ATR14 {_px(rk['watr'])}"
-            f" ＝ {_px(rk['stop'])}。週ATR14＝近 14 週（已收完的週 K）平均每週真實波幅；"
-            "只看波動、不因支撐壓力調整。2 倍是 2015～2026 年模擬選的（減少大虧最有效、又不會"
-            "一半以上被洗掉）。" + (f"**{rk['hint']}**。" if rk.get("hint") else ""))
+            f"🛑 **停損參考**（現價在買進區間內才列）＝現價 {_px(rk['price'])} − 2×週ATR14 "
+            f"{_px(rk['watr'])} ＝ {_px(rk['stop'])}。**買進後記下這個價，別跟著每天重算往下移。**"
+            + (f" {rk['hint']}。" if rk.get("hint") else ""))
     elif rk.get("buyable"):
-        # 現價 < 成長價但 2×週ATR ≥ 現價（波動極大）→ 算不出正的停損價，不能說成「高於成長價」
+        # 現價在買進區間但 2×週ATR ≥ 現價（波動極大）→ 算不出正的停損價
         stop = "停損參考：—（波動太大，算不出）"
         lines.append("🛑 **停損參考**＝現價 − 2×週ATR14；這檔週波動超過現價一半，算出來 ≤ 0，不列。")
+    elif hd:
+        # 不在買進區間 → 給已持有的人（2026-10-30 使用者拍板：22週高 − 2×週ATR、週收盤、無狀態）；
+        # 使用者要求持股停損在卡片上要清楚 → 🛡️＋粗體＋同一行寫觸發方式
+        if hd["state"] == "new":
+            stop = f":red[**🛡️ 持股停損 {_px(hd['line'])}：本週收盤已跌破**]"
+        elif hd["state"] == "below":
+            stop = (f":gray[🛡️ 持股停損 {_px(hd['line'])}：已在線下 {hd['weeks_below']} 週，"
+                    "不適用]")
+        else:
+            stop = (f"🛡️ **持股停損 {_px(hd['line'])}**（距現價 {hd['dist']:+.0%}）"
+                    + ("｜:orange[**現價已在線下，看週五收盤**]" if hd["under_now"]
+                       else "｜週收盤跌破才算"))
+        lines.append(
+            f"🛡️ **持股停損**（現價不在買進區間時列，給已持有的人；**不知道你的成本**）"
+            f"＝近 22 週最高 {_px(hd['hh'])} − 2×週ATR14 {_px(hd['watr'])} ＝ {_px(hd['line'])}。  \n"
+            "　・**看週收盤**：週五收盤跌破 → 下週一處理；盤中跌破不算。  \n"
+            "　・**只有「本週剛跌破」是訊號**。已在線下兩週以上的股票，歷史上續抱跟沒跌破的差不多，"
+            "**這條線已不適用，不是叫你現在賣**。  \n"
+            "　・2015～2026 年 603 檔模擬：最差 5% 從 −26% 縮到 −13%；代價是**半年內約 96% 會出場、"
+            "約六成賣後又漲回**。")
     else:
-        why = "沒有成長價" if rk.get("no_growth") else "現價不低於成長價"
+        why = "沒有成長價" if rk.get("no_growth") else "現價不在買進區間"
         stop = f"停損參考：—（{why}）"
-        lines.append(f"🛑 **停損參考**只在現價低於成長價時列出（這檔{why}）——這是顯示條件，"
-                     "不代表風險比較低。")
+        lines.append(f"🛑 **停損參考**只在現價落在買進區間內時列出（這檔{why}，持股停損也算不出）"
+                     "——這是顯示條件，不代表風險比較低。")
 
     sp, at, sup = rk.get("sup_px"), rk.get("at"), rk.get("support")
     sup_s = ("支撐候選 —" if sp is None else
@@ -2073,22 +2093,17 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
     res_s = (f"壓力候選 {_px(rp)}" if rp else
              f"壓力候選 —（近一年高 {_px(rk['high'])}）")
     if at is not None:
-        where = (f"現價落在大量區 {_px(at['lo'])}～{_px(at['hi'])} 內：支撐候選＝區下緣、"
-                 "壓力候選＝區上緣（跌破下緣或站上上緣才算離開這個換手區）")
+        where = f"現價在大量區 {_px(at['lo'])}～{_px(at['hi'])} 內：支撐＝區下緣、壓力＝區上緣"
     else:
-        where = ("支撐候選＝下方最近大量區 " + (f"{_px(sup['lo'])}～{_px(sup['hi'])} 的上緣" if sup
-                                         else "（下方沒有辨識到）")
-                 + "；壓力候選＝上方最近大量區的下緣"
-                 + ("" if rp else f"（上方沒有辨識到大量區，近一年高 {_px(rk['high'])} 只是高點、不是套牢量）"))
+        where = "支撐＝下方最近大量區的上緣" if sup else "下方沒有大量區"
+        where += "；壓力＝上方最近大量區的下緣" if rp else "；上方沒有大量區（近一年高不算套牢量）"
     if rk.get("sup_far"):
-        where += "。支撐候選在停損參考之下＝離太遠，不算近端支撐"
+        where += "；支撐在停損之下＝偏遠"
     lines.append(
-        "📊 **支撐／壓力候選**＝近一年成交量最集中的價格帶（大量區：日 K 典型價分 40 箱、量 ≥ "
-        f"平均 1.5 倍）。{where}。上方大量區＝以前在那裡買的人多，漲上去容易遇到解套賣壓"
-        "（減碼參考）；下方大量區＝以前換手多，跌下來可能有人接，但不保證。")
-    lines.append("⚠️ 這是**現價快照**，不是持倉的移動停損：買進後請記下當時的停損價，別跟著每天"
-                 "重算的數字往下移。量區用日 K 估計、還原價換算，跟券商分價量表會有出入；跳空或"
-                 "跌停鎖死時會虧得比停損多。細節見下方「試算細節 → 停損參考與大量區」。")
+        f"📊 **支撐／壓力候選**＝近一年成交量最集中的價格帶。{where}。上方＝解套賣壓（減碼參考）、"
+        "下方＝可能有人接，**不保證**。")
+    lines.append("⚠️ 量區用日 K 估計，跟券商分價量表會有出入；**跳空、跌停時會虧得比停損多**。"
+                 "數字細節見「試算細節」。")
     return f"{stop}  \n{sup_s}｜{res_s}  \n", "  \n".join(lines)
 
 
@@ -2257,15 +2272,21 @@ def _valuation_block(d: dict, label: str = "") -> None:
 
         rk = r.get("risk")
         if rk:
-            st.markdown("**停損參考與大量區（只替現價算；現價低於成長價才給停損）**")
+            st.markdown("**停損與大量區（在買進區間內給停損參考、不在給持股停損）**")
             show = bool(rk["buyable"] and rk["stop"])
-            sup, at = rk["support"], rk["at"]
-            rows = [
+            sup, at, hd = rk["support"], rk["at"], rk.get("hold")
+            hold_row = [] if not hd else [(
+                "持股停損", _px(hd["line"]) + f"（距現價 {hd['dist']:+.1%}）",
+                f"近 22 週最高 {_px(hd['hh'])} − 2×週ATR14；"
+                + {"above": "上週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
+                   "new": "本週收盤剛跌破",
+                   "below": f"已連續 {hd['weeks_below']} 週在線下，不適用"}[hd["state"]])]
+            rows = hold_row + [
                 ("停損參考", (_px(rk["stop"]) + f"（距現價 {rk['risk']:+.1%}）") if show else "—",
                  (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
                   + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
                  else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
-                       else ("沒有成長價" if rk.get("no_growth") else "現價不低於成長價")
+                       else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間")
                        + "，不列（顯示條件，不代表風險比較低）")),
                 ("週 ATR14", _px(rk["watr"]),
                  f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
@@ -2281,6 +2302,8 @@ def _valuation_block(d: dict, label: str = "") -> None:
                        if rk["resist"] is not None else "上方沒有辨識到大量區")),
                 ("近一年高", _px(rk["high"]), "近 250 個交易日最高價（不是大量區，另列）"),
             ]
+            if hd:                                     # 有持股停損就不再列一行空的停損參考
+                rows = [x for x in rows if x[0] != "停損參考"]
             # 手機把說明收到項目下方（同推導表），不然第一欄被擠成一字一行
             _vtable(["項目", "價位", "說明"],
                     [[(it, note), val, note] for it, val, note in rows], {1}, {2})

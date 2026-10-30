@@ -312,3 +312,51 @@ def test_買進區間_景氣高峰或業外大改用08_不疊加():
 def test_estimate_有買進區間欄位():
     r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())
     assert r["buy"] is not None and r["buy"]["hi"] == pytest.approx(0.9 * r["growth_price"])
+
+
+def _flat_fri(n: int = 200, end: str = "2026-10-23", tail: list[float] | None = None):
+    """收盤 100、高低 ±2 → 週ATR 4、22 週高 102 → 持股停損 102 − 8 ＝ 94。
+    end 預設週五（最後一週已收完）；tail 把最後幾天的收盤（含高低）換掉。"""
+    d = _ohlcv(n=n)
+    d["date"] = pd.bdate_range(end=end, periods=n)
+    for i, c in enumerate(tail or []):
+        k = d.index[len(d) - len(tail) + i]
+        d.loc[k, ["open", "close"]] = c
+        d.loc[k, "high"], d.loc[k, "low"] = c + 2, c - 2
+    return d
+
+
+def test_持股停損_近22週高減2倍週ATR_線上():
+    hd = va.hold_stop(_flat_fri())
+    assert hd["line"] == pytest.approx(94.0, rel=0.01)
+    assert hd["state"] == "above" and hd["weeks_below"] == 0 and hd["under_now"] is False
+    assert hd["dist"] == pytest.approx(-0.06, abs=0.005)
+    assert va.hold_stop(_ohlcv(n=60)) is None            # 週數不足 22＋1
+
+
+def test_持股停損_本週收盤剛跌破_才是新訊號():
+    hd = va.hold_stop(_flat_fri(tail=[80.0] * 5))        # 最後一整週收 80 < 上週線 94
+    assert hd["state"] == "new" and hd["weeks_below"] == 1
+
+
+def test_持股停損_連續兩週在線下_不適用():
+    hd = va.hold_stop(_flat_fri(tail=[80.0] * 10))
+    assert hd["state"] == "below" and hd["weeks_below"] == 2
+
+
+def test_持股停損_週中跌破還沒週收盤_只標現價在線下():
+    hd = va.hold_stop(_flat_fri(end="2026-10-22", tail=[90.0]))   # 週四收 90，本週沒收完
+    assert hd["state"] == "above" and hd["under_now"] is True
+    assert hd["line"] == pytest.approx(94.0, rel=0.01)
+
+
+def test_不在買進區間_給持股停損_在區間內不給():
+    q = _qf()
+    r = va.estimate(q, _rev(), _ohlcv(base=100.0), _per())   # 現價高於成長價 → 不在區間
+    assert r["risk"]["buyable"] is False and r["risk"]["hold"] is not None
+    r = va.estimate(q, _rev(), _ohlcv(base=40.0), _per())
+    assert r["risk"]["buyable"] is True and r["risk"]["hold"] is None
+    g = r["growth_price"]                                 # 低於成長價、但高於上緣（成長價×c）
+    r = va.estimate(q, _rev(), _ohlcv(base=g * 0.97), _per())
+    assert r["buy"]["state"] not in va.BUY_IN_STATES
+    assert r["risk"]["buyable"] is False and r["risk"]["hold"] is not None

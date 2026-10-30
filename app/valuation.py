@@ -18,13 +18,19 @@
 - 成長價（使用者 Excel 口徑）：今年預估 EPS × 交易所最新本益比——倍數不變、
   讓獲利成長推股價；成長越陡越樂觀。
 - 停損參考與支撐／壓力候選（2026-10-30 使用者要求，`risk_levels`）：只替**現價**算，現價
-  低於成長價才給停損（使用者：「需在成長價下，不一定是合理價下」）。停損參考＝現價 −
+  落在買進區間內才給停損（2026-10-30 使用者改；原本是現價低於成長價）。停損參考＝現價 −
   2×週 ATR14（已收完週、Wilder），**跟支撐分開**、不被大量區改動；距現價 <8% 或 >20% 只提示、
   不改價。倍數由 2015～2026、603 檔、15 萬個買點的 26 週模擬定案：2× 讓「虧 >30%」從 3.5%
   降到 0.4%、2022／2025 空頭最差 5% 少虧約 10 個百分點；2.5×、3× 保護明顯變差，1.5× 半年內
   一半以上會被停掉。這是現價快照，不是持倉的移動停損。
   支撐／壓力候選＝近 250 日「日 K 估計」大量區（典型價分 40 箱、量 ≥ 平均 1.5 倍），價格換算
   到目前基準；現價所在區的下／上緣優先，否則下方／上方最近一區。
+- 持股停損（2026-10-30 使用者拍板，`hold_stop`）：現價不在買進區間時改給已持有的人。不知道成本、
+  個股查詢也沒有「開始追蹤」的起點，所以**無狀態**：每次直接算近 22 週最高 − 2×週ATR14，週收盤
+  跌破上週的線才算。模擬（research/stop_design_2026-10-30/holdsim2.py）：無狀態跟「只上移」差
+  <1pp；線上組最差 5% −26%→−13%、虧 >20% 8.7%→1.0%，代價半年內 96% 出場、六成賣後又漲回；
+  2.5×／3× 尾端明顯變差。**已在線下的股票續抱 26 週跟線上的差不多**，所以只有「本週剛跌破」
+  是訊號，在線下 ≥2 週就標「不適用」、不叫賣。
 
 全部是純函式，吃 `_stock_data()` 的 qf / rev / px / per，回 dict，UI 在 streamlit_app。
 """
@@ -46,6 +52,9 @@ STOP_WATR_MULT = 2.0            # 停損＝現價 − 2×週 ATR14
 WATR_WEEKS = 14
 BUY_C = 0.9                     # 買進上緣＝成長價 × 0.9（預估獲利至少比近四季多 11%）
 BUY_C_CAUTIOUS = 0.8            # 景氣高峰或業外 >20% 時改 0.8（至少多 25%）
+BUY_IN_STATES = ("in", "in_above_fair", "cap_in")  # 現價落在買進區間（或上限）內 → 給停損參考
+HOLD_WEEKS = 22                 # 持股停損＝近 22 週最高 − 2×週ATR14（不在買進區間時給已持有的人）
+HOLD_WATR_MULT = 2.0
 HINT_NEAR = 0.08                # 停損距現價 < 8% → 提示太近（不改價）
 HINT_WIDE = 0.20                # 停損距現價 > 20% → 提示太寬（不改價）
 VP_DAYS = 250                   # 成交量分布看近 250 個交易日（約一年）
@@ -187,9 +196,9 @@ def _current_pe(per: pd.DataFrame) -> dict | None:
             "date": pd.Timestamp(p["date"].iloc[-1]).strftime("%Y/%m/%d")}
 
 
-def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
-    """已收完週 K（週五收）的 Wilder ATR：前 weeks 個 TR 平均起算、之後遞迴。
-    最後一天不是週五 → 該週還沒收完，不算。週數不足 → None。px＝[date, high, low, close]。"""
+def _weekly_bars(px: pd.DataFrame) -> pd.DataFrame | None:
+    """已收完的週 K（週五收）[high, low, close]。最後一天不是週五 → 該週還沒收完，丟掉
+    （週五休市時會少算一週，可接受）。px＝[date, high, low, close]。"""
     if px is None or px.empty or not {"date", "high", "low", "close"} <= set(px.columns):
         return None
     d = px[["date", "high", "low", "close"]].copy()
@@ -200,17 +209,66 @@ def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
     if d.empty:
         return None
     w = d.resample("W-FRI").agg({"high": "max", "low": "min", "close": "last"}).dropna()
-    if d.index[-1].weekday() != 4:                   # 本週還沒收完（週五休市時會少算一週，可接受）
+    if d.index[-1].weekday() != 4:
         w = w.iloc[:-1]
-    if len(w) < weeks + 1:
-        return None
+    return w
+
+
+def _watr_series(w: pd.DataFrame, weeks: int = WATR_WEEKS) -> pd.Series:
+    """每週的 Wilder ATR（前 weeks 個 TR 平均起算、之後遞迴）；算不出的週＝NaN。"""
     pc = w["close"].shift()
     tr = pd.concat([w["high"] - w["low"], (w["high"] - pc).abs(), (w["low"] - pc).abs()],
-                   axis=1).max(axis=1).iloc[1:].to_numpy()
-    a = float(tr[:weeks].mean())
-    for x in tr[weeks:]:
-        a = (a * (weeks - 1) + float(x)) / weeks
+                   axis=1).max(axis=1)
+    out = pd.Series(float("nan"), index=w.index)
+    if len(w) < weeks + 1:
+        return out
+    a = float(tr.iloc[1:weeks + 1].mean())
+    out.iloc[weeks] = a
+    for i in range(weeks + 1, len(w)):
+        a = (a * (weeks - 1) + float(tr.iloc[i])) / weeks
+        out.iloc[i] = a
+    return out
+
+
+def weekly_atr(px: pd.DataFrame, weeks: int = WATR_WEEKS) -> float | None:
+    """已收完週 K 的 Wilder ATR（最新一週）。週數不足 → None。px＝[date, high, low, close]。"""
+    w = _weekly_bars(px)
+    if w is None or len(w) < weeks + 1:
+        return None
+    a = float(_watr_series(w, weeks).iloc[-1])
     return a if a > 0 else None
+
+
+def hold_stop(px: pd.DataFrame) -> dict | None:
+    """持股停損（給已持有、成本未知的人；無狀態）：每週的線＝近 22 週最高 − 2×週ATR14。
+    第 q 週收盤 < 第 q−1 週的線 ＝「跌破」。回
+    `{"line", "hh", "watr", "price", "dist", "state", "weeks_below", "under_now"}`：
+      line＝最新已收完週算出的線（下一次週收盤拿它比）；dist＝line/現價−1；
+      state＝"above"（上週收盤沒跌破）／"new"（最近一週收盤剛跌破）／"below"（連續 ≥2 週在線下）；
+      weeks_below＝連續幾週週收盤在線下；under_now＝最新日收盤已低於 line（還沒週收盤確認）。
+    週數不足、線 ≤ 0 → None。"""
+    w = _weekly_bars(px)
+    if w is None or len(w) < max(HOLD_WEEKS, WATR_WEEKS + 1) + 1:
+        return None
+    line = w["high"].rolling(HOLD_WEEKS).max() - HOLD_WATR_MULT * _watr_series(w)
+    if not line.iloc[-1] > 0:
+        return None
+    cl, prev = w["close"].to_numpy(), line.shift().to_numpy()
+    n = 0
+    for q in range(len(w) - 1, -1, -1):
+        if prev[q] > 0 and cl[q] < prev[q]:            # NaN 比較為 False，自然停下
+            n += 1
+        else:
+            break
+    p = px.sort_values("date")
+    price = _num(p.iloc[-1]["close"])
+    if price is None or price <= 0:
+        return None
+    lv = float(line.iloc[-1])
+    return {"line": lv, "hh": float(w["high"].tail(HOLD_WEEKS).max()),
+            "watr": float(_watr_series(w).iloc[-1]), "price": price, "dist": lv / price - 1,
+            "state": "above" if n == 0 else ("new" if n == 1 else "below"),
+            "weeks_below": n, "under_now": bool(n == 0 and price < lv)}
 
 
 def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
@@ -421,11 +479,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
         warns.append(f"近 5 年各年平均本益比差很大（{pe['low']:.0f}～{pe['high']:.0f} 倍），"
                      "多半是過去獲利很薄時本益比被撐高；歷史倍數參考性低。")
 
-    # 停損只替現價算，且現價要低於成長價才給（使用者 2026-10-30：不必低於合理價）
     risk = risk_levels(px) if (px is not None and not px.empty) else None
-    if risk is not None:
-        risk["buyable"] = bool(price and growth_price and price < growth_price)
-        risk["no_growth"] = growth_price is None          # 畫面要分「沒有成長價」與「現價較高」
 
     cyc = _cycle_block(q)
     if cyc and cyc["pct"] >= 0.8:
@@ -435,6 +489,11 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     nonop_hi = bool(lq_pretax != 0 and abs(nonop_latest) / abs(lq_pretax) > NONOP_WARN_RATIO)
     buy = buy_range(price, band["mid"] if (band and not (pe and pe["wide"])) else None,
                     growth_price, cycle_peak=bool(cyc and cyc["pct"] >= 0.8), nonop_high=nonop_hi)
+    # 停損參考只在現價落在買進區間內才給（使用者 2026-10-30 改：原本是現價 < 成長價）
+    if risk is not None:
+        risk["buyable"] = bool(buy and buy["state"] in BUY_IN_STATES)
+        risk["no_growth"] = growth_price is None          # 畫面要分「沒有成長價」與「不在買進區間」
+        risk["hold"] = None if risk["buyable"] else hold_stop(px)
     if rv["same_as_reported_q"]:
         infos.append("近 3 個月就是最新一季財報期間：試算只是把已公布的那一季換算，不是新資訊。")
 
