@@ -228,7 +228,8 @@ def test_週ATR_未收完的週不算():
     assert va.weekly_atr(d) == pytest.approx(4.0, rel=0.01)
 
 
-def test_現價不低於成長價_不算買點():
+def test_現價不低於成長價_不算買點(monkeypatch):
+    monkeypatch.setattr(va, "BUY_RANGE_PAUSED", False)   # 驗改版前的邏輯
     q = _qf()
     r = va.estimate(q, _rev(), _ohlcv(base=100.0), _per())
     assert r["growth_price"] < 100 and r["risk"]["buyable"] is False
@@ -309,7 +310,8 @@ def test_買進區間_景氣高峰或業外大改用08_不疊加():
     assert va.buy_range(100, 120, 150)["min_growth"] == pytest.approx(1 / 0.9 - 1)
 
 
-def test_estimate_有買進區間欄位():
+def test_estimate_有買進區間欄位(monkeypatch):
+    monkeypatch.setattr(va, "BUY_RANGE_PAUSED", False)   # 驗改版前的邏輯
     r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())
     assert r["buy"] is not None and r["buy"]["hi"] == pytest.approx(0.9 * r["growth_price"])
 
@@ -355,7 +357,8 @@ def test_持股停損_週中跌破還沒週收盤_只標現價在線下():
     assert hd["line"] == pytest.approx(94.0, rel=0.01)
 
 
-def test_不在買進區間_給持股停損_在區間內不給():
+def test_不在買進區間_給持股停損_在區間內不給(monkeypatch):
+    monkeypatch.setattr(va, "BUY_RANGE_PAUSED", False)   # 驗改版前的邏輯
     q = _qf()
     r = va.estimate(q, _rev(), _ohlcv(base=100.0), _per())   # 現價高於成長價 → 不在區間
     assert r["risk"]["buyable"] is False and r["risk"]["hold"] is not None
@@ -573,3 +576,13 @@ def test_estimate_有高PE欄位():
     assert isinstance(r["high_pe"]["eligible"], bool)
     assert isinstance(r["high_pe"]["fail"], list)
 
+
+
+def test_買進區間停用中_不給區間但持股停損照給():
+    """2026-10-30 使用者：歸類完成前停用買進區間與成長價（會跟股價一起漲）。"""
+    assert va.BUY_RANGE_PAUSED is True
+    r = va.estimate(_qf(), _rev(), _ohlcv(base=40.0), _per())   # 開關關掉時這組在區間內
+    assert r["buy"] is None
+    assert r["risk"]["paused"] is True and r["risk"]["buyable"] is False
+    assert r["risk"]["hold"] is not None
+    assert r["band"] is not None                                 # 三段價照給

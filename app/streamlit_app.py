@@ -2085,7 +2085,8 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
         else:
             last = f"{hd['brk_date']} 週收盤跌破 {_px(hd['brk_line'])}，線從那週起重算。"
         lines.append(
-            f"🛡️ **持股停損**（現價不在買進區間時列，給已持有的人；**不知道你的成本**）"
+            f"🛡️ **持股停損**（{'買進區間停用中，' if rk.get('paused') else '現價不在買進區間時列，'}"
+            "給已持有的人；**不知道你的成本**）"
             f"＝{base} − 2×週ATR14 {_px(hd['watr'])} ＝ {ln}。  \n"
             "　・**看週收盤**：週五收盤跌破 → 下週一處理；盤中跌破不算。  \n"
             "　・**跌破後重新起算**：22 週高點的線跑到價格上方時，改從近期跌破那週往後算，"
@@ -2094,7 +2095,7 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
             "　・2015～2026 年 603 檔模擬：最差 5% 從 −26% 縮到約 −14%；代價是**半年內約 96% 會出場、"
             "約六成賣後又漲回**。")
     else:
-        why = "沒有成長價" if rk.get("no_growth") else "現價不在買進區間"
+        why = ("買進區間停用中" if rk.get("paused") else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間"))
         stop = f"停損參考：—（{why}）"
         lines.append(f"🛑 **停損參考**只在現價落在買進區間內時列出（這檔{why}，持股停損也算不出）"
                      "——這是顯示條件，不代表風險比較低。")
@@ -2176,6 +2177,8 @@ def _valuation_block(d: dict, label: str = "") -> None:
     c3, c1, c2 = st.container(key="valcards").columns(3)
     risk_txt, risk_how = _risk_lines(r.get("risk"))
     buy_txt, buy_how = _buy_lines(r.get("buy"))
+    if va.BUY_RANGE_PAUSED:
+        buy_txt = ":gray[買進區間：改版中（舊算法會跟著股價一起漲，先停用）]  \n"
     with c1.container(border=True, key="valcard_rev"):
         st.markdown(f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）  \n"
                     f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**  \n"
@@ -2200,19 +2203,25 @@ def _valuation_block(d: dict, label: str = "") -> None:
             tiers = f"便宜 {b['low']:,.1f}｜合理 **{b['mid']:,.1f}**｜昂貴 {b['high']:,.1f}"
         else:
             tiers = "三段價：—（本益比年數不足或預估 EPS ≤ 0）"
-        grow = (f"成長價 **{gpx:,.1f}**{_vs(gpx)}" if gpx
-                else "成長價：—")
+        grow = ("" if va.BUY_RANGE_PAUSED else
+                (f"成長價 **{gpx:,.1f}**{_vs(gpx)}  \n" if gpx else "成長價：—  \n"))
         yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
         # 卡片只放數字；公式與 PE 倍數變化收進下方展開（使用者 2026-10-30：股價說明太多）
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
-                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}  \n"
+                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}"
                     f"{buy_txt}{risk_txt}", unsafe_allow_html=True)
     cur = f"（目前 {r['cur_pe']['pe']:.1f} 倍）" if r["cur_pe"] else ""
-    with st.expander("📐 股價怎麼算：三段價、成長價、買進區間、停損參考、支撐壓力（點開看規則）"):
+    title = ("📐 股價怎麼算：三段價、停損、支撐壓力（點開看規則）" if va.BUY_RANGE_PAUSED else
+             "📐 股價怎麼算：三段價、成長價、買進區間、停損參考、支撐壓力（點開看規則）")
+    with st.expander(title):
         st.caption(f"💲 **三段價**＝近 5 年各年平均本益比的最低／中間／最高 × 今年預估 EPS"
                    f"（＝便宜／合理／昂貴）。近五年各年平均 PE：{yrs}。  \n"
-                   f"📈 **成長價**＝今年預估 EPS × 交易所目前本益比{cur}：假設本益比不變、讓獲利"
-                   "成長推股價，成長越陡越樂觀。"
+                   + ("🛒 **買進區間、成長價改版中**：舊的成長價＝今年預估 EPS × 目前本益比，"
+                      "股價漲它就跟著漲，沒有三段價時又沒有其他錨，容易誤導，所以先停用；"
+                      "改版後會依公司類型（一般／景氣循環／虧損或獲利不穩）給不同的估法。"
+                      if va.BUY_RANGE_PAUSED else
+                      f"📈 **成長價**＝今年預估 EPS × 交易所目前本益比{cur}：假設本益比不變、讓獲利"
+                      "成長推股價，成長越陡越樂觀。")
                    + (f"  \n{buy_how}" if buy_how else "")
                    + (f"  \n{risk_how}" if risk_how else ""))
     for w in r["warns"]:
@@ -2250,7 +2259,7 @@ def _valuation_block(d: dict, label: str = "") -> None:
                 (f"＝ {yb['year']} 預估 EPS", _fmt_x(yb["est"]),
                  f"去年 {_fmt_x(yb['last'])}，年增 {_fmt_pct(yb['growth'])}"),
             ]
-        if r["growth_price"]:
+        if r["growth_price"] and not va.BUY_RANGE_PAUSED:
             rows.append(("成長價 ＝ 預估 EPS × 目前本益比", _fmt_x(r["growth_price"], 1),
                          f"交易所本益比 {r['cur_pe']['pe']:.1f} 倍（{r['cur_pe']['date']}）；"
                          "倍數不變、讓獲利成長推股價，成長越陡越樂觀"))
@@ -2290,7 +2299,8 @@ def _valuation_block(d: dict, label: str = "") -> None:
 
         rk = r.get("risk")
         if rk:
-            st.markdown("**停損與大量區（在買進區間內給停損參考、不在給持股停損）**")
+            st.markdown("**停損與大量區（買進區間停用中，只給持股停損）**" if va.BUY_RANGE_PAUSED
+                        else "**停損與大量區（在買進區間內給停損參考、不在給持股停損）**")
             show = bool(rk["buyable"] and rk["stop"])
             sup, at, hd = rk["support"], rk["at"], rk.get("hold")
             hold_row = [] if not hd else [(
@@ -2307,7 +2317,7 @@ def _valuation_block(d: dict, label: str = "") -> None:
                  (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
                   + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
                  else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
-                       else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間")
+                       else ("買進區間停用中" if rk.get("paused") else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間"))
                        + "，不列（顯示條件，不代表風險比較低）")),
                 ("週 ATR14", _px(rk["watr"]),
                  f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
@@ -2429,8 +2439,10 @@ def _rev_view_growth(rows: list[dict]) -> None:
 
 def _rev_view_value(rows: list[dict]) -> None:
     from screener.revenue_watch import UPSIDE_GOAL, rank
-    basis = st.segmented_control("估值口徑", ["合理價", "成長價"], default="合理價",
-                                 key="_rev_basis") or "合理價"
+    import valuation as va
+    basis = "合理價" if va.BUY_RANGE_PAUSED else (
+        st.segmented_control("估值口徑", ["合理價", "成長價"], default="合理價",
+                             key="_rev_basis") or "合理價")
     cyc = st.toggle("含景氣循環股／歷史本益比不穩定", value=False, key="_rev_cyc")
     st.caption("不排除時前 30 名多半是景氣循環股（記憶體股價差動輒 +500%～+1100%），"
                "那是「近 5 年平均本益比 × 高峰 EPS」的方法極限，所以預設排除。")
@@ -2460,8 +2472,9 @@ def _rev_view_value(rows: list[dict]) -> None:
         st.markdown(
             "近 3 個月營收 → 最新一季毛利率與費用率 → 稅後 → 股數 → 年化 EPS。\n\n"
             "今年預估 EPS＝已公布季＋未公布季×試算。\n\n"
-            "合理價＝近 5 年各年平均本益比的中間值 × 今年預估 EPS；"
-            "成長價＝目前本益比 × 今年預估 EPS。\n\n"
+            "合理價＝近 5 年各年平均本益比的中間值 × 今年預估 EPS。"
+            + ("（成長價改版中，先停用。）\n\n" if va.BUY_RANGE_PAUSED else
+               "成長價＝目前本益比 × 今年預估 EPS。\n\n") +
             "景氣循環股（⚠）在獲利高峰時估值會偏高。**試算不是預測、不是目標價。**")
 
 

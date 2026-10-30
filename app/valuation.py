@@ -53,6 +53,8 @@ STOP_WATR_MULT = 2.0            # 停損＝現價 − 2×週 ATR14
 WATR_WEEKS = 14
 BUY_C = 0.9                     # 買進上緣＝成長價 × 0.9（預估獲利至少比近四季多 11%）
 BUY_C_CAUTIOUS = 0.8            # 景氣高峰或業外 >20% 時改 0.8（至少多 25%）
+BUY_RANGE_PAUSED = True         # 2026-10-30 使用者：股票歸類（A12）完成前停用買進區間與成長價——成長價跟股價
+                                # 等比例（追價）、沒有三段價時又無錨，會誤導。計算保留，改版後拿掉這個開關。
 BUY_IN_STATES = ("in", "in_above_fair", "cap_in")  # 現價落在買進區間（或上限）內 → 給停損參考
 HOLD_WEEKS = 22                 # 持股停損＝近 22 週最高 − 2×週ATR14（不在買進區間時給已持有的人）
 HOLD_WATR_MULT = 2.0
@@ -757,10 +759,13 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     nonop_hi = bool(lq_pretax != 0 and abs(nonop_latest) / abs(lq_pretax) > NONOP_WARN_RATIO)
     buy = buy_range(price, band["mid"] if (band and not (pe and pe["wide"])) else None,
                     growth_price, cycle_peak=bool(cyc and cyc["pct"] >= 0.8), nonop_high=nonop_hi)
+    if BUY_RANGE_PAUSED:
+        buy = None
     # 停損參考只在現價落在買進區間內才給（使用者 2026-10-30 改：原本是現價 < 成長價）
     if risk is not None:
         risk["buyable"] = bool(buy and buy["state"] in BUY_IN_STATES)
         risk["no_growth"] = growth_price is None          # 畫面要分「沒有成長價」與「不在買進區間」
+        risk["paused"] = BUY_RANGE_PAUSED
         risk["hold"] = None if risk["buyable"] else hold_stop(px)
     if rv["same_as_reported_q"]:
         infos.append("近 3 個月就是最新一季財報期間：試算只是把已公布的那一季換算，不是新資訊。")
