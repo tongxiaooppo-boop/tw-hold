@@ -2056,9 +2056,15 @@ def _risk_lines(rk: dict | None) -> tuple[str, str]:
             f" ＝ {_px(rk['stop'])}。週ATR14＝近 14 週（已收完的週 K）平均每週真實波幅；"
             "只看波動、不因支撐壓力調整。2 倍是 2015～2026 年模擬選的（減少大虧最有效、又不會"
             "一半以上被洗掉）。" + (f"**{rk['hint']}**。" if rk.get("hint") else ""))
+    elif rk.get("buyable"):
+        # 現價 < 成長價但 2×週ATR ≥ 現價（波動極大）→ 算不出正的停損價，不能說成「高於成長價」
+        stop = "停損參考：—（波動太大，算不出）"
+        lines.append("🛑 **停損參考**＝現價 − 2×週ATR14；這檔週波動超過現價一半，算出來 ≤ 0，不列。")
     else:
-        stop = "停損參考：—（現價不低於成長價）"
-        lines.append("🛑 **停損參考**只在現價低於成長價時列出——這是顯示條件，不代表風險比較低。")
+        why = "沒有成長價" if rk.get("no_growth") else "現價不低於成長價"
+        stop = f"停損參考：—（{why}）"
+        lines.append(f"🛑 **停損參考**只在現價低於成長價時列出（這檔{why}）——這是顯示條件，"
+                     "不代表風險比較低。")
 
     sp, at, sup = rk.get("sup_px"), rk.get("at"), rk.get("support")
     sup_s = ("支撐候選 —" if sp is None else
@@ -2229,7 +2235,9 @@ def _valuation_block(d: dict, label: str = "") -> None:
                 ("停損參考", (_px(rk["stop"]) + f"（距現價 {rk['risk']:+.1%}）") if show else "—",
                  (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
                   + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
-                 else "現價不低於成長價，不列（顯示條件，不代表風險比較低）"),
+                 else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
+                       else ("沒有成長價" if rk.get("no_growth") else "現價不低於成長價")
+                       + "，不列（顯示條件，不代表風險比較低）")),
                 ("週 ATR14", _px(rk["watr"]),
                  f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
                 ("支撐候選", "—" if rk["sup_px"] is None else _px(rk["sup_px"]),

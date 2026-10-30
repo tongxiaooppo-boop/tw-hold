@@ -215,7 +215,7 @@ def main(argv=None) -> int:
     # 事件表是「累積」的，正常只增不減；一次少兩成以上＝下載到壞檔／空表，不能拿來蓋掉既有
     n_old = sum(len(v) for v in old.get("events", {}).values())
     n_new = sum(len(v) for v in events.values())
-    if args.write and n_old and n_new < n_old * 0.8:
+    if args.write and n_old and n_new <= n_old * 0.8:
         print(f"::warning::股數事件從 {n_old} 筆掉到 {n_new} 筆，疑似事件表不完整——維持既有 json（不更新）")
         return 0
     if args.write and (lines or cache != {k: float(v) for k, v in old.get("twse_bonus", {}).items()}):

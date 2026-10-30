@@ -95,7 +95,9 @@ def _revenue_block(rev: pd.DataFrame, q: pd.DataFrame) -> dict | None:
     r = rev.sort_values("month").reset_index(drop=True)
     last3 = r.tail(3)
     months = pd.to_datetime(last3["month"]).dt.to_period("M")
-    if (months.iloc[-1] - months.iloc[0]).n != 2:      # 中間缺月 → 不是連續三個月，不湊
+    # 中間缺月、重複月份、任一月營收空白 → 不是完整的連續三個月，不湊（sol 審查 2026-10-30）
+    if ((months.iloc[-1] - months.iloc[0]).n != 2 or months.nunique() != 3
+            or last3["revenue"].isna().any()):
         return None
     m3 = float(last3["revenue"].sum())
     prev = r[pd.to_datetime(r["month"]).dt.to_period("M").isin(months - 12)]
@@ -176,7 +178,8 @@ def _current_pe(per: pd.DataFrame) -> dict | None:
     p["per"] = pd.to_numeric(p["per"], errors="coerce")
     # 不先 dropna：最新一天交易所 PER 空白（虧損時顯示「-」）就該不給，不能退回舊的正值
     p = p.dropna(subset=["date"]).sort_values("date")
-    if p.empty or not p["per"].iloc[-1] > 0:
+    v = p["per"].iloc[-1] if not p.empty else None
+    if v is None or pd.isna(v) or not float(v) > 0:
         return None
     return {"pe": float(p["per"].iloc[-1]),
             "date": pd.Timestamp(p["date"].iloc[-1]).strftime("%Y/%m/%d")}
@@ -220,7 +223,7 @@ def volume_zones(px: pd.DataFrame, days: int = VP_DAYS, bins: int = VP_BINS,
     d = px[list(need)].copy()
     for c in ("high", "low", "close", "volume"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
-    d = d.dropna().sort_values("date").tail(days)
+    d = d.sort_values("date").tail(days).dropna()      # 先取近 days 日再丟缺值，不往前補舊資料
     d = d[d["volume"] > 0]
     if len(d) < 60:
         return []
@@ -331,7 +334,9 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
             f"{last8['nonop'].max() / 1e8:+.2f} 億），主試算已排除業外。")
 
     t4 = q.tail(4)
-    t4ok = t4[["pretax_income", "net_income"]].notna().all(axis=1).all()   # 缺一季就不湊
+    # 缺一季就不湊：四季都要有稅前／淨利，且首尾正好相隔三季（中間沒漏季）
+    span = (t4["period_end"].iloc[-1].to_period("Q") - t4["period_end"].iloc[0].to_period("Q")).n
+    t4ok = bool(t4[["pretax_income", "net_income"]].notna().all(axis=1).all() and span == 3)
     ttm_pretax, ttm_net = float(t4["pretax_income"].sum()), float(t4["net_income"].sum())
     conv = ttm_net / ttm_pretax if (t4ok and ttm_pretax > 0) else None
     if conv is None:
@@ -387,6 +392,7 @@ def estimate(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame,
     risk = risk_levels(px) if (px is not None and not px.empty) else None
     if risk is not None:
         risk["buyable"] = bool(price and growth_price and price < growth_price)
+        risk["no_growth"] = growth_price is None          # 畫面要分「沒有成長價」與「現價較高」
 
     cyc = _cycle_block(q)
     if cyc and cyc["pct"] >= 0.8:

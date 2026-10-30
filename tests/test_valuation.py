@@ -274,3 +274,18 @@ def test_大量區占量_等於區間內實際的量():
     for z in va.volume_zones(d):
         inside = d["volume"][(tp >= z["lo"] - 1e-9) & (tp < z["hi"] - 1e-9)].sum()
         assert z["share"] == pytest.approx(inside / tot, abs=0.02)
+
+
+def test_月營收重複月或空白_不湊三個月():
+    d = _rev()
+    d.loc[d.index[-2], "month"] = d.loc[d.index[-3], "month"]        # 07、07、09
+    assert va.estimate(_qf(), d, _px(), _per())["ok"] is False
+    d = _rev()
+    d.loc[d.index[-2], "revenue"] = np.nan
+    assert va.estimate(_qf(), d, _px(), _per())["ok"] is False
+
+
+def test_近四季中間漏一季_不算轉換率():
+    q = _qf().drop(index=5).reset_index(drop=True)                    # 抽掉倒數第三季
+    r = va.estimate(q, _rev(), _px(), _per())
+    assert r["ok"] and r["inputs"]["conv"] is None
