@@ -3,10 +3,10 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-10-29",
   "market_date": "2026-10-29",
-  "fetched_at": "2026-10-29T15:23:24+00:00",
+  "fetched_at": "2026-10-30T01:19:58+00:00",
   "total_etfs": 6,
-  "synced_etfs": 5,
-  "stale_etfs": 1,
+  "synced_etfs": 6,
+  "stale_etfs": 0,
   "max_span_days": 1,
   "multi_day_etfs": [],
   "funds": {
@@ -86,55 +86,18 @@
     "premium_skipped": false
    },
    "00406A": {
-    "synced": false,
-    "date": "2026-10-28",
-    "moved_n": 0,
-    "lagging": true,
-    "own": {
-     "prev_date": "2026-10-27",
-     "date": "2026-10-28",
-     "span_days": 1,
-     "moved_n": 8,
-     "buys": [
-      "1303",
-      "2330",
-      "2368",
-      "2383",
-      "3017",
-      "3037",
-      "4938",
-      "8046"
-     ],
-     "sells": [],
-     "names": {
-      "1303": "南亞塑膠工業",
-      "2330": "台灣積體電路製造",
-      "2368": "金像電子",
-      "2383": "台光電子材料",
-      "3017": "奇鋐科技",
-      "3037": "欣興電子",
-      "4938": "和碩聯合科技",
-      "8046": "南亞電路板"
-     },
-     "qty": {
-      "1303": 550000,
-      "2330": 120000,
-      "2368": 47000,
-      "2383": 30000,
-      "3017": 80000,
-      "3037": 320000,
-      "4938": 1000000,
-      "8046": 120000
-     },
-     "exit_notes": {}
-    },
-    "aum": 124875973920.0,
-    "aum_prev": 118850518424.0,
-    "navps": 9.190123942619632,
-    "navps_prev": 8.802723597758542,
-    "close": 9.18,
-    "close_date": "2026-10-28",
-    "premium_pct": -0.11016111080593778,
+    "synced": true,
+    "date": "2026-10-29",
+    "prev_date": "2026-10-28",
+    "span_days": 1,
+    "moved_n": 16,
+    "aum": 126525417040.0,
+    "aum_prev": 124875973920.0,
+    "navps": 8.93032632409429,
+    "navps_prev": 9.190123942619632,
+    "close": 8.95,
+    "close_date": "2026-10-29",
+    "premium_pct": 0.2203018701861886,
     "premium_skipped": false
    }
   },
@@ -224,19 +187,21 @@
   "2368": {
    "name": "金像電",
    "industry": null,
-   "net_shares": 110000,
-   "net_amount": 122650000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
+   "net_shares": 410000,
+   "net_amount": 457150000,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [
-    "00403A"
+    "00403A",
+    "00406A"
    ],
    "sellers": [],
-   "kind": "buy",
+   "kind": "consensus_buy",
    "by_fund": {
-    "00403A": 110000
+    "00403A": 110000,
+    "00406A": 300000
    },
    "exit_notes": {}
   },
@@ -340,19 +305,21 @@
   "2383": {
    "name": "台光電",
    "industry": null,
-   "net_shares": 85000,
-   "net_amount": 425842888,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
+   "net_shares": 115000,
+   "net_amount": 576142888,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [
+    "00406A",
     "00992A"
    ],
    "sellers": [],
-   "kind": "buy",
+   "kind": "consensus_buy",
    "by_fund": {
-    "00992A": 85000
+    "00992A": 85000,
+    "00406A": 30000
    },
    "exit_notes": {}
   },
@@ -372,6 +339,272 @@
    "kind": "buy",
    "by_fund": {
     "00992A": 590000
+   },
+   "exit_notes": {}
+  },
+  "1303": {
+   "name": "南亞塑膠工業",
+   "industry": null,
+   "net_shares": 600000,
+   "net_amount": 187200000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 600000
+   },
+   "exit_notes": {}
+  },
+  "2059": {
+   "name": "川湖科技",
+   "industry": null,
+   "net_shares": 48000,
+   "net_amount": 474240000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 48000
+   },
+   "exit_notes": {}
+  },
+  "2330": {
+   "name": "台灣積體電路製造",
+   "industry": null,
+   "net_shares": 160000,
+   "net_amount": 386400000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 160000
+   },
+   "exit_notes": {}
+  },
+  "2454": {
+   "name": "聯發科技",
+   "industry": null,
+   "net_shares": 135000,
+   "net_amount": 546075000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 135000
+   },
+   "exit_notes": {}
+  },
+  "3008": {
+   "name": "大立光電",
+   "industry": null,
+   "net_shares": 43000,
+   "net_amount": 250045000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 43000
+   },
+   "exit_notes": {}
+  },
+  "3037": {
+   "name": "欣興電子",
+   "industry": null,
+   "net_shares": 300000,
+   "net_amount": 312000000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 300000
+   },
+   "exit_notes": {}
+  },
+  "3081": {
+   "name": "聯亞光電工業",
+   "industry": null,
+   "net_shares": 150000,
+   "net_amount": 386250000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 150000
+   },
+   "exit_notes": {}
+  },
+  "3189": {
+   "name": "景碩科技",
+   "industry": null,
+   "net_shares": 150000,
+   "net_amount": 143850000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 150000
+   },
+   "exit_notes": {}
+  },
+  "3443": {
+   "name": "創意電子",
+   "industry": null,
+   "net_shares": 35000,
+   "net_amount": 267400000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 35000
+   },
+   "exit_notes": {}
+  },
+  "3653": {
+   "name": "健策精密工業",
+   "industry": null,
+   "net_shares": 60000,
+   "net_amount": 384300000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 60000
+   },
+   "exit_notes": {}
+  },
+  "3661": {
+   "name": "世芯電子",
+   "industry": null,
+   "net_shares": 30000,
+   "net_amount": 110400000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 30000
+   },
+   "exit_notes": {}
+  },
+  "6147": {
+   "name": "頎邦科技",
+   "industry": null,
+   "net_shares": 600000,
+   "net_amount": 121800000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 600000
+   },
+   "exit_notes": {}
+  },
+  "6223": {
+   "name": "旺矽科技",
+   "industry": null,
+   "net_shares": 28000,
+   "net_amount": 135520000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 28000
+   },
+   "exit_notes": {}
+  },
+  "8996": {
+   "name": "高力熱處理工業",
+   "industry": null,
+   "net_shares": 250000,
+   "net_amount": 386250000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 250000
    },
    "exit_notes": {}
   }
