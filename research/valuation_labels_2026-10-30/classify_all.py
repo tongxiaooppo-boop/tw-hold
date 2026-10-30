@@ -1,4 +1,5 @@
-"""B1 全市場分類掃描：每檔跑 valuation.estimate()，收 label／high_pe → labels.csv，再產 summary.md。
+"""（第一版標籤介面 label/turn_why/cycle_why；app 已改兩層 type/state，本檔不能直接重跑，留作紀錄。）
+B1 全市場分類掃描：每檔跑 valuation.estimate()，收 label／high_pe → labels.csv，再產 summary.md。
 執行：cd 專案根目錄；PYTHONIOENCODING=utf-8 python research/valuation_labels_2026-10-30/classify_all.py"""
 import sys, warnings; warnings.filterwarnings("ignore")
 from pathlib import Path

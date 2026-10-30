@@ -1,4 +1,5 @@
-"""B1 第二輪調查：照 Opus 提議改標籤規則（不改 app），比較各版本分布與指定檔。
+"""（第一版標籤介面 label/turn_why/cycle_why；app 已改兩層 type/state，本檔不能直接重跑，留作紀錄。）
+B1 第二輪調查：照 Opus 提議改標籤規則（不改 app），比較各版本分布與指定檔。
 需要先有 labels.csv（classify_all.py 產出）。輸出 relabel.md、relabel.csv。"""
 import sys, warnings; warnings.filterwarnings("ignore")
 from pathlib import Path
