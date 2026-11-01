@@ -2273,19 +2273,16 @@ def _card_block(c: dict) -> None:
         st.markdown("類型：**" + "・".join(dict.fromkeys(tags)) + "**　｜　可信度：**" + (conf.get("level") or "—") + "**")
         if nc.get("ok"):
             qs = nc.get("nc_quarters") or []
-            na = sum(1 for x in qs if x["kind"] == "actual")
             span = f"{qs[0]['q']}–{qs[-1]['q']}" if qs else ""
-            fb = "（月營收未超過財報季或試算失敗，同已公布 TTM）" if nc.get("fallback") or nc.get("k") == 0 else ""
-            st.markdown(f"**前瞻四季 EPS　{_fmt_x(nc.get('eps_nc'))}**　{span}：{na} 季實際＋{4 - na} 季試算{fb}"
-                        + _MD_BR + f"已公布 TTM EPS：{_fmt_x(nc.get('eps_ttm'))}｜未來 4 季試算 EPS（F4）：{_fmt_x(nc.get('eps_f4'))}")
+            fb = "（月營收未超過財報季或試算失敗，同過去 4 季）" if nc.get("fallback") or nc.get("k") == 0 else ""
+            st.markdown(f"前瞻 4 季涵蓋 {span}{fb}")
         pp = c.get("prices") or {}
-        if pp.get("base_name"):
+        if pp.get("base_name") and pp["base_name"] != "前瞻四季 EPS":      # 基準就是卡片上的前瞻 4 季時不重複
             st.markdown(f"三價 EPS 基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**" if c.get("method") != "PB" or pp.get("source") == "補位"
                         else f"三價基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**")
         f = c.get("forward")
         if f:
-            st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}｜前瞻股價空間 {_pct_floor(f['margin'])}"
-                        f"（前瞻股價與現價無關；空間會隨現價變動）")
+            st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}（前瞻股價與現價無關；空間會隨現價變動）")
         for dg in conf.get("degrades") or []:
             st.caption("⚠️ 降級：" + dg)
         for ch in c.get("checks") or []:
@@ -2297,16 +2294,16 @@ def _card_block(c: dict) -> None:
             st.markdown("- " + str(w))
         cp = c.get("compare")
         if cp:
-            warn = "　⚠️ 與主卡差 >15%（成長股被已公布 TTM 低估／衰退股高估）" if cp["warn"] else ""
-            st.markdown(f"**用已公布 TTM EPS {cp['eps_ttm']:,.2f} 的對照三價**：便宜 {cp['cheap']:,.1f}｜合理 "
+            warn = "　⚠️ 與主卡差 >15%（成長股被過去 4 季低估／衰退股高估）" if cp["warn"] else ""
+            st.markdown(f"**用過去 4 季 EPS {cp['eps_ttm']:,.2f} 的對照三價**：便宜 {cp['cheap']:,.1f}｜合理 "
                         f"{cp['fair']:,.1f}｜昂貴 {cp['dear']:,.1f}（合理價差 {cp['diff']:+.0%}）{warn}")
         qs = nc.get("nc_quarters") or []
         if qs:
-            st.markdown("**前瞻四季明細**：" + "｜".join(
+            st.markdown("**前瞻 4 季明細**：" + "｜".join(
                 f"{x['q']} {'實際' if x['kind'] == 'actual' else '試算'} {x['eps']:.2f}" for x in qs))
         fq = nc.get("f4_quarters") or []
         if fq:
-            st.markdown("**未來 4 季試算**：" + "｜".join(f"{x['q']} {x['eps']:.2f}" for x in fq))
+            st.markdown("**未來 4 季明細（全是試算）**：" + "｜".join(f"{x['q']} {x['eps']:.2f}" for x in fq))
         prm = nc.get("params") or {}
         if prm:
             st.caption(f"試算參數：稅率 {_fmt_pct(prm.get('t'), False)}、少數股權比 {_fmt_pct(prm.get('m'), False)}、"
