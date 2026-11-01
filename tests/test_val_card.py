@@ -129,3 +129,12 @@ def test_剛好10pct事件_擋住且未知分類與未給事件資料():
 def test_財報落後3季以上_不給12個月價():
     c = vc.build_card(_qf(), _rev("2026-12"), _px(), _per(), _cls())
     assert c["forward"] is None
+
+
+def test_購買參考價_空間達10pct才給():
+    c = vc.build_card(_qf(), _rev(), _px(), _per(), _cls())          # 現價 20，前瞻價遠高於 22
+    f = c["forward"]
+    assert f["ref_ok"] and abs(f["ref_price"] - f["base"] / 1.10) < 1e-9
+    hi = _px(); hi["close"] = 500.0                                   # 現價遠高於前瞻價 → 空間不足
+    f2 = vc.build_card(_qf(), _rev(), hi, _per(), _cls())["forward"]
+    assert f2["ref_ok"] is False and f2["margin"] < 0.10

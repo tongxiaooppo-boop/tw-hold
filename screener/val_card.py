@@ -24,6 +24,7 @@ PE_NORMAL_EXC = dict(years=5, min_months=48, cap=50.0)      # 5 年每年獲利�
 PE_GROWTH = dict(years=3, min_months=30, cap=50.0)
 PB_ALL = dict(years=None, min_months=60, cap=None)
 STATES_NO_PE = ("虧損", "獲利不穩", "轉機", "預估轉虧", "谷底回升")
+REF_MARGIN = 0.10          # 購買參考價：前瞻股價須比現價高 ≥10%（使用者 2026-11-01 指定）
 DIFF_WARN = 0.15            # 主卡三價與「已公布 TTM 對照價」差 >15% → 警示
 Q_COLS = ["revenue", "gross_profit", "op_income", "pretax_income", "net_income", "ni_parent", "eps",
           "capital_stock", "equity_parent"]
@@ -217,6 +218,11 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
                           "implied_pe": price / f4 if price else None,
                           "upside": (f4 * c["p50"] / price - 1) if price else None,
                           "far_quarters": nc.get("f4_far_quarters")}
+        # 購買參考價＝前瞻股價 ÷ (1+10%)；前瞻股價 ≥ 現價×1.10（空間 ≥10%）才給
+        fw = out["forward"]
+        fw["margin"] = (fw["base"] / price - 1) if price else None
+        fw["ref_price"] = fw["base"] / (1 + REF_MARGIN)
+        fw["ref_ok"] = bool(price and fw["base"] >= price * (1 + REF_MARGIN))
         if nc.get("f4_far_quarters"):
             out["notes"].append(f"12 個月價有 {nc['f4_far_quarters']} 季沒有任何月營收，純趨勢外推。")
     return _finish(out, checks)
