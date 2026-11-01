@@ -2206,7 +2206,8 @@ def _card_explain(c: dict) -> str:
         "- 限制：樣本是現行上市櫃（無下市股）、無原始公告版本、報酬期間重疊、約 3 個獨立年度、同時受 2026 年行情影響。",
         "本卡片是情境估算，**非買進建議**；可信度低時請特別保守看待。",
     ]
-    return _MD_BR.join(lines)
+    # 分隔線前後要有空行：「文字行緊接 ---」在 markdown 是 setext 標題，會把整段變成超大字（使用者 11/1 截圖）
+    return _MD_BR.join(lines).replace(_MD_BR + "---" + _MD_BR, chr(10) * 2 + "---" + chr(10) * 2)
 
 
 def _pct_floor(v) -> str:

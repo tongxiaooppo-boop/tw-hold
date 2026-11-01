@@ -149,3 +149,14 @@ def test_分類基準落後最新財報_降級提示():
     cl = _cls(); cl["decided_at"] = "2025-06-30"                         # 財報最新 2025-12-31
     c = vc.build_card(_qf(), _rev(), _px(), _per(), cl)
     assert any("分類基準" in d for d in c["confidence"]["degrades"])
+
+
+def test_功能解釋的分隔線前後有空行_不會變成標題():
+    import importlib, sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+    sa = importlib.import_module("streamlit_app")
+    for method, typ in (("PE", "normal"), ("PE", "growth"), ("PB", "financial")):
+        txt = sa._card_explain({"method": method, "type": typ})
+        i = txt.index("---")
+        assert txt[i - 2:i] == "\n\n" and txt[i + 3:i + 5] == "\n\n"
+        assert "回測" in txt and "沒有" in txt
