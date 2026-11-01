@@ -192,15 +192,14 @@ def test_分類基準落後最新財報_降級提示():
     assert any("分類基準" in d for d in c["confidence"]["degrades"])
 
 
-def test_功能解釋的分隔線前後有空行_不會變成標題():
+def test_怎麼算規則列_含回測狀態且不含舊術語():
     import importlib, sys
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
     sa = importlib.import_module("streamlit_app")
     for method, typ in (("PE", "normal"), ("PE", "growth"), ("PB", "financial")):
-        txt = sa._card_explain({"method": method, "type": typ})
-        i = txt.index("---")
-        assert txt[i - 2:i] == "\n\n" and txt[i + 3:i + 5] == "\n\n"
-        assert "回測" in txt and "沒有" in txt
+        rows = dict(sa._card_explain_rows({"method": method, "type": typ}))
+        assert "回測" in rows["回測狀態"] and "沒有" in rows["回測狀態"]
+        assert all("P20" not in v and "**" not in v for v in rows.values())     # 表格內不渲染 markdown，不能留粗體符號
 
 
 def test_最新季EPS缺值_用本益比反推_財報賠錢仍不給():

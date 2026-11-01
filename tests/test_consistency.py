@@ -105,15 +105,25 @@ def test_現價倍數與歷史中位倍數同源():
     f = c["forward"]
     assert f["implied_pe"] == pytest.approx(c["price"] / f["rolling"]["eps"], abs=1e-9, rel=0)
     assert f["mult_p50"] == pytest.approx(f["rolling"]["base"] / f["rolling"]["eps"], abs=1e-9, rel=0)   # 與合理價同一個倍數
-    assert "口徑不完全相同" in sa._card_explain(c)
+    assert any("口徑不完全相同" in v for _, v in sa._card_explain_rows(c))
 
 
 def test_倍數行讀引擎欄位且與三價一致():
     c = vc.build_card(_qf(), _rev(), _px(), _per(), _cls())
-    line = sa._mult_line(c)
+    line = sa._mult_text(c)
     cp = c["band"]["capped"]
     for key in ("p20", "p50", "p80"):
         assert f"{cp[key]:.1f}" in line
     assert c["prices"]["fair"] == pytest.approx(c["prices"]["base"] * cp["p50"], abs=1e-9, rel=0)
     assert c["band"]["years"] in (None, 3, 5) and ("全部歷史" in line or f"近 {c['band']['years']} 年" in line)
     assert "P20" not in line and "P50" not in line
+
+
+def test_估值定位細節列_數字與卡片同源():
+    c = vc.build_card(_qf(), _rev(), _px(), _per(), _cls())
+    rows = dict(sa._card_detail_rows(c))
+    nc = c["eps"]
+    assert [f"{x['eps']:.2f}" for x in nc["nc_quarters"]] == [r.split()[-1] for r in rows["前瞻 4 季"]]
+    assert sum(float(r.split()[-1]) for r in rows["前瞻 4 季"]) == pytest.approx(nc["eps_nc"], abs=0.02, rel=0)
+    assert f"{c['forward']['implied_pe']:.1f}" in rows["現價倍數"]
+    assert rows["倍數"] == sa._mult_text(c) and "**" not in rows["倍數"]
