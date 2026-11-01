@@ -166,3 +166,68 @@ def test_主程式_整批零檔不寫檔且回傳1(fake_data, monkeypatch):
     out = fake_data / "sc.json"
     assert bc.main(["--out", str(out), "--no-history"]) == 1
     assert not out.exists()
+
+
+# ---- 季更閘門 new_quarter_ready ----
+def _uni(tickers):
+    return pd.DataFrame({"ticker": tickers})
+
+
+def test_gate_coverage_ok_and_newer_than_snapshot():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = _quarterly(tk, n=4, start="2025-12-31")            # 最新季 2026-09-30，100% 涵蓋
+    ok, why, latest = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    assert ok and latest == pd.Timestamp("2026-09-30")
+
+
+def test_gate_partial_coverage_waits():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = _quarterly(tk, n=3, start="2025-12-31")            # 到 2026-06-30 全有
+    extra = _quarterly(tk[:50], n=1, start="2026-09-30")   # 2026-09-30 只有一半公司公布
+    q = pd.concat([q, extra], ignore_index=True)
+    ok, why, latest = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"))
+    assert not ok and "不分型" in why and latest == pd.Timestamp("2026-09-30")
+
+
+def test_gate_snapshot_already_latest_skips():
+    tk = [f"{1000 + i}" for i in range(10)]
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-09-30"))
+    assert not ok and "已是最新季" in why
+
+
+def test_gate_no_snapshot_only_checks_coverage():
+    tk = [f"{1000 + i}" for i in range(10)]
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    ok, _, _ = bc.new_quarter_ready(q, _uni(tk), None)
+    assert ok
+
+
+def test_gate_ticker_suffix_normalized():
+    q = _quarterly(["2330.TW", "2317.TW"], n=2, start="2026-06-30")
+    ok, _, _ = bc.new_quarter_ready(q, _uni(["2330", "2317"]), pd.Timestamp("2026-03-31"))
+    assert ok
+
+
+def test_gate_waits_until_rebalance_day():
+    tk = [f"{1000 + i}" for i in range(10)]
+    q = _quarterly(tk, n=4, start="2025-12-31")            # 最新季 2026-09-30，100% 涵蓋，換股日 11/14
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-13")
+    assert not ok and "未到換股日" in why
+    ok, _, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    assert ok
+
+
+def test_gate_after_rebalance_but_low_coverage_says_so():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = pd.concat([_quarterly(tk, n=3, start="2025-12-31"), _quarterly(tk[:80], n=1, start="2026-09-30")],
+                  ignore_index=True)
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-20")
+    assert not ok and "不分型" in why
+
+
+def test_rebalance_dates_match_build_lists():
+    import build_lists as bl
+    got = sorted((v[0], v[1]) for v in bc.REBALANCE_FOR_QUARTER.values())
+    assert got == sorted(bl.REBALANCE_MD)
+    assert bc.rebalance_date_for("2026-12-31") == pd.Timestamp("2027-03-31")

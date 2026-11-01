@@ -179,6 +179,50 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
     return out
 
 
+MIN_COVERAGE = 0.95   # 新季財報涵蓋 universe 的比例門檻；未達 → 還在公布期，不分型（避免用殘缺的橫斷面分位）
+
+# 季末月 → 該季的換股日（月, 日, 年位移）。必須與 build_lists.REBALANCE_MD（3/31、5/15、8/14、11/14）一致；
+# tests 有一致性檢查。分型季更跟價值／定存的季換股同一天上線（使用者 2026-11-01 指定）。
+REBALANCE_FOR_QUARTER = {3: (5, 15, 0), 6: (8, 14, 0), 9: (11, 14, 0), 12: (3, 31, 1)}
+
+
+def rebalance_date_for(period_end) -> pd.Timestamp:
+    """某季季末對應的換股日（財報法定期限）。"""
+    pe = pd.Timestamp(period_end)
+    m, d, dy = REBALANCE_FOR_QUARTER[pe.month]
+    return pd.Timestamp(year=pe.year + dy, month=m, day=d)
+
+
+def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_asof,
+                      today=None, min_coverage: float = MIN_COVERAGE) -> tuple[bool, str, pd.Timestamp | None]:
+    """季更閘門（純函式）：回傳 (要不要重算, 原因, 最新季末)。
+
+    三條都成立才 True：
+      1. 最新季末 > 目前快照的 asof（current_asof 為 None＝沒有快照，視為成立）；
+      2. today ≥ 該季換股日（today 為 None 則不檢查此條，測試／手動用）；
+      3. 該季已有財報的 universe 檔數 ≥ min_coverage × universe 檔數。
+    任一不成立 → False 並給原因（下次 rebuild 再看）。換股日已過但涵蓋率不足時原因會明講，
+    此時卡片會一直顯示「分類過期」，要人工看是哪些公司沒公布。
+    """
+    q = quarterly.copy()
+    q["ticker"] = q["ticker"].map(_t)
+    q["period_end"] = pd.to_datetime(q["period_end"])
+    if q.empty:
+        return False, "季度面板為空", None
+    latest = q["period_end"].max()
+    if current_asof is not None and latest <= pd.Timestamp(current_asof):
+        return False, f"快照已是最新季（{pd.Timestamp(current_asof):%Y-%m-%d}）", latest
+    rb = rebalance_date_for(latest)
+    if today is not None and pd.Timestamp(today).normalize() < rb:
+        return False, f"{latest:%Y-%m-%d} 季未到換股日 {rb:%Y-%m-%d}，等價值／定存一起換", latest
+    uni = {_t(x) for x in universe["ticker"]}
+    have = set(q.loc[q["period_end"] == latest, "ticker"]) & uni
+    cov = len(have) / max(len(uni), 1)
+    if cov < min_coverage:
+        return False, f"{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%} < {min_coverage:.0%}，不分型", latest
+    return True, f"{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%}，換股日 {rb:%Y-%m-%d}", latest
+
+
 def _empty_history() -> pd.DataFrame:
     return pd.DataFrame({c: pd.Series(dtype="object") for c in cl.HISTORY_COLS})
 
@@ -204,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=None, help="JSON 輸出路徑（預設 data/derived/stock_class.json）")
     ap.add_argument("--no-history", action="store_true", help="不讀不寫 class_history.parquet（遲滯視為首次）")
     ap.add_argument("--asof", default=None, help="分類基準季末（預設＝資料內最新季）")
+    ap.add_argument("--if-new-quarter", action="store_true",
+                    help="季更模式（CI 用）：只有「出現比快照更新的季、已到該季換股日、且財報涵蓋率 ≥ 95%%」才重算，否則直接 exit 0 不動檔")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -220,6 +266,19 @@ def main(argv: list[str] | None = None) -> int:
     quarterly = load_quarterly()
     monthly = pd.read_parquet(REVENUE)
     universe = pd.read_parquet(UNIVERSE)
+    if args.if_new_quarter:
+        cur = None
+        if out_path.exists():
+            try:
+                cur = pd.Timestamp(json.loads(out_path.read_text(encoding="utf-8")).get("asof"))
+            except Exception:  # noqa: BLE001 — 快照壞了就當沒有，涵蓋率夠就重建
+                cur = None
+        from zoneinfo import ZoneInfo
+        today = _dt.datetime.now(ZoneInfo("Asia/Taipei")).date()
+        ok, why, _ = new_quarter_ready(quarterly, universe, cur, today=today)
+        print(("季更：重算 — " if ok else "季更：略過 — ") + why)
+        if not ok:
+            return 0
     asof = pd.Timestamp(args.asof) if args.asof else pd.Timestamp(quarterly["period_end"].max())
 
     skipped: dict[str, str] = {}

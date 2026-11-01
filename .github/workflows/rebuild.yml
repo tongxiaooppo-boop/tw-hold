@@ -107,6 +107,13 @@ jobs:
       - name: 算因子 + 三清單
         run: python build_lists.py   # screen_all() → data/derived/{value,deposit,swing}_list.json + _meta.json
 
+      # 估值分型季更（stock_class.json＋class_history.parquet）：只有「出現比快照更新的季、且財報涵蓋 universe ≥ 95%」
+      # 才重算（--if-new-quarter），其餘每天 exit 0 不動檔。類型有遲滯（連 2 季才換、換後鎖定），狀態不遲滯。
+      # 掛了不擋三清單（卡片會顯示「分類過期」降級，不會顯示錯的分類）。
+      - name: 估值分型季更
+        continue-on-error: true
+        run: python build_classification.py --if-new-quarter
+
       # 主動式 ETF 認養旗標（context flag，非 gate）。抓規模前六大主動 ETF 的官網
       # 每日 PCF → 落 data/pcf/ 快照 → 前後兩日差分 → active_etf_flags.json。
       # 單一投信掛掉 / 網路失敗都 continue-on-error，**不擋三清單**。
@@ -236,6 +243,7 @@ jobs:
                data/derived/deposit_list.json \
                data/derived/swing_list.json \
                data/derived/short_scan.json \
+               data/derived/stock_class.json \
                data/history/ \
                reference/corporate_actions_resolved.json; then
             # data/history/ 也要算：swing 線的 asof 取自 tw-swing 的外部分享檔，隔天就換成下一天，這輪不 commit 就永遠補不回來。
