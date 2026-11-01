@@ -49,6 +49,14 @@ def test_組輸入_每檔都有ClassInputs且欄位齊全():
     assert len(inp.market_rev_ttm_yoy) > 0 and len(inp.stock_rev_ttm_yoy) > 0
 
 
+def test_組輸入_有equity_parent時quarters也帶上():
+    qdf = _quarterly(TK)
+    qdf["equity_parent"] = 500.0
+    out = bc.assemble_inputs(qdf, _monthly(TK), _universe(TK))
+    assert "equity_parent" in out["1001"].quarters.columns
+    assert list(out["1001"].quarters.columns[:len(cl.QUARTER_COLS)]) == list(cl.QUARTER_COLS)
+
+
 def test_組輸入_capex累計會差分成單季():
     out = bc.assemble_inputs(_quarterly(TK), _monthly(TK), _universe(TK))
     capex = out["1001"].quarters["capex"].iloc[:4].tolist()

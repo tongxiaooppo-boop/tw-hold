@@ -297,6 +297,53 @@ def test_股本增50趴_特殊退出():
     assert "股本 4 季變動 +50%（> 30%）" in c.why
 
 
+def _with_equity(q, eq):
+    q = q.copy()
+    q["equity_parent"] = _col(eq, len(q))
+    return q
+
+
+def test_股本增200pct但權益不變_分割_不判特殊():
+    cap = [1000.0] * 40 + [3000.0] * 4
+    c = cl.classify(_inp(_with_equity(_q(cap=cap), 5000.0)))
+    assert c.type != cl.TYPE_SPECIAL
+    assert "cap_change" not in c.metrics["special_triggers"]
+    assert c.metrics["cap_jump_equity_flat"] is True
+
+
+def test_股本增50pct且權益增60pct_判特殊():
+    cap = [1000.0] * 40 + [1500.0] * 4
+    eq = [5000.0] * 40 + [8000.0] * 4
+    c = cl.classify(_inp(_with_equity(_q(cap=cap), eq)))
+    assert c.type == cl.TYPE_SPECIAL
+    assert c.metrics["special_triggers"] == ["cap_change"]
+    assert "股本 4 季變動 +50%（> 30%）且權益 +60%（> 30%，且 ≥ 股本變動的 50%）" in c.why
+
+
+def test_股本增200pct權益只增51pct_獲利累積的分割_不判特殊():
+    # 緯穎型：股本 ×3（分割/配股），權益只因獲利累積 +51%（< 股本變動 200% 的 50%）
+    cap = [1000.0] * 40 + [3010.0] * 4
+    eq = [5000.0] * 40 + [7550.0] * 4
+    c = cl.classify(_inp(_with_equity(_q(cap=cap), eq)))
+    assert c.type != cl.TYPE_SPECIAL
+    assert c.metrics["cap_jump_equity_flat"] is True
+
+
+def test_沒有equity_parent欄_沿用舊規則只看股本():
+    cap = [1000.0] * 40 + [1500.0] * 4
+    c = cl.classify(_inp(_q(cap=cap)))
+    assert c.type == cl.TYPE_SPECIAL
+    assert "cap_jump_equity_flat" not in c.metrics
+
+
+def test_權益缺值_股本大增條件不成立():
+    cap = [1000.0] * 40 + [1500.0] * 4
+    eq = [5000.0] * 40 + [float("nan")] * 4
+    c = cl.classify(_inp(_with_equity(_q(cap=cap), eq)))
+    assert c.type != cl.TYPE_SPECIAL
+    assert c.metrics["cap_jump_equity_flat"] is True
+
+
 def test_減資40趴_也算股本變動_特殊退出():
     cap = [1000.0] * 40 + [600.0] * 4
     assert cl.classify(_inp(_q(cap=cap))).type == cl.TYPE_SPECIAL

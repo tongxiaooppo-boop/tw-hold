@@ -176,6 +176,9 @@ HYST_CONFIRM_Q = 2                 # 連續 2 季一致才切換
 HYST_LOCK_Q = 4                    # 切換後鎖 4 季（含切換當季，最早第 T+4 季才可再切）
 
 QUARTER_COLS = ("revenue", "op_income", "eps", "total_assets", "capital_stock", "capex")
+QUARTER_COLS_OPTIONAL = ("equity_parent",)   # 選用：資產負債表歸母權益；有此欄才啟用特殊③的權益條件
+SPECIAL_EQUITY_RATIO = 0.50                  # 權益變動須 ≥ 股本變動 × 此比例才算真增資/併購（權益只因獲利累積增加、股本卻大增＝分割/配股）【經驗】
+SPECIAL_EQUITY_JUMP = 0.30                   # 股本大增時，同 4 季窗權益變動（絕對值）也須 > 30%【經驗】
 
 HISTORY_COLS = ("ticker", "decided_at", "candidate_type", "final_type", "switched",
                 "candidate_states", "final_states")
@@ -189,6 +192,9 @@ class ClassInputs:
     quarters：單一檔，index＝period_end（季末 Timestamp，嚴格遞增），欄位 QUARTER_COLS 全部**單季**
       （capex 已用 quarterly_prep.to_single_quarter_cashflow 差分；capex 正負號不拘，取絕對值用）。
       缺季的列可以不存在；缺值 NaN。
+      另可有選用欄 QUARTER_COLS_OPTIONAL（equity_parent＝資產負債表歸母權益，非損益表的 ni_parent）：
+      有此欄時，特殊③a 的「股本大增」還須同 4 季窗權益變動絕對值 > SPECIAL_EQUITY_JUMP
+      （任一端 NaN 或 ≤ 0 → 不成立；避免分割／配股被誤判成併購）；沒有此欄則只看股本。
     oroa_amp_pct／asset_ta_rev_pct／asset_capex_rev_pct：全市場橫斷面分位（cross_section_pct 的輸出，
       0～1，越大越前面）；算不出 NaN（NaN 視為不成立）。
     rev_beta、ind_sync：rev_index.revenue_beta／industry_sync；NaN 視為不成立。
@@ -579,8 +585,23 @@ def classify(inp: ClassInputs) -> Classification:
         chg = (float(cap_now) / float(cap_prev) - 1.0
                if pd.notna(cap_now) and pd.notna(cap_prev) and cap_prev > 0 else nan)
         if pd.notna(chg) and abs(chg) > SPECIAL_CAP_CHANGE:
-            triggers.append("cap_change")
-            why.append(f"股本 4 季變動 {chg:+.0%}（> {SPECIAL_CAP_CHANGE:.0%}）")
+            if "equity_parent" in q.columns:
+                eq = q["equity_parent"].astype(float)
+                eq_prev = _lag(eq, 4).iloc[-1]
+                eq_now = eq.iloc[-1]
+                eq_chg = (float(eq_now) / float(eq_prev) - 1.0
+                          if pd.notna(eq_now) and pd.notna(eq_prev) and eq_prev > 0 and eq_now > 0
+                          else nan)
+                if (pd.notna(eq_chg) and abs(eq_chg) > SPECIAL_EQUITY_JUMP
+                        and abs(eq_chg) >= SPECIAL_EQUITY_RATIO * abs(chg)):
+                    triggers.append("cap_change")
+                    why.append(f"股本 4 季變動 {chg:+.0%}（> {SPECIAL_CAP_CHANGE:.0%}）"
+                               f"且權益 {eq_chg:+.0%}（> {SPECIAL_EQUITY_JUMP:.0%}，且 ≥ 股本變動的 {SPECIAL_EQUITY_RATIO:.0%}）")
+                else:
+                    metrics["cap_jump_equity_flat"] = True
+            else:
+                triggers.append("cap_change")
+                why.append(f"股本 4 季變動 {chg:+.0%}（> {SPECIAL_CAP_CHANGE:.0%}）")
         yoy_now = yoy_q.iloc[-1]
         if (pd.notna(yoy_now) and yoy_now > SPECIAL_REV_JUMP
                 and pd.notna(chg) and chg > SPECIAL_CAP_JUMP_WITH_REV):

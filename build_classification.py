@@ -114,7 +114,8 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
     for c in cl.QUARTER_COLS:
         if c not in q.columns:
             q[c] = np.nan
-    by_t = {t: g.set_index("period_end")[list(cl.QUARTER_COLS)].astype(float).sort_index()
+    qcols = list(cl.QUARTER_COLS) + [c for c in cl.QUARTER_COLS_OPTIONAL if c in q.columns]
+    by_t = {t: g.set_index("period_end")[qcols].astype(float).sort_index()
             for t, g in q[q["ticker"].isin(pop)].groupby("ticker")}
 
     m = _prep_monthly(monthly_rev)
