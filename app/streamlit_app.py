@@ -2179,7 +2179,7 @@ def _card_explain(c: dict) -> str:
     """統一說明引擎口徑。"""
     from screener.eps_nowcast import TRIAL_BASIS_TEXT, FUTURE_TEXT
     lines = [
-        "三價＝EPS×自身歷史倍數 P20／P50／P80；補位時另註。EPS 預設用前瞻 4 季，試算不可用或財報落後 3 季以上改用過去 4 季。",
+        "三價＝EPS×倍數：便宜／合理／昂貴＝這檔自己歷史倍數的第 20／50／80 百分位。倍數窗依類型：一般看近 5 年、高成長近 3 年、金融與資產重循環看股價淨值比的全部歷史。EPS 預設用前瞻 4 季，試算不可用或財報落後 3 季以上改用過去 4 季。",
         "倍數取自倍數窗內每月底的本益比（分母是已公布近 4 季 EPS），乘前瞻 4 季 EPS，口徑不完全相同。",
         "賠錢不給價；高變動、前瞻退回、倍數補位只降可信度或換基準，不擋價。",
         TRIAL_BASIS_TEXT[(c.get("eps") or {}).get("basis", "latest")],
@@ -2283,15 +2283,34 @@ def _card_block(c: dict) -> None:
             st.caption(f"試算參數：稅率 {_fmt_pct(prm.get('t'), False)}、少數股權比 {_fmt_pct(prm.get('m'), False)}、"
                        f"毛利率（最新一季） {_fmt_pct(prm.get('gm_last'), False)}、費損率（最新一季） {_fmt_pct(prm.get('opex_last'), False)}、"
                        f"近 3 月營收年增 {_fmt_pct(prm.get('g3'))}、近 12 月營收年增 {_fmt_pct(prm.get('g12'))}（未來 4 季用）")
-        b = c.get("band")
-        if b and b.get("raw"):
-            r_ = b["raw"]
-            st.caption(f"倍數窗 {b.get('window_start')}～{b.get('window_end')}，{b.get('n_months')} 個月底；"
-                       f"原始 P20/P50/P80＝{r_['p20']:.2f}/{r_['p50']:.2f}/{r_['p80']:.2f}")
+        mult = _mult_line(c)
+        if mult:
+            st.markdown(mult)
         st.caption("樣本為現行上市櫃（無下市股，存活者偏差）；"
                    f"分類基準 {str(c.get('class_asof') or '—')[:10]}、規則 {c.get('version')}。")
         from screener.eps_nowcast import TRIAL_BASIS_TEXT
         st.caption(TRIAL_BASIS_TEXT[nc.get("basis", "latest")])
+
+
+def _mult_line(c: dict) -> str:
+    """倍數是三價的依據，用正常字級、白話寫：哪一段歷史、幾個月、便宜／合理／昂貴各是幾倍。只讀引擎欄位。"""
+    p, b = c.get("prices") or {}, c.get("band") or {}
+    unit = "股價淨值比" if c.get("method") == "PB" else "本益比"
+    if p.get("source") == "補位":
+        lo, mid, hi = p.get("mults") or (None, None, None)
+        return (f"**倍數（類型參考，不是這檔自己的歷史）**：便宜 {lo:g}｜合理 {mid:g}｜昂貴 {hi:g} 倍；"
+                f"三價＝EPS × 這三個倍數") if lo is not None else ""
+    cp = b.get("capped") or {}
+    if not b.get("ok") or cp.get("p50") is None:
+        return ""
+    years = b.get("years")
+    span = "全部歷史" if years is None else f"近 {years} 年"
+    why = ("，金融與資產重循環看全部歷史" if years is None else "，高成長股只看近 3 年" if years == 3 else "")
+    nd = 2 if c.get("method") == "PB" else 1
+    base = "每股淨值" if c.get("method") == "PB" else "EPS"
+    return (f"**倍數**：這檔{span}（{b.get('window_start')}～{b.get('window_end')}，{b.get('n_months')} 個月底{why}）的{unit}由低到高排，"
+            f"第 20%／50%／80% 位置＝便宜 **{cp['p20']:.{nd}f}**｜合理 **{cp['p50']:.{nd}f}**｜昂貴 **{cp['p80']:.{nd}f}** 倍；"
+            f"三價＝{base} × 這三個倍數")
 
 
 def _eps_quarter_tables(nc: dict, fin_q: str = "") -> None:

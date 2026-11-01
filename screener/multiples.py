@@ -133,6 +133,8 @@ def band(per, col, years, min_months, cap=None, asof=None) -> dict:
 
     ok = n_months >= min_months
     return {
+        "years": years,
+        "cap": cap,
         "ok": bool(ok),
         "reason": (
             None

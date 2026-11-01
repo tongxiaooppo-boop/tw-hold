@@ -226,8 +226,8 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
     out["truncated"] = bool(b.get("truncated"))
     if b.get("truncated"):
         r, c = b["raw"], b["capped"]
-        out["notes"].append(f"倍數上限 {b['cap']:.0f}：原始 P20/P50/P80 ＝ {r['p20']:.1f}/{r['p50']:.1f}/{r['p80']:.1f}，"
-                            f"截斷後 {c['p20']:.1f}/{c['p50']:.1f}/{c['p80']:.1f}。")
+        out["notes"].append(f"倍數上限 {b['cap']:.0f} 倍：歷史原始倍數 {r['p20']:.1f}／{r['p50']:.1f}／{r['p80']:.1f}，"
+                            f"截斷後 {c['p20']:.1f}／{c['p50']:.1f}／{c['p80']:.1f}。")
         checks.append(dt.Check("倍數截斷", "degrade", None, "倍數被上限截斷"))
     if not use_nc or hit:
         return _finish(out, checks)      # EPS 基準不是前瞻 EPS（閘門／高獲利區／循環）或獲利狀態不穩：不給對照價與 12 個月價（維持舊行為）
