@@ -2389,7 +2389,8 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
                                    share_events=_events(code))
     except Exception as e:  # noqa: BLE001  新版估值卡掛掉不連累舊的三卡
         card = {"ok": False, "reason": f"新版估值卡算不出來：{type(e).__name__}: {e}"}
-    st.markdown("#### 💰 估值速覽")
+    st.markdown("#### 💰 估值速覽（開發中）")
+    st.caption("🚧 開發中：估值規則還在修正，數字僅供參考。")
     if not r["ok"]:
         st.caption(r["reason"])
         if card.get("ok"):       # 舊版試算失敗，新版估值卡仍可能算得出來（Opus #12）
@@ -4178,7 +4179,10 @@ def _macro_compass_page() -> None:
 
 
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
-NAV = ["總經導航", "短線", "長波段", "價值", "定存", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
+# 2026-11-02 使用者：估值（含月營收的估值價差排序）有疑慮，月營收入口先關；程式保留，改 True 即恢復
+REVENUE_PAGE_ON = False
+NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
+       if REVENUE_PAGE_ON or n != "月營收"]
 
 
 def _freshness_badge_html() -> str:
@@ -4256,6 +4260,8 @@ def main() -> None:
     goto = st.session_state.pop("_nav_goto", None)   # 頁內「切到另一頁」——在建 radio 前寫入
     if goto in NAV:
         st.session_state["_nav"] = goto
+    if st.session_state.get("_nav") not in (None, *NAV):    # 已關閉的分頁（例：月營收）留在舊 session
+        st.session_state.pop("_nav")
     # radio 還沒建，但 key 綁 session_state——使用者點過的那一頁在 rerun 一開始就已經
     # 寫回去了，所以這裡就能知道等一下會選中哪一頁，徽章 CSS 才併得進同一次注入。
     _inject_css(st.session_state.get("_nav") or NAV[0])

@@ -13,6 +13,7 @@ st_testing = pytest.importorskip("streamlit.testing.v1")
 AppTest = st_testing.AppTest
 
 REPO_APP = "app/streamlit_app.py"
+_REV_ON = "REVENUE_PAGE_ON = True" in (Path(__file__).resolve().parents[1] / REPO_APP).read_text(encoding="utf-8")
 
 
 def _run():
@@ -302,6 +303,7 @@ def test_總經導航_外資空單與三大法人卡出現_TXO已移除():
         assert "三大法人買賣超" in blob
 
 
+@pytest.mark.skipif(not _REV_ON, reason="月營收入口暫時關閉（2026-11-02）")
 def test_月營收分頁_四個檢視都不炸():
     at = AppTest.from_file(REPO_APP, default_timeout=60)
     at.session_state["_nav"] = "月營收"
@@ -317,6 +319,7 @@ def test_月營收分頁_四個檢視都不炸():
         assert not at.exception, view
 
 
+@pytest.mark.skipif(not _REV_ON, reason="月營收入口暫時關閉（2026-11-02）")
 def test_月營收分頁_循環股開關與條件都不炸():
     p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
     if not p.exists():
@@ -335,6 +338,7 @@ def test_月營收分頁_循環股開關與條件都不炸():
         assert not at.exception, cond
 
 
+@pytest.mark.skipif(not _REV_ON, reason="月營收入口暫時關閉（2026-11-02）")
 def test_月營收持有提示_代號篩選與開關不炸():
     p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
     if not p.exists():
@@ -350,6 +354,7 @@ def test_月營收持有提示_代號篩選與開關不炸():
     assert not at.exception
 
 
+@pytest.mark.skipif(not _REV_ON, reason="月營收入口暫時關閉（2026-11-02）")
 def test_月營收代號連到個股查詢():
     p = Path(REPO_APP).resolve().parent.parent / "data" / "derived" / "revenue_watch.json"
     if not p.exists():
