@@ -2189,8 +2189,20 @@ def _card_explain(c: dict) -> str:
         l2 = ("**前瞻股價**＝未來 4 季試算 EPS（F4）× 歷史 P50 倍數；範圍＝F4×P20 ～ F4×P80（只反映倍數不確定，**不是預測信賴區間**）。"
               "與現價無關。**購買參考價**＝前瞻股價 ÷ 1.10；前瞻股價 ≥ 現價 × 1.10（空間 ≥10%）才顯示，否則不給。"
               "**10% 是自訂門檻，不是預期報酬。**")
+    p_ = c.get("prices") or {}
+    fb = ("**補位倍數**：這檔自身歷史倍數不可用（月數不足、倍數分布太寬、倍數上限使三價相同、股數事件汙染或屬特殊／財報不足類型），"
+          "三價改用「類型參考倍數 × EPS」，**不是這檔自己的歷史**，可信度一律低、不給前瞻股價與購買參考價。"
+          "參考倍數（便宜／合理／昂貴）：一般 12.8／16.5／21.1、高成長 17.2／19.2／26.2、循環 13.6／17.6／22.7、"
+          "金融 9.9／11.8／14.0、特殊 8.8／11.5／15.2、資料不足 13.1／15.9／19.4。前兩者＝同類「有自身歷史倍數者」的三價倍數中位數；"
+          "其餘＝2021～2025 年底全市場橫斷面本益比的分位數（口徑不同，偏誤見下）。**沒有回測。**"
+          if p_.get("source") == "補位" else None)
+    eb = ("**EPS 基準**：一般、高成長用前瞻四季 EPS；前瞻 EPS 試算不可靠（橋接殘差、業外占比高且不穩、月營收口徑不符、近零 EPS）或 ≤ 0 時，"
+          "改用近四季實際 EPS 並標可信度低；景氣循環類、或「歷史高獲利區＋循環跡象」取近四季與 3 年平均的較低者（避免用高峰 EPS 乘歷史倍數）。"
+          "**近四季 EPS ≤ 0（賠錢）不給三價。**")
     lines = [
         l1,
+        fb,
+        eb,
         "**前瞻四季 EPS**＝最近 (4−k) 季財報實際 ＋ k 季試算（k＝1～3，通常 1 或 2）；試算＝月營收 × 毛利率（含季節偏差）"
         "− 營業費損（隨營收）＋ 近 8 季業外中位數，再乘稅率與少數股權比、除以股數。",
         l2,
@@ -2207,7 +2219,7 @@ def _card_explain(c: dict) -> str:
         "本卡片是情境估算，**非買進建議**；可信度低時請特別保守看待。",
     ]
     # 分隔線前後要有空行：「文字行緊接 ---」在 markdown 是 setext 標題，會把整段變成超大字（使用者 11/1 截圖）
-    return _MD_BR.join(lines).replace(_MD_BR + "---" + _MD_BR, chr(10) * 2 + "---" + chr(10) * 2)
+    return _MD_BR.join(x for x in lines if x).replace(_MD_BR + "---" + _MD_BR, chr(10) * 2 + "---" + chr(10) * 2)
 
 
 def _pct_floor(v) -> str:
@@ -2227,7 +2239,8 @@ def _card_lines(c: dict) -> str:
     if p:
         pos, col = _POS_ZH.get(c.get("position") or "na", ("—", "gray"))
         unit = "PB" if c.get("method") == "PB" else "PE"
-        out.append(f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　:{col}[{pos}]（{unit}）")
+        src = "類型參考倍數" if p.get("source") == "補位" else "自身歷史"
+        out.append(f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　:{col}[{pos}]（{unit}・{src}）")
     else:
         out.append(f":gray[三價：不給（{c.get('no_price') or '—'}）]")
     if f:
@@ -2240,8 +2253,10 @@ def _card_lines(c: dict) -> str:
         out.append(f"前瞻股價 **{f['base']:,.1f}**（{f['lo']:,.1f}～{f['hi']:,.1f}）")
     elif p and c.get("method") == "PB":
         out.append(":gray[購買參考價／前瞻股價：PB 路線不給]")
+    elif p and p.get("source") == "補位":
+        out.append(":gray[購買參考價／前瞻股價：補位三價不給]")
     elif p:
-        out.append(":gray[購買參考價／前瞻股價：不給（EPS 試算不足或財報落後 3 季以上）]")
+        out.append(":gray[購買參考價／前瞻股價：不給（前瞻 EPS 不可用、EPS 改用較保守基準，或財報落後 3 季以上）]")
     return _MD_BR.join(out) + _MD_BR
 
 
@@ -2263,6 +2278,10 @@ def _card_block(c: dict) -> None:
             fb = "（月營收未超過財報季或試算失敗，同已公布 TTM）" if nc.get("fallback") or nc.get("k") == 0 else ""
             st.markdown(f"**前瞻四季 EPS　{_fmt_x(nc.get('eps_nc'))}**　{span}：{na} 季實際＋{4 - na} 季試算{fb}"
                         + _MD_BR + f"已公布 TTM EPS：{_fmt_x(nc.get('eps_ttm'))}｜未來 4 季試算 EPS（F4）：{_fmt_x(nc.get('eps_f4'))}")
+        pp = c.get("prices") or {}
+        if pp.get("base_name"):
+            st.markdown(f"三價 EPS 基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**" if c.get("method") != "PB" or pp.get("source") == "補位"
+                        else f"三價基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**")
         f = c.get("forward")
         if f:
             st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}｜前瞻股價空間 {_pct_floor(f['margin'])}"

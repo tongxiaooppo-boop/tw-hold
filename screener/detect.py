@@ -1,7 +1,8 @@
 """估值失效偵測與可信度（草案 §6、§8.3 的精簡版；2026-11-01）。
 
-每個檢查回 `Check(name, level, value, why)`：level ∈ ok／degrade／block。
-`confidence()` 彙總：任何 block → 不給價；degrade 0 條＝高、1 條＝中、≥2 條＝低。
+每個檢查回 `Check(name, level, value, why)`：level ∈ ok／degrade／severe／block。
+`confidence()` 彙總：任何 block → 不給價；severe（仍給價）→ 低；degrade 0 條＝高、1 條＝中、≥2 條＝低。
+（val_card 不再用 block 擋價：它把 block 轉成 severe，見 val_card 檔頭。）
 純函式，不讀檔。
 
 已做（草案 11 項裡的 8 項）：股數對不上(2)、橋接殘差(3)、業外閘門(4)、稅/少數股權超界(5，由
@@ -31,7 +32,7 @@ RATIO_BLOCK = 4.0
 @dataclass
 class Check:
     name: str
-    level: str            # ok／degrade／block
+    level: str            # ok／degrade／severe（仍給價、可信度低）／block
     value: float | None
     why: str
 
@@ -166,9 +167,11 @@ def class_flags(cls: dict | None) -> list[Check]:
 def confidence(checks: list[Check]) -> dict:
     """彙總：{'level': '不給價'|'高'|'中'|'低', 'blocks': [...], 'degrades': [...]}（中文原因句）。"""
     blocks = [c.why for c in checks if c.level == "block"]
-    deg = list(dict.fromkeys(c.why for c in checks if c.level == "degrade" and c.why))
+    deg = list(dict.fromkeys(c.why for c in checks if c.level in ("degrade", "severe") and c.why))
     if blocks:
         lv = "不給價"
+    elif any(c.level == "severe" for c in checks):      # 嚴重（試算不可靠改用實際 EPS／倍數補位）：可信度上限為低，不看條數
+        lv = "低"
     elif not deg:
         lv = "高"
     elif len(deg) == 1:

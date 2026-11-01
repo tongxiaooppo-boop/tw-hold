@@ -1,13 +1,15 @@
 """估值卡片資料（估值改版 A13，2026-11-01）：分類 → 前瞻 EPS → 月底倍數三價 → 12 個月基準情境價 → 可信度。
 
 純函式，不讀檔：app 把個股的季報 `qf`、月營收 `rev`、股價 `px`、倍數 `per` 與
-`data/derived/stock_class.json` 裡該檔的分類 dict `cls` 傳進來。定義見 `D:\\g\\claude\\估值定義定案草案.md`
-§3～§6；第一版範圍（誠實揭露，卡片也會寫）：
-- 一般／高成長：PE 三價（月底 P20/P50/P80 × EPS_NC）＋12 個月基準價（EPS_F4 × 倍數）。
-- 金融、循環・資產重：PB 三價（× 最新 BVPS）；**12 個月價第一版不給**（需要 EPS_norm 與 BVPS 橋接）。
-- 循環・資產輕、特殊、資料不足：不給價。
-- 一般／高成長若狀態為虧損／獲利不穩／轉機：不給 PE 價，仍顯示前瞻 EPS 供參考。
-- D4 高峰閘門（簡化版）：歷史高獲利區 ＋（疑似循環 或 單一景氣事件 或 營運回撤 ≥50%）→ 不給一般三價。
+`data/derived/stock_class.json` 裡該檔的分類 dict `cls` 傳進來。定義見 `D:/g/claude/估值定義定案草案.md`
+§3～§6；三價規則（使用者 2026-11-01 定案，取代 v1 的「閘門擋價」）：
+- **賠錢（近四季 EPS ≤ 0）不給三價**；其餘一律給。
+- 自身歷史 P20/P50/P80 有效就用自己的：一般／高成長／循環・資產輕＝PE × EPS；金融、循環・資產重＝PB × 每股淨值。
+- 自身歷史無效（月數不足、分布 P80÷P20>4、倍數上限使三價相同、PB 窗內有大型股數事件、每股淨值缺）
+  → 以 `FALLBACK_MULTS` 類型參考倍數 × EPS 補位；特殊、資料不足一律補位。補位＝可信度低、不給前瞻股價與購買參考價。
+- 風險閘門只決定 EPS 取哪個、要不要降級：試算閘門（橋接殘差／業外／月營收口徑／近零 EPS）擋下 → 近四季實際 EPS、
+  可信度低；歷史高獲利區＋循環跡象、或循環類 → 近四季與 3 年平均取低者。獲利狀態（不穩／轉機…）只降級。
+- 前瞻股價（F4 × P50）與購買參考價：維持舊行為，只在前瞻 EPS 可用、自身歷史有效時給（前瞻股價 EPS 之後依 H22 結果再定）。
 """
 from __future__ import annotations
 
@@ -18,12 +20,19 @@ from screener import detect as dt
 from screener import eps_nowcast as en
 from screener import multiples as mu
 
-CARD_VERSION = "card-v1-2026-11-01"
+CARD_VERSION = "card-v2-2026-11-01"
 PE_NORMAL = dict(years=5, min_months=48, cap=30.0)
 PE_NORMAL_EXC = dict(years=5, min_months=48, cap=50.0)      # 5 年每年獲利且年均 PE 都 >30
 PE_GROWTH = dict(years=3, min_months=30, cap=50.0)
 PB_ALL = dict(years=None, min_months=60, cap=None)
+GATE_NAMES = ("橋接殘差", "業外閘門", "月營收口徑", "近零EPS")     # 前瞻 EPS 試算閘門（block＝改用近四季實際 EPS）
 STATES_NO_PE = ("虧損", "獲利不穩", "轉機", "預估轉虧", "谷底回升")
+# 補位倍數（便宜／合理／昂貴；2026-11-01 使用者定案，推導與口徑見 HANDOFF A15、research/valuation_v2_experiment/）：
+# 一般、高成長＝同類「有自身歷史倍數者」的三價倍數中位數（207／22 檔）；循環＝2021–2025 年底橫斷面 PE 收縮；
+# 金融、特殊、資料不足＝2021–2025 年底橫斷面錨（口徑不同於前兩者，不往全體收縮）。
+FALLBACK_MULTS = {"normal": (12.8, 16.5, 21.1), "growth": (17.2, 19.2, 26.2), "cyclical": (13.6, 17.6, 22.7),
+                  "financial": (9.9, 11.8, 14.0), "special": (8.8, 11.5, 15.2), "insufficient": (13.1, 15.9, 19.4)}
+PER_STALE_DAYS = 10         # 反推 EPS 用的交易所本益比，最新一筆不得落後最新收盤日超過這麼多天
 REF_MARGIN = 0.10          # 購買參考價：前瞻股價須比現價高 ≥10%（使用者 2026-11-01 指定）
 DIFF_WARN = 0.15            # 主卡三價與「已公布 TTM 對照價」差 >15% → 警示
 Q_COLS = ["revenue", "gross_profit", "op_income", "pretax_income", "net_income", "ni_parent", "eps",
@@ -86,7 +95,7 @@ def _peak_block(cls: dict) -> str | None:
         return None
     dd = m.get("max_dd")
     if "疑似循環" in sub or "僅單一景氣事件" in sub or (isinstance(dd, (int, float)) and dd >= 0.5):
-        return "目前處於自身歷史高獲利區，且有景氣循環跡象：用高峰 EPS 乘歷史倍數會高估，不給一般三價"
+        return "目前處於自身歷史高獲利區，且有景氣循環跡象：用高峰 EPS 乘歷史倍數會高估，EPS 改取近四季與 3 年平均較低者"
     return None
 
 
@@ -140,65 +149,67 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
     if typ not in ("insufficient", "special", "financial", "cyclical", "normal", "growth"):
         out["no_price"] = f"未知分類「{typ}」，不給價"
         return _finish(out, checks)
+    # 賠錢（近四季 EPS ≤ 0）不給三價（使用者 2026-11-01）；其餘風險閘門只換 EPS 基準或降級，不擋價
+    ttm, avg3 = _ttm_eps(q), _avg3_eps(q)
+    if ttm is None:      # 最新季 EPS 缺值（金融股常見）→ 用收盤價 ÷ 交易所本益比反推近四季 EPS（同交易所口徑）
+        ttm = _ttm_from_per(per, px)
+        if ttm is not None:
+            checks.append(dt.Check("EPS反推", "degrade", None, "近四季 EPS 缺值，改用收盤價 ÷ 交易所本益比反推"))
+    if ttm is None or ttm <= 0:
+        out["no_price"] = ("近四季 EPS 缺值，且交易所本益比空白（可能賠錢或無資料），不給三價" if ttm is None
+                           else f"近四季 EPS {ttm:.2f} ≤ 0（賠錢不給三價）")
+        return _finish(out, checks)
+    hit = [s for s in states if s in STATES_NO_PE]
+    if hit:
+        checks.append(dt.Check("獲利狀態", "degrade", None, f"目前狀態「{'、'.join(hit)}」：獲利不穩，估值參考性較低"))
     if typ in ("insufficient", "special"):
-        out["no_price"] = {"insufficient": "財報不足 12 季，不分類不給價",
-                           "special": "特殊類型（生技／建材營造／併購重組等），歷史倍數不可比，不給價"}[typ]
+        why = {"insufficient": "財報不足 12 季，沒有自身歷史倍數",
+               "special": "特殊類型（生技／建材營造／併購重組等），歷史倍數不可比"}[typ]
+        _fallback(out, typ, ttm, "近四季實際 EPS", price, why, checks)
         return _finish(out, checks)
     is_pb = typ == "financial" or (typ == "cyclical" and "資產重" in subtags)
-    if typ == "cyclical" and not is_pb:
-        out["no_price"] = "景氣循環・資產輕：第一版不給價（需要多年平滑盈餘估值，尚未實作）"
-        return _finish(out, checks)
+    peak = _peak_block(cls)
+    if peak:
+        checks.append(dt.Check("高獲利區", "degrade", None, peak))
+    eps, eps_name, use_nc = _eps_base(typ, nc, q, ttm, avg3, peak is not None, checks)
 
     if is_pb:
-        out["method"] = "PB"
         b = mu.band(per, "pbr", **PB_ALL)
         out["band"] = b
         bv = _bvps(per, px)
-        checks += [dt.dist_check(b), dt.pb_events(per, share_events)]
-        p = mu.prices(bv, b) if bv else None
-        if p is None:
-            out["no_price"] = "歷史股價淨值比或每股淨值不足"
-        else:
-            out["prices"] = {**p, "base": bv, "base_name": "每股淨值"}
+        dc, ev = dt.dist_check(b), dt.pb_events(per, share_events)
+        if bv and dc.level != "block" and ev.level != "block":
+            out["method"] = "PB"
+            checks += [dc, ev]
+            p = mu.prices(bv, b)
+            out["prices"] = {**p, "base": bv, "base_name": "每股淨值", "source": "歷史"}
             out["position"] = mu.classify_position(price, p) if price else "na"
             out["notes"].append("PB 三價＝歷史月底股價淨值比分位 × 最新每股淨值；12 個月基準價：循環・金融第一版不給。")
             if typ == "financial":
                 out["notes"].append("金融股 2026 起 IFRS 17 淨值有斷點，跨年 PB 不完全可比。")
+        else:
+            why = ("每股淨值不可得" if not bv else
+                   ev.why if ev.level == "block" else dc.why)
+            _fallback(out, typ, eps, eps_name, price, "PB 自身歷史不可用（" + why.replace("，PB 不給價", "") + "）", checks)
         return _finish(out, checks)
 
-    # ── PE 路線（一般／高成長）──
+    # ── PE 路線（一般／高成長／循環・資產輕）──
     out["method"] = "PE"
-    if not nc or not nc.get("ok"):
-        out["no_price"] = (nc or {}).get("reason") or "月營收不足，無法試算前瞻 EPS"
-        return _finish(out, checks)
-    if any(s in states for s in STATES_NO_PE):
-        hit = "、".join(s for s in states if s in STATES_NO_PE)
-        out["no_price"] = f"目前狀態「{hit}」：PE 法不適用，只列前瞻 EPS 供參考"
-        return _finish(out, checks)
-    pk = _peak_block(cls)
-    if pk:
-        out["no_price"] = pk
-        return _finish(out, checks)
-
-    spec = PE_GROWTH
-    if typ == "normal":
-        spec = PE_NORMAL
-        if mu.high_pe_exception(per, _yearly_eps(q)):
-            spec = PE_NORMAL_EXC
-            out["notes"].append("近 5 年每年獲利且年均 PE 都 >30：倍數上限放寬到 50。")
+    spec = PE_GROWTH if typ == "growth" else PE_NORMAL
+    if typ == "normal" and mu.high_pe_exception(per, _yearly_eps(q)):
+        spec = PE_NORMAL_EXC
+        out["notes"].append("近 5 年每年獲利且年均 PE 都 >30：倍數上限放寬到 50。")
     b = mu.band(per, "per", **spec)
     out["band"] = b
-    checks += [dt.dist_check(b), dt.near_zero_eps(nc.get("eps_nc"), q)]
-    base = nc.get("eps_nc")
-    if b.get("ok") and b.get("cap") and b["raw"]["p20"] >= b["cap"]:
-        out["no_price"] = (f"歷史月底本益比 P20 已 ≥ 上限 {b['cap']:.0f}"
-                           f"（原始 {b['raw']['p20']:.1f}/{b['raw']['p50']:.1f}/{b['raw']['p80']:.1f}），截斷後三價相同，不給價")
+    dc = dt.dist_check(b)
+    flat = bool(b.get("ok") and b.get("cap") and b["raw"]["p20"] >= b["cap"])
+    if dc.level == "block" or flat:
+        why = (f"歷史月底本益比 P20 已 ≥ 上限 {b['cap']:.0f}，截斷後三價相同" if flat else dc.why)
+        _fallback(out, typ, eps, eps_name, price, "PE 自身歷史不可用（" + why + "）", checks)
         return _finish(out, checks)
-    p = mu.prices(base, b) if base else None
-    if p is None:
-        out["no_price"] = (b.get("reason") if b and not b.get("ok") else "預估 EPS ≤ 0 或歷史本益比不足")
-        return _finish(out, checks)
-    out["prices"] = {**p, "base": base, "base_name": "前瞻四季 EPS"}
+    checks.append(dc)
+    p = mu.prices(eps, b)
+    out["prices"] = {**p, "base": eps, "base_name": eps_name, "source": "歷史"}
     out["position"] = mu.classify_position(price, p) if price else "na"
     out["truncated"] = bool(b.get("truncated"))
     if b.get("truncated"):
@@ -206,13 +217,15 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
         out["notes"].append(f"倍數上限 {b['cap']:.0f}：原始 P20/P50/P80 ＝ {r['p20']:.1f}/{r['p50']:.1f}/{r['p80']:.1f}，"
                             f"截斷後 {c['p20']:.1f}/{c['p50']:.1f}/{c['p80']:.1f}。")
         checks.append(dt.Check("倍數截斷", "degrade", None, "倍數被上限截斷"))
+    if not use_nc or hit:
+        return _finish(out, checks)      # EPS 基準不是前瞻 EPS（閘門／高獲利區／循環）或獲利狀態不穩：不給對照價與 12 個月價（維持舊行為）
     # 對照：用已公布 TTM
-    ttm = nc.get("eps_ttm")
-    if ttm and ttm > 0 and not nc.get("fallback"):
-        pt = mu.prices(ttm, b)
+    ttm_nc = nc.get("eps_ttm")
+    if ttm_nc and ttm_nc > 0 and not nc.get("fallback"):
+        pt = mu.prices(ttm_nc, b)
         if pt:
             diff = p["fair"] / pt["fair"] - 1
-            out["compare"] = {"eps_ttm": ttm, "cheap": pt["cheap"], "fair": pt["fair"], "dear": pt["dear"],
+            out["compare"] = {"eps_ttm": ttm_nc, "cheap": pt["cheap"], "fair": pt["fair"], "dear": pt["dear"],
                               "diff": diff, "warn": abs(diff) > DIFF_WARN}
     # 12 個月基準情境價（與現價無關）。財報過舊（k≥3，最新月營收已超過最後財報季三季以上）→ F4 的
     # 「未來 4 季」從最後財報季起算，可能已經是過去的季度，不給
@@ -236,11 +249,68 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
     return _finish(out, checks)
 
 
+def _ttm_eps(q: pd.DataFrame) -> float | None:
+    e = q["eps"].tail(4)
+    return float(e.sum()) if len(e) == 4 and e.notna().all() else None
+
+
+def _ttm_from_per(per: pd.DataFrame, px: pd.DataFrame) -> float | None:
+    """近四季 EPS ＝ 收盤價 ÷ 交易所本益比（同一天，取最新一個同時有 PER 與收盤價的日子；該日 PER 空白或落後太久 → None）。"""
+    if per is None or per.empty or px is None or px.empty:
+        return None
+    p = per[["date", "per"]].copy()
+    p["date"] = pd.to_datetime(p["date"])
+    p["per"] = pd.to_numeric(p["per"], errors="coerce")
+    c = px[["date", "close"]].copy()
+    c["date"] = pd.to_datetime(c["date"])
+    c = c.dropna()
+    j = p.merge(c, on="date").sort_values("date").tail(1)      # 最新一天：PER 空白（常見於賠錢）不往前找舊值
+    if j.empty or not (j["per"].iloc[0] > 0) or (c["date"].max() - j["date"].iloc[0]).days > PER_STALE_DAYS:
+        return None
+    return float(j["close"].iloc[0]) / float(j["per"].iloc[0])
+
+
+def _avg3_eps(q: pd.DataFrame) -> float | None:
+    """近 12 季 EPS 合計 ÷ 3（3 年平均年 EPS）；不足 12 季或有缺值 → None。"""
+    e = q["eps"].tail(12)
+    return float(e.sum()) / 3 if len(e) == 12 and e.notna().all() else None
+
+
+def _eps_base(typ: str, nc: dict | None, q: pd.DataFrame, ttm: float, avg3: float | None,
+              peak: bool, checks: list[dt.Check]) -> tuple[float, str, bool]:
+    """三價的 EPS 基準（呼叫端已確認近四季 EPS > 0）。回傳 (EPS, 名稱, 是否用前瞻 EPS)。
+    一般／高成長：前瞻四季 EPS（NC）；NC ≤ 0 或任一試算閘門（橋接殘差／業外／月營收口徑／近零 EPS）擋下 → 近四季實際。
+    循環、或歷史高獲利區＋循環跡象：近四季與 3 年平均取低者（不用高峰 EPS）；3 年平均不可用 → 近四季並降級。"""
+    nc_eps = nc.get("eps_nc") if nc and nc.get("ok") else None
+    if typ in ("normal", "growth") and nc_eps is not None and nc_eps > 0:
+        checks.append(dt.near_zero_eps(nc_eps, q))
+        gate = any(c.level == "block" and c.name in GATE_NAMES for c in checks)
+        if not gate and not peak:
+            return float(nc_eps), "前瞻四季 EPS", True
+    elif typ in ("normal", "growth") and nc is not None and nc.get("ok"):
+        checks.append(dt.Check("前瞻EPS≤0", "severe", None, "前瞻四季 EPS ≤ 0，改用近四季實際 EPS"))
+    if typ == "cyclical" or peak:
+        if avg3 is not None and avg3 > 0:
+            return min(ttm, avg3), "近四季與 3 年平均較低者", False
+        checks.append(dt.Check("3年平均", "degrade", None, "3 年平均 EPS 不可用或 ≤ 0，改用近四季實際 EPS"))
+    return ttm, "近四季實際 EPS", False
+
+
+def _fallback(out: dict, typ: str, eps: float, eps_name: str, price, why: str, checks: list[dt.Check]) -> None:
+    """自身歷史倍數不可用 → 以「類型參考倍數」補位（一律低可信度、不給前瞻股價與購買參考價）。"""
+    lo, mid, hi = FALLBACK_MULTS[typ]
+    b = {"ok": True, "raw": dict(p20=lo, p50=mid, p80=hi), "capped": dict(p20=lo, p50=mid, p80=hi)}
+    p = mu.prices(eps, b)
+    out["method"] = "PE"
+    out["prices"] = {**p, "base": eps, "base_name": eps_name, "source": "補位", "mults": [lo, mid, hi]}
+    out["position"] = mu.classify_position(price, p) if price else "na"
+    out["notes"].append(f"{why}；改用類型參考倍數 {lo}／{mid}／{hi} × {eps_name}。")
+    checks.append(dt.Check("補位倍數", "severe", None, "自身歷史倍數不可用，改用類型參考倍數補位"))
+
+
 def _finish(out: dict, checks: list[dt.Check]) -> dict:
-    conf = dt.confidence(checks)
+    # 風險閘門不再擋價：剩下的 block（EPS 試算不可靠等）一律標成「嚴重」→ 可信度低（價格已換 EPS 基準或補位）
+    checks = [dt.Check(c.name, "severe", c.value, c.why) if c.level == "block" else c for c in checks]
     out["checks"] = _check_pack(checks)
-    out["confidence"] = conf
-    if conf["level"] == "不給價" and out.get("prices"):
-        out["no_price"] = "；".join(conf["blocks"])
-        out["prices"] = out["forward"] = out["position"] = out["compare"] = None
+    out["confidence"] = dt.confidence(checks)
     return out
