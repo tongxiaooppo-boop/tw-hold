@@ -171,10 +171,11 @@ def prices(base, b) -> dict | None:
 
 
 def high_pe_exception(per, yearly_eps, years=5, gate=30.0) -> bool:
-    """檢查最近 years 個完整日曆年及當年。
+    """檢查資料最後一年「之前」最近 years 個完整日曆年（**不含當年**）。
 
-    當年以資料最後日期所屬年決定，不依賴系統時間。
-    僅納入至少 20 個有效日的年份，且至少須有 years 個合格年份。
+    當年財報未齊（例如 10 月只有 Q1、Q2），拿它的全年 EPS 當條件會讓放寬永遠不成立
+    （2026-11-01 Opus 掃描抓到）。當年＝資料最後日期所屬年，不依賴系統時間。
+    僅納入至少 20 個有效日的年份，且須有 years 個合格年份。
     """
     if years <= 0 or yearly_eps is None:
         return False
@@ -187,7 +188,7 @@ def high_pe_exception(per, yearly_eps, years=5, gate=30.0) -> bool:
     valid = _positive_values(daily)
     valid = valid.loc[
         (valid.index.year >= current_year - years)
-        & (valid.index.year <= current_year)
+        & (valid.index.year < current_year)
     ]
     if valid.empty:
         return False

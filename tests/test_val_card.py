@@ -138,3 +138,14 @@ def test_購買參考價_空間達10pct才給():
     hi = _px(); hi["close"] = 500.0                                   # 現價遠高於前瞻價 → 空間不足
     f2 = vc.build_card(_qf(), _rev(), hi, _per(), _cls())["forward"]
     assert f2["ref_ok"] is False and f2["margin"] < 0.10
+
+
+def test_財報落後剛好3季_不給前瞻股價但三價仍給():
+    c = vc.build_card(_qf(), _rev("2026-09"), _px(), _per(), _cls())     # 最後財報 2025Q4，月營收到 2026-09 → k=3
+    assert c["prices"] is not None and c["forward"] is None
+
+
+def test_分類基準落後最新財報_降級提示():
+    cl = _cls(); cl["decided_at"] = "2025-06-30"                         # 財報最新 2025-12-31
+    c = vc.build_card(_qf(), _rev(), _px(), _per(), cl)
+    assert any("分類基準" in d for d in c["confidence"]["degrades"])

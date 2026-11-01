@@ -24,7 +24,7 @@ def _monthly_data(values):
 
 def _high_pe_data():
     rows = []
-    for year in range(2020, 2025):
+    for year in range(2020, 2026):
         dates = pd.date_range(f"{year}-01-02", periods=20, freq="B")
         for i, date in enumerate(dates):
             # 每年平均為 (20 + 44) / 2 = 32，不要求每天都超過 gate。
@@ -273,3 +273,13 @@ def test_classify_position三種與na():
         incomplete = dict(p)
         incomplete[key] = None
         assert multiples.classify_position(20.0, incomplete) == "na"
+
+
+def test_high_pe_exception_資料到當年10月_當年EPS不全也能成立():
+    rows = []
+    for year in range(2020, 2027):
+        for i, date in enumerate(pd.date_range(f"{year}-01-02", periods=20, freq="B")):
+            rows.append({"date": date, "per": 20.0 if i % 2 == 0 else 44.0, "pbr": 2.0})
+    per = pd.DataFrame(rows)
+    eps = {year: 2.0 for year in range(2021, 2026)}      # 2026 沒有全年 EPS
+    assert multiples.high_pe_exception(per, eps) is True

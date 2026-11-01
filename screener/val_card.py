@@ -116,6 +116,14 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
         out["no_price"] = "財報不足 4 季"
         return out
     monthly = _monthly(rev)
+    # 分類是 build_classification 的快照；財報進來後分類沒重跑 → 狀態（虧損／獲利不穩）可能過期（Opus #6）
+    try:
+        ca, qmax = pd.Timestamp(cls.get("decided_at")), q["period_end"].max()
+        if ca < qmax:
+            checks.append(dt.Check("分類過期", "degrade", None,
+                                   f"分類基準 {ca:%Y-%m-%d} 落後最新財報 {qmax:%Y-%m-%d}，狀態（虧損／獲利不穩）可能過期"))
+    except (TypeError, ValueError):
+        pass
 
     # ── 前瞻 EPS（非金融才有毛利欄可試算）──
     nc = None
