@@ -171,6 +171,7 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
                 asset_capex_rev_pct=float(pct["capex_rev"].get(t, np.nan)),
                 rev_beta=ri.revenue_beta(stock_yoy, market),
                 ind_sync=ri.industry_sync(stock_yoy, ind_yoy),
+                industry_name=qp.normalize_industry(uni.loc[t, "industry"]) if "industry" in uni.columns else "",
                 stock_rev_ttm_yoy=stock_yoy, market_rev_ttm_yoy=market,
                 industry_rev_ttm_yoy=ind_yoy, g3=g3, eps_nc=None, eps_f4=None)
         except Exception as e:  # noqa: BLE001

@@ -136,7 +136,9 @@ SUB_CYCLICAL_GROWTH = "具循環性"       # 循環＋高成長，穿越通過 �
 SUB_ASSET_HEAVY = "資產重"
 SUB_ASSET_LIGHT = "資產輕"
 SUB_SHRINKING = "營運收縮"
-SUB_UNSTABLE = "獲利不穩"
+SUB_UNSTABLE = "近5年曾虧損"      # 與狀態「獲利不穩」（近 4 季有虧損季）不同義，故改名（分類v2 T7）
+SUB_PRIOR_CYCLE = "產業先驗循環"       # 必要①未過、必要②成立，且屬傳統循環產業（T2）
+SUB_SINGLE_EVENT = "僅單一景氣事件"    # 必要②只靠單一 2 年窗成立（T5）
 
 # ── 門檻（名稱照草案；【經驗】＝初值，上線後校準）────────────────
 MIN_QUARTERS = 12                  # §1.1 第 0 步
@@ -173,6 +175,11 @@ FWD_EXPAND_MIN = 0.10              # 【經驗】
 PROFIT_ZONE_HIGH = 0.80
 PROFIT_ZONE_LOW = 0.20
 HYST_CONFIRM_Q = 2                 # 連續 2 季一致才切換
+CYCLE_EXIT_AMP_PCT = 0.60          # 循環留任：振幅分位 ≥ 此值仍算留任（比進入的 0.70 寬）【經驗】
+CYCLE_PRIOR_INDUSTRIES = ("航運業", "鋼鐵工業", "塑膠工業", "水泥工業", "造紙工業", "玻璃陶瓷",
+                          "橡膠工業", "化學工業")   # 傳統循環產業先驗【經驗】
+SINGLE_EVENT_WINDOW_Q = 8          # 單一景氣事件窗：連續 8 季（24 個月）【經驗】
+HYST_CYCLE_EXIT_Q = 4              # 離開循環須候選連續 4 季（進入仍是 HYST_CONFIRM_Q）【經驗】
 HYST_LOCK_Q = 4                    # 切換後鎖 4 季（含切換當季，最早第 T+4 季才可再切）
 
 QUARTER_COLS = ("revenue", "op_income", "eps", "total_assets", "capital_stock", "capex")
@@ -183,6 +190,7 @@ SPECIAL_EQUITY_JUMP = 0.30                   # 股本大增時，同 4 季窗權
 HISTORY_COLS = ("ticker", "decided_at", "candidate_type", "final_type", "switched",
                 "candidate_states", "final_states")
 STATE_SEP = "|"
+DISPLAY_LOSS = "虧損中"                      # 非循環類只有虧損、沒有轉機狀態時的顯示名（T3）
 
 
 @dataclass
@@ -219,6 +227,7 @@ class ClassInputs:
     eps_nc: float | None = None
     eps_f4: float | None = None
     listed_quarters: int | None = None
+    industry_name: str = ""     # normalize_industry 後的產業名（選用，T2 傳統循環產業先驗用）
 
 
 @dataclass
@@ -334,7 +343,14 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
         return empty
     op_ttm = qp.ttm(quarters["op_income"].astype(float))
     rev_ttm = qp.ttm(quarters["revenue"].astype(float))
-    yoy = _ttm_yoy(rev_ttm)
+    return _drawdown_from_ttm(op_ttm, _ttm_yoy(rev_ttm), window)
+
+
+def _drawdown_from_ttm(op_ttm: pd.Series, yoy: pd.Series, window: int) -> dict:
+    """op_drawdown 的本體：吃已算好（可被遮蔽）的 TTM 營業利益與 TTM 營收年增。"""
+    nan = float("nan")
+    empty = {"max_dd": nan, "dd_peak": None, "dd_trough": None, "rev_yoy_min": nan,
+             "contraction": False, "recovered_half": None}
     win = op_ttm.tail(window)
 
     peak_val, peak_t = None, None
@@ -369,6 +385,33 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
     return {"max_dd": float(best_dd), "dd_peak": best_peak, "dd_trough": best_trough,
             "rev_yoy_min": rev_min, "contraction": contraction,
             "recovered_half": recovered}
+
+
+def single_event_dependent(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q,
+                           span_q: int = SINGLE_EVENT_WINDOW_Q) -> bool:
+    """必要②是否只靠單一景氣事件成立（T5）。
+
+    原本 op_drawdown(...)["contraction"] 為 True 才有意義；為 False 直接回 False。
+    做法：把 TTM 營業利益與 TTM 營收年增在任一個連續 span_q 季（預設 8 季＝24 個月）的窗內設 NaN
+    （窗起點掃過近 window 季內每個位置），重算 contraction；只要有一個窗使它變 False → True
+    （拿掉那一段就沒有回撤＋營收收縮＝只觀察到一次循環）。有兩段不同年份的回撤 → 任一單窗都遮不掉兩段 → False。
+    純函式、不丟例外；資料空 → False。
+    """
+    if len(quarters) == 0:
+        return False
+    op_ttm = qp.ttm(quarters["op_income"].astype(float))
+    yoy = _ttm_yoy(qp.ttm(quarters["revenue"].astype(float)))
+    if not _drawdown_from_ttm(op_ttm, yoy, window)["contraction"]:
+        return False
+    n = len(op_ttm)
+    for start in range(max(0, n - window - span_q + 1), n):
+        idx = op_ttm.index[start:start + span_q]
+        op_m, yoy_m = op_ttm.copy(), yoy.copy()
+        op_m.loc[idx] = np.nan
+        yoy_m.loc[yoy_m.index.intersection(idx)] = np.nan
+        if not _drawdown_from_ttm(op_m, yoy_m, window)["contraction"]:
+            return True
+    return False
 
 
 def cycle_coverage(oroa: pd.Series, amp: float, window: int = CYCLE_WINDOW_Q) -> bool:
@@ -494,6 +537,7 @@ def classify(inp: ClassInputs) -> Classification:
         "cyclical_aux": False, "asset_heavy": False, "rev_cagr3": nan, "rev_cagr5": nan,
         "op_cagr3": nan, "growth_core": False, "crossing": {}, "ttm_eps": nan,
         "special_triggers": [], "stay_ok": {},
+        "suspect_cyclical": False, "prior_cyclical": False, "single_event": False,
     }
     # 0 資料閘門
     if n_rev < MIN_QUARTERS:
@@ -526,10 +570,13 @@ def classify(inp: ClassInputs) -> Classification:
     nec1 = bool(pd.notna(amp_pct) and amp_pct >= (1 - CYCLE_AMP_TOP_PCT) - 1e-12)
     nec2 = bool(pd.notna(dd["max_dd"]) and dd["max_dd"] >= CYCLE_DRAWDOWN - 1e-12
                 and dd["contraction"])
-    cyc_ok = nec1 and nec2
+    cyc_ok = nec1 and nec2                     # 必要兩條（不含輔助）
     beta_ok = bool(pd.notna(inp.rev_beta) and inp.rev_beta >= CYCLE_BETA_MIN)
     sync_ok = bool(pd.notna(inp.ind_sync) and inp.ind_sync >= CYCLE_SYNC_MIN)
     aux_ok = beta_ok or sync_ok
+    prior_ok = bool(nec2 and not nec1 and inp.industry_name in CYCLE_PRIOR_INDUSTRIES)   # T2
+    suspect = bool(cyc_ok and not aux_ok)      # T1：必要兩條成立、輔助未過 → 不改類型，只標疑似
+    is_cyc = bool((cyc_ok and aux_ok) or prior_ok)   # 真正判成循環類型的條件
     heavy_thr = (1 - ASSET_HEAVY_TOP_PCT) - 1e-12
     asset_heavy = bool((pd.notna(inp.asset_ta_rev_pct) and inp.asset_ta_rev_pct >= heavy_thr)
                        or (pd.notna(inp.asset_capex_rev_pct)
@@ -553,14 +600,18 @@ def classify(inp: ClassInputs) -> Classification:
         "recovered_half": dd["recovered_half"],
         "coverage": (None if pd.isna(amp) else bool(cover)),
         "cyclical_necessary": cyc_ok, "cyclical_aux": aux_ok, "asset_heavy": asset_heavy,
+        "suspect_cyclical": suspect, "prior_cyclical": prior_ok,
         "rev_cagr3": c3, "rev_cagr5": c5, "op_cagr3": o3, "growth_core": growth_core,
         "crossing": crossing, "ttm_eps": ttm_eps_now,
     })
     # stay_ok：遲滯的留任門檻
     crossing_pass = bool(crossing["passed"])
     metrics["stay_ok"] = {
-        TYPE_GROWTH: bool(growth_stay_core and (crossing_pass if cyc_ok else True)),
-        TYPE_CYCLICAL: cyc_ok,
+        TYPE_GROWTH: bool(growth_stay_core and (crossing_pass if is_cyc else True)),
+        # 循環留任（T6）：必要②仍成立，且振幅分位 ≥ CYCLE_EXIT_AMP_PCT（比進入的 0.70 寬）；
+        # 不看輔助條件。離開還須候選連續 HYST_CYCLE_EXIT_Q 季（見 apply_hysteresis）。
+        TYPE_CYCLICAL: bool(nec2 and ((pd.notna(amp_pct) and amp_pct >= CYCLE_EXIT_AMP_PCT - 1e-12)
+                                      or prior_ok)),
     }
 
     # ── 類型 ──
@@ -625,6 +676,10 @@ def classify(inp: ClassInputs) -> Classification:
             else:
                 why.append(f"缺輔助條件（營收 beta {inp.rev_beta:.2f}、"
                            f"產業同步度 {inp.ind_sync:.2f}），列疑似循環")
+        elif prior_ok:
+            why.append(f"TTM 營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
+                       f"期間 TTM 營收年增最低 {dd['rev_yoy_min']:+.0%}；"
+                       f"屬傳統循環產業（{inp.industry_name}），OROA 振幅未達前 {CYCLE_AMP_TOP_PCT:.0%}")
         if growth_core:
             c5_txt = "—" if pd.isna(c5) else f"{c5:.0%}"
             why.append(f"TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5_txt}")
@@ -632,7 +687,7 @@ def classify(inp: ClassInputs) -> Classification:
             why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
                        f"（≥ {GROWTH_MIN_YOY:.0%}）")
 
-        if cyc_ok and growth_core:
+        if is_cyc and growth_core:
             if crossing["executed"]:
                 if crossing["passed"]:
                     why.append(f"市場營收收縮的 {crossing['n']} 個月，個股營收年增皆 > 0")
@@ -647,7 +702,7 @@ def classify(inp: ClassInputs) -> Classification:
             else:
                 ctype = TYPE_CYCLICAL
                 subtags.append(SUB_GROWTH_CYCLE)
-        elif cyc_ok:
+        elif is_cyc:
             ctype = TYPE_CYCLICAL
         elif growth_core:
             ctype = TYPE_GROWTH
@@ -655,10 +710,17 @@ def classify(inp: ClassInputs) -> Classification:
             ctype = TYPE_NORMAL
             why.append("未符合景氣循環或高成長條件")
 
+        if suspect:                      # T1：疑似循環＝類型不變（growth／normal），只加副標與降級
+            subtags.append(SUB_SUSPECT_CYCLE)
+            degrade.append("營收型態疑似循環（輔助條件未過）")
         if ctype == TYPE_CYCLICAL:
-            if not aux_ok:
-                subtags.append(SUB_SUSPECT_CYCLE)
-                degrade.append("疑似循環（缺輔助條件）")
+            if prior_ok and not cyc_ok:
+                subtags.append(SUB_PRIOR_CYCLE)
+                degrade.append("靠產業先驗，振幅未過前 30%")
+            if single_event_dependent(q):
+                subtags.append(SUB_SINGLE_EVENT)
+                degrade.append("必要條件只靠單一景氣事件成立（僅觀察到一次循環）")
+                metrics["single_event"] = True
             if not cover:
                 subtags.append(SUB_CYCLE_INCOMPLETE)
                 degrade.append("循環未觀察完整")
@@ -725,7 +787,10 @@ def classify(inp: ClassInputs) -> Classification:
         if zone:
             state.append(zone)
             why.append(f"最新 OROA 位於自身近 {CYCLE_WINDOW_Q} 季第 {pct_self * 100:.0f} 百分位")
-    if zone and ctype == TYPE_CYCLICAL and cover:
+        if zone == STATE_PROFIT_HIGH and suspect:
+            degrade.append("疑似循環且處歷史高獲利區（避免用高峰 EPS 判便宜）")
+    if (zone and ctype == TYPE_CYCLICAL and cover and not suspect
+            and SUB_CYCLE_INCOMPLETE not in subtags):          # T4：須確認循環且觀察完整
         ind_last = _last_nonnan(inp.industry_rev_ttm_yoy)
         if pd.notna(ind_last):
             if zone == STATE_PROFIT_HIGH and ind_last > 0:
@@ -837,9 +902,17 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
         out.why.append(f"切換後鎖定中（至 {_qlabel(end)}），維持{TYPE_ZH.get(current, current)}")
         return result(current, cand)
 
-    if consecutive and prev["candidate_type"] == cand:                       # 6
+    need = HYST_CYCLE_EXIT_Q if current == TYPE_CYCLICAL else HYST_CONFIRM_Q   # 6（T6：離開循環須連 4 季）
+    run = 1                                  # 含本季，往回數「前一曆季接續、候選同為 cand」的列
+    expect = _qord(new_q) - 1
+    for _, row in history.iloc[::-1].iterrows():
+        if _qord(pd.Timestamp(row["decided_at"])) != expect or row["candidate_type"] != cand:
+            break
+        run += 1
+        expect -= 1
+    if run >= need:
         return result(cand, cand)
-    out.why.append(f"本季判定為{TYPE_ZH.get(cand, cand)}，未連續 {HYST_CONFIRM_Q} 季，"
+    out.why.append(f"本季判定為{TYPE_ZH.get(cand, cand)}，未連續 {need} 季，"
                    f"維持{TYPE_ZH.get(current, current)}")
     return result(current, cand)
 
@@ -847,10 +920,14 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
 def display_type(c: Classification) -> str:
     """卡片顯示用類型名（§1.4 覆蓋規則）。
 
-    c.type 為 TYPE_NORMAL 或 TYPE_GROWTH，且 state 含 "虧損" 或 "轉機" → "轉機"。
+    c.type 為 TYPE_NORMAL 或 TYPE_GROWTH：state 含 "轉機"（四個改善證據全成立）→ "轉機"；
+      只有 "虧損"、沒有 "轉機" → DISPLAY_LOSS（"虧損中"，T3）。
     其餘 → TYPE_ZH[c.type]（循環、金融不被覆蓋；特殊、資料不足照原名）。
     """
-    if c.type in (TYPE_NORMAL, TYPE_GROWTH) and (STATE_LOSS in c.state or STATE_TURNAROUND in c.state):
-        return "轉機"
+    if c.type in (TYPE_NORMAL, TYPE_GROWTH):
+        if STATE_TURNAROUND in c.state:
+            return "轉機"
+        if STATE_LOSS in c.state:
+            return DISPLAY_LOSS
     return TYPE_ZH[c.type]
 

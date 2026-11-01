@@ -385,15 +385,104 @@ def test_OROA高低高_營收收縮_輔助成立_判循環():
     assert "OROA 振幅 20.0%，位於全體前 10%" in c.why
     assert "TTM 營業利益自 2017Q4 高點最多跌 100%，期間 TTM 營收年增最低 -30%" in c.why
     assert "營收 beta 1.60（≥ 1.5）" in c.why
-    assert c.reasons_degrade == []
+    # _cyc_q 只有一段景氣事件 → T5 標「僅單一景氣事件」並降級（兩段回撤的情形見 test_必要2有兩段不同年份回撤_不標）
+    assert cl.SUB_SINGLE_EVENT in c.subtags
+    assert c.reasons_degrade == ["必要條件只靠單一景氣事件成立（僅觀察到一次循環）"]
 
 
-def test_必要兩條但無輔助_疑似循環():
+def test_必要兩條成立但輔助未過_類型不是循環_副標疑似循環():
+    # T1：疑似循環不改類型（落回一般），只加副標與降級；metrics 記 suspect_cyclical
     c = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.9, rev_beta=1.0, ind_sync=0.3))
-    assert c.type == cl.TYPE_CYCLICAL
+    assert c.type == cl.TYPE_NORMAL
     assert cl.SUB_SUSPECT_CYCLE in c.subtags
-    assert "疑似循環（缺輔助條件）" in c.reasons_degrade
+    assert "營收型態疑似循環（輔助條件未過）" in c.reasons_degrade
     assert "缺輔助條件（營收 beta 1.00、產業同步度 0.30），列疑似循環" in c.why
+    assert c.metrics["suspect_cyclical"] is True and c.metrics["cyclical_necessary"] is True
+
+
+def test_疑似循環且歷史高獲利區_多一條降級原因():
+    # 最後 4 季營業利益 300 → 最新 OROA 0.3 唯一最高 → 歷史高獲利區；輔助未過 → 疑似
+    c = cl.classify(_inp(_cyc_q(tail_op=[300.0] * 4), oroa_amp_pct=0.9, rev_beta=1.0, ind_sync=0.3))
+    assert c.type == cl.TYPE_NORMAL and cl.STATE_PROFIT_HIGH in c.state
+    assert "疑似循環且處歷史高獲利區（避免用高峰 EPS 判便宜）" in c.reasons_degrade
+
+
+def test_疑似循環不產生疑似景氣高檔():
+    # 3443 型：同上資料、產業同向，但類型非循環 → 不得有「疑似景氣高檔」
+    ind = pd.Series(0.1, index=pd.date_range("2016-01-01", "2025-12-01", freq="MS"))
+    c = cl.classify(_inp(_cyc_q(tail_op=[300.0] * 4), oroa_amp_pct=0.9, rev_beta=1.0, ind_sync=0.3,
+                         industry_rev_ttm_yoy=ind))
+    assert cl.STATE_PROFIT_HIGH in c.state and cl.STATE_CYCLE_HIGH not in c.state
+
+
+def test_確認循環且已觀察完整_才可疑似景氣高檔():
+    ind = pd.Series(0.1, index=pd.date_range("2016-01-01", "2025-12-01", freq="MS"))
+    c = cl.classify(_inp(_cyc_q(tail_op=[300.0] * 4), oroa_amp_pct=0.9, rev_beta=1.6,
+                         industry_rev_ttm_yoy=ind))
+    assert c.type == cl.TYPE_CYCLICAL and cl.SUB_CYCLE_INCOMPLETE not in c.subtags
+    assert cl.STATE_CYCLE_HIGH in c.state
+    # 循環未觀察完整（停在谷底）→ 沒有疑似景氣高低檔
+    c2 = cl.classify(_inp(_cyc_trough_q(), oroa_amp_pct=0.9, rev_beta=1.6, industry_rev_ttm_yoy=ind))
+    assert cl.SUB_CYCLE_INCOMPLETE in c2.subtags
+    assert cl.STATE_CYCLE_HIGH not in c2.state and cl.STATE_CYCLE_LOW not in c2.state
+
+
+# ── T2 傳統循環產業先驗 ─────────────────────────────
+
+def test_傳統循環產業_必要2成立但振幅未過_判循環_副標產業先驗():
+    # 2605 型：振幅分位 0.3（< 0.70）、輔助也不給；_cyc_q 必要2成立
+    c = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.3, industry_name="航運業"))
+    assert c.type == cl.TYPE_CYCLICAL
+    assert cl.SUB_PRIOR_CYCLE in c.subtags and cl.SUB_SUSPECT_CYCLE not in c.subtags
+    assert "靠產業先驗，振幅未過前 30%" in c.reasons_degrade
+    assert c.metrics["prior_cyclical"] is True
+
+
+def test_非傳統循環產業_振幅未過_不判循環():
+    c = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.3, industry_name="半導體業"))
+    assert c.type == cl.TYPE_NORMAL and cl.SUB_PRIOR_CYCLE not in c.subtags
+
+
+def test_傳統循環產業_必要2不成立_不判循環():
+    # 1101 台泥型：有回撤但營收從不收縮 → 必要2不成立
+    c = cl.classify(_inp(_two_dd_q(1.0), oroa_amp_pct=0.3, industry_name="水泥工業"))
+    assert c.type == cl.TYPE_NORMAL and cl.SUB_PRIOR_CYCLE not in c.subtags
+
+
+def test_傳統循環產業_必要1已成立_行為不變_不標產業先驗():
+    c = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.9, rev_beta=1.6, industry_name="航運業"))
+    assert c.type == cl.TYPE_CYCLICAL and cl.SUB_PRIOR_CYCLE not in c.subtags
+
+
+# ── T5 單一景氣事件 ─────────────────────────────────
+
+def _two_events_q():
+    """兩段不同年份的深回撤且都伴隨營收大減：營業利益 200 → 0（idx 8..15）→ 200 → 0（idx 28..35）→ 200；
+    營收同期降為 500。拿掉任一個 8 季窗，另一段仍成立。"""
+    rev = [1000.0] * 44
+    rev[8:16] = [500.0] * 8
+    rev[28:36] = [500.0] * 8
+    op = [200.0] * 44
+    op[8:16] = [0.0] * 8
+    op[28:36] = [0.0] * 8
+    return _q(rev=rev, op=op)
+
+
+def test_必要2只靠單一兩年窗_標僅單一景氣事件():
+    assert cl.single_event_dependent(_cyc_q()) is True
+    c = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.9, rev_beta=1.6))
+    assert c.type == cl.TYPE_CYCLICAL                     # 不改類型
+    assert cl.SUB_SINGLE_EVENT in c.subtags and c.metrics["single_event"] is True
+
+
+def test_必要2有兩段不同年份回撤_不標():
+    assert cl.single_event_dependent(_two_events_q()) is False
+    c = cl.classify(_inp(_two_events_q(), oroa_amp_pct=0.9, rev_beta=1.6))
+    assert c.type == cl.TYPE_CYCLICAL and cl.SUB_SINGLE_EVENT not in c.subtags
+
+
+def test_必要2不成立_不算單一事件():
+    assert cl.single_event_dependent(_bubble_q()) is False
 
 
 def test_同步度0點6_輔助成立():
@@ -422,7 +511,7 @@ def test_振幅分位NaN_不判循環():
 
 
 def test_單一年泡沫_不判循環():
-    # 振幅分位即使給 0.95、beta 2，回撤 50% 期間營收沒收縮 → 必要②不成立
+    # 振幅分位即使給 0.95、beta 2，回撤 50% 期間營收沒收縮 → 必要2不成立
     c = cl.classify(_inp(_bubble_q(), oroa_amp_pct=0.95, rev_beta=2.0))
     assert c.type == cl.TYPE_NORMAL
     assert c.metrics["cyclical_necessary"] is False
@@ -847,7 +936,8 @@ def test_遲滯不改動輸入():
 # ── 顯示名 ──────────────────────────────────────────
 
 @pytest.mark.parametrize("t,state,expected", [
-    (cl.TYPE_NORMAL, [cl.STATE_LOSS], "轉機"),
+    (cl.TYPE_NORMAL, [cl.STATE_LOSS], "虧損中"),             # T3：只有虧損 → 虧損中
+    (cl.TYPE_NORMAL, [cl.STATE_LOSS, cl.STATE_TURNAROUND], "轉機"),
     (cl.TYPE_GROWTH, [cl.STATE_TURNAROUND], "轉機"),
     (cl.TYPE_NORMAL, [], "一般"),
     (cl.TYPE_GROWTH, [], "高成長"),
@@ -858,3 +948,62 @@ def test_遲滯不改動輸入():
 ])
 def test_顯示類型_覆蓋規則(t, state, expected):
     assert cl.display_type(cl.Classification(type=t, state=state)) == expected
+
+
+def test_非循環只有虧損_顯示虧損中():
+    eps = [1.0] * 40 + [-1.0, 0.5, 0.25, 0.25]               # 近四季合計 0 → 虧損；g3 缺 → 無轉機
+    c = cl.classify(_inp(_q(eps=eps)))
+    assert cl.STATE_LOSS in c.state and cl.STATE_TURNAROUND not in c.state
+    assert cl.display_type(c) == cl.DISPLAY_LOSS == "虧損中"
+
+
+def test_非循環有轉機狀態_顯示轉機():
+    c = cl.classify(_inp(_turn_q(), g3=0.05))
+    assert cl.display_type(c) == "轉機"
+
+
+def test_副標與狀態不同名():
+    assert cl.SUB_UNSTABLE != cl.STATE_UNSTABLE and cl.SUB_UNSTABLE == "近5年曾虧損"
+
+
+# ── T6 循環退出門檻 ─────────────────────────────────
+
+C = cl.TYPE_CYCLICAL
+
+
+def test_循環留任門檻_振幅分位0點55不留任_0點65留任():
+    ok = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.65, rev_beta=1.0, ind_sync=0.3))
+    assert ok.type == N and ok.metrics["stay_ok"][C] is True       # 進不了循環（<0.70），但留任（≥0.60）
+    low = cl.classify(_inp(_cyc_q(), oroa_amp_pct=0.55))
+    assert low.metrics["stay_ok"][C] is False
+
+
+def test_循環分位跌到0點55只一季_不退出():
+    h = _hist([(0, C, C, True)] + [(i, C, C, False) for i in range(1, 6)])
+    r = cl.apply_hysteresis(_cls(N, 6, stay_ok={C: False}), h)     # 只有本季是候選一般
+    assert r.type == C and r.metrics["switched"] is False
+    assert "未連續 4 季" in " ".join(r.why)
+
+
+def test_循環分位連4季低於0點60_退出並鎖4季():
+    # Q0 切成循環；Q4、Q5、Q6 候選一般，Q7 第 4 季 → 退出（Q0 起鎖 4 季已過）
+    h = _hist([(0, C, C, True), (1, C, C, False), (2, C, C, False), (3, C, C, False),
+               (4, N, C, False), (5, N, C, False), (6, N, C, False)])
+    r = cl.apply_hysteresis(_cls(N, 7, stay_ok={C: False}), h)
+    assert r.type == N and r.metrics["switched"] is True and r.metrics["last_switch"] == Q[7]
+    assert r.metrics["locked_until"] == Q[10]
+
+
+def test_循環必要條件連4季不成立_退出():
+    # 必要2不成立 → stay_ok False，同樣走連 4 季
+    h = _hist([(0, C, C, True)] + [(i, C, C, False) for i in range(1, 4)]
+              + [(4, N, C, False), (5, N, C, False), (6, N, C, False)])
+    r = cl.apply_hysteresis(_cls(N, 7, stay_ok={C: False}), h)
+    assert r.type == N and r.metrics["switched"] is True
+
+
+def test_循環中途一季回到留任_重新計算連續():
+    h = _hist([(0, C, C, True)] + [(i, C, C, False) for i in range(1, 4)]
+              + [(4, N, C, False), (5, N, C, False), (6, C, C, False)])
+    r = cl.apply_hysteresis(_cls(N, 7, stay_ok={C: False}), h)
+    assert r.type == C                                              # 連續被 Q6 打斷，只剩 1 季
