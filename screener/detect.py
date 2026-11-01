@@ -115,7 +115,7 @@ def revenue_caliber(q: pd.DataFrame, monthly: pd.Series) -> Check:
             ratio = float(sum(monthly[m] for m in months)) / float(r.revenue)
             bad += abs(ratio - 1) > REV_CALIBER_TOL
     if tot >= 3 and bad >= 2:
-        return Check(n, "block", float(bad), f"近 4 季有 {bad} 季月營收合計與季報營收差 >5%，EPS_NC 不可靠")
+        return Check(n, "block", float(bad), f"近 4 季有 {bad} 季月營收合計與季報營收差 >5%，前瞻 4 季不可靠")
     return _ok(n, float(bad))
 
 
@@ -129,7 +129,7 @@ def near_zero_eps(eps_base: float | None, q: pd.DataFrame) -> Check:
     ttm = e.rolling(4).sum().dropna().tail(20)
     med = float(ttm.median())
     if med > 0 and eps_base < med * NEAR_ZERO_REL:
-        return Check(n, "block", eps_base, f"預估 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，PE 法不適用")
+        return Check(n, "block", eps_base, f"前瞻 4 季 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，改用過去 4 季 EPS")
     return _ok(n, eps_base)
 
 

@@ -2172,54 +2172,25 @@ _MD_BR = "  " + chr(10)      # markdown 強制換行（兩個空白＋換行）
 _POS_ZH = {"cheap": ("便宜區", "green"), "fair": ("合理區", "blue"), "dear": ("昂貴區", "red"), "na": ("—", "gray")}
 
 
+_NC_KIND_TEXT = {"actual": "實際", "est": "推算", "copy": "預測（延續最近一季）"}
+
+
 def _card_explain(c: dict) -> str:
-    """功能解釋：算式、警語、回測狀態都寫在這裡（使用者 2026-11-01 指定：卡片只放數字，警語進解釋）。
-    依 c['method']（PE／PB）與 c['type'] 切換三價與前瞻股價的說明（Opus 掃描 #4）。"""
-    pb = c.get("method") == "PB"
-    if pb:
-        l1 = ("**三價**＝歷史（約 10 年）每個月底的股價淨值比 P20／P50／P80 × 最新每股淨值（＝現價 ÷ 交易所股價淨值比）；"
-              "不設上限；歷史窗內有大型股數調整事件者不給（交易所 PBR 沒修）。金融股 2026 年起 IFRS 17 淨值有斷點，跨年不完全可比。"
-              "現價低於便宜價＝便宜區、介於之間＝合理區、高於昂貴價＝昂貴區。是「相對自身歷史倍數」的位置，不是內在價值。")
-        l2 = "**前瞻股價與購買參考價**：PB 路線（金融、景氣循環・資產重）第一版不給。"
-    else:
-        cap = ("本益比上限 50（高成長股，取近 3 年月底本益比）" if c.get("type") == "growth" else
-               "本益比上限 30（近 5 年每年獲利且各年均值都 >30 者放寬到 50）；取近 5 年月底本益比")
-        l1 = (f"**三價**＝近年每個月底的本益比 P20／P50／P80 × **前瞻四季 EPS**；{cap}，被截斷時會另註原始倍數。"
-              "現價低於便宜價＝便宜區、介於之間＝合理區、高於昂貴價＝昂貴區。是「相對自身歷史倍數」的位置，不是內在價值。")
-        l2 = ("**前瞻股價**＝未來 4 季試算 EPS（F4）× 歷史 P50 倍數；範圍＝F4×P20 ～ F4×P80（只反映倍數不確定，**不是預測信賴區間**）。"
-              "與現價無關。**購買參考價**＝前瞻股價 ÷ 1.10；前瞻股價 ≥ 現價 × 1.10（空間 ≥10%）才顯示，否則不給。"
-              "**10% 是自訂門檻，不是預期報酬。**")
-    p_ = c.get("prices") or {}
-    fb = ("**補位倍數**：這檔自身歷史倍數不可用（月數不足、倍數分布太寬、倍數上限使三價相同、股數事件汙染或屬特殊／財報不足類型），"
-          "三價改用「類型參考倍數 × EPS」，**不是這檔自己的歷史**，可信度一律低、不給前瞻股價與購買參考價。"
-          "參考倍數（便宜／合理／昂貴）：一般 12.8／16.5／21.1、高成長 17.2／19.2／26.2、循環 13.6／17.6／22.7、"
-          "金融 9.9／11.8／14.0、特殊 8.8／11.5／15.2、資料不足 13.1／15.9／19.4。前兩者＝同類「有自身歷史倍數者」的三價倍數中位數；"
-          "其餘＝2021～2025 年底全市場橫斷面本益比的分位數（口徑不同，偏誤見下）。**沒有回測。**"
-          if p_.get("source") == "補位" else None)
-    eb = ("**EPS 基準**：一般、高成長用前瞻四季 EPS；前瞻 EPS 試算不可靠（橋接殘差、業外占比高且不穩、月營收口徑不符、近零 EPS）或 ≤ 0 時，"
-          "改用近四季實際 EPS 並標可信度低；景氣循環類、或「歷史高獲利區＋循環跡象」取近四季與 3 年平均的較低者（避免用高峰 EPS 乘歷史倍數）。"
-          "**近四季 EPS ≤ 0（賠錢）不給三價。**")
+    """統一說明引擎口徑。"""
+    from screener.eps_nowcast import TRIAL_BASIS_TEXT, FUTURE_TEXT
     lines = [
-        l1,
-        fb,
-        eb,
-        "**前瞻四季 EPS**＝最近 (4−k) 季財報實際 ＋ k 季試算（k＝1～3，通常 1 或 2）；試算＝月營收 × 毛利率（含季節偏差）"
-        "− 營業費損（隨營收）＋ 近 8 季業外中位數，再乘稅率與少數股權比、除以股數。",
-        l2,
+        "三價＝EPS×自身歷史倍數 P20／P50／P80；補位時另註。EPS 預設用前瞻 4 季，試算不可用或財報落後 3 季以上改用過去 4 季。",
+        "賠錢不給價；高變動、前瞻退回、倍數補位只降可信度或換基準，不擋價。",
+        TRIAL_BASIS_TEXT[(c.get("eps") or {}).get("basis", "latest")],
+        FUTURE_TEXT,
+        "對照價＝過去 4 季 EPS×同一組倍數；兩者差逾 30% 標「獲利口徑差異大」，不判便宜／昂貴、不給購買參考價。",
+        "購買參考價＝合理價÷1.10，且須比現價高 10% 以上才給；補位、前瞻退回都不給。",
         "---",
-        "⚠️ **回測狀態：購買參考價這條規則本身「沒有」直接回測。** 只有下面的間接檢驗，且都不能證明它有效：",
-        "- 前瞻四季 EPS 的誤差中位數 8.9%，優於「維持近四季不變」的 12.1%（2018～2025，31 個重播點）。",
-        "- 未來 4 季 EPS（F4）誤差中位數 32.9%，**沒有優於**「維持近四季不變」（32.8%）；誤差 P10～P90 約 −63%～+122%，"
-        "所以**前瞻股價的點位不可靠**。F4 相對近四季的高低，對「誰成長較快」的排序有弱訊號（相關約 0.15）。",
-        "- 間接回測（2023-08～2025-08，約 3 個獨立年度，分組與購買參考價規則不同；以下是「組內減組外」的 12 個月平均超額報酬差）："
-        "現價 ≤ 合理價（P50×NC）者比同期其他可給價股票**少約 3.6 個百分點**（排除 2026 約持平）；現價 ≤ 便宜價（P20）者**少約 23 個百分點**；"
-        "再加成長條件：F4 ≥ 近四季約 −0.4 個百分點（無差別）、F4 ≥ 1.05 倍近四季 +11.3、≥ 1.10 倍 +16.7，"
-        "但**剔除貢獻最大的 10 檔後全部轉負**，預先登記的四條通過標準沒有任何一組全過。**低於自身歷史倍數並不代表之後會漲。**",
-        "- 限制：樣本是現行上市櫃（無下市股）、無原始公告版本、報酬期間重疊、約 3 個獨立年度、同時受 2026 年行情影響。",
-        "本卡片是情境估算，**非買進建議**；可信度低時請特別保守看待。",
+        "回測採舊口徑；新口徑沒有驗證。",
+        "購買參考價規則沒有直接回測。",
+        "情境估算，非買進建議。",
     ]
-    # 分隔線前後要有空行：「文字行緊接 ---」在 markdown 是 setext 標題，會把整段變成超大字（使用者 11/1 截圖）
-    return _MD_BR.join(x for x in lines if x).replace(_MD_BR + "---" + _MD_BR, chr(10) * 2 + "---" + chr(10) * 2)
+    return _MD_BR.join(lines).replace(_MD_BR + "---" + _MD_BR, "\n\n---\n\n")
 
 
 def _pct_floor(v) -> str:
@@ -2231,38 +2202,38 @@ def _pct_floor(v) -> str:
 
 
 def _card_lines(c: dict) -> str:
-    """卡片一的估值行：三價（便宜／合理／昂貴＋位置）、購買參考價、前瞻股價。只放數字，說明在展開區。"""
+    """卡片一的估值行：三價（便宜／合理／昂貴＋位置＋EPS 基準）、對照價、購買參考價。每個數字只出現一次，說明在展開區。"""
     if not c.get("ok"):
         return ":gray[" + (c.get("reason") or "估值：—") + "]"
-    p, f, px0 = c.get("prices"), c.get("forward"), c.get("price")
+    p, f = c.get("prices"), c.get("forward")
     out = []
     if p:
         pos, col = _POS_ZH.get(c.get("position") or "na", ("—", "gray"))
         unit = "PB" if c.get("method") == "PB" else "PE"
         src = "類型參考倍數" if p.get("source") == "補位" else "自身歷史"
-        out.append(f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　:{col}[{pos}]（{unit}・{src}）")
+        base = (p.get("base_name") or "").replace(" EPS", "")
+        out.append(f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　:{col}[{pos}]（{unit}・{src}・{base}）")
     else:
         out.append(f":gray[三價：不給（{c.get('no_price') or '—'}）]")
     if f:
-        if f.get("margin") is None:
-            out.append(":gray[購買參考價：缺現價，不給]")
+        reported = f.get("reported")
+        if reported:
+            big = "　:gray[⚠️ 獲利口徑差異大]" if f.get("gap_big") else ""
+            out.append(f"對照 過去 4 季：合理 {reported['base']:,.1f}（差 {f['gap']:+.0%}）{big}")
+        if f.get("gap_big"):
+            out.append(":gray[購買參考價：不給（獲利口徑差異大）]")
         elif f.get("ref_ok"):
-            out.append(f"購買參考價 **≤ {f['ref_price']:,.1f}**（前瞻股價空間 {f['margin']:+.0%}）")
+            out.append(f"購買參考價 **≤ {f['ref_price']:,.1f}**（空間 {f['margin']:+.0%}）")
         else:
-            out.append(f":gray[購買參考價：前瞻股價空間 {_pct_floor(f['margin'])}，不足 10%，不給]")
-        out.append(f"前瞻股價 **{f['base']:,.1f}**（{f['lo']:,.1f}～{f['hi']:,.1f}）")
-    elif p and c.get("method") == "PB":
-        out.append(":gray[購買參考價／前瞻股價：PB 路線不給]")
-    elif p and p.get("source") == "補位":
-        out.append(":gray[購買參考價／前瞻股價：補位三價不給]")
+            out.append(":gray[購買參考價：不給]")
     elif p:
-        out.append(":gray[購買參考價／前瞻股價：不給（前瞻 EPS 不可用、EPS 改用較保守基準，或財報落後 3 季以上）]")
+        out.append(":gray[購買參考價：不給]")
     return _MD_BR.join(out) + _MD_BR
 
 
 def _card_block(c: dict) -> None:
     """新版估值定位細節（A13）：類型／狀態、前瞻 EPS 明細、降級原因、分類原因，全在同一個展開區。
-    三價、前瞻股價、購買參考價在卡一（_card_lines），算式與警語在「怎麼算」（_card_explain）。"""
+    三價、對照價、購買參考價在卡一（_card_lines），算式與警語在「怎麼算」（_card_explain）。"""
     if not c.get("ok"):
         st.caption(c.get("reason") or "—")
         return
@@ -2274,15 +2245,15 @@ def _card_block(c: dict) -> None:
         if nc.get("ok"):
             qs = nc.get("nc_quarters") or []
             span = f"{qs[0]['q']}–{qs[-1]['q']}" if qs else ""
-            fb = "（月營收未超過財報季或試算失敗，同過去 4 季）" if nc.get("fallback") or nc.get("k") == 0 else ""
+            fb = "（退回過去 4 季）" if nc.get("fallback") else ""
             st.markdown(f"前瞻 4 季涵蓋 {span}{fb}")
         pp = c.get("prices") or {}
-        if pp.get("base_name") and pp["base_name"] != "前瞻四季 EPS":      # 基準就是卡片上的前瞻 4 季時不重複
+        if pp.get("base_name") and pp["base_name"] != "前瞻 4 季 EPS":      # 基準就是卡片上的前瞻 4 季時不重複
             st.markdown(f"三價 EPS 基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**" if c.get("method") != "PB" or pp.get("source") == "補位"
                         else f"三價基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**")
         f = c.get("forward")
         if f:
-            st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}（前瞻股價與現價無關；空間會隨現價變動）")
+            st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}")
         for dg in conf.get("degrades") or []:
             st.caption("⚠️ 降級：" + dg)
         for ch in c.get("checks") or []:
@@ -2294,28 +2265,88 @@ def _card_block(c: dict) -> None:
             st.markdown("- " + str(w))
         cp = c.get("compare")
         if cp:
-            warn = "　⚠️ 與主卡差 >15%（成長股被過去 4 季低估／衰退股高估）" if cp["warn"] else ""
+            warn = "　⚠️ 獲利口徑差異大（>30%）" if cp["warn"] else ""
             st.markdown(f"**用過去 4 季 EPS {cp['eps_ttm']:,.2f} 的對照三價**：便宜 {cp['cheap']:,.1f}｜合理 "
                         f"{cp['fair']:,.1f}｜昂貴 {cp['dear']:,.1f}（合理價差 {cp['diff']:+.0%}）{warn}")
         qs = nc.get("nc_quarters") or []
         if qs:
             st.markdown("**前瞻 4 季明細**：" + "｜".join(
-                f"{x['q']} {'實際' if x['kind'] == 'actual' else '試算'} {x['eps']:.2f}" for x in qs))
-        fq = nc.get("f4_quarters") or []
+                f"{x['q']} {_NC_KIND_TEXT[x['kind']]} {x['eps']:.2f}" for x in qs))
+        fq = nc.get("future_quarters") or []
         if fq:
-            st.markdown("**未來 4 季明細（全是試算）**：" + "｜".join(f"{x['q']} {x['eps']:.2f}" for x in fq))
+            st.markdown("**未來 4 季明細**：" + "｜".join(
+                f"{x['q']} {'沿用前瞻' if i < 2 else '成長預測'} {x['eps']:.2f}" for i, x in enumerate(fq)))
         prm = nc.get("params") or {}
         if prm:
             st.caption(f"試算參數：稅率 {_fmt_pct(prm.get('t'), False)}、少數股權比 {_fmt_pct(prm.get('m'), False)}、"
-                       f"毛利率(TTM) {_fmt_pct(prm.get('gm_ttm'), False)}、費損率 {_fmt_pct(prm.get('opex_ratio'), False)}、"
-                       f"近 3 月營收年增 {_fmt_pct(prm.get('g3'))}")
+                       f"毛利率（最新一季） {_fmt_pct(prm.get('gm_last'), False)}、費損率（最新一季） {_fmt_pct(prm.get('opex_last'), False)}、"
+                       f"近 3 月營收年增 {_fmt_pct(prm.get('g3'))}、近 12 月營收年增 {_fmt_pct(prm.get('g12'))}（未來 4 季用）")
         b = c.get("band")
         if b and b.get("raw"):
             r_ = b["raw"]
             st.caption(f"倍數窗 {b.get('window_start')}～{b.get('window_end')}，{b.get('n_months')} 個月底；"
                        f"原始 P20/P50/P80＝{r_['p20']:.2f}/{r_['p50']:.2f}/{r_['p80']:.2f}")
-        st.caption("樣本為現行上市櫃（無下市股，存活者偏差）；業外假設為近 8 季中位數延續，並非已剔除一次性；"
+        st.caption("樣本為現行上市櫃（無下市股，存活者偏差）；"
                    f"分類基準 {str(c.get('class_asof') or '—')[:10]}、規則 {c.get('version')}。")
+        from screener.eps_nowcast import TRIAL_BASIS_TEXT
+        st.caption(TRIAL_BASIS_TEXT[nc.get("basis", "latest")])
+
+
+def _eps_quarter_tables(nc: dict, fin_q: str = "") -> None:
+    """逐季呈現引擎提供的中間值，畫面不重算獲利或 EPS。"""
+    qs = nc.get("nc_quarters") or []
+    future = nc.get("future_quarters") or []
+    kinds = {"actual": "實際", "est": "推算", "copy": "預測", "grow": "成長預測"}
+    est = [x for x in qs if x["kind"] != "actual"] + future[2:]
+    for x in est:
+        rev, gm, op = x.get("rev"), x.get("gm"), x.get("op")
+        gp, opex, conv, net = (x.get(key) for key in ("gp", "opex", "conv", "net"))
+        shares = x.get("shares")
+        rev_note = ("沿用前瞻末季營收並套成長因子" if x.get("rev_src") == "grow" else
+                    "延續最近一季營收" if x.get("rev_src") == "flat" else
+                    "月營收合計；缺月依近 3 月年增補")
+        rows = [
+            (f"{x['q']} 營收", _fmt_yi(rev), rev_note),
+            ("× 毛利率", _fmt_pct(gm, False), f"{fin_q} 財報（最新一季）"),
+            ("＝ 毛利", _fmt_yi(gp), ""),
+            ("－ 營業費用", _fmt_yi(opex), f"費用率 {_fmt_pct(x.get('opex_ratio'), False)} × 試算營收"),
+            ("＝ 營業利益（試算）", _fmt_yi(op), ""),
+            ("＋ 業外", _fmt_yi(x.get("nonop")), "推算與預測季排除業外" if nc.get("basis") == "latest" else "舊口徑"),
+            ("× 歸母淨利 ÷ 稅前", _fmt_pct(conv, False), "(1−稅率)×(1−少數股權比)，取近 8 季"),
+            ("＝ 歸母淨利（單季試算）", _fmt_yi(net), ""),
+            ("÷ 股數", "—" if shares is None else f"{shares / 1e8:,.2f} 億股", "近 4 季「歸母淨利 ÷ EPS」中位數"),
+            (f"＝ {x['q']} 試算 EPS", _fmt_x(x["eps"]), ""),
+        ]
+        st.markdown(f"**{x['q']} {kinds[x['kind']]}推導表**")
+        _vtable(["步驟", "數值", "來源／假設"], [[(a_, c_), b_, c_] for a_, b_, c_ in rows], {1}, {2})
+    if qs:
+        st.markdown(f"**前瞻 4 季合計 {_fmt_x(nc.get('eps_nc'))}**")
+        _vtable(["季", "類別", "EPS"],
+                [[x["q"], kinds[x["kind"]], _fmt_x(x["eps"])] for x in qs], {2})
+    if future:
+        st.markdown(f"**未來 4 季合計 {_fmt_x(nc.get('eps_future'))}**")
+        _vtable(["季", "類別", "EPS"],
+                [[x["q"], "沿用前瞻" if i < 2 else "成長預測", _fmt_x(x["eps"])]
+                 for i, x in enumerate(future)], {2})
+    from screener.eps_nowcast import TRIAL_BASIS_TEXT
+    st.caption(TRIAL_BASIS_TEXT[nc.get("basis", "latest")])
+
+
+def _card_eps_lines(nc: dict) -> list[str]:
+    """卡片只讀引擎數值。"""
+    if not nc.get("ok") or nc.get("fallback"):
+        out = [f"過去 4 季：{_fmt_x(nc.get('eps_ttm'))}（4 季實際）"] if nc.get("eps_ttm") is not None else []
+        return out + [":gray[前瞻／未來 4 季：不試算（金融股、月營收不足或試算退回）]"]
+    qs = nc.get("nc_quarters") or []
+    na = sum(x["kind"] == "actual" for x in qs)
+    ne = sum(x["kind"] == "est" for x in qs)
+    npred = sum(x["kind"] == "copy" for x in qs)
+    status = nc.get("future_status", "no_data")
+    future = (_fmt_x(nc.get("eps_future")) if status == "ok" else
+              "未呈成長，不外推" if status == "not_growth" else "資料不足")
+    return [f"過去 4 季：{_fmt_x(nc.get('eps_ttm'))}（4 季實際）",
+            f"前瞻 4 季：**{_fmt_x(nc.get('eps_nc'))}**（{na} 實際＋{ne} 推算＋{npred} 預測）",
+            f"未來 4 季：{future}" + ("（2 季沿用前瞻＋2 季成長預測）" if status == "ok" else "")]
 
 
 def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
@@ -2341,7 +2372,8 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
             with st.expander("📐 怎麼算（含警語與回測狀態，點開看）"):
                 st.markdown(_card_explain(card))
         return
-    st.caption(f"營運速度年化試算，**非全年預測、非目標價**　｜　財報 {a['fin_q']}｜"
+    st.caption(("延續最新一季毛利率與費用率的試算" if (card.get("eps") or {}).get("ok") else "資料不足")
+               + f"，**非預測、非目標價**　｜　財報 {a['fin_q']}｜"
                f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
 
     rv, e, pe, yb = r["rev"], r["eps"], r["pe"], r["year"]
@@ -2356,116 +2388,28 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
         rows = [f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）",
                 f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**",
                 f"vs 上季 {a['fin_q']}：{_fmt_pct(rv['vs_last_q'])}｜年增：{_fmt_pct(rv['yoy'])}",
-                "**EPS**"]
-        if nc.get("ok"):
-            qs = nc.get("nc_quarters") or []
-            na = sum(1 for x in qs if x["kind"] == "actual")
-            rows.append(f"過去 4 季：{_fmt_x(e['ttm'])}")
-            rows.append(f"前瞻 4 季：**{_fmt_x(nc.get('eps_nc'))}**（{na} 季實際＋{4 - na} 季試算）")
-            rows.append(f"未來 4 季：{_fmt_x(nc.get('eps_f4'))}（4 季都是試算）")
-        else:       # 新版前瞻 EPS 算不出來時，才顯示舊版的今年預估／年化試算（避免同卡三個「預估」並存，Opus #8）
-            rows.append(f"過去 4 季：{_fmt_x(e['ttm'])}")
-            if yb:
-                rows.append(f"{yb['year']} 預估 **{_fmt_x(yb['est'])}**（年增 {_fmt_pct(yb['growth'])}）")
-            rows.append(f"年化試算（排除業外）：{_fmt_x(e['run_ex'])}")
+                "**EPS（滾動獲利估值）**"]
+        rows.extend(_card_eps_lines(nc))
         st.markdown(_MD_BR.join(rows))
     with c3.container(border=True, key="valcard_px"):
-        b, gpx, px0 = r["band"], r["growth_price"], r["price"]
-
-        def _vs(v):
-            return f"（{v / px0 - 1:+.0%}）" if (v and px0) else ""
-        # 各年平均 PE 差太多（最高 > 4×最低）→ 卡片不列三段價，免得 88～360 這種區間誤導；展開裡照列
+        px0 = card.get("price")
         tiers = _card_lines(card)
-        grow = ("" if va.BUY_RANGE_PAUSED else
-                (f"成長價 **{gpx:,.1f}**{_vs(gpx)}  \n" if gpx else "成長價：—  \n"))
-        yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
         # 卡片只放數字；公式與 PE 倍數變化收進下方展開（使用者 2026-10-30：股價說明太多）
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
-                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}"
+                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}"
                     f"{buy_txt}{risk_txt}", unsafe_allow_html=True)
     _card_block(card)
-    cur = f"（目前 {r['cur_pe']['pe']:.1f} 倍）" if r["cur_pe"] else ""
-    title = ("📐 怎麼算：三價、前瞻股價、購買參考價、停損、支撐壓力（含警語與回測狀態，點開看）" if va.BUY_RANGE_PAUSED else
-             "📐 股價怎麼算：三段價、成長價、買進區間、停損參考、支撐壓力（點開看規則）")
-    with st.expander(title):
+    with st.expander("📐 怎麼算（含警語與回測）"):
         st.markdown(_card_explain(card))
-        if not va.BUY_RANGE_PAUSED:
-            st.caption(f"📈 **成長價**＝今年預估 EPS × 交易所目前本益比{cur}：假設本益比不變、讓獲利成長推股價。"
-                       + (f"  \n{buy_how}" if buy_how else ""))
         if risk_how:
             st.caption(risk_how)
-    for w in r["warns"]:
-        st.warning(w, icon="⚠️")
-    for i in r["infos"]:
-        st.caption("ℹ️ " + i)
 
     inp = r["inputs"]
-    with st.expander("🔍 試算細節（推導表／敏感度／本益比區間／業外）"):
-        gp = rv["m3_sum"] * inp["gm"] if inp["gm"] is not None else None
-        op = gp - inp["opex_est"] if (gp is not None and inp["opex_est"] is not None) else None
-        net = op * inp["conv"] if (op is not None and inp["conv"] is not None) else None
-        rows = [
-            ("近 3 月營收合計", _fmt_yi(rv["m3_sum"]), f"月營收 {rv['first_month']}–{rv['last_month']}"),
-            ("× 毛利率", _fmt_pct(inp["gm"], False), f"{a['fin_q']} 財報"),
-            ("＝ 毛利", _fmt_yi(gp), ""),
-            ("－ 營業費用", _fmt_yi(inp["opex_est"]),
-             f"{a['fin_q']} 費用率 {_fmt_pct(inp['opex_ratio'], False)} × 試算營收"
-             f"（若固定為 {a['fin_q']} 金額 {_fmt_yi(inp['opex'])}，年化 EPS 會是 "
-             f"{_fmt_x(inp['run_fixed_opex'])}）"),
-            ("＝ 營業利益（試算）", _fmt_yi(op), ""),
-            ("＋ 業外", "0（排除）",
-             f"對照版加回近 4 季平均 {_fmt_yi(inp['nonop_avg4'])}；最新一季 {_fmt_yi(inp['nonop_latest'])}"),
-            ("× 歸母淨利 ÷ 稅前", _fmt_pct(inp["conv"], False), "近 4 季合計（含稅與非控制權益）"),
-            ("＝ 歸母淨利（單季試算）", _fmt_yi(net), ""),
-            ("÷ 股數", "—" if inp["shares"] is None else f"{inp['shares'] / 1e8:,.2f} 億股",
-             "近 4 季「歸母淨利 ÷ EPS」中位數"),
-            ("× 4 ＝ 年化試算 EPS", _fmt_x(e["run_ex"]), "把這一季的速度延長成一年"),
-        ]
-        if yb:
-            rows += [
-                (f"{yb['year']} 已公布 {yb['reported_q']} 季 EPS", _fmt_x(yb["reported_eps"]), "財報實際（含業外）"),
-                (f"＋ 未公布 {4 - yb['reported_q']} 季 × 試算單季 EPS",
-                 _fmt_x(yb["est"] - yb["reported_eps"]), "年化試算 EPS ÷ 4（排除業外）"),
-                (f"＝ {yb['year']} 預估 EPS", _fmt_x(yb["est"]),
-                 f"去年 {_fmt_x(yb['last'])}，年增 {_fmt_pct(yb['growth'])}"),
-            ]
-        if r["growth_price"] and not va.BUY_RANGE_PAUSED:
-            rows.append(("成長價 ＝ 預估 EPS × 目前本益比", _fmt_x(r["growth_price"], 1),
-                         f"交易所本益比 {r['cur_pe']['pe']:.1f} 倍（{r['cur_pe']['date']}）；"
-                         "倍數不變、讓獲利成長推股價，成長越陡越樂觀"))
-        if r["implied_pe"]:
-            rows.append(("現價 ÷ 年化試算 EPS", f"{r['implied_pe']:.1f} 倍", "現價隱含的前瞻本益比"))
-        st.markdown("**推導表**")
-        _vtable(["步驟", "數值", "來源／假設"],
-                [[(stp, note), val, note] for stp, val, note in rows], {1}, {2})
-
-        if r["sens"]:
-            s = r["sens"]
-            st.markdown("**敏感度：營收 × 毛利率 → 年化試算 EPS（排除業外）**")
-            _vtable(["營收＼毛利率"] + [f"{x * 100:+.0f}pp" for x in s["gm"]],
-                    [[f"{dr:+.0%}"] + [_fmt_x(v) for v in row]
-                     for dr, row in zip(s["rev"], s["eps"])], {1, 2, 3})
-
-        st.markdown("**三段價：近 5 年各年平均本益比 × 今年預估 EPS**")
-        if pe:
-            _vtable(["年", "平均本益比", "有效交易日"],
-                    [[str(y["year"]), f"{y['pe']:.1f} 倍", str(y["days"])] for y in pe["years"]],
-                    {1, 2})
-        if pe and r["band"]:
-            est = yb["est"] if yb else None
-            lo_sd = max(pe["mean"] - pe["sd"], 0)
-            mults = (pe["low"], pe["mid"], pe["high"], lo_sd, pe["mean"], pe["mean"] + pe["sd"])
-            labels = ("便宜（最低年）", "合理（中間）", "昂貴（最高年）",
-                      "對照：平均 −1σ", "對照：平均", "對照：平均 +1σ")
-            _vtable(["段", "本益比", "股價"],
-                    [[lb, f"{m:.1f} 倍", _fmt_x(m * est, 1) if est else "—"]
-                     for lb, m in zip(labels, mults)], {1, 2})
-            st.caption("各年平均本益比＝該年每天交易所 trailing PE 的平均（排除虧損日；有效日 "
-                       "<20 天的年份不算）。「平均 ±1σ」是外資本益比區間圖（PE band）的口徑，"
-                       "但外資用的是前瞻本益比，這裡只有 trailing。trailing 倍數 × 預估 EPS "
-                       "口徑不一致，只能讀成「如果市場照過去的倍數給今年的獲利」，不是目標價。")
+    with st.expander("🔍 試算細節（推導表／業外）"):
+        if nc.get("ok"):
+            _eps_quarter_tables(nc, a.get("fin_q") or "")
         else:
-            st.caption("本益比年數不足（少於 3 年）或預估 EPS ≤ 0，不套倍數。")
+            st.caption("資料不足")
 
         rk = r.get("risk")
         if rk:
@@ -2487,7 +2431,7 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
                  (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
                   + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
                  else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
-                       else ("買進區間停用中" if rk.get("paused") else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間"))
+                       else ("買進區間停用中" if rk.get("paused") else ("缺估值資料" if rk.get("no_growth") else "現價不在買進區間"))
                        + "，不列（顯示條件，不代表風險比較低）")),
                 ("週 ATR14", _px(rk["watr"]),
                  f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
@@ -2516,7 +2460,7 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
                 " 30%」從 3.5% 降到 0.4%，2022、2025 兩次空頭的最差 5% 少虧約 10 個百分點；代價是"
                 "半年內約 45% 會被停掉、其中三成之後又漲回來。跳空、跌停鎖死時會虧得比停損多。")
 
-        st.markdown("**近 8 季業外**")
+        st.markdown("**試算排除業外，僅供參考**")
         _vtable(["季", "業外", "稅前", "占稅前"],
                 [[h["q"], _fmt_yi(h["nonop"]), _fmt_yi(h["pretax"]),
                   _fmt_pct(h["nonop"] / abs(h["pretax"])) if h["pretax"] else "—"]
