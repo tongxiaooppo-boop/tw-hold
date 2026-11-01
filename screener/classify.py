@@ -159,6 +159,10 @@ GROWTH_REV_CAGR3 = 0.20            # 【經驗】
 GROWTH_REV_CAGR5 = 0.12            # 【經驗】
 GROWTH_OP_CAGR3 = 0.20             # 【經驗】
 GROWTH_NO_NEG_YOY_Q = 12
+GROWTH_RELAX_MIN_YOY = -0.25         # ③放寬路徑：近12季最低 ≥ −25%【經驗，2026-11-01 sol／Opus 兩輪定案】
+GROWTH_RELAX_BAD_Q = 4                # ③放寬路徑：年增 < −10% 的季數最多 4 季
+CYCLE_PRIOR_EXCLUDE = ("2633", "2634")   # 先驗排除表：台灣高鐵（基礎建設）、漢翔（航太），雖屬「航運業」但非景氣循環
+SPECIAL_TA_JUMP = 0.30                # ③b：扣掉盈餘累積後總資產仍大增 > 30% 才算併入外部資產
 GROWTH_MIN_YOY = -0.10             # ③ 近 12 季 TTM 營收年增最低須 ≥ −10%（原「從未 < 0」放寬）【經驗】
 GROWTH_EXIT_CAGR3 = 0.12           # 退出門檻（遲滯）
 GROWTH_MIN_LISTED_Q = 20           # 上市 < 20 季降一級
@@ -538,6 +542,7 @@ def classify(inp: ClassInputs) -> Classification:
         "op_cagr3": nan, "growth_core": False, "crossing": {}, "ttm_eps": nan,
         "special_triggers": [], "stay_ok": {},
         "suspect_cyclical": False, "prior_cyclical": False, "single_event": False,
+        "comparability_pending": False,
     }
     # 0 資料閘門
     if n_rev < MIN_QUARTERS:
@@ -574,7 +579,8 @@ def classify(inp: ClassInputs) -> Classification:
     beta_ok = bool(pd.notna(inp.rev_beta) and inp.rev_beta >= CYCLE_BETA_MIN)
     sync_ok = bool(pd.notna(inp.ind_sync) and inp.ind_sync >= CYCLE_SYNC_MIN)
     aux_ok = beta_ok or sync_ok
-    prior_ok = bool(nec2 and not nec1 and inp.industry_name in CYCLE_PRIOR_INDUSTRIES)   # T2
+    prior_ok = bool(nec2 and not nec1 and inp.industry_name in CYCLE_PRIOR_INDUSTRIES
+                     and inp.ticker not in CYCLE_PRIOR_EXCLUDE)   # T2＋排除表
     suspect = bool(cyc_ok and not aux_ok)      # T1：必要兩條成立、輔助未過 → 不改類型，只標疑似
     is_cyc = bool((cyc_ok and aux_ok) or prior_ok)   # 真正判成循環類型的條件
     heavy_thr = (1 - ASSET_HEAVY_TOP_PCT) - 1e-12
@@ -584,14 +590,24 @@ def classify(inp: ClassInputs) -> Classification:
 
     # 高成長 ①②③
     yoy_tail = yoy_q.tail(GROWTH_NO_NEG_YOY_Q)
-    no_neg = bool(len(yoy_tail) >= GROWTH_NO_NEG_YOY_Q and yoy_tail.notna().all()
-                  and (yoy_tail >= GROWTH_MIN_YOY - 1e-12).all())
-    cond1 = bool(pd.notna(c3) and c3 >= GROWTH_REV_CAGR3 and (pd.isna(c5) or c5 >= GROWTH_REV_CAGR5))
+    full12 = bool(len(yoy_tail) >= GROWTH_NO_NEG_YOY_Q and yoy_tail.notna().all())
+    no_neg = bool(full12 and (yoy_tail >= GROWTH_MIN_YOY - 1e-12).all())
+    # ③放寬路徑（2026-11-01）：有限度衰退、近期已恢復；只給「非循環、非疑似循環、非先驗」者用
+    relax_ok = bool(full12 and (yoy_tail >= GROWTH_RELAX_MIN_YOY - 1e-12).all()
+                    and int((yoy_tail < GROWTH_MIN_YOY).sum()) <= GROWTH_RELAX_BAD_Q
+                    and len(yoy_q) >= 4 and (yoy_q.tail(4) >= 0).all())
+    listed_q = inp.listed_quarters if inp.listed_quarters is not None else len(q)
+    if listed_q >= GROWTH_MIN_LISTED_Q:        # 5 年 CAGR：上市滿 20 季起必填（算不出＝不成立）
+        c5_ok = bool(pd.notna(c5) and c5 >= GROWTH_REV_CAGR5)
+    else:
+        c5_ok = bool(pd.isna(c5) or c5 >= GROWTH_REV_CAGR5)
+    cond1 = bool(pd.notna(c3) and c3 >= GROWTH_REV_CAGR3 and c5_ok)
     cond2 = bool(pd.notna(o3) and o3 >= GROWTH_OP_CAGR3)
-    growth_core = cond1 and cond2 and no_neg
+    no_neg_any = no_neg or (relax_ok and not (suspect or is_cyc))
+    growth_core = cond1 and cond2 and no_neg_any
     # 留任門檻：①②的 3 年 CAGR 改用退出門檻（草案未寫②是否放寬，依測試兩者都用 12%）
     growth_stay_core = bool(pd.notna(c3) and c3 >= GROWTH_EXIT_CAGR3
-                            and pd.notna(o3) and o3 >= GROWTH_EXIT_CAGR3 and no_neg)
+                            and pd.notna(o3) and o3 >= GROWTH_EXIT_CAGR3 and no_neg_any)
 
     metrics.update({
         "oroa": _last_nonnan(oroa.tail(1)), "oroa_amp": amp,
@@ -656,8 +672,21 @@ def classify(inp: ClassInputs) -> Classification:
         yoy_now = yoy_q.iloc[-1]
         if (pd.notna(yoy_now) and yoy_now > SPECIAL_REV_JUMP
                 and pd.notna(chg) and chg > SPECIAL_CAP_JUMP_WITH_REV):
-            triggers.append("rev_jump_cap")
-            why.append(f"TTM 營收年增 {yoy_now:+.0%} 且股本同步增 {chg:+.0%}，疑似併購/重組")
+            # ③b（2026-11-01 改）：營收翻倍＋股本增只是「候選」；還要「扣掉盈餘累積後總資產仍大增」
+            # （併購帶進外部資產；CB 轉換、景氣反彈累積獲利不會），且已判循環者循環先判，才退出為特殊。
+            ta = q["total_assets"].astype(float)
+            ta_prev, ta_now = _lag(ta, 4).iloc[-1], ta.iloc[-1]
+            earn = max(float(op_ttm.iloc[-1]), 0.0) if pd.notna(op_ttm.iloc[-1]) else 0.0
+            ta_ex = ((float(ta_now) - float(ta_prev) - earn) / float(ta_prev)
+                     if pd.notna(ta_now) and pd.notna(ta_prev) and ta_prev > 0 else nan)
+            metrics["ta_jump_ex_earnings"] = ta_ex
+            if pd.notna(ta_ex) and ta_ex > SPECIAL_TA_JUMP and not is_cyc:
+                triggers.append("rev_jump_cap")
+                why.append(f"TTM 營收年增 {yoy_now:+.0%} 且股本同步增 {chg:+.0%}，"
+                           f"扣除盈餘後總資產仍增 {ta_ex:+.0%}，疑似併購/重組")
+            else:
+                metrics["comparability_pending"] = True
+                degrade.append("營收與股本同步大增，歷史可比性待確認（未達併購認定）")
         metrics["special_triggers"] = triggers
         if triggers:
             ctype = TYPE_SPECIAL

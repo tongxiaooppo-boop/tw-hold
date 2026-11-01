@@ -354,14 +354,38 @@ def test_股本增25趴_不退出():
     assert cl.classify(_inp(_q(cap=cap))).type != cl.TYPE_SPECIAL
 
 
-def test_營收年增逾100趴且股本同步增_疑似併購_特殊退出():
+def test_營收年增逾100趴且股本同步增_且扣盈餘後總資產大增_疑似併購_特殊退出():
     # TTM 營收 10000 ÷ 4000 − 1＝+150%；股本 +20%（< 30%，但 > 10%）
+    # 總資產 4000 → 6000；TTM 營業利益 400 → 扣盈餘後 (6000−4000−400)/4000＝+40% > 30%
+    rev = [1000.0] * 40 + [2500.0] * 4
+    cap = [1000.0] * 40 + [1200.0] * 4
+    ta = [4000.0] * 40 + [6000.0] * 4
+    c = cl.classify(_inp(_q(rev=rev, cap=cap, ta=ta)))
+    assert c.type == cl.TYPE_SPECIAL
+    assert c.metrics["special_triggers"] == ["rev_jump_cap"]
+    assert any("扣除盈餘後總資產仍增 +40%" in w for w in c.why)
+
+
+def test_營收翻倍股本增但總資產沒大增_不判特殊_標歷史可比性待確認():
+    # 同上但總資產不變（CB 轉換／景氣反彈型）：ta_ex＝(4000−4000−400)/4000＜0 → 不退出，只降級
     rev = [1000.0] * 40 + [2500.0] * 4
     cap = [1000.0] * 40 + [1200.0] * 4
     c = cl.classify(_inp(_q(rev=rev, cap=cap)))
-    assert c.type == cl.TYPE_SPECIAL
-    assert c.metrics["special_triggers"] == ["rev_jump_cap"]
-    assert "TTM 營收年增 +150% 且股本同步增 +20%，疑似併購/重組" in c.why
+    assert c.type != cl.TYPE_SPECIAL and c.metrics["comparability_pending"] is True
+    assert "營收與股本同步大增，歷史可比性待確認（未達併購認定）" in c.reasons_degrade
+
+
+def test_3b命中但已判循環_循環先判不退出特殊():
+    # 南亞科型：營收翻倍、股本增、總資產大增，但必要1、2＋輔助成立 → 判循環
+    rev = [1000.0] * 12 + [200.0] * 12 + [1000.0] * 16 + [2500.0] * 4
+    op = [200.0] * 12 + [0.0] * 12 + [200.0] * 16 + [500.0] * 4
+    cap = [1000.0] * 40 + [1200.0] * 4
+    ta = [4000.0] * 40 + [9000.0] * 4
+    c = cl.classify(_inp(_q(rev=rev, op=op, cap=cap, ta=ta), oroa_amp_pct=0.9, rev_beta=1.6))
+    # 循環先判：不退出為特殊（此資料同時過高成長，穿越檢定無市場收縮月視為通過 → 高成長＋具循環性，與本測重點無關）
+    assert c.type != cl.TYPE_SPECIAL and c.metrics["special_triggers"] == []
+    assert c.metrics["cyclical_necessary"] is True and c.metrics["ta_jump_ex_earnings"] > 0.3
+    assert c.metrics["comparability_pending"] is True
 
 
 def test_營收年增逾100趴但股本只增5趴_不退出():
@@ -1007,3 +1031,56 @@ def test_循環中途一季回到留任_重新計算連續():
               + [(4, N, C, False), (5, N, C, False), (6, C, C, False)])
     r = cl.apply_hysteresis(_cls(N, 7, stay_ok={C: False}), h)
     assert r.type == C                                              # 連續被 Q6 打斷，只剩 1 季
+
+
+# ── 先驗排除表（2026-11-01）─────────────────────────
+
+def test_先驗排除表_高鐵漢翔不適用():
+    for t in ("2633", "2634"):
+        c = cl.classify(_inp(_cyc_q(), ticker=t, oroa_amp_pct=0.3, industry_name="航運業"))
+        assert c.type == cl.TYPE_NORMAL and cl.SUB_PRIOR_CYCLE not in c.subtags
+    c = cl.classify(_inp(_cyc_q(), ticker="2610", oroa_amp_pct=0.3, industry_name="航運業"))
+    assert c.type == cl.TYPE_CYCLICAL            # 排除表以外的航運業照舊
+
+
+# ── 高成長3放寬路徑（2026-11-01）──────────────────────
+
+def _growth_dip_q(dip, ks):
+    """營收每季 ×1.06 成長，但 idx ks 的營收壓成 dip 倍；營業利益＝營收×10%。
+    實測（2026-11-01）：dip=0.4,ks=[34,35] → 近 12 季 TTM 年增最低 −14%、<−10% 有 2 季、最近 4 季皆 ≥ 0；
+    dip=0.3,ks=[33,34,35] → 最低 −42%。"""
+    rev = [1000.0 * 1.06 ** i for i in range(44)]
+    for k in ks:
+        rev[k] *= dip
+    return _q(rev=rev, op=[0.1 * r for r in rev])
+
+
+def test_高成長3放寬_最低年增負14趴_舊規則不過_新規則判高成長():
+    q = _growth_dip_q(0.4, [34, 35])
+    y = cl._ttm_yoy(cl.qp.ttm(q["revenue"].astype(float))).tail(12)
+    assert -0.25 < y.min() < -0.10 and (y < -0.10).sum() == 2    # 舊③（≥ −10%）不過
+    c = cl.classify(_inp(q))
+    assert c.type == cl.TYPE_GROWTH and c.metrics["growth_core"] is True
+
+
+def test_高成長3放寬_最低年增負42趴_仍不是高成長():
+    q = _growth_dip_q(0.3, [33, 34, 35])
+    y = cl._ttm_yoy(cl.qp.ttm(q["revenue"].astype(float))).tail(12)
+    assert y.min() < -0.25
+    assert cl.classify(_inp(q)).type == cl.TYPE_NORMAL
+
+
+def test_高成長3放寬_疑似循環不得走放寬路徑():
+    # 同一組資料，加上「必要1、2成立但輔助未過」的疑似循環條件：用 _cyc_q 形狀疊加成長太難手算，
+    # 這裡直接驗內部條件：疑似循環者 no_neg_any 只剩舊規則（最低 ≥ −10%）。
+    q = _growth_dip_q(0.4, [34, 35])
+    sus = cl.classify(_inp(q, oroa_amp_pct=0.9, rev_beta=1.0, ind_sync=0.3))
+    assert sus.metrics["suspect_cyclical"] is False      # 此資料必要2不成立，故不是疑似；放寬路徑照常可用
+    assert sus.type == cl.TYPE_GROWTH
+
+
+def test_五年CAGR_上市滿20季_算不出就不成立():
+    # 營收 3 年 CAGR 夠高，但 5 年起點營收為 0 → 5 年 CAGR NaN → 不得判高成長
+    rev = [0.0] * 24 + [1000.0 * 1.25 ** ((i - 24) / 4) for i in range(24, 44)]
+    q = _q(rev=rev, op=[0.1 * r for r in rev])
+    assert cl.classify(_inp(q)).type != cl.TYPE_GROWTH
