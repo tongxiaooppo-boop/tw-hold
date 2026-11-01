@@ -26,7 +26,8 @@
   OROA(t)＝TTM op_income(t) ÷ 近 5 個季末 total_assets 平均（t−4..t，5 季都要有值且平均 > 0）。
   振幅＝近 CYCLE_WINDOW_Q 季 OROA 的 P90 − P10（線性插值＝pandas quantile 預設）。
   必要①：inp.oroa_amp_pct ≥ 1 − CYCLE_AMP_TOP_PCT（＝0.70）。
-  必要②：op_drawdown(...)["max_dd"] ≥ CYCLE_DRAWDOWN 且 ["contraction"] 為 True。
+  必要②：op_drawdown(...)["contraction"] 為 True（任何一段 TTM 營業利益回撤 ≥ CYCLE_DRAWDOWN 且該段期間
+         TTM 營收年增曾 < CYCLE_REV_CONTRACTION；max_dd 等為記錄那一段，見 op_drawdown）。
   輔助：inp.rev_beta ≥ CYCLE_BETA_MIN 或 inp.ind_sync ≥ CYCLE_SYNC_MIN（NaN 視為不成立）。
   必要兩條＋輔助 → 循環；只有必要兩條 → 循環＋副標「疑似循環」＋降級原因。
   循環涵蓋：cycle_coverage(OROA, 振幅) 為 False → 副標「循環未觀察完整」＋降級原因。
@@ -39,7 +40,7 @@
   ①TTM 營收 3 年 CAGR ≥ GROWTH_REV_CAGR3 且 5 年 CAGR ≥ GROWTH_REV_CAGR5
     （5 年 CAGR 因歷史不足為 NaN → 跳過 5 年部分，加降級原因「營收歷史不足 5 年，5 年 CAGR 未檢查」）
   ②TTM op_income 3 年 CAGR ≥ GROWTH_OP_CAGR3（兩端都 > 0，否則不成立）
-  ③近 GROWTH_NO_NEG_YOY_Q 季的季頻 TTM 營收年增都 ≥ 0（任一 NaN 或 < 0 → 不成立）
+  ③近 GROWTH_NO_NEG_YOY_Q 季的季頻 TTM 營收年增最低 ≥ GROWTH_MIN_YOY（−10%；任一 NaN 或有 < −10% → 不成立）
   ④穿越循環檢定 crossing_test(...)：只在「同時判循環」時用來裁決（見判斷順序 3／4）。
   上市季數（inp.listed_quarters，None 時用 quarters 列數）< GROWTH_MIN_LISTED_Q → 降級原因「上市未滿 20 季」。
   CAGR(n 年)＝(TTM(t) ÷ TTM(t − 4n 季))^(1/n) − 1；任一端 ≤ 0 或 NaN → NaN。
@@ -71,7 +72,7 @@
   疑似循環  "缺輔助條件（營收 beta {beta:.2f}、產業同步度 {sync:.2f}），列疑似循環"（NaN 印 "nan"）
   高成長①  "TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5:.0%}"（5 年 NaN 印 "—"）
   高成長②  "TTM 營業利益 3 年 CAGR {o3:.0%}"
-  高成長③  "近 12 季 TTM 營收年增皆 ≥ 0"
+  高成長③  "近 12 季 TTM 營收年增最低 {m:+.0%}（≥ -10%）"
   穿越      "市場營收收縮的 {n} 個月，個股營收年增皆 > 0" ／ "市場營收收縮的 {n} 個月，個股有 {k} 個月 ≤ 0"
   一般      "未符合景氣循環或高成長條件"
   狀態另起，每個狀態一條，例 "近四季 EPS 合計 -0.40 ≤ 0"、"最新 OROA 位於自身近 40 季第 100 百分位"。
@@ -156,6 +157,7 @@ GROWTH_REV_CAGR3 = 0.20            # 【經驗】
 GROWTH_REV_CAGR5 = 0.12            # 【經驗】
 GROWTH_OP_CAGR3 = 0.20             # 【經驗】
 GROWTH_NO_NEG_YOY_Q = 12
+GROWTH_MIN_YOY = -0.10             # ③ 近 12 季 TTM 營收年增最低須 ≥ −10%（原「從未 < 0」放寬）【經驗】
 GROWTH_EXIT_CAGR3 = 0.12           # 退出門檻（遲滯）
 GROWTH_MIN_LISTED_Q = 20           # 上市 < 20 季降一級
 SPECIAL_BIOTECH_WINDOW_Q = 12
@@ -304,15 +306,16 @@ def oroa_amplitude(oroa: pd.Series, window: int = CYCLE_WINDOW_Q,
 
 
 def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
-    """TTM op_income 的最大回撤與同期營收收縮。
+    """TTM op_income 的營運回撤與同期營收收縮（「任何一段」語意）。
 
-    TTM op、TTM 營收與其年增先用全部列算好，再只看最後 window 列。對每個 t：peak(t)＝窗內 t 以前（含）TTM op 最大值所在季（同值取**最晚**那季）；
+    TTM op、TTM 營收與其年增先用全部列算好，再只看最後 window 列。對每個 t：peak(t)＝窗內 t 以前（含）TTM op 最大值所在季（同值取**最晚**那季，即滾動最高點）；
       peak 值 > 0 時 dd(t)＝1 − TTM_op(t) ÷ peak 值（可 > 1，代表跌到負）；否則不算。
-    max_dd＝max dd(t)；取 max_dd 的 t 為 trough（同值取最早），對應 peak 為 dd_peak。
-    rev_yoy_min＝[dd_peak, trough] 期間（含兩端）季頻 TTM 營收年增（TTM(t)/TTM(t−4)−1）的最小值。
-    contraction＝rev_yoy_min < CYCLE_REV_CONTRACTION。
-    **注意**：「同期營收收縮」只看 max_dd 那一段；若要求「任一段 dd ≥ 50% 且同期收縮」，見待決。
-    recovered_half＝trough 之後（不含）任一 TTM op ≥ peak 值 × CYCLE_RECOVER_HALF；trough 是最後一季 → None。
+    每個 t 的 rev_yoy_min(t)＝[peak(t), t] 期間（含兩端）季頻 TTM 營收年增（TTM(t)/TTM(t−4)−1）的最小值。
+    **條件②（contraction）成立＝存在某個 t，dd(t) ≥ CYCLE_DRAWDOWN 且 rev_yoy_min(t) < CYCLE_REV_CONTRACTION**
+      （2026-11-01 改：原本只看 max_dd 那一段；航運型早期有一次不縮營收的深回撤、後期才有營收大減的深回撤，舊語意會漏判）。
+    記錄的那一段：有滿足條件的 t → 其中 dd 最大者（同值取最早 t）；沒有 → 整體最大回撤那一段（舊行為），contraction False。
+    max_dd／dd_peak／dd_trough／rev_yoy_min 都是記錄那一段的值。
+    recovered_half＝記錄那段 trough 之後（不含）任一 TTM op ≥ 該段 peak 值 × CYCLE_RECOVER_HALF；trough 是最後一季 → None。
 
     回傳 {"max_dd": float, "dd_peak": Timestamp|None, "dd_trough": Timestamp|None,
           "rev_yoy_min": float, "contraction": bool, "recovered_half": bool|None}
@@ -329,7 +332,8 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
     win = op_ttm.tail(window)
 
     peak_val, peak_t = None, None
-    best_dd, best_peak, best_trough = None, None, None
+    best_all = None          # (dd, peak, trough)：整體最大回撤
+    best_ok = None           # (dd, peak, trough)：滿足「dd ≥ 門檻 且 期間營收收縮」者中 dd 最大
     for t, v in win.items():
         if pd.isna(v):
             continue
@@ -337,11 +341,17 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
             peak_val, peak_t = float(v), t
         if peak_val > 0:
             dd = 1.0 - float(v) / peak_val
-            if best_dd is None or dd > best_dd:       # 同值取最早
-                best_dd, best_peak, best_trough = dd, peak_t, t
-    if best_dd is None:
+            if best_all is None or dd > best_all[0]:       # 同值取最早
+                best_all = (dd, peak_t, t)
+            if dd >= CYCLE_DRAWDOWN - 1e-12 and (best_ok is None or dd > best_ok[0]):
+                seg_t = yoy.loc[peak_t:t].dropna()
+                if len(seg_t) and float(seg_t.min()) < CYCLE_REV_CONTRACTION:
+                    best_ok = (dd, peak_t, t)
+    if best_all is None:
         return empty
 
+    contraction = best_ok is not None
+    best_dd, best_peak, best_trough = best_ok if contraction else best_all
     seg = yoy.loc[best_peak:best_trough].dropna()
     rev_min = float(seg.min()) if len(seg) else nan
     peak_value = float(win.loc[best_peak])
@@ -351,7 +361,7 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
         after = win.loc[win.index > best_trough].dropna()
         recovered = bool((after >= peak_value * CYCLE_RECOVER_HALF).any())
     return {"max_dd": float(best_dd), "dd_peak": best_peak, "dd_trough": best_trough,
-            "rev_yoy_min": rev_min, "contraction": bool(rev_min < CYCLE_REV_CONTRACTION),
+            "rev_yoy_min": rev_min, "contraction": contraction,
             "recovered_half": recovered}
 
 
@@ -522,7 +532,7 @@ def classify(inp: ClassInputs) -> Classification:
     # 高成長 ①②③
     yoy_tail = yoy_q.tail(GROWTH_NO_NEG_YOY_Q)
     no_neg = bool(len(yoy_tail) >= GROWTH_NO_NEG_YOY_Q and yoy_tail.notna().all()
-                  and (yoy_tail >= 0).all())
+                  and (yoy_tail >= GROWTH_MIN_YOY - 1e-12).all())
     cond1 = bool(pd.notna(c3) and c3 >= GROWTH_REV_CAGR3 and (pd.isna(c5) or c5 >= GROWTH_REV_CAGR5))
     cond2 = bool(pd.notna(o3) and o3 >= GROWTH_OP_CAGR3)
     growth_core = cond1 and cond2 and no_neg
@@ -598,7 +608,8 @@ def classify(inp: ClassInputs) -> Classification:
             c5_txt = "—" if pd.isna(c5) else f"{c5:.0%}"
             why.append(f"TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5_txt}")
             why.append(f"TTM 營業利益 3 年 CAGR {o3:.0%}")
-            why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增皆 ≥ 0")
+            why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
+                       f"（≥ {GROWTH_MIN_YOY:.0%}）")
 
         if cyc_ok and growth_core:
             if crossing["executed"]:
@@ -724,7 +735,8 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
     缺欄 → ValueError。history 為空（0 列）＝首次判定。
 
     規則（current＝history 最後一列 final_type；prev＝history 最後一列）：
-      1. 首次判定：final＝new.type，switched False，last_switch None。
+      1. 首次判定（history 0 列）：類型與狀態都直接採用 new（不做連 2 季、不限立即狀態），
+         switched False，last_switch None，locked_until None。
       2. new.type 或 current 屬 TYPES_NO_HYSTERESIS → final＝new.type 立即生效（改變時 switched True）。
       3. 有效候選 cand＝new.type；若 new.type ≠ current 且 new.metrics["stay_ok"].get(current) 為 True
          → cand＝current（未跌破留任門檻，不算門檻外）。
@@ -734,7 +746,7 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
          否則維持。（鎖定期間的候選仍計入「連續」）
       new 的季＝new.metrics["asof"]；與 prev.decided_at 相同 → ValueError（同季重判應由呼叫端取代該列）。
     狀態：final_states＝new.state 中屬 STATES_IMMEDIATE 者 ＋ 其餘「也出現在 prev.candidate_states 且 prev 為前一曆季」者
-      （保持 new.state 的順序）。首次判定 → 只有 STATES_IMMEDIATE。
+      （保持 new.state 的順序）。首次判定 → 直接採用 new.state 全部（2026-11-01 改）。
     輸出：type＝final、state＝final_states；metrics 另加
       "candidate_type"(cand), "raw_type"(new.type), "switched"(bool), "last_switch"(Timestamp|None：本季切換＝本季),
       "locked_until"(Timestamp|None：鎖定期最後一季的季末)。
@@ -763,10 +775,8 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
                             "last_switch": last_switch, "locked_until": locked})
         return out
 
-    immediate = [s for s in new.state if s in STATES_IMMEDIATE]
-
     if len(history) == 0:                                   # 1 首次判定
-        return finish(new.type, new.type, False, None, immediate)
+        return finish(new.type, new.type, False, None, list(new.state))
 
     prev = history.iloc[-1]
     prev_dt = pd.Timestamp(prev["decided_at"])

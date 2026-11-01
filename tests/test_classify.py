@@ -146,6 +146,38 @@ def test_營運回撤_停在谷底_未回升():
     assert d["recovered_half"] is False
 
 
+def _two_dd_q(second_rev_drop):
+    """兩段深回撤：營業利益 200 → 0（idx 8..15）→ 200 → 0（idx 28..35）→ 200。
+    第一段營收不變（1000，沒收縮）；第二段營收降為 second_rev_drop 比例（idx 28..35），
+    之後營收回到 1000。TTM 營收年增在第二段期間最低約 −(1−比例)×(4季)/4。"""
+    rev = [1000.0] * 44
+    rev[28:36] = [1000.0 * second_rev_drop] * 8
+    op = [200.0] * 44
+    op[8:16] = [0.0] * 8
+    op[28:36] = [0.0] * 8
+    return _q(rev=rev, op=op)
+
+
+def test_航運型循環_早期溫和回撤_後期深回撤且營收大減_判循環():
+    # 前段回撤 100% 但營收沒縮；後段回撤 100% 且 TTM 營收年增最低 −50%
+    # 舊語意只看「最大回撤那一段」（同值取最早＝第一段，營收沒縮）→ 條件②不成立；新語意看任何一段
+    d = cl.op_drawdown(_two_dd_q(0.5))
+    assert d["contraction"] is True
+    assert d["max_dd"] == pytest.approx(1.0)
+    assert d["dd_trough"] > pd.Timestamp("2015-03-31") + pd.offsets.QuarterEnd(24)   # 記錄的是後段
+    assert d["rev_yoy_min"] < -0.10
+    c = cl.classify(_inp(_two_dd_q(0.5), oroa_amp_pct=0.9, rev_beta=1.6))
+    assert c.type == cl.TYPE_CYCLICAL and c.metrics["cyclical_necessary"] is True
+
+
+def test_有大回撤但營收從不收縮_條件2不成立():
+    d = cl.op_drawdown(_two_dd_q(1.0))
+    assert d["max_dd"] == pytest.approx(1.0)          # 無滿足段 → 記錄整體最大回撤（維持原行為）
+    assert d["contraction"] is False
+    c = cl.classify(_inp(_two_dd_q(1.0), oroa_amp_pct=0.9, rev_beta=1.6))
+    assert c.metrics["cyclical_necessary"] is False and c.type != cl.TYPE_CYCLICAL
+
+
 @pytest.mark.parametrize("vals,amp,expected", [
     ([0.2, 0.0, 0.2], 0.2, True),           # 高→低→高，每段 0.2 ≥ 0.1
     ([0.0, 0.2, 0.0], 0.2, True),           # 低→高→低
@@ -399,7 +431,7 @@ def test_高成長_全部成立():
     assert c.metrics["op_cagr3"] == pytest.approx(0.25)
     assert c.metrics["growth_core"] is True
     assert "TTM 營收 3 年 CAGR 25%、5 年 25%" in c.why
-    assert "近 12 季 TTM 營收年增皆 ≥ 0" in c.why
+    assert "近 12 季 TTM 營收年增最低 +25%（≥ -10%）" in c.why
 
 
 def test_三年營收CAGR30但市場收縮期也縮_判循環不判高成長():
@@ -440,11 +472,38 @@ def test_高成長_營業利益3年前為負_不成立():
     assert math.isnan(c.metrics["op_cagr3"])
 
 
-def test_近12季TTM營收年增有負_不判高成長():
+def _growth_q_min_yoy(target):
+    """_growth_q 只改 idx 38 的營收，使近 12 季 TTM 營收年增的最低點（idx 38）＝target。
+    原 TTM(38)＝1.25×TTM(34)；改後 TTM(38)＝(1+target)×TTM(34)，差額從 idx 38 單季營收扣掉。
+    營業利益不動（3 年 CAGR 只看最後一季，不受影響）。"""
+    q = _growth_q()
+    rev = q["revenue"].to_numpy(dtype=float).copy()
+    s34 = rev[31:35].sum()
+    rev[38] = rev[38] - (1.25 - (1 + target)) * s34
+    q["revenue"] = rev
+    return q
+
+
+def test_近12季TTM營收年增最低跌破負10pct_不判高成長():
     q = _growth_q()
     q.iloc[38, q.columns.get_loc("revenue")] = 0.0
-    # TTM(38)÷TTM(34)＝1.25×(1+g+g²)/(1+g+g²+g³)，g＝1.25^0.25 → 約 0.911 < 1
+    # TTM(38)÷TTM(34)＝1.25×(1+g+g²)/(1+g+g²+g³)，g＝1.25^0.25 → 約 0.911（年增 −8.9%）；
+    # 2026-11-01 起門檻放寬為最低 ≥ −10%，所以再把 idx 37 也歸零，年增最低跌破 −10% 才不成立
+    q.iloc[37, q.columns.get_loc("revenue")] = 0.0
     assert cl.classify(_inp(q)).type == cl.TYPE_NORMAL
+
+
+def test_高成長_營收年增最低負5pct_仍通過第三條():
+    q = _growth_q_min_yoy(-0.05)
+    c = cl.classify(_inp(q))
+    assert c.type == cl.TYPE_GROWTH and c.metrics["growth_core"] is True
+    assert "近 12 季 TTM 營收年增最低 -5%（≥ -10%）" in c.why
+
+
+def test_高成長_營收年增最低負15pct_不通過():
+    q = _growth_q_min_yoy(-0.15)
+    c = cl.classify(_inp(q))
+    assert c.type == cl.TYPE_NORMAL and c.metrics["growth_core"] is False
 
 
 def test_5年CAGR不足12_不判高成長():
@@ -717,9 +776,18 @@ def test_其他狀態連2次一致才生效():
     assert r.state == [cl.STATE_PROFIT_HIGH]
 
 
-def test_首次判定_只留立即狀態():
+def test_首次判定_狀態直接採用():
+    # 2026-11-01 起：首次出現的 ticker 類型與狀態都直接採用（原本只放行立即狀態）
     r = cl.apply_hysteresis(_cls(N, 0, state=[cl.STATE_LOSS, cl.STATE_TURNAROUND]), _hist([]))
-    assert r.state == [cl.STATE_LOSS]
+    assert r.state == [cl.STATE_LOSS, cl.STATE_TURNAROUND]
+    assert r.metrics["switched"] is False and r.metrics["last_switch"] is None
+    assert r.metrics["locked_until"] is None
+
+
+def test_有歷史_狀態仍需連2季():
+    h = _hist([(0, N, N, False, "")])
+    r = cl.apply_hysteresis(_cls(N, 1, state=[cl.STATE_TURNAROUND]), h)
+    assert r.state == []
 
 
 def test_遲滯不改動輸入():
