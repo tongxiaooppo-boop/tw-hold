@@ -98,3 +98,11 @@ def test_畫面不自己算推導():
         for node in ast.walk(func):
             if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
                 pytest.fail(f"{func.name}:{node.lineno} 畫面自行相乘")
+
+
+def test_現價倍數與歷史中位倍數同源():
+    c = vc.build_card(_qf(), _rev(), _px(), _per(), _cls())
+    f = c["forward"]
+    assert f["implied_pe"] == pytest.approx(c["price"] / f["rolling"]["eps"], abs=1e-9, rel=0)
+    assert f["mult_p50"] == pytest.approx(f["rolling"]["base"] / f["rolling"]["eps"], abs=1e-9, rel=0)   # 與合理價同一個倍數
+    assert "口徑不完全相同" in sa._card_explain(c)

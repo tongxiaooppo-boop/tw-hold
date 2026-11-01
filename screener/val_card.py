@@ -254,7 +254,8 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
                           ref_ok=ref_ok,
                           ref_price=rolling["base"] / (1 + REF_MARGIN) if ref_ok else None,
                           margin=rolling["base"] / price - 1 if ref_ok else None,
-                          implied_pe=price / rolling["eps"] if rolling and price else None)
+                          implied_pe=price / rolling["eps"] if rolling and price else None,
+                          mult_p50=c["p50"])
     if gap_big:
         out["position"] = "na"           # 兩個口徑差太多：不判便宜／昂貴（與「不給上漲空間」一致）
         out["notes"].append("獲利口徑差異大")

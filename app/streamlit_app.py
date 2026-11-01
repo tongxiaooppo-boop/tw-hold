@@ -2180,6 +2180,7 @@ def _card_explain(c: dict) -> str:
     from screener.eps_nowcast import TRIAL_BASIS_TEXT, FUTURE_TEXT
     lines = [
         "三價＝EPS×自身歷史倍數 P20／P50／P80；補位時另註。EPS 預設用前瞻 4 季，試算不可用或財報落後 3 季以上改用過去 4 季。",
+        "倍數取自倍數窗內每月底的本益比（分母是已公布近 4 季 EPS），乘前瞻 4 季 EPS，口徑不完全相同。",
         "賠錢不給價；高變動、前瞻退回、倍數補位只降可信度或換基準，不擋價。",
         TRIAL_BASIS_TEXT[(c.get("eps") or {}).get("basis", "latest")],
         FUTURE_TEXT,
@@ -2253,7 +2254,8 @@ def _card_block(c: dict) -> None:
                         else f"三價基準：**{pp['base_name']} {_fmt_x(pp.get('base'))}**")
         f = c.get("forward")
         if f:
-            st.markdown(f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}")
+            if f.get("implied_pe") is not None:
+                st.markdown(f"現價是前瞻 EPS 的 {_fmt_x(f['implied_pe'], 1)} 倍（歷史中位 {_fmt_x(f.get('mult_p50'), 1)} 倍）")
         for dg in conf.get("degrades") or []:
             st.caption("⚠️ 降級：" + dg)
         for ch in c.get("checks") or []:
