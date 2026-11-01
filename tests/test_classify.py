@@ -1084,3 +1084,28 @@ def test_五年CAGR_上市滿20季_算不出就不成立():
     rev = [0.0] * 24 + [1000.0 * 1.25 ** ((i - 24) / 4) for i in range(24, 44)]
     q = _q(rev=rev, op=[0.1 * r for r in rev])
     assert cl.classify(_inp(q)).type != cl.TYPE_GROWTH
+
+
+def test_3b_營業利益為負_照減_總資產扣虧損後增幅更大():
+    # 營業利益 −100/季 → TTM −400；總資產 4000→5500：(5500−4000−(−400))/4000＝+47.5% > 30% → 特殊
+    rev = [1000.0] * 40 + [2500.0] * 4
+    cap = [1000.0] * 40 + [1200.0] * 4
+    ta = [4000.0] * 40 + [5500.0] * 4
+    op = [100.0] * 40 + [-100.0] * 4
+    c = cl.classify(_inp(_q(rev=rev, cap=cap, ta=ta, op=op)))
+    assert c.type == cl.TYPE_SPECIAL and c.metrics["ta_jump_ex_earnings"] == pytest.approx(0.475)
+
+
+def test_3b_營業利益缺值_不判特殊_待確認():
+    rev = [1000.0] * 40 + [2500.0] * 4
+    cap = [1000.0] * 40 + [1200.0] * 4
+    ta = [4000.0] * 40 + [9000.0] * 4
+    op = [100.0] * 40 + [100.0, 100.0, float("nan"), 100.0]       # TTM 含 NaN → 缺值
+    c = cl.classify(_inp(_q(rev=rev, cap=cap, ta=ta, op=op)))
+    assert c.type != cl.TYPE_SPECIAL and c.metrics["comparability_pending"] is True
+
+
+def test_高成長3放寬_理由寫實際門檻():
+    q = _growth_dip_q(0.4, [34, 35])
+    c = cl.classify(_inp(q))
+    assert any("≥ -25%，低於 -10% 的季數 2 ≤ 4，最近 4 季皆 ≥ 0%" in w for w in c.why)

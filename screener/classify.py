@@ -676,9 +676,9 @@ def classify(inp: ClassInputs) -> Classification:
             # （併購帶進外部資產；CB 轉換、景氣反彈累積獲利不會），且已判循環者循環先判，才退出為特殊。
             ta = q["total_assets"].astype(float)
             ta_prev, ta_now = _lag(ta, 4).iloc[-1], ta.iloc[-1]
-            earn = max(float(op_ttm.iloc[-1]), 0.0) if pd.notna(op_ttm.iloc[-1]) else 0.0
-            ta_ex = ((float(ta_now) - float(ta_prev) - earn) / float(ta_prev)
-                     if pd.notna(ta_now) and pd.notna(ta_prev) and ta_prev > 0 else nan)
+            earn = op_ttm.iloc[-1]                 # 盈餘累積的代理：TTM 營業利益（負的照減＝加回虧損）；缺值＝未知
+            ta_ex = ((float(ta_now) - float(ta_prev) - float(earn)) / float(ta_prev)
+                     if pd.notna(ta_now) and pd.notna(ta_prev) and ta_prev > 0 and pd.notna(earn) else nan)
             metrics["ta_jump_ex_earnings"] = ta_ex
             if pd.notna(ta_ex) and ta_ex > SPECIAL_TA_JUMP and not is_cyc:
                 triggers.append("rev_jump_cap")
@@ -713,8 +713,13 @@ def classify(inp: ClassInputs) -> Classification:
             c5_txt = "—" if pd.isna(c5) else f"{c5:.0%}"
             why.append(f"TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5_txt}")
             why.append(f"TTM 營業利益 3 年 CAGR {o3:.0%}")
-            why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
-                       f"（≥ {GROWTH_MIN_YOY:.0%}）")
+            if no_neg:
+                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
+                           f"（≥ {GROWTH_MIN_YOY:.0%}）")
+            else:
+                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
+                           f"（≥ {GROWTH_RELAX_MIN_YOY:.0%}，低於 {GROWTH_MIN_YOY:.0%} 的季數 "
+                           f"{int((yoy_tail < GROWTH_MIN_YOY).sum())} ≤ {GROWTH_RELAX_BAD_Q}，最近 4 季皆 ≥ 0%）")
 
         if is_cyc and growth_core:
             if crossing["executed"]:
