@@ -2158,13 +2158,107 @@ def _px(v: float) -> str:
     return f"{v:,.0f}" if abs(v) >= 100 else f"{v:,.1f}"
 
 
-def _valuation_block(d: dict, label: str = "") -> None:
+@st.cache_data(ttl=3600, show_spinner=False)
+def _stock_class_all() -> dict:
+    j = _load("stock_class.json") or {}
+    return {x["ticker"]: x for x in j.get("stocks", [])}
+
+
+def _stock_class(code: str) -> dict | None:
+    return _stock_class_all().get(str(code).strip().split(".")[0])
+
+
+_POS_ZH = {"cheap": ("便宜區", "green"), "fair": ("合理區", "blue"), "dear": ("昂貴區", "red"), "na": ("—", "gray")}
+
+
+def _card_block(c: dict) -> None:
+    """新版估值定位（A13）：類型／狀態、前瞻四季 EPS、月底倍數三價、12 個月基準情境價、可信度。
+    計算在 screener/val_card.py；這裡只排版。三價是「相對自身歷史倍數的位置」，不是內在價值。"""
+    st.markdown("##### 📊 估值定位")
+    if not c.get("ok"):
+        st.caption(c.get("reason") or "—")
+        return
+    conf = c.get("confidence") or {}
+    tags = [c.get("display_type") or "—"] + list(c.get("state") or []) + list(c.get("subtags") or [])
+    px0 = c.get("price")
+    nc = c.get("eps") or {}
+    p = c.get("prices")
+    with st.container(border=True):
+        st.markdown("類型：**" + "・".join(dict.fromkeys(tags)) + "**　｜　可信度：**" + (conf.get("level") or "—") + "**")
+        if nc.get("ok"):
+            qs = nc.get("nc_quarters") or []
+            na = sum(1 for x in qs if x["kind"] == "actual")
+            span = f"{qs[0]['q']}–{qs[-1]['q']}" if qs else ""
+            fb = "（月營收未超過財報季或試算失敗，同已公布 TTM）" if nc.get("fallback") or nc.get("k") == 0 else ""
+            st.markdown(f"**前瞻四季 EPS　{_fmt_x(nc.get('eps_nc'))}**　{span}：{na} 季實際＋{4 - na} 季試算{fb}  \n"
+                        f"已公布 TTM EPS：{_fmt_x(nc.get('eps_ttm'))}｜12 個月後 EPS（未來 4 季試算）："
+                        f"{_fmt_x(nc.get('eps_f4'))}")
+        if p:
+            pos, col = _POS_ZH.get(c.get("position") or "na", ("—", "gray"))
+            unit = "PE" if c.get("method") == "PE" else "PB"
+            st.markdown(f"**三價**（歷史月底{unit}分位 × {p['base_name']} {p['base']:,.2f}）  \n"
+                        f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　"
+                        f"現價 {_fmt_x(px0, 1)} → :{col}[{pos}]")
+            st.caption("相對自身近年倍數的位置，不是內在價值；中間價是歷史中位數基準。")
+        else:
+            st.markdown(f":gray[不給三價：{c.get('no_price') or '—'}]")
+        f = c.get("forward")
+        if f:
+            st.markdown(f"**12 個月基準情境價　{f['base']:,.1f}**（{f['lo']:,.1f}～{f['hi']:,.1f}）  \n"
+                        f"= 未來 4 季試算 EPS {f['eps_f4']:,.2f} × 歷史 P50 倍數（區間為 P20～P80，只反映倍數不確定）。"
+                        f"隱含前瞻 PE {_fmt_x(f['implied_pe'], 1)}｜相對現價 {_fmt_pct(f['upside'])}"
+                        "（與現價無關的情境，非預測、非目標價）")
+        elif c.get("method") == "PB" and p:
+            st.caption("12 個月基準價：金融／循環股第一版不給。")
+        for dg in conf.get("degrades") or []:
+            st.caption("⚠️ 降級：" + dg)
+        for n in c.get("notes") or []:
+            st.caption("ℹ️ " + n)
+    with st.expander("🔎 分類原因與對照價"):
+        for w in c.get("why") or []:
+            st.markdown("- " + str(w))
+        cp = c.get("compare")
+        if cp:
+            warn = "　⚠️ 與主卡差 >15%（成長股被已公布 TTM 低估／衰退股高估）" if cp["warn"] else ""
+            st.markdown(f"**用已公布 TTM EPS {cp['eps_ttm']:,.2f} 的對照三價**：便宜 {cp['cheap']:,.1f}｜合理 "
+                        f"{cp['fair']:,.1f}｜昂貴 {cp['dear']:,.1f}（合理價差 {cp['diff']:+.0%}）{warn}")
+        qs = nc.get("nc_quarters") or []
+        if qs:
+            st.markdown("**前瞻四季明細**：" + "｜".join(
+                f"{x['q']} {'實際' if x['kind'] == 'actual' else '試算'} {x['eps']:.2f}" for x in qs))
+        fq = nc.get("f4_quarters") or []
+        if fq:
+            st.markdown("**未來 4 季試算**：" + "｜".join(f"{x['q']} {x['eps']:.2f}" for x in fq))
+        prm = nc.get("params") or {}
+        if prm:
+            st.caption(f"試算參數：稅率 {_fmt_pct(prm.get('t'), False)}、少數股權比 {_fmt_pct(prm.get('m'), False)}、"
+                       f"毛利率(TTM) {_fmt_pct(prm.get('gm_ttm'), False)}、費損率 {_fmt_pct(prm.get('opex_ratio'), False)}、"
+                       f"近 3 月營收年增 {_fmt_pct(prm.get('g3'))}")
+        b = c.get("band")
+        if b and b.get("raw"):
+            r_ = b["raw"]
+            st.caption(f"倍數窗 {b.get('window_start')}～{b.get('window_end')}，{b.get('n_months')} 個月底；"
+                       f"原始 P20/P50/P80＝{r_['p20']:.2f}/{r_['p50']:.2f}/{r_['p80']:.2f}")
+        st.caption("樣本為現行上市櫃（無下市股，存活者偏差）；業外假設為近 8 季中位數延續，並非已剔除一次性；"
+                   f"分類基準 {c.get('class_asof') or '—'}、規則 {c.get('version')}。")
+        for ch in c.get("checks") or []:
+            st.caption(("⛔ " if ch["level"] == "block" else "⚠️ ") + ch["why"])
+
+
+def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
     """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
     計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。label＝「代號 股名」，放股價欄最前面。"""
     import valuation as va
 
     r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
     a = r.get("asof") or {}
+    try:
+        from screener import val_card
+        from reference.corporate_actions import _events
+        card = val_card.build_card(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"), _stock_class(code),
+                                   share_events=_events(code))
+    except Exception as e:  # noqa: BLE001  新版估值卡掛掉不連累舊的三卡
+        card = {"ok": False, "reason": f"新版估值卡算不出來：{type(e).__name__}: {e}"}
     st.markdown("#### 💰 估值速覽")
     if not r["ok"]:
         st.caption(r["reason"])
@@ -2190,19 +2284,16 @@ def _valuation_block(d: dict, label: str = "") -> None:
                     f"含近 4 季平均業外：{_fmt_x(e['run_incl'])}  \n"
                     f"近 4 季實際：{_fmt_x(e['ttm'])}  \n" + (
                         f"{yb['year']} 預估 **{_fmt_x(yb['est'])}**（年增 {_fmt_pct(yb['growth'])}）"
-                        if yb else "今年預估：—"))
+                        if yb else "今年預估：—")
+                    + (f"  \n前瞻四季 **{_fmt_x((card.get('eps') or {}).get('eps_nc'))}**（見下方估值定位）"
+                       if (card.get("eps") or {}).get("ok") else ""))
     with c3.container(border=True, key="valcard_px"):
         b, gpx, px0 = r["band"], r["growth_price"], r["price"]
 
         def _vs(v):
             return f"（{v / px0 - 1:+.0%}）" if (v and px0) else ""
         # 各年平均 PE 差太多（最高 > 4×最低）→ 卡片不列三段價，免得 88～360 這種區間誤導；展開裡照列
-        if b and pe and pe.get("wide"):
-            tiers = "三段價：各年本益比差太多，不列（見試算細節）"
-        elif b:
-            tiers = f"便宜 {b['low']:,.1f}｜合理 **{b['mid']:,.1f}**｜昂貴 {b['high']:,.1f}"
-        else:
-            tiers = "三段價：—（本益比年數不足或預估 EPS ≤ 0）"
+        tiers = ":gray[便宜／合理／昂貴三價與 12 個月基準價：見下方「估值定位」]"
         grow = ("" if va.BUY_RANGE_PAUSED else
                 (f"成長價 **{gpx:,.1f}**{_vs(gpx)}  \n" if gpx else "成長價：—  \n"))
         yrs = ("｜".join(f"{y['year']} {y['pe']:.1f}" for y in pe["years"]) if pe else "—")
@@ -2210,12 +2301,12 @@ def _valuation_block(d: dict, label: str = "") -> None:
         st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
                     f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}  \n{grow}"
                     f"{buy_txt}{risk_txt}", unsafe_allow_html=True)
+    _card_block(card)
     cur = f"（目前 {r['cur_pe']['pe']:.1f} 倍）" if r["cur_pe"] else ""
-    title = ("📐 股價怎麼算：三段價、停損、支撐壓力（點開看規則）" if va.BUY_RANGE_PAUSED else
+    title = ("📐 股價怎麼算：停損、支撐壓力（點開看規則）" if va.BUY_RANGE_PAUSED else
              "📐 股價怎麼算：三段價、成長價、買進區間、停損參考、支撐壓力（點開看規則）")
     with st.expander(title):
-        st.caption(f"💲 **三段價**＝近 5 年各年平均本益比的最低／中間／最高 × 今年預估 EPS"
-                   f"（＝便宜／合理／昂貴）。近五年各年平均 PE：{yrs}。  \n"
+        st.caption(f"💲 舊版參考：近 5 年各年平均本益比（{yrs}）。新版三價改用月底 P20/P50/P80，見「估值定位」。  \n"
                    + ("🛒 **買進區間、成長價改版中**：舊的成長價＝今年預估 EPS × 目前本益比，"
                       "股價漲它就跟著漲，沒有三段價時又沒有其他錨，容易誤導，所以先停用；"
                       "改版後會依公司類型（一般／景氣循環／虧損或獲利不穩）給不同的估法。"
@@ -2599,7 +2690,7 @@ def _stock_page() -> None:
         st.caption((_sx or _ox) + "　—　" + _active_legend(_aflags))
 
     try:
-        _valuation_block(d, f"{code} {stock_name}".strip())
+        _valuation_block(d, f"{code} {stock_name}".strip(), code)
     except Exception as e:  # noqa: BLE001  試算掛掉不連累下面的圖
         st.warning(f"估值速覽算不出來：{type(e).__name__}: {e}")
 
