@@ -2365,9 +2365,9 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
             na = sum(1 for x in qs if x["kind"] == "actual")
             rows.append(f"前瞻四季 **{_fmt_x(nc.get('eps_nc'))}**（{na} 季實際＋{4 - na} 季試算）")
             rows.append(f"未來 4 季：{_fmt_x(nc.get('eps_f4'))}")
-            rows.append(f"近 4 季實際：{_fmt_x(e['ttm'])}")
+            rows.append(f"過去四季：{_fmt_x(e['ttm'])}")
         else:       # 新版前瞻 EPS 算不出來時，才顯示舊版的今年預估／年化試算（避免同卡三個「預估」並存，Opus #8）
-            rows.append(f"近 4 季實際：{_fmt_x(e['ttm'])}")
+            rows.append(f"過去四季：{_fmt_x(e['ttm'])}")
             if yb:
                 rows.append(f"{yb['year']} 預估 **{_fmt_x(yb['est'])}**（年增 {_fmt_pct(yb['growth'])}）")
             rows.append(f"年化試算（排除業外）：{_fmt_x(e['run_ex'])}")
