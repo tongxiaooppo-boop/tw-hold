@@ -92,7 +92,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import copy
+import dataclasses
+
+import numpy as np
 import pandas as pd
+
+from screener import quarterly_prep as qp
 
 RULE_VERSION = "class-v1-2026-11-01"
 
@@ -220,6 +226,53 @@ class Classification:
     rule_version: str = RULE_VERSION
 
 
+# ── 內部小工具 ────────────────────────────────────────────────
+
+def _on_calendar(s: pd.Series) -> pd.Series:
+    """展開成連續曆季（缺季補 NaN）；季末 index 才有意義。"""
+    if s.empty:
+        return s
+    return s.reindex(pd.date_range(s.index[0], s.index[-1], freq="QE"))
+
+
+def _lag(s: pd.Series, k: int) -> pd.Series:
+    """往前 k 個**曆季**的值（缺季為 NaN），index 與 s 相同。"""
+    if s.empty:
+        return s
+    return _on_calendar(s).shift(k).reindex(s.index)
+
+
+def _ttm_yoy(ttm_s: pd.Series) -> pd.Series:
+    """季頻 TTM 年增＝TTM(t) ÷ TTM(t−4 曆季) − 1；分母 ≤ 0 或 NaN → NaN。"""
+    prev = _lag(ttm_s, 4)
+    return (ttm_s / prev.where(prev > 0) - 1.0).astype(float)
+
+
+def _qlabel(ts: pd.Timestamp) -> str:
+    """季末 Timestamp → "2017Q4"。"""
+    return f"{ts.year}Q{ts.quarter}"
+
+
+def _qord(ts: pd.Timestamp) -> int:
+    """季末 Timestamp → 曆季序號（相鄰季差 1）。"""
+    return pd.Timestamp(ts).year * 4 + pd.Timestamp(ts).quarter
+
+
+def _full_years_eps(eps: pd.Series) -> dict[int, float]:
+    """曆年 → 該年 4 季 EPS 合計（只收 4 季都有值的完整年）。"""
+    out: dict[int, float] = {}
+    s = eps.dropna()
+    for y, g in s.groupby(s.index.year):
+        if len(g) == 4:
+            out[int(y)] = float(g.sum())
+    return out
+
+
+def _last_nonnan(s: pd.Series) -> float:
+    s = s.dropna()
+    return float(s.iloc[-1]) if len(s) else float("nan")
+
+
 # ── 單檔計算（build 用來算橫斷面，classify 內部也用）─────────────────
 
 def oroa_series(quarters: pd.DataFrame) -> pd.Series:
@@ -228,14 +281,26 @@ def oroa_series(quarters: pd.DataFrame) -> pd.Series:
     TTM 用 quarterly_prep.ttm（連續 4 曆季）；總資產 5 個曆季都要在 index 且非 NaN、平均 > 0，否則 NaN。
     輸出與 quarters 同 index、name="oroa" 的 float Series。缺欄 → KeyError。
     """
-    raise NotImplementedError
+    op_ttm = qp.ttm(quarters["op_income"].astype(float))
+    ta = quarters["total_assets"].astype(float)
+    if ta.empty:
+        return pd.Series(dtype=float, name="oroa")
+    avg = _on_calendar(ta).rolling(OROA_ASSET_AVG_Q, min_periods=OROA_ASSET_AVG_Q).mean()
+    avg = avg.reindex(quarters.index)
+    avg = avg.where(avg > 0)                      # ≤ 0 或 NaN → NaN
+    out = (op_ttm / avg).astype(float)
+    out.name = "oroa"
+    return out
 
 
 def oroa_amplitude(oroa: pd.Series, window: int = CYCLE_WINDOW_Q,
                    min_obs: int = CYCLE_MIN_OROA_OBS) -> float:
     """近 window 列（最後 window 列，含 NaN 列）中非 NaN 的 OROA 的 P90 − P10
     （pandas Series.quantile 預設線性插值）。非 NaN 個數 < min_obs → NaN。不丟例外。"""
-    raise NotImplementedError
+    vals = oroa.tail(window).dropna()
+    if len(vals) < min_obs or len(vals) == 0:
+        return float("nan")
+    return float(vals.quantile(0.9) - vals.quantile(0.1))
 
 
 def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
@@ -253,7 +318,41 @@ def op_drawdown(quarters: pd.DataFrame, window: int = CYCLE_WINDOW_Q) -> dict:
           "rev_yoy_min": float, "contraction": bool, "recovered_half": bool|None}
     無可算點 → max_dd NaN、contraction False、其餘 None／NaN。
     """
-    raise NotImplementedError
+    nan = float("nan")
+    empty = {"max_dd": nan, "dd_peak": None, "dd_trough": None, "rev_yoy_min": nan,
+             "contraction": False, "recovered_half": None}
+    if len(quarters) == 0:
+        return empty
+    op_ttm = qp.ttm(quarters["op_income"].astype(float))
+    rev_ttm = qp.ttm(quarters["revenue"].astype(float))
+    yoy = _ttm_yoy(rev_ttm)
+    win = op_ttm.tail(window)
+
+    peak_val, peak_t = None, None
+    best_dd, best_peak, best_trough = None, None, None
+    for t, v in win.items():
+        if pd.isna(v):
+            continue
+        if peak_val is None or v >= peak_val:        # 同值取最晚
+            peak_val, peak_t = float(v), t
+        if peak_val > 0:
+            dd = 1.0 - float(v) / peak_val
+            if best_dd is None or dd > best_dd:       # 同值取最早
+                best_dd, best_peak, best_trough = dd, peak_t, t
+    if best_dd is None:
+        return empty
+
+    seg = yoy.loc[best_peak:best_trough].dropna()
+    rev_min = float(seg.min()) if len(seg) else nan
+    peak_value = float(win.loc[best_peak])
+    if best_trough == win.index[-1]:
+        recovered = None
+    else:
+        after = win.loc[win.index > best_trough].dropna()
+        recovered = bool((after >= peak_value * CYCLE_RECOVER_HALF).any())
+    return {"max_dd": float(best_dd), "dd_peak": best_peak, "dd_trough": best_trough,
+            "rev_yoy_min": rev_min, "contraction": bool(rev_min < CYCLE_REV_CONTRACTION),
+            "recovered_half": recovered}
 
 
 def cycle_coverage(oroa: pd.Series, amp: float, window: int = CYCLE_WINDOW_Q) -> bool:
@@ -261,7 +360,22 @@ def cycle_coverage(oroa: pd.Series, amp: float, window: int = CYCLE_WINDOW_Q) ->
       高→低→高：x_i − x_j ≥ thr 且 x_k − x_j ≥ thr，或
       低→高→低：x_j − x_i ≥ thr 且 x_j − x_k ≥ thr，
     其中 thr＝amp × CYCLE_COVERAGE_LEG。amp 為 NaN 或 ≤ 0 → False。"""
-    raise NotImplementedError
+    if amp is None or pd.isna(amp) or amp <= 0:
+        return False
+    x = oroa.tail(window).dropna().to_numpy(dtype=float)
+    if len(x) < 3:
+        return False
+    thr = amp * CYCLE_COVERAGE_LEG - 1e-12           # 容許浮點誤差（剛好等於門檻算成立）
+    pre_max = np.maximum.accumulate(x)
+    pre_min = np.minimum.accumulate(x)
+    suf_max = np.maximum.accumulate(x[::-1])[::-1]
+    suf_min = np.minimum.accumulate(x[::-1])[::-1]
+    for j in range(1, len(x) - 1):
+        if pre_max[j - 1] - x[j] >= thr and suf_max[j + 1] - x[j] >= thr:
+            return True
+        if x[j] - pre_min[j - 1] >= thr and x[j] - suf_min[j + 1] >= thr:
+            return True
+    return False
 
 
 def asset_intensity(quarters: pd.DataFrame) -> dict:
@@ -272,19 +386,40 @@ def asset_intensity(quarters: pd.DataFrame) -> dict:
       這樣的列 < ASSET_CAPEX_MIN_Q 或 Σrevenue ≤ 0 → NaN。
     回傳 {"ta_rev": float, "capex_rev": float}。
     """
-    raise NotImplementedError
+    nan = float("nan")
+    ta_rev = nan
+    if len(quarters):
+        rev_ttm = qp.ttm(quarters["revenue"].astype(float))
+        last_rev, last_ta = rev_ttm.iloc[-1], quarters["total_assets"].iloc[-1]
+        if pd.notna(last_rev) and last_rev > 0 and pd.notna(last_ta):
+            ta_rev = float(last_ta) / float(last_rev)
+    tail = quarters[["capex", "revenue"]].tail(ASSET_CAPEX_Q).dropna()
+    capex_rev = nan
+    if len(tail) >= ASSET_CAPEX_MIN_Q and tail["revenue"].sum() > 0:
+        capex_rev = float(tail["capex"].abs().sum() / tail["revenue"].sum())
+    return {"ta_rev": ta_rev, "capex_rev": capex_rev}
 
 
 def cross_section_pct(values: pd.Series) -> pd.Series:
     """橫斷面分位：values.rank(pct=True, method="average")；NaN 保持 NaN、不計入分母。
     index 原樣（通常是 ticker）。"""
-    raise NotImplementedError
+    return values.rank(pct=True, method="average")
 
 
 def ttm_cagr(ttm_series: pd.Series, years: int) -> float:
     """CAGR＝(最後一列值 ÷ 4×years 個曆季前那一季的值)^(1/years) − 1。
     ttm_series 的 index 為季末 Timestamp；那一季不在 index、任一端 NaN 或 ≤ 0 → NaN。"""
-    raise NotImplementedError
+    nan = float("nan")
+    if len(ttm_series) == 0:
+        return nan
+    t_last = ttm_series.index[-1]
+    t_base = t_last - pd.offsets.QuarterEnd(4 * years)
+    if t_base not in ttm_series.index:
+        return nan
+    end, start = ttm_series.iloc[-1], ttm_series.loc[t_base]
+    if pd.isna(end) or pd.isna(start) or end <= 0 or start <= 0:
+        return nan
+    return float((end / start) ** (1.0 / years) - 1.0)
 
 
 def crossing_test(stock_rev_ttm_yoy: pd.Series, market_rev_ttm_yoy: pd.Series,
@@ -298,7 +433,20 @@ def crossing_test(stock_rev_ttm_yoy: pd.Series, market_rev_ttm_yoy: pd.Series,
       否則 passed＝(k == 0)，executed＝True。
     回傳 {"n": int, "k": int, "passed": bool, "executed": bool}。
     """
-    raise NotImplementedError
+    none = {"n": 0, "k": 0, "passed": True, "executed": False}
+    market = market_rev_ttm_yoy.dropna()
+    if asof is None:
+        if len(market) == 0:
+            return none
+        asof = market.index[-1]
+    lo = asof - pd.DateOffset(months=window_months)
+    shrink = market[(market.index > lo) & (market.index <= asof) & (market < 0)]
+    stk = stock_rev_ttm_yoy.reindex(shrink.index).dropna()
+    n = int(len(stk))
+    if n == 0:
+        return none
+    k = int((stk <= 0).sum())
+    return {"n": n, "k": k, "passed": k == 0, "executed": True}
 
 
 # ── 主函式 ────────────────────────────────────────────────────
@@ -313,7 +461,256 @@ def classify(inp: ClassInputs) -> Classification:
     - metrics["asof"]＝quarters 最後一列的 period_end（遲滯會用到）。
     錯誤：quarters 缺 QUARTER_COLS 任一欄 → KeyError；index 不遞增 → ValueError。
     """
-    raise NotImplementedError
+    q = inp.quarters
+    missing = [c for c in QUARTER_COLS if c not in q.columns]
+    if missing:
+        raise KeyError(f"quarters 缺欄位：{missing}")
+    if not (q.index.is_monotonic_increasing and q.index.is_unique):
+        raise ValueError("quarters index 必須嚴格遞增")
+
+    nan = float("nan")
+    n_rev = int(q["revenue"].notna().sum())
+    metrics: dict = {
+        "asof": q.index[-1] if len(q) else None, "n_quarters": n_rev,
+        "oroa": nan, "oroa_amp": nan, "oroa_pct_self": nan, "max_dd": nan,
+        "dd_peak": None, "dd_trough": None, "dd_rev_yoy_min": nan, "contraction": False,
+        "recovered_half": None, "coverage": None, "cyclical_necessary": False,
+        "cyclical_aux": False, "asset_heavy": False, "rev_cagr3": nan, "rev_cagr5": nan,
+        "op_cagr3": nan, "growth_core": False, "crossing": {}, "ttm_eps": nan,
+        "special_triggers": [], "stay_ok": {},
+    }
+    # 0 資料閘門
+    if n_rev < MIN_QUARTERS:
+        return Classification(type=TYPE_INSUFFICIENT, metrics=metrics,
+                              why=[f"單季財報僅 {n_rev} 季（< {MIN_QUARTERS} 季），不分類"])
+
+    rev = q["revenue"].astype(float)
+    op = q["op_income"].astype(float)
+    eps = q["eps"].astype(float)
+    why: list[str] = []
+    degrade: list[str] = []
+    subtags: list[str] = []
+
+    rev_ttm = qp.ttm(rev)
+    op_ttm = qp.ttm(op)
+    eps_ttm = qp.ttm(eps)
+    yoy_q = _ttm_yoy(rev_ttm)
+
+    # ── 指標（不論最後判成什麼類型都算，狀態與 metrics 要用）──
+    oroa = oroa_series(q)
+    amp = oroa_amplitude(oroa)
+    dd = op_drawdown(q)
+    cover = cycle_coverage(oroa, amp)
+    crossing = crossing_test(inp.stock_rev_ttm_yoy, inp.market_rev_ttm_yoy)
+    c3, c5 = ttm_cagr(rev_ttm, 3), ttm_cagr(rev_ttm, 5)
+    o3 = ttm_cagr(op_ttm, 3)
+    ttm_eps_now = _last_nonnan(eps_ttm.tail(1))
+
+    amp_pct = inp.oroa_amp_pct
+    nec1 = bool(pd.notna(amp_pct) and amp_pct >= (1 - CYCLE_AMP_TOP_PCT) - 1e-12)
+    nec2 = bool(pd.notna(dd["max_dd"]) and dd["max_dd"] >= CYCLE_DRAWDOWN - 1e-12
+                and dd["contraction"])
+    cyc_ok = nec1 and nec2
+    beta_ok = bool(pd.notna(inp.rev_beta) and inp.rev_beta >= CYCLE_BETA_MIN)
+    sync_ok = bool(pd.notna(inp.ind_sync) and inp.ind_sync >= CYCLE_SYNC_MIN)
+    aux_ok = beta_ok or sync_ok
+    heavy_thr = (1 - ASSET_HEAVY_TOP_PCT) - 1e-12
+    asset_heavy = bool((pd.notna(inp.asset_ta_rev_pct) and inp.asset_ta_rev_pct >= heavy_thr)
+                       or (pd.notna(inp.asset_capex_rev_pct)
+                           and inp.asset_capex_rev_pct >= heavy_thr))
+
+    # 高成長 ①②③
+    yoy_tail = yoy_q.tail(GROWTH_NO_NEG_YOY_Q)
+    no_neg = bool(len(yoy_tail) >= GROWTH_NO_NEG_YOY_Q and yoy_tail.notna().all()
+                  and (yoy_tail >= 0).all())
+    cond1 = bool(pd.notna(c3) and c3 >= GROWTH_REV_CAGR3 and (pd.isna(c5) or c5 >= GROWTH_REV_CAGR5))
+    cond2 = bool(pd.notna(o3) and o3 >= GROWTH_OP_CAGR3)
+    growth_core = cond1 and cond2 and no_neg
+    # 留任門檻：①②的 3 年 CAGR 改用退出門檻（草案未寫②是否放寬，依測試兩者都用 12%）
+    growth_stay_core = bool(pd.notna(c3) and c3 >= GROWTH_EXIT_CAGR3
+                            and pd.notna(o3) and o3 >= GROWTH_EXIT_CAGR3 and no_neg)
+
+    metrics.update({
+        "oroa": _last_nonnan(oroa.tail(1)), "oroa_amp": amp,
+        "max_dd": dd["max_dd"], "dd_peak": dd["dd_peak"], "dd_trough": dd["dd_trough"],
+        "dd_rev_yoy_min": dd["rev_yoy_min"], "contraction": dd["contraction"],
+        "recovered_half": dd["recovered_half"],
+        "coverage": (None if pd.isna(amp) else bool(cover)),
+        "cyclical_necessary": cyc_ok, "cyclical_aux": aux_ok, "asset_heavy": asset_heavy,
+        "rev_cagr3": c3, "rev_cagr5": c5, "op_cagr3": o3, "growth_core": growth_core,
+        "crossing": crossing, "ttm_eps": ttm_eps_now,
+    })
+    # stay_ok：遲滯的留任門檻
+    crossing_pass = bool(crossing["passed"])
+    metrics["stay_ok"] = {
+        TYPE_GROWTH: bool(growth_stay_core and (crossing_pass if cyc_ok else True)),
+        TYPE_CYCLICAL: cyc_ok,
+    }
+
+    # ── 類型 ──
+    ctype: str | None = None
+    group = inp.industry_group
+    if group == "financial":
+        ctype = TYPE_FINANCIAL
+        why.append("產業為金融保險，走 PB")
+    else:
+        triggers: list[str] = []
+        k_loss = int((eps.tail(SPECIAL_BIOTECH_WINDOW_Q) < 0).sum())
+        if group == "biotech" and k_loss >= SPECIAL_BIOTECH_LOSS_Q:
+            triggers.append("biotech_loss")
+            why.append(f"生技醫療近 {SPECIAL_BIOTECH_WINDOW_Q} 季有 {k_loss} 季虧損"
+                       f"（≥ {SPECIAL_BIOTECH_LOSS_Q}）")
+        if group == "construction":
+            triggers.append("construction")
+            why.append("建材營造：營收認列不連續，只給 PB 位置")
+        cap = q["capital_stock"].astype(float)
+        cap_prev = _lag(cap, 4).iloc[-1]
+        cap_now = cap.iloc[-1]
+        chg = (float(cap_now) / float(cap_prev) - 1.0
+               if pd.notna(cap_now) and pd.notna(cap_prev) and cap_prev > 0 else nan)
+        if pd.notna(chg) and abs(chg) > SPECIAL_CAP_CHANGE:
+            triggers.append("cap_change")
+            why.append(f"股本 4 季變動 {chg:+.0%}（> {SPECIAL_CAP_CHANGE:.0%}）")
+        yoy_now = yoy_q.iloc[-1]
+        if (pd.notna(yoy_now) and yoy_now > SPECIAL_REV_JUMP
+                and pd.notna(chg) and chg > SPECIAL_CAP_JUMP_WITH_REV):
+            triggers.append("rev_jump_cap")
+            why.append(f"TTM 營收年增 {yoy_now:+.0%} 且股本同步增 {chg:+.0%}，疑似併購/重組")
+        metrics["special_triggers"] = triggers
+        if triggers:
+            ctype = TYPE_SPECIAL
+
+    if ctype is None:
+        # 景氣循環／高成長的 why（成立才寫）
+        if cyc_ok:
+            why.append(f"OROA 振幅 {amp:.1%}，位於全體前 {1 - amp_pct:.0%}")
+            why.append(f"TTM 營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
+                       f"期間 TTM 營收年增最低 {dd['rev_yoy_min']:+.0%}")
+            if aux_ok:
+                if beta_ok:
+                    why.append(f"營收 beta {inp.rev_beta:.2f}（≥ {CYCLE_BETA_MIN:g}）")
+                if sync_ok:
+                    why.append(f"產業同步度 {inp.ind_sync:.2f}（≥ {CYCLE_SYNC_MIN:g}）")
+            else:
+                why.append(f"缺輔助條件（營收 beta {inp.rev_beta:.2f}、"
+                           f"產業同步度 {inp.ind_sync:.2f}），列疑似循環")
+        if growth_core:
+            c5_txt = "—" if pd.isna(c5) else f"{c5:.0%}"
+            why.append(f"TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5_txt}")
+            why.append(f"TTM 營業利益 3 年 CAGR {o3:.0%}")
+            why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增皆 ≥ 0")
+
+        if cyc_ok and growth_core:
+            if crossing["executed"]:
+                if crossing["passed"]:
+                    why.append(f"市場營收收縮的 {crossing['n']} 個月，個股營收年增皆 > 0")
+                else:
+                    why.append(f"市場營收收縮的 {crossing['n']} 個月，"
+                               f"個股有 {crossing['k']} 個月 ≤ 0")
+            else:
+                degrade.append("期間無市場營收收縮月，穿越檢定未執行")
+            if crossing_pass:
+                ctype = TYPE_GROWTH
+                subtags.append(SUB_CYCLICAL_GROWTH)
+            else:
+                ctype = TYPE_CYCLICAL
+                subtags.append(SUB_GROWTH_CYCLE)
+        elif cyc_ok:
+            ctype = TYPE_CYCLICAL
+        elif growth_core:
+            ctype = TYPE_GROWTH
+        else:
+            ctype = TYPE_NORMAL
+            why.append("未符合景氣循環或高成長條件")
+
+        if ctype == TYPE_CYCLICAL:
+            if not aux_ok:
+                subtags.append(SUB_SUSPECT_CYCLE)
+                degrade.append("疑似循環（缺輔助條件）")
+            if not cover:
+                subtags.append(SUB_CYCLE_INCOMPLETE)
+                degrade.append("循環未觀察完整")
+            subtags.append(SUB_ASSET_HEAVY if asset_heavy else SUB_ASSET_LIGHT)
+            if dd["recovered_half"] is False:
+                degrade.append("回撤後未回到前高 50%（可能為結構衰退）")
+        if ctype == TYPE_GROWTH:
+            if pd.isna(c5):
+                degrade.append("營收歷史不足 5 年，5 年 CAGR 未檢查")
+            listed = inp.listed_quarters if inp.listed_quarters is not None else len(q)
+            if listed < GROWTH_MIN_LISTED_Q:
+                degrade.append(f"上市未滿 {GROWTH_MIN_LISTED_Q} 季")
+        if ctype == TYPE_NORMAL:
+            if pd.notna(c3) and c3 < NORMAL_SHRINK_CAGR3:
+                subtags.append(SUB_SHRINKING)
+            years = _full_years_eps(eps)
+            if years:
+                last_y = max(years)
+                if any(v < 0 for y, v in years.items() if y > last_y - NORMAL_LOSS_YEARS):
+                    subtags.append(SUB_UNSTABLE)
+
+    # ── 狀態 ──
+    state: list[str] = []
+    last4 = eps.tail(4)
+    any_neg4 = bool((last4 < 0).any())
+    is_loss = bool(pd.notna(ttm_eps_now) and ttm_eps_now <= 0)
+    if is_loss:
+        state.append(STATE_LOSS)
+        why.append(f"近四季 EPS 合計 {ttm_eps_now:.2f} ≤ 0")
+    nc, f4 = inp.eps_nc, inp.eps_f4
+    if nc is not None and nc <= 0 and not is_loss:
+        state.append(STATE_FWD_LOSS)
+        why.append(f"EPS_NC {nc:.2f} ≤ 0，預估轉虧")
+    unstable_reason: str | None = None
+    if any_neg4:
+        unstable_reason = f"近四季有 {int((last4 < 0).sum())} 季 EPS < 0"
+    elif nc is not None:
+        hist = eps_ttm.tail(UNSTABLE_MEDIAN_Q).dropna()
+        if len(hist) >= 4:
+            med = float(hist.median())
+            if med > 0 and nc < med * UNSTABLE_EPSNC_REL:
+                unstable_reason = (f"EPS_NC {nc:.2f} < 近 5 年 TTM EPS 中位數 {med:.2f} 的 "
+                                   f"{UNSTABLE_EPSNC_REL:.0%}")
+    if unstable_reason:
+        state.append(STATE_UNSTABLE)
+        why.append(unstable_reason)
+    if (any_neg4 and len(q) and pd.notna(op.iloc[-1]) and op.iloc[-1] > 0
+            and pd.notna(inp.g3) and inp.g3 > 0):
+        t3 = op_ttm.tail(3).to_numpy(dtype=float)
+        if len(t3) == 3 and not np.isnan(t3).any() and t3[2] > t3[1] > t3[0]:
+            name = STATE_TROUGH_RECOVERY if ctype == TYPE_CYCLICAL else STATE_TURNAROUND
+            state.append(name)
+            why.append(f"{name}：近四季曾虧損，最新季營業利益轉正且 TTM 營業利益連 2 季上升")
+    zone_win = oroa.tail(CYCLE_WINDOW_Q)
+    zone_vals = zone_win.dropna()
+    zone: str | None = None
+    if len(zone_vals) >= CYCLE_MIN_OROA_OBS and pd.notna(zone_win.iloc[-1]):
+        pct_self = float(zone_vals.rank(pct=True, method="average").iloc[-1])
+        metrics["oroa_pct_self"] = pct_self
+        if pct_self >= PROFIT_ZONE_HIGH:
+            zone = STATE_PROFIT_HIGH
+        elif pct_self <= PROFIT_ZONE_LOW:
+            zone = STATE_PROFIT_LOW
+        if zone:
+            state.append(zone)
+            why.append(f"最新 OROA 位於自身近 {CYCLE_WINDOW_Q} 季第 {pct_self * 100:.0f} 百分位")
+    if zone and ctype == TYPE_CYCLICAL and cover:
+        ind_last = _last_nonnan(inp.industry_rev_ttm_yoy)
+        if pd.notna(ind_last):
+            if zone == STATE_PROFIT_HIGH and ind_last > 0:
+                state.append(STATE_CYCLE_HIGH)
+                why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史高獲利區同向")
+            elif zone == STATE_PROFIT_LOW and ind_last < 0:
+                state.append(STATE_CYCLE_LOW)
+                why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史低獲利區同向")
+    if (nc is not None and f4 is not None and pd.notna(ttm_eps_now) and ttm_eps_now > 0
+            and nc > 0 and f4 > 0 and nc / ttm_eps_now - 1.0 >= FWD_EXPAND_MIN - 1e-12
+            and f4 >= nc):
+        state.append(STATE_FWD_EXPAND)
+        why.append(f"EPS_NC {nc:.2f} 較近四季 EPS {ttm_eps_now:.2f} 成長 "
+                   f"{nc / ttm_eps_now - 1.0:.0%}，EPS_F4 {f4:.2f} ≥ EPS_NC")
+
+    return Classification(type=ctype, state=state, subtags=subtags, why=why,
+                          metrics=metrics, reasons_degrade=degrade)
 
 
 def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classification:
@@ -346,7 +743,74 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
       "切換後鎖定中（至 {YYYYQn}），維持{current 中文}"
       留任時："高成長留任：3 年營收 CAGR 仍 ≥ 12%"（只在 cand 因 stay_ok 改回 current 且 current 為 growth）
     """
-    raise NotImplementedError
+    missing = [c for c in HISTORY_COLS if c not in history.columns]
+    if missing:
+        raise ValueError(f"history 缺欄位：{missing}")
+    new_q = pd.Timestamp(new.metrics["asof"])
+    out = dataclasses.replace(
+        new, state=list(new.state), subtags=list(new.subtags), why=list(new.why),
+        metrics=copy.deepcopy(new.metrics), reasons_degrade=list(new.reasons_degrade))
+
+    def finish(final: str, cand: str, switched: bool, last_switch, final_states: list[str]):
+        out.type = final
+        out.state = final_states
+        locked = None
+        if last_switch is not None:
+            end = _qord(last_switch) + HYST_LOCK_Q - 1
+            if _qord(new_q) <= end:
+                locked = pd.Timestamp(last_switch) + pd.offsets.QuarterEnd(HYST_LOCK_Q - 1)
+        out.metrics.update({"candidate_type": cand, "raw_type": new.type, "switched": switched,
+                            "last_switch": last_switch, "locked_until": locked})
+        return out
+
+    immediate = [s for s in new.state if s in STATES_IMMEDIATE]
+
+    if len(history) == 0:                                   # 1 首次判定
+        return finish(new.type, new.type, False, None, immediate)
+
+    prev = history.iloc[-1]
+    prev_dt = pd.Timestamp(prev["decided_at"])
+    if new_q == prev_dt:
+        raise ValueError("同一季重複判定：應由呼叫端取代該列")
+    consecutive = _qord(prev_dt) == _qord(new_q) - 1
+    current = str(prev["final_type"])
+
+    # 狀態：立即狀態＋前一曆季候選也有的狀態
+    prev_states = prev["candidate_states"]
+    prev_set = set(str(prev_states).split(STATE_SEP)) if isinstance(prev_states, str) and prev_states else set()
+    final_states = [s for s in new.state
+                    if s in STATES_IMMEDIATE or (consecutive and s in prev_set)]
+
+    sw = history[history["switched"].astype(bool)]
+    last_sw = pd.Timestamp(sw.iloc[-1]["decided_at"]) if len(sw) else None
+
+    def result(final: str, cand: str):
+        switched = final != current
+        return finish(final, cand, switched, new_q if switched else last_sw, final_states)
+
+    if new.type in TYPES_NO_HYSTERESIS or current in TYPES_NO_HYSTERESIS:   # 2
+        return result(new.type, new.type)
+
+    cand = new.type                                                          # 3
+    stayed = False
+    if new.type != current and new.metrics.get("stay_ok", {}).get(current) is True:
+        cand, stayed = current, True
+
+    if cand == current:                                                      # 4
+        if stayed and current == TYPE_GROWTH:
+            out.why.append(f"高成長留任：3 年營收 CAGR 仍 ≥ {GROWTH_EXIT_CAGR3:.0%}")
+        return result(current, cand)
+
+    if last_sw is not None and _qord(new_q) < _qord(last_sw) + HYST_LOCK_Q:  # 5
+        end = last_sw + pd.offsets.QuarterEnd(HYST_LOCK_Q - 1)
+        out.why.append(f"切換後鎖定中（至 {_qlabel(end)}），維持{TYPE_ZH.get(current, current)}")
+        return result(current, cand)
+
+    if consecutive and prev["candidate_type"] == cand:                       # 6
+        return result(cand, cand)
+    out.why.append(f"本季判定為{TYPE_ZH.get(cand, cand)}，未連續 {HYST_CONFIRM_Q} 季，"
+                   f"維持{TYPE_ZH.get(current, current)}")
+    return result(current, cand)
 
 
 def display_type(c: Classification) -> str:
@@ -355,5 +819,7 @@ def display_type(c: Classification) -> str:
     c.type 為 TYPE_NORMAL 或 TYPE_GROWTH，且 state 含 "虧損" 或 "轉機" → "轉機"。
     其餘 → TYPE_ZH[c.type]（循環、金融不被覆蓋；特殊、資料不足照原名）。
     """
-    raise NotImplementedError
+    if c.type in (TYPE_NORMAL, TYPE_GROWTH) and (STATE_LOSS in c.state or STATE_TURNAROUND in c.state):
+        return "轉機"
+    return TYPE_ZH[c.type]
 

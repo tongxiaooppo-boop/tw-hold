@@ -144,7 +144,7 @@ def test_ttm_n小於1_報錯():
     ("金融業", "financial"),
     (" 金融業 ", "financial"),
     ("生技醫療業", "biotech"),
-    ("化學生技醫療", "biotech"),
+    ("化學生技醫療", "other"),      # 混合分類，不算生技（Opus 審後決定）
     ("建材營造", "construction"),
     ("半導體業", "other"),
     ("其他", "other"),

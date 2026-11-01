@@ -35,6 +35,7 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 H_MIN = 0.03              # 門檻下限 3pp【經驗】
@@ -63,7 +64,34 @@ def momentum_metrics(monthly: pd.Series) -> pd.DataFrame:
       g3/g12/A/D/h3 為 float（定義見檔頭），兩個旗標為 bool（只看月份，與資料有無無關）。
     錯誤：index 非 DatetimeIndex、不遞增或有重複 → ValueError；index 不是月初 → ValueError。
     """
-    raise NotImplementedError
+    idx = monthly.index
+    if not isinstance(idx, pd.DatetimeIndex):
+        raise ValueError("index 必須是 DatetimeIndex")
+    if not idx.is_monotonic_increasing or not idx.is_unique:
+        raise ValueError("index 必須嚴格遞增且不重複")
+    if (idx.day != 1).any():
+        raise ValueError("index 必須是月初")
+    if len(monthly) == 0:
+        out = pd.DataFrame({c: pd.Series(dtype=float) for c in METRIC_COLS})
+        return out.astype({"holiday_flag": bool, "A_holiday_flag": bool})
+    full = pd.date_range(idx[0], idx[-1], freq="MS")
+    r = monthly.astype(float)
+    r = r.where(r > 0).reindex(full)
+    s3 = r.rolling(3, min_periods=3).sum()
+    s12 = r.rolling(12, min_periods=12).sum()
+    g3 = s3 / s3.shift(12) - 1
+    g12 = s12 / s12.shift(12) - 1
+    ratio = s3 / s3.shift(24)
+    h3 = (ratio.where(ratio > 0) ** 0.5) - 1
+    A = g3 - g3.shift(3)
+    D = g3 - g12
+    out = pd.DataFrame({
+        "g3": g3.astype(float), "g12": g12.astype(float), "A": A.astype(float),
+        "D": D.astype(float), "h3": h3.astype(float),
+        "holiday_flag": [int(x) in HOLIDAY_END_MONTHS for x in full.month],
+        "A_holiday_flag": [int(x) in A_HOLIDAY_END_MONTHS for x in full.month],
+    }, index=full)
+    return out[list(METRIC_COLS)]
 
 
 def noise_threshold(A_series: pd.Series, asof: pd.Timestamp | None = None) -> dict:
@@ -74,7 +102,22 @@ def noise_threshold(A_series: pd.Series, asof: pd.Timestamp | None = None) -> di
     回傳 {"sigma": float（無值→NaN）, "H": float, "n": int（窗內非 NaN 個數）}。
     不丟例外（A_series 空 → sigma NaN、H＝H_MIN、n＝0）。
     """
-    raise NotImplementedError
+    nan = float("nan")
+    if len(A_series) == 0:
+        return {"sigma": nan, "H": H_MIN, "n": 0}
+    if asof is None:
+        asof = A_series.index[-1]
+    lo = asof - pd.DateOffset(months=NOISE_WINDOW)
+    hi = asof - pd.DateOffset(months=1)
+    idx = A_series.index
+    w = A_series[(idx >= lo) & (idx <= hi)].dropna().astype(float)
+    n = int(len(w))
+    if n == 0:
+        return {"sigma": nan, "H": H_MIN, "n": 0}
+    med = float(w.median())
+    mad = float((w - med).abs().median())
+    sigma = MAD_SCALE * mad
+    return {"sigma": float(sigma), "H": float(max(H_MIN, H_SIGMA_MULT * sigma)), "n": n}
 
 
 def momentum_label(metrics: pd.DataFrame, asof: pd.Timestamp | None = None) -> dict:
@@ -94,4 +137,66 @@ def momentum_label(metrics: pd.DataFrame, asof: pd.Timestamp | None = None) -> d
        "holiday_flag": bool, "A_holiday_flag": bool}
       g12、D 若 metrics 沒有該欄 → NaN。
     """
-    raise NotImplementedError
+    nan = float("nan")
+    if asof is None:
+        asof = metrics.index[-1]
+    if asof not in metrics.index:
+        raise KeyError(asof)
+
+    def _val(col: str, m: pd.Timestamp) -> float:
+        if col not in metrics.columns or m not in metrics.index:
+            return nan
+        v = metrics.at[m, col]
+        return nan if pd.isna(v) else float(v)
+
+    A = metrics["A"]
+
+    def _dir(m: pd.Timestamp, H: float) -> str | None:
+        a = _val("A", m)
+        if np.isnan(a):
+            return None
+        if a > H:
+            return "accel"
+        if a < -H:
+            return "decel"
+        return None
+
+    nt = noise_threshold(A, asof)
+    direction = _dir(asof, nt["H"])
+    g3 = _val("g3", asof)
+    label = None
+    if direction == "accel":
+        label = LABEL_ACCEL_POS if g3 > 0 else LABEL_ACCEL_NEG
+    elif direction == "decel":
+        label = LABEL_DECEL_POS if g3 > 0 else LABEL_DECEL_NEG
+
+    prev_m = asof - pd.DateOffset(months=1)
+    prev_dir = None
+    if prev_m in metrics.index:
+        prev_dir = _dir(prev_m, noise_threshold(A, prev_m)["H"])
+    confirmed = bool(direction is not None and direction == prev_dir
+                     and nt["n"] >= MIN_A_HISTORY)
+
+    h_now = _val("h3", asof)
+    h_old = _val("h3", asof - pd.DateOffset(months=3))
+    base_note = None
+    if not (np.isnan(h_now) or np.isnan(h_old)):
+        if direction == "accel" and h_now <= h_old:
+            base_note = NOTE_LOW_BASE
+        elif direction == "decel" and h_now > h_old:
+            base_note = NOTE_HIGH_BASE
+
+    def _flag(col: str, months: tuple[int, ...]) -> bool:
+        if col in metrics.columns:
+            return bool(metrics.at[asof, col])
+        return int(asof.month) in months
+
+    return {
+        "month": asof, "g3": g3, "g12": _val("g12", asof), "A": _val("A", asof),
+        "D": _val("D", asof), "h3": h_now,
+        "sigma": nt["sigma"], "H": nt["H"], "n_hist": nt["n"],
+        "direction": direction, "label": label, "confirmed": confirmed,
+        "base_note": base_note,
+        "holiday_flag": _flag("holiday_flag", HOLIDAY_END_MONTHS),
+        "A_holiday_flag": _flag("A_holiday_flag", A_HOLIDAY_END_MONTHS),
+    }

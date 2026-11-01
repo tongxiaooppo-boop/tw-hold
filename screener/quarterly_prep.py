@@ -34,11 +34,12 @@ GROUP_OTHER = "other"
 # 對照表：universe.industry 原文（去頭尾空白後）→ 分組。表外一律 GROUP_OTHER。
 # 只收草案 §8.7 第 2 點明列的名稱；實際資料若出現其他寫法（例「建材營造業」），
 # 要由 Opus 決定後補進來，不要在實作時自行擴充。
+# 2026-11-01 Opus 審後決定：「化學生技醫療」是櫃買把化學與生技混在一起的分類，化學股連續虧損
+# 不該被當生技退出 → 不收進 biotech（落到 other；真生技仍由「生技醫療業」涵蓋）。
 INDUSTRY_GROUP_MAP: dict[str, str] = {
     "金融保險": GROUP_FINANCIAL,
     "金融業": GROUP_FINANCIAL,
     "生技醫療業": GROUP_BIOTECH,
-    "化學生技醫療": GROUP_BIOTECH,
     "建材營造": GROUP_CONSTRUCTION,
 }
 
@@ -81,7 +82,36 @@ def to_single_quarter_cashflow(q: pd.DataFrame,
       - 任何 period_end 不是季末（月份不在 3/6/9/12 或日不是該月最後一天）→ ValueError。
       - 同 (ticker, period_end) 重複 → ValueError（應先由 load_quarterly 去重）。
     """
-    raise NotImplementedError
+    for need in ("ticker", "period_end"):
+        if need not in q.columns:
+            raise KeyError(need)
+    pe = pd.to_datetime(q["period_end"])
+    # 季末檢查：月份在 3/6/9/12 且為該月最後一天
+    bad = ~(pe.dt.month.isin([3, 6, 9, 12]) & pe.dt.is_month_end)
+    if bad.any():
+        raise ValueError(f"period_end 不是季末：{pe[bad].iloc[0]}")
+    if q.duplicated(["ticker", "period_end"]).any():
+        raise ValueError("(ticker, period_end) 有重複")
+
+    out = q.copy()
+    out["period_end"] = pe
+    out = out.sort_values(["ticker", "period_end"]).reset_index(drop=True)
+    year = out["period_end"].dt.year
+    is_q1 = out["period_end"].dt.month == 3
+    key = pd.MultiIndex.from_arrays([out["ticker"], out["period_end"]])
+    # 前一個季末（缺季不往前跳）；跨年（Q1 的前一季是去年 Q4）不用，Q1 直接取累計值
+    prev_end = out["period_end"] - pd.offsets.QuarterEnd(1)
+    prev_key = pd.MultiIndex.from_arrays([out["ticker"], prev_end])
+    same_year = (prev_end.dt.year == year).to_numpy()
+    for c in cols:
+        if c not in out.columns:
+            continue
+        cum = out[c].astype(float)
+        out[f"{c}{YTD_SUFFIX}"] = cum
+        prev = pd.Series(cum.to_numpy(), index=key).reindex(prev_key).to_numpy()
+        single = pd.Series(cum.to_numpy() - prev, index=out.index).where(same_year)
+        out[c] = cum.where(is_q1, single)
+    return out
 
 
 def ttm(series: pd.Series, n: int = 4) -> pd.Series:
@@ -101,7 +131,20 @@ def ttm(series: pd.Series, n: int = 4) -> pd.Series:
       - index 不是 DatetimeIndex、不嚴格遞增（含重複）→ ValueError。
       - n < 1 → ValueError。
     """
-    raise NotImplementedError
+    if n < 1:
+        raise ValueError("n 必須 >= 1")
+    if not isinstance(series.index, pd.DatetimeIndex):
+        raise ValueError("index 必須是 DatetimeIndex")
+    if not series.index.is_monotonic_increasing or not series.index.is_unique:
+        raise ValueError("index 必須嚴格遞增")
+    if len(series) == 0:
+        return series.astype(float).copy()
+    # 轉成曆季 Period、補齊缺季（NaN）後做 rolling，所以涵蓋缺季的窗都是 NaN
+    per = series.index.to_period("Q")
+    s = pd.Series(series.to_numpy(dtype=float), index=per)
+    full = pd.period_range(per[0], per[-1], freq="Q")
+    r = s.reindex(full).rolling(n, min_periods=n).sum()
+    return pd.Series(r.reindex(per).to_numpy(), index=series.index, name=series.name)
 
 
 def industry_group(name: object) -> str:
@@ -111,7 +154,9 @@ def industry_group(name: object) -> str:
     不做模糊比對（不用 `in`／startswith），避免「其他金融」之類誤收。
     不會丟例外。
     """
-    raise NotImplementedError
+    if not isinstance(name, str):
+        return GROUP_OTHER
+    return INDUSTRY_GROUP_MAP.get(name.strip(), GROUP_OTHER)
 
 
 def normalize_industry(name: object) -> str | None:
@@ -119,4 +164,9 @@ def normalize_industry(name: object) -> str | None:
     （已去空白）。None、NaN、空字串、非字串 → None（呼叫端應排除這些股票，不建產業指數）。
     不會丟例外。
     """
-    raise NotImplementedError
+    if not isinstance(name, str):
+        return None
+    s = name.strip()
+    if not s:
+        return None
+    return INDUSTRY_ALIASES.get(s, s)
