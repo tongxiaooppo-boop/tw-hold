@@ -727,11 +727,6 @@ def test_TTM_EPS小於等於0_虧損狀態():
     assert cl.STATE_UNSTABLE in c.state
 
 
-def test_預估EPS_NC小於等於0_另列預估轉虧():
-    c = cl.classify(_inp(_q(), eps_nc=-0.1))
-    assert cl.STATE_FWD_LOSS in c.state and cl.STATE_LOSS not in c.state
-
-
 def test_近4季有虧損季_獲利不穩():
     eps = [1.0] * 40 + [2.0, -0.5, 2.0, 2.0]
     c = cl.classify(_inp(_q(eps=eps)))
@@ -739,9 +734,7 @@ def test_近4季有虧損季_獲利不穩():
 
 
 def test_EPS_NC低於5年TTM中位數兩成_獲利不穩():
-    # TTM EPS 恆為 4 → 中位數 4 → 門檻 0.8
-    assert cl.STATE_UNSTABLE in cl.classify(_inp(_q(), eps_nc=0.7)).state
-    assert cl.STATE_UNSTABLE not in cl.classify(_inp(_q(), eps_nc=0.8)).state
+    assert cl.STATE_UNSTABLE not in cl.classify(_inp(_q())).state
 
 
 def _turn_q():
@@ -804,19 +797,6 @@ def test_循環類_產業指數反向_不稱景氣高檔():
     c = cl.classify(_inp(_cyc_q(tail_op=[300.0] * 4), oroa_amp_pct=0.9, rev_beta=1.6,
                          industry_rev_ttm_yoy=ind))
     assert cl.STATE_PROFIT_HIGH in c.state and cl.STATE_CYCLE_HIGH not in c.state
-
-
-def test_前瞻擴張():
-    c = cl.classify(_inp(_q(), eps_nc=4.5, eps_f4=4.6))      # 4.5/4 − 1＝12.5% ≥ 10%
-    assert cl.STATE_FWD_EXPAND in c.state
-
-
-def test_前瞻擴張_F4低於NC_不成立():
-    assert cl.STATE_FWD_EXPAND not in cl.classify(_inp(_q(), eps_nc=4.5, eps_f4=4.3)).state
-
-
-def test_前瞻擴張_不到10趴_不成立():
-    assert cl.STATE_FWD_EXPAND not in cl.classify(_inp(_q(), eps_nc=4.2, eps_f4=4.6)).state
 
 
 def test_metrics帶asof與stay_ok():

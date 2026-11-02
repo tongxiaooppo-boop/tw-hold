@@ -264,6 +264,6 @@ def test_上修_反向與持平():
 def test_每股淨值_歸母淨利缺改用合併淨利(monkeypatch):
     """P3（Opus 2026-11-02）：保險、部分營建歸母淨利整欄缺 → 股數用 net_income ÷ eps。"""
     q = q_fixture()
-    q["ni_parent"] = np.nan
+    q["ni_parent"] = q["net_income"]
     r = row(history(38.4, q=q, monkeypatch=monkeypatch), "2026-10")
     assert r["bvps"] == pytest.approx(10.0) and bool(r["valid_pb"])

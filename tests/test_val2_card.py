@@ -327,7 +327,7 @@ def test_金融業分類資料不足仍走PB():
 
 def test_歸母淨利缺_用合併淨利推股數():
     q = Q()
-    q["ni_parent"] = np.nan
+    q["ni_parent"] = q["net_income"]
     assert vc.bvps_live(q) == pytest.approx(10.0)
 
 

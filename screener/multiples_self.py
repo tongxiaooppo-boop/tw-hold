@@ -8,8 +8,7 @@
   eps_fwd = eps_windows.fwd_window(..., base=上面的 ttm).eps；窗口 ok=False → NaN。
   q 由呼叫端先做 corporate_actions.adjust_eps（EPS 已在最新股數基準），這裡不再調整。
 - bvps(t)：最近一季「quarter_visible(period_end, t)」且 equity_parent 有限 >0 的季 Q；
-  股數＝Q 的隱含股數 ni_parent ÷ eps（|eps| ≥ EPS_MIN、結果有限 >0；ni_parent 缺值改用 net_income（P3：
-  保險、部分營建的歸母淨利整欄缺）；eps 已在最新基準，
+  股數＝Q 的隱含股數 ni_parent ÷ eps（|eps| ≥ EPS_MIN、結果有限 >0；ni_parent（loader 已依規則頂替）；eps 已在最新基準，
   所以股數也在最新基準）。Q 推不出股數 → 往前找最多 4 個「可見」季中最近一個推得出的；都沒有 → NaN。
   bvps = Q 的 equity_parent ÷ 該股數。
 - 倍數（T-3：有效值＝有限且 >0）：
@@ -97,7 +96,7 @@ def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: 
             latest = equity_rows.iloc[-1]
             candidates = visible[visible["period_end"] <= latest["period_end"]].tail(5)   # 本季＋往前 4 季
             for v in candidates.iloc[::-1].itertuples(index=False):
-                ni = v.ni_parent if np.isfinite(v.ni_parent) else v.net_income
+                ni = v.ni_parent
                 if np.isfinite(v.eps) and abs(v.eps) >= EPS_MIN and np.isfinite(ni):
                     shares = ni / v.eps
                     if _positive(shares):

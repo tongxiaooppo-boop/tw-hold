@@ -8,7 +8,6 @@
    `data/upstream/fundamentals/universe.parquet`（母體＝universe 全部列，不只 in_universe）。
 2. `assemble_inputs`（純函式）：現金流累計→單季、逐檔算 OROA 振幅／資產強度後做**全體**橫斷面分位、
    營收指數（全市場／產業／排除自己）、beta、同步度、g3，組成 {ticker: ClassInputs}。
-   eps_nc／eps_f4 尚未實作 → None。
 3. `classify.classify` 逐檔（單檔例外只記錄略過）→ 讀既有 class_history.parquet → `apply_hysteresis`
    → 寫 JSON 與 history。整批 0 檔 → 不寫檔、exit 1。
 
@@ -177,7 +176,7 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
                 ind_sync=ri.industry_sync(stock_yoy, ind_yoy),
                 industry_name=qp.normalize_industry(uni.loc[t, "industry"]) if "industry" in uni.columns else "",
                 stock_rev_ttm_yoy=stock_yoy, market_rev_ttm_yoy=market,
-                industry_rev_ttm_yoy=ind_yoy, g3=g3, eps_nc=None, eps_f4=None)
+                industry_rev_ttm_yoy=ind_yoy, g3=g3)
         except Exception as e:  # noqa: BLE001
             skipped[t] = f"組輸入失敗：{type(e).__name__}: {e}"
     return out
@@ -200,13 +199,37 @@ def rebalance_date_for(period_end) -> pd.Timestamp:
     return pd.Timestamp(year=pe.year + dy, month=m, day=d)
 
 
-def _valid_tickers(q: pd.DataFrame, period_end: pd.Timestamp) -> set[str]:
-    """該季末 REQUIRED_COLS 三欄都有值的 ticker。"""
-    cols = [c for c in REQUIRED_COLS if c in q.columns]
-    if len(cols) < len(REQUIRED_COLS):
+def _financial_set(universe: pd.DataFrame) -> set[str]:
+    """金融業裸代號集合；缺產業欄時為空。"""
+    if "industry" not in universe:
         return set()
-    rows = q[q["period_end"] == period_end]
-    return set(rows.loc[rows[cols].notna().all(axis=1), "ticker"])
+    return set(universe.loc[universe["industry"].map(qp.industry_group) == "financial", "ticker"].map(_t))
+
+
+def coverage_mktcap_k(universe: pd.DataFrame, covered: set[str]) -> int | None:
+    """依市值排名計算從第一檔起連續涵蓋的檔數。"""
+    if "mktcap_rank" not in universe:
+        return None
+    u = universe[["ticker", "mktcap_rank"]].dropna(subset=["mktcap_rank"]).copy()
+    u["ticker"] = u["ticker"].map(_t)
+    u = u.sort_values("mktcap_rank", kind="stable").drop_duplicates("ticker")
+    k = 0
+    for t in u["ticker"]:
+        if t not in covered:
+            break
+        k += 1
+    return k
+
+
+def _valid_tickers(q: pd.DataFrame, period_end: pd.Timestamp,
+                   financial: frozenset[str] | set[str] = frozenset()) -> set[str]:
+    """金融股只需 EPS 與歸母淨利，其餘需 REQUIRED_COLS 三欄。"""
+    rows = q[q["period_end"] == period_end].copy()
+    tickers = rows["ticker"].map(_t)
+    values = rows.reindex(columns=REQUIRED_COLS)
+    valid = values.notna().all(axis=1)
+    valid |= tickers.isin(financial) & values[["eps", "ni_parent"]].notna().all(axis=1)
+    return set(tickers[valid])
 
 
 def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_asof,
@@ -235,7 +258,7 @@ def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_a
         return False, "季度面板為空", None
     latest = q["period_end"].max()
     uni = {_t(x) for x in universe["ticker"]}
-    valid_latest = _valid_tickers(q, latest) & uni
+    valid_latest = _valid_tickers(q, latest, _financial_set(universe)) & uni
     same_quarter = current_asof is not None and latest == pd.Timestamp(current_asof)
     if current_asof is not None and latest < pd.Timestamp(current_asof):
         return False, f"快照已是最新季（{pd.Timestamp(current_asof):%Y-%m-%d}）", latest
@@ -245,7 +268,7 @@ def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_a
     if today is not None and pd.Timestamp(today).normalize() < rb:
         return False, f"{latest:%Y-%m-%d} 季未到換股日 {rb:%Y-%m-%d}，等價值／定存一起換", latest
     prev = latest - pd.offsets.QuarterEnd(1)
-    base = _valid_tickers(q, prev) & uni
+    base = _valid_tickers(q, prev, _financial_set(universe)) & uni
     if not base:
         base = set(q["ticker"]) & uni
     cov = len(valid_latest & base) / max(len(base), 1)
@@ -370,10 +393,11 @@ def main(argv: list[str] | None = None) -> int:
             "final_states": cl.STATE_SEP.join(final.state)})
 
     qn = quarterly.assign(ticker=quarterly["ticker"].map(_t), period_end=pd.to_datetime(quarterly["period_end"]))
-    valid_count = len(_valid_tickers(qn, asof) & {_t(x) for x in universe["ticker"]})
+    valid_count = len(_valid_tickers(qn, asof, _financial_set(universe)) & {_t(x) for x in universe["ticker"]})
     payload = {"asof": asof.date().isoformat(), "rule_version": cl.RULE_VERSION, "valid_count": valid_count,
                "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
-               "count": len(stocks), "stocks": stocks}
+               "count": len(stocks), "stocks": stocks,
+               "coverage_mktcap_k": coverage_mktcap_k(universe, {s["ticker"] for s in stocks})}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 

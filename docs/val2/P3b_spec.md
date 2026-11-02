@@ -6,7 +6,7 @@
 
 ## 1. `reference/loader.py::merge_statements`（歸母淨利頂替，A26 Q3 定案）
 - 合併前先記下資產負債表**原始** `equity_parent`（沒有此欄＝全 NaN），再做既有的 `equity_parent.fillna(equity)`。
-- 合併後：`ni_parent` 為 NaN 且 原始 `equity_parent` 為 NaN（含資產負債表沒有該季列）且 `net_income` 有限 → `ni_parent = net_income`。其餘維持 NaN。
+- 合併後：`ni_parent` 為 NaN 且 該季沒有非控制權益（原始 `equity_parent` 為 NaN、或等於 `equity` 權益總額、或資產負債表沒有該季列）且 `net_income` 有限 → `ni_parent = net_income`。其餘維持 NaN。（驗收時 Opus 補「等於權益總額」：原規格漏掉，實測 193 列；補後未頂替且有淨利的正好是 8 列。）
 - 暫存欄合併完要刪掉；輸出欄位與欄序跟現在完全一樣（不新增欄）。
 - docstring 寫明規則與理由：「歸母權益也缺＝沒有非控制權益，合併淨利就是歸母淨利；歸母權益有值時不頂替（2015～2023 有 8 列兩者不同）」。
 - 下游拿掉無條件頂替：`screener/multiples_self.py`（約 100 行 `ni = v.ni_parent if ... else v.net_income`）與 `screener/val_card.py`（約 461 行同樣寫法）改成只用 `ni_parent`，兩處 docstring（multiples_self 約 11 行、val_card 約 453 行）改成「ni_parent（loader 已依規則頂替）」。`reference/corporate_actions.py` 約 406 行**不動**（範圍外，影響只有那 8 列舊季）。

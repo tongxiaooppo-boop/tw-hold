@@ -8,7 +8,7 @@
 （oroa_series／oroa_amplitude／asset_intensity）與分位函式 cross_section_pct。
 
 ## 判斷順序（classify，取第一個成立的類型）
-0 資料閘門：quarters 中 revenue 非 NaN 的列數 < MIN_QUARTERS → TYPE_INSUFFICIENT（不判狀態）
+0 資料閘門：金融業看 eps、其他看 revenue，非 NaN 的列數 < MIN_QUARTERS → TYPE_INSUFFICIENT（不判狀態）
 1 金融：industry_group == "financial" → TYPE_FINANCIAL（不看數字；狀態照判）
 2 特殊退出 TYPE_SPECIAL（任一）：
     ① biotech 且近 SPECIAL_BIOTECH_WINDOW_Q 季中 eps < 0 的季數 ≥ SPECIAL_BIOTECH_LOSS_Q
@@ -47,16 +47,13 @@
 
 ## 狀態（§1.4；TYPE_INSUFFICIENT 不判，其餘類型都判；可同時多個，依下列順序放進 state）
   "虧損"         最新連續 4 季 eps 合計 ≤ 0
-  "預估轉虧"     inp.eps_nc 非 None 且 ≤ 0，且不是"虧損"
-  "獲利不穩"     最新 4 季任一 eps < 0；或 eps_nc 非 None 且 < 近 5 年（20 季）TTM EPS 中位數 × 0.2
-                 （中位數 ≤ 0 或可用 TTM < 4 個 → 後半條不判）
+  "獲利不穩"     最新 4 季任一 eps < 0
   "轉機"/"谷底回升"  最新 4 季任一 eps < 0，且最新季 op_income > 0，且 TTM op(t) > TTM op(t−1) > TTM op(t−2)，
                  且 inp.g3 > 0（NaN 不成立）。非循環類叫"轉機"，TYPE_CYCLICAL 叫"谷底回升"。
   "歷史高獲利區"/"歷史低獲利區"  最新 OROA 在自身近 40 季 OROA（含最新，非 NaN 至少 CYCLE_MIN_OROA_OBS 個）的
                  rank(pct=True, method="average") ≥ PROFIT_ZONE_HIGH／≤ PROFIT_ZONE_LOW。
   "疑似景氣高檔"/"疑似景氣低檔"  只在 TYPE_CYCLICAL＋循環涵蓋完整＋歷史高（低）獲利區，且
                  inp.industry_rev_ttm_yoy 最後一個非 NaN 值 > 0（< 0）時另加（暫定，見待決）。
-  "前瞻擴張"     eps_nc、eps_f4、TTM EPS 皆 > 0，eps_nc ÷ TTM EPS − 1 ≥ FWD_EXPAND_MIN，且 eps_f4 ≥ eps_nc。
 
 ## why（list[str]，依判斷順序；數字格式固定）
   資料閘門  "單季財報僅 {n} 季（< 12 季），不分類"
@@ -101,7 +98,7 @@ import pandas as pd
 
 from screener import quarterly_prep as qp
 
-RULE_VERSION = "class-v1-2026-11-01"
+RULE_VERSION = "class-v2-2026-11-02"
 
 # ── 類型 ─────────────────────────────────────────────────────
 TYPE_INSUFFICIENT = "insufficient"
@@ -117,7 +114,6 @@ TYPES_NO_HYSTERESIS = (TYPE_INSUFFICIENT, TYPE_FINANCIAL, TYPE_SPECIAL)
 
 # ── 狀態 ─────────────────────────────────────────────────────
 STATE_LOSS = "虧損"
-STATE_FWD_LOSS = "預估轉虧"
 STATE_UNSTABLE = "獲利不穩"
 STATE_TURNAROUND = "轉機"
 STATE_TROUGH_RECOVERY = "谷底回升"
@@ -125,7 +121,6 @@ STATE_PROFIT_HIGH = "歷史高獲利區"
 STATE_PROFIT_LOW = "歷史低獲利區"
 STATE_CYCLE_HIGH = "疑似景氣高檔"
 STATE_CYCLE_LOW = "疑似景氣低檔"
-STATE_FWD_EXPAND = "前瞻擴張"
 STATES_IMMEDIATE = (STATE_LOSS,)    # 遲滯：只有「虧損」立即生效，其餘連 2 次一致
 
 # ── 副標 ─────────────────────────────────────────────────────
@@ -174,9 +169,6 @@ SPECIAL_REV_JUMP = 1.00
 SPECIAL_CAP_JUMP_WITH_REV = 0.10   # 【待決】「股本同步大增」草案未給數字，暫定 10%
 NORMAL_SHRINK_CAGR3 = -0.05
 NORMAL_LOSS_YEARS = 5
-UNSTABLE_EPSNC_REL = 0.2
-UNSTABLE_MEDIAN_Q = 20             # 近 5 年 TTM EPS
-FWD_EXPAND_MIN = 0.10              # 【經驗】
 PROFIT_ZONE_HIGH = 0.80
 PROFIT_ZONE_LOW = 0.20
 HYST_CONFIRM_Q = 2                 # 連續 2 季一致才切換
@@ -214,7 +206,6 @@ class ClassInputs:
     stock_rev_ttm_yoy、market_rev_ttm_yoy、industry_rev_ttm_yoy：月頻（index 月初 Timestamp）
       TTM 營收年增；industry 為「排除自己」版本。可為空 Series。
     g3：rev_momentum 最新月的 g3；NaN 視為不成立。
-    eps_nc、eps_f4：前瞻 EPS（eps_nowcast 尚未實作，None＝不判相關狀態）。
     listed_quarters：上市季數；None 時以 quarters 列數代替。
     """
     ticker: str
@@ -229,8 +220,6 @@ class ClassInputs:
     market_rev_ttm_yoy: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
     industry_rev_ttm_yoy: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
     g3: float = float("nan")
-    eps_nc: float | None = None
-    eps_f4: float | None = None
     listed_quarters: int | None = None
     industry_name: str = ""     # normalize_industry 後的產業名（選用，T2 傳統循環產業先驗用）
 
@@ -532,7 +521,7 @@ def classify(inp: ClassInputs) -> Classification:
         raise ValueError("quarters index 必須嚴格遞增")
 
     nan = float("nan")
-    n_rev = int(q["revenue"].notna().sum())
+    n_rev = int(q["eps" if inp.industry_group == "financial" else "revenue"].notna().sum())
     metrics: dict = {
         "asof": q.index[-1] if len(q) else None, "n_quarters": n_rev,
         "oroa": nan, "oroa_amp": nan, "oroa_pct_self": nan, "max_dd": nan,
@@ -542,7 +531,7 @@ def classify(inp: ClassInputs) -> Classification:
         "op_cagr3": nan, "growth_core": False, "crossing": {}, "ttm_eps": nan,
         "special_triggers": [], "stay_ok": {},
         "suspect_cyclical": False, "prior_cyclical": False, "single_event": False,
-        "comparability_pending": False,
+        "comparability_pending": False, "by_type": {},
     }
     # 0 資料閘門
     if n_rev < MIN_QUARTERS:
@@ -554,7 +543,6 @@ def classify(inp: ClassInputs) -> Classification:
     eps = q["eps"].astype(float)
     why: list[str] = []
     degrade: list[str] = []
-    subtags: list[str] = []
 
     rev_ttm = qp.ttm(rev)
     op_ttm = qp.ttm(op)
@@ -732,10 +720,8 @@ def classify(inp: ClassInputs) -> Classification:
                     degrade.append("期間無市場營收收縮月，穿越檢定未執行")
             if crossing_pass:
                 ctype = TYPE_GROWTH
-                subtags.append(SUB_CYCLICAL_GROWTH)
             else:
                 ctype = TYPE_CYCLICAL
-                subtags.append(SUB_GROWTH_CYCLE)
         elif is_cyc:
             ctype = TYPE_CYCLICAL
         elif growth_core:
@@ -744,101 +730,106 @@ def classify(inp: ClassInputs) -> Classification:
             ctype = TYPE_NORMAL
             why.append("未符合景氣循環或高成長條件")
 
-        if suspect:                      # T1：疑似循環＝類型不變（growth／normal），只加副標與降級
-            subtags.append(SUB_SUSPECT_CYCLE)
-            degrade.append("營收型態疑似循環（輔助條件未過）")
-        if ctype == TYPE_CYCLICAL:
-            if prior_ok and not cyc_ok:
-                subtags.append(SUB_PRIOR_CYCLE)
-                degrade.append("靠產業先驗，振幅未過前 30%")
-            if single_event_dependent(q):
-                subtags.append(SUB_SINGLE_EVENT)
-                degrade.append("必要條件只靠單一景氣事件成立（僅觀察到一次循環）")
-                metrics["single_event"] = True
-            if not cover:
-                subtags.append(SUB_CYCLE_INCOMPLETE)
-                degrade.append("循環未觀察完整")
-            subtags.append(SUB_ASSET_HEAVY if asset_heavy else SUB_ASSET_LIGHT)
-            if dd["recovered_half"] is False:
-                degrade.append("回撤後未回到前高 50%（可能為結構衰退）")
-        if ctype == TYPE_GROWTH:
-            if pd.isna(c5):
-                degrade.append("營收歷史不足 5 年，5 年 CAGR 未檢查")
-            listed = inp.listed_quarters if inp.listed_quarters is not None else len(q)
-            if listed < GROWTH_MIN_LISTED_Q:
-                degrade.append(f"上市未滿 {GROWTH_MIN_LISTED_Q} 季")
-        if ctype == TYPE_NORMAL:
-            if pd.notna(c3) and c3 < NORMAL_SHRINK_CAGR3:
-                subtags.append(SUB_SHRINKING)
-            years = _full_years_eps(eps)
-            if years:
-                last_y = max(years)
-                if any(v < 0 for y, v in years.items() if y > last_y - NORMAL_LOSS_YEARS):
-                    subtags.append(SUB_UNSTABLE)
+    base_degrade, base_why = list(degrade), list(why)
 
-    # ── 狀態 ──
-    state: list[str] = []
-    last4 = eps.tail(4)
-    any_neg4 = bool((last4 < 0).any())
-    is_loss = bool(pd.notna(ttm_eps_now) and ttm_eps_now <= 0)
-    if is_loss:
-        state.append(STATE_LOSS)
-        why.append(f"近四季 EPS 合計 {ttm_eps_now:.2f} ≤ 0")
-    nc, f4 = inp.eps_nc, inp.eps_f4
-    if nc is not None and nc <= 0 and not is_loss:
-        state.append(STATE_FWD_LOSS)
-        why.append(f"EPS_NC {nc:.2f} ≤ 0，預估轉虧")
-    unstable_reason: str | None = None
-    if any_neg4:
-        unstable_reason = f"近四季有 {int((last4 < 0).sum())} 季 EPS < 0"
-    elif nc is not None:
-        hist = eps_ttm.tail(UNSTABLE_MEDIAN_Q).dropna()
-        if len(hist) >= 4:
-            med = float(hist.median())
-            if med > 0 and nc < med * UNSTABLE_EPSNC_REL:
-                unstable_reason = (f"EPS_NC {nc:.2f} < 近 5 年 TTM EPS 中位數 {med:.2f} 的 "
-                                   f"{UNSTABLE_EPSNC_REL:.0%}")
-    if unstable_reason:
-        state.append(STATE_UNSTABLE)
-        why.append(unstable_reason)
-    if (any_neg4 and len(q) and pd.notna(op.iloc[-1]) and op.iloc[-1] > 0
-            and pd.notna(inp.g3) and inp.g3 > 0):
-        t3 = op_ttm.tail(3).to_numpy(dtype=float)
-        if len(t3) == 3 and not np.isnan(t3).any() and t3[2] > t3[1] > t3[0]:
-            name = STATE_TROUGH_RECOVERY if ctype == TYPE_CYCLICAL else STATE_TURNAROUND
-            state.append(name)
-            why.append(f"{name}：近四季曾虧損，最新季營業利益轉正且 TTM 營業利益連 2 季上升")
-    zone_win = oroa.tail(CYCLE_WINDOW_Q)
-    zone_vals = zone_win.dropna()
-    zone: str | None = None
-    if len(zone_vals) >= CYCLE_MIN_OROA_OBS and pd.notna(zone_win.iloc[-1]):
-        pct_self = float(zone_vals.rank(pct=True, method="average").iloc[-1])
-        metrics["oroa_pct_self"] = pct_self
-        if pct_self >= PROFIT_ZONE_HIGH:
-            zone = STATE_PROFIT_HIGH
-        elif pct_self <= PROFIT_ZONE_LOW:
-            zone = STATE_PROFIT_LOW
-        if zone:
-            state.append(zone)
-            why.append(f"最新 OROA 位於自身近 {CYCLE_WINDOW_Q} 季第 {pct_self * 100:.0f} 百分位")
-        if zone == STATE_PROFIT_HIGH and suspect:
-            degrade.append("疑似循環且處歷史高獲利區（避免用高峰 EPS 判便宜）")
-    if (zone and ctype == TYPE_CYCLICAL and cover and not suspect
-            and SUB_CYCLE_INCOMPLETE not in subtags):          # T4：須確認循環且觀察完整
-        ind_last = _last_nonnan(inp.industry_rev_ttm_yoy)
-        if pd.notna(ind_last):
-            if zone == STATE_PROFIT_HIGH and ind_last > 0:
-                state.append(STATE_CYCLE_HIGH)
-                why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史高獲利區同向")
-            elif zone == STATE_PROFIT_LOW and ind_last < 0:
-                state.append(STATE_CYCLE_LOW)
-                why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史低獲利區同向")
-    if (nc is not None and f4 is not None and pd.notna(ttm_eps_now) and ttm_eps_now > 0
-            and nc > 0 and f4 > 0 and nc / ttm_eps_now - 1.0 >= FWD_EXPAND_MIN - 1e-12
-            and f4 >= nc):
-        state.append(STATE_FWD_EXPAND)
-        why.append(f"EPS_NC {nc:.2f} 較近四季 EPS {ttm_eps_now:.2f} 成長 "
-                   f"{nc / ttm_eps_now - 1.0:.0%}，EPS_F4 {f4:.2f} ≥ EPS_NC")
+    def _decorate(ctype):
+        """依假設類型重用副標、降級與狀態判斷；說明僅採候選類型。"""
+        subtags, state = [], []
+        degrade, why = list(base_degrade), list(base_why)
+        decoration_metrics = {}
+        if ctype in (TYPE_CYCLICAL, TYPE_GROWTH, TYPE_NORMAL):
+            if is_cyc and growth_core:
+                if ctype == TYPE_CYCLICAL:
+                    subtags.append(SUB_GROWTH_CYCLE)
+                elif ctype == TYPE_GROWTH:
+                    subtags.append(SUB_CYCLICAL_GROWTH)
+            if suspect:                      # T1：疑似循環＝類型不變（growth／normal），只加副標與降級
+                subtags.append(SUB_SUSPECT_CYCLE)
+                degrade.append("營收型態疑似循環（輔助條件未過）")
+            if ctype == TYPE_CYCLICAL:
+                if prior_ok and not cyc_ok:
+                    subtags.append(SUB_PRIOR_CYCLE)
+                    degrade.append("靠產業先驗，振幅未過前 30%")
+                if single_event_dependent(q):
+                    subtags.append(SUB_SINGLE_EVENT)
+                    degrade.append("必要條件只靠單一景氣事件成立（僅觀察到一次循環）")
+                if not cover:
+                    subtags.append(SUB_CYCLE_INCOMPLETE)
+                    degrade.append("循環未觀察完整")
+                subtags.append(SUB_ASSET_HEAVY if asset_heavy else SUB_ASSET_LIGHT)
+                if dd["recovered_half"] is False:
+                    degrade.append("回撤後未回到前高 50%（可能為結構衰退）")
+            if ctype == TYPE_GROWTH:
+                if pd.isna(c5):
+                    degrade.append("營收歷史不足 5 年，5 年 CAGR 未檢查")
+                listed = inp.listed_quarters if inp.listed_quarters is not None else len(q)
+                if listed < GROWTH_MIN_LISTED_Q:
+                    degrade.append(f"上市未滿 {GROWTH_MIN_LISTED_Q} 季")
+            if ctype == TYPE_NORMAL:
+                if pd.notna(c3) and c3 < NORMAL_SHRINK_CAGR3:
+                    subtags.append(SUB_SHRINKING)
+                years = _full_years_eps(eps)
+                if years:
+                    last_y = max(years)
+                    if any(v < 0 for y, v in years.items() if y > last_y - NORMAL_LOSS_YEARS):
+                        subtags.append(SUB_UNSTABLE)
+
+        # ── 狀態 ──
+        state: list[str] = []
+        last4 = eps.tail(4)
+        any_neg4 = bool((last4 < 0).any())
+        is_loss = bool(pd.notna(ttm_eps_now) and ttm_eps_now <= 0)
+        if is_loss:
+            state.append(STATE_LOSS)
+            why.append(f"近四季 EPS 合計 {ttm_eps_now:.2f} ≤ 0")
+        unstable_reason: str | None = None
+        if any_neg4:
+            unstable_reason = f"近四季有 {int((last4 < 0).sum())} 季 EPS < 0"
+        if unstable_reason:
+            state.append(STATE_UNSTABLE)
+            why.append(unstable_reason)
+        if (any_neg4 and len(q) and pd.notna(op.iloc[-1]) and op.iloc[-1] > 0
+                and pd.notna(inp.g3) and inp.g3 > 0):
+            t3 = op_ttm.tail(3).to_numpy(dtype=float)
+            if len(t3) == 3 and not np.isnan(t3).any() and t3[2] > t3[1] > t3[0]:
+                name = STATE_TROUGH_RECOVERY if ctype == TYPE_CYCLICAL else STATE_TURNAROUND
+                state.append(name)
+                why.append(f"{name}：近四季曾虧損，最新季營業利益轉正且 TTM 營業利益連 2 季上升")
+        zone_win = oroa.tail(CYCLE_WINDOW_Q)
+        zone_vals = zone_win.dropna()
+        zone: str | None = None
+        if len(zone_vals) >= CYCLE_MIN_OROA_OBS and pd.notna(zone_win.iloc[-1]):
+            pct_self = float(zone_vals.rank(pct=True, method="average").iloc[-1])
+            decoration_metrics["oroa_pct_self"] = pct_self
+            if pct_self >= PROFIT_ZONE_HIGH:
+                zone = STATE_PROFIT_HIGH
+            elif pct_self <= PROFIT_ZONE_LOW:
+                zone = STATE_PROFIT_LOW
+            if zone:
+                state.append(zone)
+                why.append(f"最新 OROA 位於自身近 {CYCLE_WINDOW_Q} 季第 {pct_self * 100:.0f} 百分位")
+            if zone == STATE_PROFIT_HIGH and suspect:
+                degrade.append("疑似循環且處歷史高獲利區（避免用高峰 EPS 判便宜）")
+        if (zone and ctype == TYPE_CYCLICAL and cover and not suspect
+                and SUB_CYCLE_INCOMPLETE not in subtags):          # T4：須確認循環且觀察完整
+            ind_last = _last_nonnan(inp.industry_rev_ttm_yoy)
+            if pd.notna(ind_last):
+                if zone == STATE_PROFIT_HIGH and ind_last > 0:
+                    state.append(STATE_CYCLE_HIGH)
+                    why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史高獲利區同向")
+                elif zone == STATE_PROFIT_LOW and ind_last < 0:
+                    state.append(STATE_CYCLE_LOW)
+                    why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史低獲利區同向")
+        return subtags, state, degrade, why, decoration_metrics
+
+    subtags, state, degrade, why, dm = _decorate(ctype)
+    metrics.update(dm)
+    if ctype == TYPE_CYCLICAL:
+        metrics["single_event"] = SUB_SINGLE_EVENT in subtags
+    if ctype in (TYPE_CYCLICAL, TYPE_GROWTH, TYPE_NORMAL):
+        for t in (TYPE_CYCLICAL, TYPE_GROWTH, TYPE_NORMAL):
+            st, states, reasons, _, _ = _decorate(t)
+            metrics["by_type"][t] = {"subtags": st, "state": states, "reasons_degrade": reasons}
 
     return Classification(type=ctype, state=state, subtags=subtags, why=why,
                           metrics=metrics, reasons_degrade=degrade)
@@ -867,6 +858,8 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
       new 的季＝new.metrics["asof"]；與 prev.decided_at 相同 → ValueError（同季重判應由呼叫端取代該列）。
     狀態：final_states＝new.state 中屬 STATES_IMMEDIATE 者 ＋ 其餘「也出現在 prev.candidate_states 且 prev 為前一曆季」者
       （保持 new.state 的順序）。首次判定 → 直接採用 new.state 全部（2026-11-01 改）。
+    final 與候選不同且有 by_type 時，改採 final 的副標、降級與狀態再過濾。
+    狀態延續比對將「轉機」與「谷底回升」視為同一狀態。
     輸出：type＝final、state＝final_states；metrics 另加
       "candidate_type"(cand), "raw_type"(new.type), "switched"(bool), "last_switch"(Timestamp|None：本季切換＝本季),
       "locked_until"(Timestamp|None：鎖定期最後一季的季末)。
@@ -885,6 +878,7 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
 
     def finish(final: str, cand: str, switched: bool, last_switch, final_states: list[str]):
         out.type = final
+        out.metrics["subtags_recomputed"] = False
         out.state = final_states
         locked = None
         if last_switch is not None:
@@ -908,15 +902,27 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
     # 狀態：立即狀態＋前一曆季候選也有的狀態
     prev_states = prev["candidate_states"]
     prev_set = set(str(prev_states).split(STATE_SEP)) if isinstance(prev_states, str) and prev_states else set()
-    final_states = [s for s in new.state
-                    if s in STATES_IMMEDIATE or (consecutive and s in prev_set)]
 
     sw = history[history["switched"].astype(bool)]
     last_sw = pd.Timestamp(sw.iloc[-1]["decided_at"]) if len(sw) else None
 
     def result(final: str, cand: str):
         switched = final != current
-        return finish(final, cand, switched, new_q if switched else last_sw, final_states)
+        bt = new.metrics.get("by_type", {})
+        recomputed = final != new.type and final in bt
+        states = new.state
+        if recomputed:
+            out.subtags = list(bt[final]["subtags"])
+            out.reasons_degrade = list(bt[final]["reasons_degrade"])
+            states = bt[final]["state"]
+        # 轉機與谷底回升為同一改善狀態，跨類型也算連續。
+        previous = set(prev_set)
+        if previous & {STATE_TURNAROUND, STATE_TROUGH_RECOVERY}:
+            previous.update((STATE_TURNAROUND, STATE_TROUGH_RECOVERY))
+        filtered = [s for s in states if s in STATES_IMMEDIATE or (consecutive and s in previous)]
+        result = finish(final, cand, switched, new_q if switched else last_sw, filtered)
+        result.metrics["subtags_recomputed"] = recomputed
+        return result
 
     if new.type in TYPES_NO_HYSTERESIS or current in TYPES_NO_HYSTERESIS:   # 2
         return result(new.type, new.type)

@@ -49,6 +49,12 @@ def test_歸母淨利缺但歸母權益有值_不頂替():
     assert np.isnan(_ni(merge_statements(*_stmts()), "B"))
 
 
+def test_歸母淨利缺且歸母權益等於權益總額_用合併淨利():
+    inc, bal, cf = _stmts()
+    bal.loc[bal["ticker"] == "B", "equity_parent"] = 1000.0          # 等於權益總額＝沒有非控制權益
+    assert _ni(merge_statements(inc, bal, cf), "B") == 100.0
+
+
 def test_歸母淨利有值_不動():
     assert _ni(merge_statements(*_stmts()), "C") == 90.0
 

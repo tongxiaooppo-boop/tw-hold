@@ -450,7 +450,7 @@ def c_tier(price: float | None, bvps: float | None, mh: pd.DataFrame | None, aso
 def bvps_live(q: pd.DataFrame) -> float | None:
     """與 multiples_self.build_history 的 bvps 同算法，但所有財報季都視為可見（live）：
     最近一季 equity_parent 有限 >0 的季 Q；股數＝Q 起往前共 5 季中最近一個 |eps| ≥ EPS_MIN 且 ni_parent÷eps 有限 >0 者
-    （ni_parent 缺值改用 net_income，與 build_history 相同）；
+    （ni_parent（loader 已依規則頂替），與 build_history 相同）；
     都推不出 → None。回傳 Q.equity_parent ÷ 股數。"""
     q = _quarters(q)
     eq = q[np.isfinite(q["equity_parent"]) & (q["equity_parent"] > 0)]
@@ -458,7 +458,7 @@ def bvps_live(q: pd.DataFrame) -> float | None:
         return None
     latest = eq.iloc[-1]
     for r in q[q["period_end"] <= latest["period_end"]].tail(5).iloc[::-1].itertuples(index=False):
-        ni = r.ni_parent if _finite(r.ni_parent) else r.net_income
+        ni = r.ni_parent
         if _finite(r.eps) and abs(r.eps) >= EPS_MIN and _finite(ni):
             shares = ni / r.eps
             if _finite(shares) and shares > 0:
