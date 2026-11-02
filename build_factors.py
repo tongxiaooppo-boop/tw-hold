@@ -309,7 +309,7 @@ def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str]
 def screen_all() -> dict:
     """跑價值 / 定存篩選，回傳 `{deposit, value, context}`。
     `build_factors.main()`（parquet + md）與 `build_lists.main()`（JSON）共用。"""
-    q = load_quarterly()
+    q = load_quarterly(live=True)   # 線上：提早公布的財報抓到就用
     fin_tickers, fin_shares, fin_mktcap, uni_industry = _universe_financials()
     qf = quarterly_factors(q, fin_tickers=fin_tickers, shares=fin_shares)
     div = load_dividends()

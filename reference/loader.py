@@ -13,9 +13,10 @@ bundle 目錄由 `TWHOLD_BUNDLE_DIR` 環境變數指定，預設 `<repo>/data/up
 ## 公告日安全邊界
 
 `income`／`balance`／`cashflow` 的 `period_end` 是**期別結束日不是公告日**。
-台灣季報法定期限約季末 +45 天（Q4 是次年 3/31，更晚，但用 45 天保守估）。
-因此每一季掛一個 `disclosure_date = period_end + 45 天`——任何「某天看得到
-哪一期財報」的判斷都用這個，不用 `period_end`。
+台灣季報法定期限約季末 +45 天（Q4 是次年 3/31，45 天對 Q4 偏早）。
+回測／重播每一季掛 `disclosure_date = period_end + 45 天`——「某天看得到
+哪一期財報」的判斷都用這個，不用 `period_end`。線上產品（`live=True`）資料在就算
+已公布（`period_end + 1 天`），提早公布的公司抓到就用。
 """
 
 from __future__ import annotations
@@ -32,8 +33,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_DIR = Path(os.environ.get("TWHOLD_BUNDLE_DIR", _REPO_ROOT / "data" / "upstream"))
 FUND_DIR = BUNDLE_DIR / "fundamentals"
 
-#: 季報公告落後（季末 → 看得到）。保守：法定 Q1-Q3 是季末 +45 天，Q4 更長，
-#: 一律用 45 天不夠保守的季末（Q4）就晚一點才納入，寧可晚不可早。
+#: 季報公告落後（季末 → 看得到），只給回測／重播用（線上產品見 `load_quarterly(live=True)`）。
+#: 法定 Q1-Q3 是季末 +45 天；Q4 年報法定次年 3/31，用 45 天（2/14）其實**偏早**，
+#: 回測在 2/14～3/31 之間可能用到還沒公布的年報（前視偏誤，bugs_ledger §G2，尚未修）。
 STATEMENT_LAG_DAYS = 45
 
 
@@ -72,10 +74,16 @@ def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
     return q[order].sort_values(keys).reset_index(drop=True)
 
 
-def load_quarterly() -> pd.DataFrame:
-    """三表合併成季度面板，依 (ticker, period_end) 排序並加公告日。"""
+def load_quarterly(live: bool = False) -> pd.DataFrame:
+    """三表合併成季度面板，依 (ticker, period_end) 排序並加公告日。
+
+    live=True（線上產品，asof＝今天）：資料裡有的季就是已經公布，`disclosure_date`
+    設成期末隔天，提早公布的公司抓到就用（跟月營收一樣搶時間差）。
+    live=False（回測／重播，預設）：維持期末 +45 天，避免用到當時還沒公布的財報。
+    """
     q = merge_statements(_read("income"), _read("balance"), _read("cashflow"))
-    q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=STATEMENT_LAG_DAYS)
+    lag = 1 if live else STATEMENT_LAG_DAYS
+    q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=lag)
     return q
 
 
