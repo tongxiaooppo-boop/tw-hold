@@ -161,7 +161,7 @@ def _synth_fin_quarterly(ticker: str, start_year: int = 2021, n_years: int = 6,
         rows.append(dict(
             ticker=ticker, period_end=pe,
             revenue=np.nan, eps=eps,
-            net_income=ni, gross_profit=np.nan, op_income=np.nan,
+            net_income=ni, ni_parent=q_ni, gross_profit=np.nan, op_income=np.nan,
             pretax_income=ni * 1.2,
             total_assets=100000.0, equity=8000.0, equity_parent=np.nan,
             total_liabilities=92000.0, current_assets=np.nan,
@@ -186,6 +186,32 @@ def test_金融軌_2026起YTD淨利還原單季_歷史不動():
     g2 = qf2[qf2["ticker"] == "NF1"]
     post2 = g2[g2["period_end"].dt.year == 2026]["net_income"].tolist()
     assert post2[:2] == [100.0, 200.0]
+
+
+def _fin_2026(ni, npar):
+    pes = pd.to_datetime(["2025-12-31", "2026-03-31", "2026-06-30", "2026-09-30"])
+    return pd.DataFrame({"ticker": "F", "period_end": pes[:len(ni)], "net_income": ni, "ni_parent": npar})
+
+
+def test_金融軌_2026單季口徑Q2大於Q1不被誤減():
+    q = _fin_2026([90.0, 100.0, 120.0], [90.0, 100.0, 120.0])        # 已是單季（2026-10 起實況）
+    assert factors._deaccum_ytd(q, "net_income", {"F"}).tolist() == [90.0, 100.0, 120.0]
+
+
+def test_金融軌_2026累計缺中間季不補成Q1():
+    q = _fin_2026([90.0, 100.0, np.nan, 330.0], [90.0, 100.0, 110.0, 120.0])
+    out = factors._deaccum_ytd(q, "net_income", {"F"}).tolist()
+    assert out[:2] == [90.0, 100.0] and np.isnan(out[2]) and np.isnan(out[3])
+
+
+def test_金融軌_2026累計逐列判斷還原():
+    q = _fin_2026([90.0, 100.0, 210.0, 330.0], [90.0, 100.0, 110.0, 120.0])
+    assert factors._deaccum_ytd(q, "net_income", {"F"}).tolist() == [90.0, 100.0, 110.0, 120.0]
+
+
+def test_金融軌_沒有單季歸母淨利不猜():
+    q = _fin_2026([90.0, 100.0, 210.0], [np.nan, np.nan, np.nan])
+    assert factors._deaccum_ytd(q, "net_income", {"F"}).tolist() == [90.0, 100.0, 210.0]
 
 
 def test_金融軌_2026缺EPS從淨利股數推算後過門檻():

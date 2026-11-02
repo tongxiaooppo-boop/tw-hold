@@ -33,25 +33,47 @@ def _ttm(df: pd.DataFrame, col: str) -> pd.Series:
               .transform(lambda s: s.rolling(4, min_periods=4).sum()))
 
 
-def _deaccum_ytd(q: pd.DataFrame, col: str, tickers: set[str]) -> pd.Series:
-    """把「當年累計」（YTD）的損益流量項還原成單季值——同 ticker、同曆年內
-    `val − 上一季 val`，曆年首季（Q1）保持原值。
+_YTD_TOL = 0.10   # net_income 與單季／累計歸母淨利的相對差容忍度
 
-    只對 `tickers` 內、`period_end` 在 2026 年起、且該 (ticker, 曆年) 序列**年內
-    單調不減**的群組動手。理由：金控的 FinMind `IncomeAfterTax` 2023–2025 是單季值
-    （Q4 常因獎金/提存而下降），2026 起改成 YTD 累計（實測 2881/2882 等）。限定
-    2026+ 才動、又要單調不減，確保永遠不會誤傷已知正確的單季歷史。"""
+
+def _deaccum_ytd(q: pd.DataFrame, col: str, tickers: set[str]) -> pd.Series:
+    """金融股 2026 年起的 `col`（淨利）若是「當年累計」（YTD），還原成單季值。
+
+    **逐列明確判斷，不猜**（2026-11-02 修 D-2／D-3）：以單季歸母淨利 `ni_parent` 當尺——
+    `col` 接近當年 `ni_parent` 累計（相對差 ≤ `_YTD_TOL`）且不接近該季 `ni_parent` → 判定 YTD。
+    舊做法「年內單調不減就當 YTD」在 2026-10 資料改成單季後，把 25 檔金融股 Q2 誤減成 Q2−Q1
+    （2881 單季 642 億 → 307 億）。
+    - 判定 YTD 的列：單季＝本列 − 同年上一季（上一季須是相鄰曆季且有值，否則 NaN，不補成 Q1）。
+    - Q1、判定不了（缺 `ni_parent`、累計不完整）、判定為單季的列：維持原值。
+    只動 `tickers` 內、`period_end` 在 2026 年起的列；其餘原樣回傳。"""
     s = q[col].astype("float64")
-    if not tickers:
+    if not tickers or "ni_parent" not in q.columns:
         return s
-    yr = q["period_end"].dt.year
     out = s.copy()
-    for (tk, y), idx in q.groupby([q["ticker"], yr], sort=False).groups.items():
-        if tk not in tickers or y < 2026 or len(idx) < 2:
+    pe = q["period_end"]
+    for tk, idx in q.groupby("ticker", sort=False).groups.items():
+        if tk not in tickers:
             continue
-        vals = s.loc[idx]
-        if (vals.diff().dropna() >= 0).all():             # 年內單調不減 → 視為 YTD 累計
-            out.loc[idx] = vals.diff().fillna(vals.iloc[0])
+        g = q.loc[idx].sort_values("period_end")
+        per = g["period_end"].dt.to_period("Q")
+        vals = s.loc[g.index]
+        npar = g["ni_parent"].astype("float64")
+        for j, i in enumerate(g.index):
+            p = per.iloc[j]
+            if p.year < 2026 or p.quarter == 1 or pd.isna(vals.iloc[j]):
+                continue
+            # 同年 Q1..本季的 ni_parent 都要有，才算得出累計
+            same_year = [k for k in range(j + 1) if per.iloc[k].year == p.year]
+            if len(same_year) != p.quarter or npar.iloc[same_year].isna().any():
+                continue
+            cum, single = float(npar.iloc[same_year].sum()), float(npar.iloc[j])
+            v = float(vals.iloc[j])
+            near_cum = cum != 0 and abs(v / cum - 1.0) <= _YTD_TOL
+            near_single = single != 0 and abs(v / single - 1.0) <= _YTD_TOL
+            if not near_cum or near_single:
+                continue
+            prev_ok = j >= 1 and per.iloc[j - 1] == p - 1 and pd.notna(vals.iloc[j - 1])
+            out.loc[i] = v - float(vals.iloc[j - 1]) if prev_ok else np.nan
     return out
 
 
@@ -81,8 +103,8 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     from reference.corporate_actions import adjust_eps
     q = adjust_eps(q)
 
-    # 金融軌：金控的 FinMind 淨利 2026 起改用 YTD 累計口徑 → 還原單季
-    # （見 _deaccum_ytd，限 2026+ 且年內單調不減）。只動 net_income——金控 revenue
+    # 金融軌：金控淨利 2026 起曾出現 YTD 累計口徑 → 逐列對照單季歸母淨利判斷後還原單季
+    # （見 _deaccum_ytd；2026-10 起資料已是單季，判斷為單季的列不動）。只動 net_income——金控 revenue
     # 在現行 bundle 品質不穩，且不進任何定存門檻 / 排序項，不碰。
     if fin_tickers and "net_income" in q.columns:
         q["net_income"] = _deaccum_ytd(q, "net_income", fin_tickers)
