@@ -81,7 +81,8 @@ def card(q=None, rev=None, px=None, cls="default", mh=None, rh=None, ind=None):
 
 FIELDS = {"ok", "tier", "route", "reason", "price", "px_date", "ticker", "type", "display_type", "state", "subtags",
           "why", "class_asof", "eps", "growth", "prices", "position", "fwd_prices", "buy_range", "revision",
-          "b_tier", "c_tier", "roe", "eps_3y_avg", "price_note", "quality", "status", "notes", "version"}
+          "b_tier", "c_tier", "roe", "eps_3y_avg", "price_note", "quality", "status", "notes", "version",
+          "nonop_hist", "nonop_median", "fwd_note"}  # P4 新增
 
 
 # ── 回傳結構 ─────────────────────────────────────────────

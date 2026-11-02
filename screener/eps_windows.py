@@ -204,6 +204,13 @@ def windows(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
 
 
 
+def nonop_median(rows: list[dict]) -> float | None:
+    """P4：業外中位數（_estimate 與 val_card 共用，不准兩份）。rows＝最近 NONOP_QUARTERS 個已公布季（dict 含
+    pretax_income、op_income）；有限的 pretax−op 少於 NONOP_MIN_VALID 個 → None；否則中位數（float）。
+    _estimate 改呼叫本函式，None 時照舊 raise「試算停用：業外有效季數不足」。"""
+    raise NotImplementedError
+
+
 def _finite(value) -> bool:
     return value is not None and bool(pd.notna(value)) and math.isfinite(float(value))
 

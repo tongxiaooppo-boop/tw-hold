@@ -59,6 +59,8 @@ position：A 層 multiples.classify_position 同規則（price < cheap → cheap
   growth(list，見 growth_rows), prices(dict|None), position(str), fwd_prices(dict|None),
   buy_range(dict|None), revision(dict), b_tier(dict|None), c_tier(dict|None), roe(float|None),
   eps_3y_avg(float|None), price_note(str|None：沒有三價時放在三價位置的短句，見 price_note()), quality{cfo_ni, accrual}, status(summarize 結果), notes(list[str]), version
+  P4 新增：nonop_hist(list，nonop_rows)、nonop_median(float|None，eps_windows.nonop_median)、fwd_note(str|None，fwd_note())、
+  revision["last_event"]（rev_hist 最後一列 event，無 → None）、buy_range 多 where／gap（buy_where()）
 prices／fwd_prices dict：{cheap, fair, dear, base, base_name, metric("pe"|"pe_fwd"|"pb"), mults(tuple 截斷後),
   raw_mults(tuple), capped(bool), cap(float|None), n_valid, n_loss, window("YYYY-MM～YYYY-MM")}
 """
@@ -124,7 +126,7 @@ def _end_mean(q, col):
     values = [q.iloc[i][col] for i in (0, -1) if _finite(q.iloc[i][col])]
     return float(np.mean(values)) if values else None
 
-CARD_VERSION = "card-v3-val2"
+CARD_VERSION = "card-v4-val2"
 Q_COLS = ["revenue", "gross_profit", "op_income", "pretax_income", "net_income", "ni_parent", "eps",
           "capital_stock", "equity_parent", "total_assets", "ocf"]
 TIERS = ("A", "B", "C", "D")
@@ -157,6 +159,33 @@ PRICE_NOTES = {"universe": "不在估值範圍", "few": "財報太少，不估�
                "bvps": "缺每股淨值，不估價", "gap": "財報不連續，不估價", "special": "特殊類型，不估價",
                "loss": "虧損中，不估價", "thin": "獲利接近零，不估價", "b_peer": "自身歷史太短，改看產業本益比",
                "b_only": "自身歷史太短，只列本益比", "cap": "歷史本益比高於上限，不估價"}
+
+
+# P4：前瞻三價那格沒有三價時的短句（P4_spec §1；畫面一定要有字）
+FWD_NOTES = {"est_off": "試算停用，不給前瞻三價", "pb": "淨值比路線，不給前瞻三價",
+             "cyclical": "循環股不給前瞻三價（用較低獲利情境）", "same": "新季營收未出，前瞻＝近 4 季，不另給",
+             "window": "前瞻 4 季不可用（{}），不給", "thin": "前瞻獲利接近零，不給",
+             "hist": "前瞻倍數歷史太短，不給"}
+
+
+def fwd_note(card: dict, cls: dict | None) -> str | None:
+    """P4_spec §1：fwd_prices 有值或 tier≠"A" → None；否則依序 est_off（eps.est_disabled）、pb（route=="PB"）、
+    cyclical（type=="cyclical" 或 peak_block(cls)）、same（NOTE_FWD_SAME ∈ notes）、window（eps.fwd 為 None 或 ok False，
+    {} 填 eps.fwd 的 reason，None 時填「無資料」）、thin（eps.fwd.eps < EPS_MIN）、其餘 hist。"""
+    raise NotImplementedError
+
+
+def nonop_rows(q: pd.DataFrame) -> list[dict]:
+    """P4_spec §1：最近 eps_windows.NONOP_QUARTERS 個有實際財報的季（舊→新），每列
+    {"q": "2026Q2", "nonop": pretax_income−op_income, "pretax": pretax_income, "share": nonop÷|pretax|}；
+    非有限 → None（share 另在 pretax 為 0 時 None）。q 少於 1 季 → []。"""
+    raise NotImplementedError
+
+
+def buy_where(buy: dict | None, price: float | None) -> dict | None:
+    """P4_spec §1：buy 為 None → None；回傳 buy 的複本加 where（"below"／"in"／"above"／None）與 gap
+    （above：price÷high−1；below：price÷low−1；其餘 None）。"""
+    raise NotImplementedError
 
 
 def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFrame | None,

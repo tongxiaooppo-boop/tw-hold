@@ -165,6 +165,13 @@ def revision_event(prev: dict | None, cur: dict) -> str:
     return "report" if cur["actual_qs"] != prev["actual_qs"] else "normal"
 
 
+def hist_position(mh: pd.DataFrame | None, metric: str, asof: pd.Timestamp, months: int | None) -> dict | None:
+    """P4（三軌體檢「本益比／股價淨值比歷史位置（自建）」）：取 month ≤ last_complete_month(asof) 且 valid_{metric}
+    為 True 的列；months 不是 None → 只留 month ≥ last_complete_month(asof) − (months−1)（以月份算，不是列數）。
+    沒有列 → None。回傳 {"now": 最後一列 metric 值, "pct": (值 ≤ now 的列數) ÷ 列數, "n": 列數, "month": 最後一列 month}。"""
+    raise NotImplementedError
+
+
 def revision_streak(rev_hist: pd.DataFrame) -> dict:
     """上修判斷（§5-4）。rev_hist＝該檔 eps_revision（欄 month, window, eps_fwd, event），依 month 舊→新處理。
     從第 2 列起逐列：
