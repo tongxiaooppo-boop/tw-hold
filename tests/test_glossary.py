@@ -1,7 +1,8 @@
 """全站名詞（docs/val2/upgrade_guide.md §15-1／15-2／15-3；P4_spec §8）。框架由 Opus 定，實作者（P4c）不得改。
 
 P4c 要做的事＝改 app/、screener/、build_*.py 的畫面文字，讓本檔全過。實作者只准動本檔的 WHITELIST
-（每條要寫理由，且只准放「程式內部訊息」）與 OUTSIDE_OK（估值名詞在 val_view 以外合法出現的地方）；
+（每條要寫理由，且只准放「程式內部訊息」或「資料 key：…」——寫進／讀自 data/ 檔案的中文 key，改了會斷資料，
+畫面要另行轉換）與 OUTSIDE_OK（估值名詞在 val_view 以外合法出現的地方）；
 RULES、掃描法、排除範圍、測試本身都不准改。覺得某條規則誤判，停下回報 Opus。
 
 掃描法（同 terms/ui_strings.txt 的抽法，改用 AST 精確化）：
