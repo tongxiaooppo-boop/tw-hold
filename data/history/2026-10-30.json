@@ -15,7 +15,7 @@
    "status": "ok",
    "note": "",
    "n": 4,
-   "scanned": 610,
+   "scanned": 614,
    "candidates": [
     {
      "t": "2379",
@@ -46,7 +46,13 @@
      "st": 3
     }
    ],
-   "revisions": []
+   "revisions": [
+    {
+     "digest": "1ac4fbb52f680409",
+     "origin": "live",
+     "status": "ok"
+    }
+   ]
   },
   "long": {
    "origin": "live",

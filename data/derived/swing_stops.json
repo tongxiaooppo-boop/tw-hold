@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "asof": "2026-10-30",
+    "asof": "2026-11-02",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
@@ -298,18 +298,9 @@
     },
     "9933": {
       "name": "中鼎",
-      "first_seen": "2026-10-08",
-      "entry_date": "2026-10-12",
-      "entry_price": 43.0,
-      "atr0": 1.4357,
-      "run_high": 48.5,
-      "trail_stop": 45.63,
-      "last_close": 45.3,
-      "last_update": "2026-10-30",
-      "status": "stopped_out",
-      "dropped_date": null,
-      "exit_date": "2026-10-30",
-      "exit_price": 45.63
+      "status": "pending_entry",
+      "signal_date": "2026-11-02",
+      "risk_stop_ref": 42.34
     },
     "3653": {
       "name": "健策",

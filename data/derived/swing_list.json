@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "trading_date": "2026-10-30",
-    "rebuilt_at": "2026-11-01T15:37:35+00:00",
+    "trading_date": "2026-11-02",
+    "rebuilt_at": "2026-11-02T13:53:30+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
-    "note": "universe.parquet：612 檔",
+    "note": "universe.parquet：616 檔",
     "u1b_pending": false,
     "has_pe_bands": true,
     "has_fill_rate": true,
@@ -23,11 +23,11 @@
       "c_roe": true,
       "c_gm_not_deteriorating": true,
       "c_fscore": true,
-      "eps_yoy_q": 0.5960264900662253,
-      "eps_yoy_base": 1.51,
+      "eps_yoy_q": 0.5584415584415583,
+      "eps_yoy_base": 1.54,
       "eps_yoy_low_base": false,
-      "roe": 0.1619931195226645,
-      "f_score": 8.0,
+      "roe": 0.2544780474904572,
+      "f_score": 9.0,
       "revenue_yoy": 0.13828970856873446,
       "c_rev_yoy": true,
       "revenue_accel": false,
@@ -102,9 +102,9 @@
       ],
       "name": "東和鋼鐵",
       "industry": "鋼鐵工業",
-      "market_cap": 65719242000.0,
+      "market_cap": 65719243620.0,
       "first_seen": "2026-09-17",
-      "streak_days": 27
+      "streak_days": 28
     },
     {
       "ticker": "2027",
@@ -196,9 +196,9 @@
       ],
       "name": "大成鋼",
       "industry": "鋼鐵工業",
-      "market_cap": 129729884091.63437,
+      "market_cap": 129729884844.63438,
       "first_seen": "2026-09-24",
-      "streak_days": 22
+      "streak_days": 23
     },
     {
       "ticker": "2535",
@@ -288,9 +288,9 @@
       ],
       "name": "達欣工",
       "industry": "建材營造",
-      "market_cap": 25183842000.0,
+      "market_cap": 25183838931.0,
       "first_seen": "2026-10-27",
-      "streak_days": 4
+      "streak_days": 5
     },
     {
       "ticker": "3045",
@@ -378,9 +378,9 @@
       ],
       "name": "台灣大",
       "industry": "通信網路業",
-      "market_cap": 497078038500.0,
+      "market_cap": 497078040502.5,
       "first_seen": "2026-10-15",
-      "streak_days": 10
+      "streak_days": 11
     },
     {
       "ticker": "6491",
@@ -473,7 +473,7 @@
       "industry": "化學生技醫療",
       "market_cap": 32682000000.0,
       "first_seen": "2026-09-07",
-      "streak_days": 35
+      "streak_days": 36
     },
     {
       "ticker": "6782",
@@ -563,7 +563,7 @@
       "industry": "生技醫療業",
       "market_cap": 16632000000.0,
       "first_seen": "2026-10-12",
-      "streak_days": 13
+      "streak_days": 14
     },
     {
       "ticker": "9933",
@@ -653,9 +653,9 @@
       ],
       "name": "中鼎",
       "industry": "其他",
-      "market_cap": 43579129276.04332,
+      "market_cap": 43579130091.443306,
       "first_seen": "2026-10-02",
-      "streak_days": 18
+      "streak_days": 19
     }
   ],
   "changes": {
