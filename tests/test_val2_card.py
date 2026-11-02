@@ -29,8 +29,9 @@ def _events(monkeypatch):
 
 def Q(n=30, **over) -> pd.DataFrame:
     q = make_q("2026Q2", n=n, **over)
-    for c, v in (("equity_parent", 1000.0), ("capital_stock", 1000.0), ("total_assets", 2000.0), ("ocf", 120.0)):
+    for c, v in (("equity_parent", 1000.0), ("capital_stock", 1000.0), ("total_assets", 2000.0)):
         q[c] = v
+    q["ocf"] = 120.0 * pd.to_datetime(q["period_end"]).dt.quarter    # 財報 ocf 是年初至今累計（11/2 對帳）
     q["ticker"] = "9999"
     return q
 
@@ -123,7 +124,8 @@ def test_A_PE_三價與購買區間():
     assert p["base"] == pytest.approx(TTM) and p["base_name"] == vc.BASE_TTM and p["metric"] == "pe"
     assert (p["n_valid"], p["n_loss"], p["window"], p["cap"], p["capped"]) == (60, 0, "2021-11～2026-10", 30.0, False)
     assert c["position"] == "fair"
-    assert c["buy_range"] == pytest.approx({"low": 36.864, "high": 46.08, "state": "normal", "note": None})
+    assert c["buy_range"] == pytest.approx({"low": 36.864, "high": 46.08, "state": "normal", "note": None,
+                                         "where": "in", "gap": None})
     assert c["eps"]["ttm"]["n_est"] == 1 and c["eps"]["ttm"]["eps"] == pytest.approx(TTM)
     assert c["eps"]["est_disabled"] is None
     assert c["b_tier"] is None and c["c_tier"] is None and c["roe"] is None and c["eps_3y_avg"] is None
@@ -212,7 +214,8 @@ def test_購買區間_PB無前瞻_金融ROE():
     assert p["base"] == pytest.approx(10.0) and p["base_name"] == vc.BASE_BVPS and p["metric"] == "pb"
     assert p["n_valid"] == 72 and p["window"] == "2020-11～2026-10" and p["cap"] is None
     assert c["fwd_prices"] is None and c["position"] == "fair"
-    assert c["buy_range"] == pytest.approx({"low": 10.0, "high": 20.0, "state": "normal", "note": None})
+    assert c["buy_range"] == pytest.approx({"low": 10.0, "high": 20.0, "state": "normal", "note": None,
+                                         "where": "in", "gap": None})
     assert c["roe"] == pytest.approx(0.384)
     assert c["eps"]["ttm"]["n_est"] == 0                       # 金融不試算
 
@@ -249,14 +252,16 @@ def test_B層產業樣本不足():
     c = card(mh=MH(valid_until="2023-06"), ind=peers)          # 有效 20 個月 → B
     assert c["tier"] == "B" and c["prices"] is None and c["buy_range"] is None
     assert c["b_tier"] == pytest.approx({"pe_now": 10.0, "industry_pct": None, "eps_needed": None,
-                                         "n_peers": 5, "median_pe": None})
+                                         "n_peers": 5, "median_pe": None,
+                                         "n_valid": 20, "n_loss": 0, "window": "2021-11～2026-10"})
 
 
 def test_B層_產業百分位與反推EPS():
     peers = {"測試業": {"median_pe": 12.0, "n": 10, "values": [6.0, 7, 8, 9, 11, 12, 13, 14, 15, 16]}}
     b = card(mh=MH(valid_until="2023-06"), ind=peers)["b_tier"]
     assert b == pytest.approx({"pe_now": 10.0, "industry_pct": 0.4, "eps_needed": 3.2,
-                               "n_peers": 10, "median_pe": 12.0})
+                               "n_peers": 10, "median_pe": 12.0,
+                               "n_valid": 20, "n_loss": 0, "window": "2021-11～2026-10"})
 
 
 # ── 可信度帶來的停用 ─────────────────────────────────────
@@ -317,6 +322,13 @@ def test_年增率_新季未出不列前瞻():
 
 def test_品質_現金流與應計():
     assert card()["quality"] == pytest.approx({"cfo_ni": 1.25, "accrual": -0.048})
+
+
+def test_品質_ocf累計要先轉單季():
+    """11/2 對帳發現：ocf 是年初至今累計。近 4 季 2025Q3～2026Q2 的累計值 360／480／120／240，
+    轉單季後各 120，合計 480（直接加會是 1200 → cfo_ni 3.125）。"""
+    q = Q()
+    assert vc.quality(q)["cfo_ni"] == pytest.approx(480 / (96 * 4))
 
 
 # ── P3 驗收後補（Opus，2026-11-02 乾跑發現）──────────────────

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 PIN = "📌"
 PIN_LEGEND = "📌＝主卡片上的數字"
@@ -63,12 +64,15 @@ def fmt_pct(v, signed: bool = True) -> str:
 def fmt_yi(v) -> str:
     """金額（元）→ 億，千分位整數＋「 億」（"4,676 億"）；|值| < 10 億留一位小數（"6.4 億"）；None → "—"。
     本函式（與 fmt_shares）是唯一准許除以 1e8 的地方（test_畫面不自己算 白名單）。"""
-    raise NotImplementedError
+    if not _valid(v):
+        return "—"
+    yi = v / 1e8
+    return f"{yi:,.0f} 億" if yi >= 10 or yi <= -10 else f"{yi:,.1f} 億"
 
 
 def fmt_shares(v) -> str:
     """股數（股）→ "259.3 億股"（一位小數）；None → "—"。"""
-    raise NotImplementedError
+    return f"{v / 1e8:,.1f} 億股" if _valid(v) else "—"
 
 
 def fmt_range(lo, hi) -> str:
@@ -127,25 +131,131 @@ class CardView:
 
 # ── 卡片 ──────────────────────────────────────────────────
 
-def coverage_line(meta: dict | None) -> str:
+def coverage_line(meta: Optional[dict]) -> str:
     """meta＝stock_class.json 頂層（count、coverage_mktcap_k）。規則見 P4_spec §3-1。"""
-    raise NotImplementedError
+    meta = meta or {}
+    n, k = meta.get("count"), meta.get("coverage_mktcap_k")
+    if n is None:
+        return ""
+    if k is not None and k >= COVERAGE_MIN_K:
+        return f"估值涵蓋市值前 {k:d} 大（共 {n:d} 檔）"
+    return f"估值收錄 {n:d} 檔"
 
 
 def asof_line(card: dict) -> str:
     """"財報 2026Q2｜月營收至 2026-09｜股價 2026/10/30　｜　試算不是預測、不是目標價"（缺的段落省略）。
     財報＝eps.reported 最後一季；月營收＝growth key=="month" 的 period。"""
-    raise NotImplementedError
+    parts = []
+    reported = (card.get("eps") or {}).get("reported") or {}
+    quarters = reported.get("quarters") or []
+    if quarters:
+        parts.append(f"財報 {quarters[-1]['q']}")
+    month = next((r for r in card.get("growth", []) if r["key"] == "month"), None)
+    if month:
+        parts.append(f"月營收至 {month['period']}")
+    if card.get("px_date"):
+        parts.append(f"股價 {card['px_date']}")
+    return "｜".join(parts) + ("　｜　" if parts else "") + NOT_FORECAST
 
 
-def revision_text(rev: dict | None) -> str:
+def revision_text(rev: Optional[dict]) -> str:
     """上修文字，規則見 P4_spec §3-1 EPS 卡第 3 點。"""
-    raise NotImplementedError
+    rev = rev or {}
+    if rev.get("last_event") == "roll":
+        return REV_ROLL
+    if rev.get("last_event") == "report":
+        return REV_REPORT
+    pct = rev.get("last_pct")
+    pct_text = fmt_pct(pct)
+    if pct is None or pct_text in ("+0.0%", "-0.0%"):
+        return REV_FLAT
+    text = f"比上月 {pct_text}"
+    if rev.get("streak", 0) >= 1 and rev.get("direction") in ("up", "down"):
+        direction = "上修" if rev["direction"] == "up" else "下修"
+        text += f"，連續{direction} {rev['streak']:d} 個月"
+    return text
 
 
-def card_view(card: dict, label: str, meta: dict | None) -> CardView:
+def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
     """label＝"2330 台積電"；meta＝stock_class.json 頂層。規則見 P4_spec §3-1。"""
-    raise NotImplementedError
+    full = bool(card.get("ok"))
+    tier = card.get("tier")
+    p, fp = card.get("prices") or {}, card.get("fwd_prices") or {}
+    pins = {}
+    tri = _tri(p)
+    ftri = _tri(fp) if tier == "A" else None
+    base_text = None
+    if tier == "A" and _valid(p.get("base")):
+        pins["基準"] = fmt_eps(p["base"])
+        base_text = f"基準：{p['base_name']} {pins['基準']} 元"
+        if p["base_name"] == "較低獲利情境":
+            base_text += f"（3 年平均 {fmt_eps(card.get('eps_3y_avg'))}；近 4 季 {fmt_eps((card['eps'].get('ttm') or {}).get('eps'))}）"
+    if tri:
+        pins.update(dict(tri))
+    if ftri:
+        pins.update({"前瞻" + k: v for k, v in ftri})
+    extra = []
+    if card.get("roe") is not None:
+        extra.append(f"ROE {fmt_pct(card['roe'], False)}（近 4 季）")
+    b = card.get("b_tier") or {}
+    if tier == "B":
+        parts = []
+        if b.get("pe_now") is not None:
+            parts.append(f"現價本益比 {fmt_mult(b['pe_now'], 'pe')}")
+        if b.get("industry_pct") is not None:
+            parts.append(f"同產業排名 {fmt_pct(b['industry_pct'], False)}（{b['n_peers']:d} 家）")
+        if b.get("eps_needed") is not None:
+            pins["反推 EPS 門檻"] = fmt_eps(b["eps_needed"])
+            parts.append(f"反推 EPS 門檻 {pins['反推 EPS 門檻']} 元")
+        if parts:
+            extra.append("｜".join(parts))
+    if tier == "C" and card.get("c_tier"):
+        extra.append(card["c_tier"]["text"])
+    buy = None
+    if card.get("buy_range"):
+        br = card["buy_range"]
+        pins["購買區間"] = fmt_range(br["low"], br["high"])
+        buy = (pins["購買區間"], f"{BUY_STATE[br['state']]}｜{_buy_position(br)}")
+    note = None if tri else f"{card.get('price_note') or card.get('reason') or '沒有三價'}，{MORE_DETAIL}"
+    if not full:
+        note = "不在估值範圍"
+    price = PriceCard(
+        head="股價", head_sub=label + (f"｜{card['display_type']}" if card.get("display_type") else ""),
+        price=fmt_px(card.get("price")), price_sub=f"現價（{card['px_date'][5:]}）" if card.get("px_date") else "現價",
+        tri_label=("三價（相對自身股價淨值比歷史）" if card.get("route") == "PB" else "三價（相對自身歷史）") if full else None,
+        tri_hint="推導見 🔍 ③" if full else None, tri=tri, tri_note=note, pos=POS.get(card.get("position")),
+        base_text=base_text, extra=tuple(extra), buy=buy,
+        fwd_label="前瞻三價（相對自身前瞻倍數）" if tier == "A" else None,
+        fwd_tri=ftri, fwd_note=card.get("fwd_note") if tier == "A" else None)
+    eps_card = None
+    if full:
+        eps = card.get("eps") or {}
+        ttm, fwd = eps.get("ttm") or {}, eps.get("fwd") or {}
+        kv = []
+        tval = fmt_eps(ttm.get("eps"))
+        if _valid(ttm.get("eps")):
+            pins["近 4 季 EPS"] = tval
+        kv.append(("近 4 季 EPS", _window_sub(ttm, eps.get("est_disabled")), tval + " 元" if tval != "—" else tval))
+        rev = revision_text(card.get("revision"))
+        if _same_windows(ttm, fwd) and fwd.get("ok"):
+            kv.append(("前瞻 4 季 EPS", f"新季營收未出（{rev}）", "＝近 4 季"))
+        elif fwd.get("ok") and _valid(fwd.get("eps")):
+            pins["前瞻 4 季 EPS"] = fmt_eps(fwd["eps"])
+            kv.append(("前瞻 4 季 EPS", f"{_window_sub(fwd, None)}（{rev}）", pins["前瞻 4 季 EPS"] + " 元"))
+        else:
+            sub = "試算停用：" + eps["est_disabled"] if eps.get("est_disabled") else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
+            kv.append(("前瞻 4 季 EPS", sub, "—"))
+        growth = []
+        for r in card.get("growth", []):
+            key = r["key"]
+            period = {"ttm": "近 4 季", "fwd": "前瞻 4 季"}.get(key, r["period"])
+            if key == "month":
+                period = f"最新月（{r['period'][5:]} 月）"
+            elif key == "last_q":
+                period += "（財報）" if r["kind"] == "actual" else f"（試算；營收已公布 {r['months_known']:d} 個月）"
+            growth.append((period, (r.get("rev") or {}).get("text", "—"), (r.get("eps") or {}).get("text", "—")))
+        eps_card = EpsCard(tuple(kv), "年增率（對去年同期）", VTable(None, "grid", ("期間", "營收", "EPS"), tuple(growth)))
+    return CardView(full, coverage_line(meta), asof_line(card), price, eps_card, pins)
 
 
 # ── 展開區 ────────────────────────────────────────────────
@@ -156,14 +266,208 @@ def legend_row() -> str:
 
 def detail_tables(card: dict) -> list[VTable]:
     """📊 估值定位細節（kv）。P4_spec §3-2。不放推導與三價。"""
-    raise NotImplementedError
+    if not card.get("ok"):
+        return []
+    tier = card["tier"]
+    tier_text = {"A": "自身歷史倍數足夠", "B": "自身歷史太短，看產業",
+                 "C": (card.get("c_tier") or {}).get("text", "虧損中，不用獲利估價"), "D": card.get("reason") or "不做估值"}
+    rows = [("分層", f"{tier} 層：{tier_text[tier]}")]
+    if card.get("route"):
+        rows.append(("估值方法", "股價淨值比" if card["route"] == "PB" else "本益比"))
+    types = [card.get("display_type")] + list(card.get("state") or []) + list(card.get("subtags") or [])
+    rows.append(("類型", "・".join(t for t in types if t)))
+    if card.get("why"):
+        rows.append(("分類原因", "；".join(card["why"])))
+    for key, name in (("data", "資料"), ("share_basis", "股數基準"), ("comparability", "可比性"), ("estimate", "試算")):
+        status = (card.get("status") or {}).get(key)
+        if status:
+            text = "正常" if status["level"] == "ok" else "；".join(f"{i['name']}：{i['why']}" for i in status.get("items", [])) or "尚未檢查"
+            rows.append(("可信度", f"{name}：{text}"))
+    stats = card.get("prices") if tier == "A" else card.get("b_tier") if tier == "B" else None
+    if stats:
+        for key, name in (("n_valid", "有效月數"), ("n_loss", "虧損月數"), ("window", "倍數期間")):
+            if stats.get(key) is not None:
+                rows.append((name, stats[key] if key == "window" else f"{stats[key]:d}"))
+    if card.get("roe") is not None:
+        rows.append(("ROE", fmt_pct(card["roe"], False)))
+    quality = card.get("quality") or {}
+    if quality.get("cfo_ni") is not None:
+        rows.append(("營業現金流 ÷ 淨利", fmt_pct(quality["cfo_ni"], False)))
+    if quality.get("accrual") is not None:
+        rows.append(("應計比率", fmt_pct(quality["accrual"], False)))
+    if card.get("notes"):
+        rows.append(("備註", "；".join(card["notes"])))
+    rows.append(("樣本", "存活者偏差；分類基準 " + (card.get("class_asof") or "未提供") + "；版本 " + card.get("version", "")))
+    return [VTable(None, "kv", ("項目", "內容"), tuple(rows))]
 
 
 def explain_tables(card: dict) -> list[VTable]:
     """📐 怎麼算（kv「項目｜規則」）。P4_spec §3-2。不放這檔的任何數字。"""
-    raise NotImplementedError
+    if not card.get("ok"):
+        return []
+    pb = card.get("route") == "PB"
+    method = "股價淨值比" if pb else "本益比"
+    rows = [
+        ("近 4 季 EPS", "最近連續四季，營收齊全時可含一季試算；停用時只用已公布財報。"),
+        ("前瞻 4 季 EPS", "新季營收出現後窗口向前一季，最多含兩季試算；新季營收未出時與近 4 季相同。"),
+        ("試算", "月營收補齊季營收，套用最新季毛利率與費用率、近八季業外中位數、稅率及少數股權比，再除以隱含股數。"),
+        ("三價", f"{'每股淨值' if pb else '基準 EPS'} × 自身歷史{method}的 20%／50%／80% 位置。"),
+        ("倍數窗", "股價淨值比採全歷史。" if pb else "一般與循環股近 60 月，高成長近 36 月；本益比上限依類型截斷。"),
+        ("有效月", "倍數、基準與股數資料有效，排除不可比月份；本益比須有正獲利且倍數不超過 100 倍。" if not pb else "每股淨值及股價有效，排除不可比月份。"),
+        ("分層", "A：自身歷史足夠；B：歷史不足看產業；C：虧損或微利；D：資料或方法不適用。股價淨值比路線歷史不足直接 D。"),
+        ("購買區間", "一般用便宜價至合理價；前瞻連續上修兩次且前瞻合理價較高，上緣改用前瞻合理價。上修／下修以 ±2% 判斷。"),
+        ("較低獲利情境", "循環或高獲利區，採近 4 季 EPS 與 3 年平均 EPS 較低者；平均不可用則採近 4 季。"),
+        ("反推 EPS 門檻", "現價 ÷ 同產業中位本益比，產業有效樣本至少 8 家。"),
+        ("可信度", "資料、股數基準、可比性、試算四組分別揭露正常、警告、停用及未檢查；停用列出受影響窗口或方法。"),
+        ("已知限制：樣本", "現有上市櫃樣本有存活者偏差。"),
+        ("已知限制：財報", "歷史財報可能重編，回溯無法完全重現當時資訊。"),
+        ("已知限制：試算", "最新季利潤率及歷史業外未必延續。"),
+        ("已知限制：倍數", "歷史倍數與產業分布不保證未來重現。"),
+        ("已知限制：事件", "股數事件及公司轉型可能造成不可比。"),
+        ("提醒", "規則未經驗證，情境估算，非買進建議"),
+    ]
+    if pb:
+        rows = [r for r in rows if r[0] not in ("較低獲利情境", "反推 EPS 門檻")]
+    return [VTable(None, "kv", ("項目", "規則"), tuple(rows))]
 
 
 def trial_tables(card: dict) -> list[VTable]:
     """🔍 試算細節 ①～⑥。P4_spec §3-2（照 card_demo.html）。📌 列：數值欄 f"{PIN} {字}"、來源欄以 f"＝卡片『{標籤}』" 開頭。"""
-    raise NotImplementedError
+    if not card.get("ok"):
+        return []
+    pins = card_view(card, "", None).pins
+    eps = card.get("eps") or {}
+    ttm, fwd = eps.get("ttm") or {}, eps.get("fwd") or {}
+    tables, rows, hl = [], [], []
+    for r in ttm.get("quarters", []):
+        rows.append((r["q"], KIND_ZH[r["kind"]], fmt_eps(r["eps"])))
+    if "近 4 季 EPS" in pins:
+        hl.append(len(rows))
+        rows.append(("近 4 季合計", "＝卡片『近 4 季 EPS』", PIN + " " + pins["近 4 季 EPS"]))
+    if _same_windows(ttm, fwd):
+        rows.append(("前瞻 4 季", "新季營收未出 → 與近 4 季相同", ""))
+    else:
+        for r in fwd.get("quarters", []):
+            rows.append((r["q"], KIND_ZH[r["kind"]], fmt_eps(r["eps"])))
+        if "前瞻 4 季 EPS" in pins:
+            hl.append(len(rows))
+            rows.append(("前瞻 4 季合計", "＝卡片『前瞻 4 季 EPS』", PIN + " " + pins["前瞻 4 季 EPS"]))
+    if rows:
+        tables.append(VTable("① 窗口表", "grid", ("季", "實際／試算", "EPS（元）"), tuple(rows), tuple(hl)))
+    details = {}
+    for w in (ttm, fwd):
+        for d in w.get("details", []):
+            details[d["q"]] = d
+    tqs = {d["q"] for d in ttm.get("details", [])}
+    fqs = {d["q"] for d in fwd.get("details", [])}
+    for q, d in sorted(details.items()):
+        rows = [(f"{m[5:]} 月營收", fmt_yi(v), KIND_ZH["actual"] if source == "actual" else f"試算（{source}）") for m, v, source in d["months"]]
+        source = next((r.get("params_from") for w in (ttm, fwd) for r in w.get("quarters", []) if r["q"] == q), None)
+        rows.extend([
+            ("＝ 季營收", fmt_yi(d["revenue"]), "—"),
+            ("×（毛利率 − 營業費用率）", f"{fmt_pct(d['gm_last'], False)} − {fmt_pct(d['opex_last'], False)}", f"{source} 財報（最新一季）"),
+            ("＝ 營業利益（試算）", fmt_yi(d["op"]), "—"),
+            ("＋ 業外", fmt_yi(d["nonop"]), "近 8 季業外中位數"),
+            ("×（1−稅率）×（1−少數股權比）", f"{fmt_pct(d['tax'], False)}／{fmt_pct(d['minority'], False)}", "；".join(["近 8 季合計"] + list(d.get("flags", [])))),
+            ("＝ 歸母淨利（試算）", fmt_yi(d["ni_parent"]), "—"),
+            ("÷ 股數", fmt_shares(d["shares"]), d["shares_from"] + " 隱含股數"),
+            ("＝ 試算 EPS", fmt_eps(d["eps"]) + " 元", "規則未經驗證"),
+        ])
+        title = f"② {q} 試算" + ("（近 4 季、前瞻 4 季共用）" if q in tqs and q in fqs else "")
+        tables.append(_derive(title, rows, (next(i for i, r in enumerate(rows) if r[0] == "＝ 試算 EPS"),)))
+    if card.get("prices"):
+        tables.append(_price_table(card, card["prices"], pins, False))
+    if card.get("fwd_prices"):
+        tables.append(_price_table(card, card["fwd_prices"], pins, True))
+    br = card.get("buy_range")
+    if br:
+        source = f"見 ③-2 前瞻合理價；前瞻連續 {card['revision']['streak']:d} 個月上修" if br["state"] == "fwd_up" else "見 ③ 合理價；前瞻沒有連續 2 個月上修 → 不改用前瞻合理價"
+        rows = [("下緣", fmt_px(br["low"]), "見 ③ 便宜價"), ("上緣", fmt_px(br["high"]), source),
+                _pin_row("購買區間", "購買區間", pins, "；" + _buy_position(br))]
+        tables.append(_derive("④ 購買區間", rows, (2,)))
+    b = card.get("b_tier") or {}
+    if b:
+        rows = []
+        if card.get("price") is not None:
+            rows.append(("現價", fmt_px(card["price"]), "原始收盤"))
+        if b.get("median_pe") is not None:
+            rows.append(("÷ 產業中位本益比", fmt_mult(b["median_pe"], "pe"), f"同產業 {b['n_peers']:d} 家"))
+        if "反推 EPS 門檻" in pins:
+            rows.append(_pin_row("反推 EPS 門檻", "反推 EPS 門檻", pins))
+        if rows:
+            tables.append(_derive("⑤ B 層反推 EPS 門檻", rows, tuple(i for i, r in enumerate(rows) if r[1].startswith(PIN))))
+    if card.get("nonop_hist"):
+        rows = [(r["q"], fmt_yi(r["nonop"]), fmt_yi(r["pretax"]), fmt_pct(r.get("share"), False)) for r in card["nonop_hist"]]
+        title = f"⑥ 近 8 季業外（中位數 {fmt_yi(card['nonop_median'])}，用在試算）" if _valid(card.get("nonop_median")) else "⑥ 近 8 季業外"
+        tables.append(VTable(title, "grid",
+                             ("季", "業外", "稅前", "占稅前"), tuple(rows)))
+    return tables
+
+
+def _valid(v):
+    return v is not None and v == v and v not in (float("inf"), float("-inf"))
+
+
+def _tri(prices):
+    if not all(_valid(prices.get(k)) for k in ("cheap", "fair", "dear")):
+        return None
+    return tuple((name, fmt_px(prices[key])) for name, key in (("便宜價", "cheap"), ("合理價", "fair"), ("昂貴價", "dear")))
+
+
+def _same_windows(ttm, fwd):
+    tq, fq = ttm.get("quarters") or [], fwd.get("quarters") or []
+    return bool(tq) and tuple(r["q"] for r in tq) == tuple(r["q"] for r in fq)
+
+
+def _window_sub(window, disabled):
+    qs = window.get("quarters") or []
+    period = f"{qs[0]['q']}～{qs[-1]['q']}" if qs else ""
+    if disabled:
+        return period + "，試算停用：" + disabled
+    if not window.get("ok"):
+        return window.get("reason") or "無資料"
+    return period + (f"，含 {window['n_est']:d} 季試算" if window.get("n_est") else "，4 季皆已公布")
+
+
+def _buy_position(br):
+    if br.get("where") == "in":
+        return "現價在區間內"
+    if br.get("where") == "above":
+        return "現價高於上緣 " + fmt_pct(br.get("gap"))
+    if br.get("where") == "below":
+        return "現價低於下緣 " + fmt_pct(br.get("gap"))
+    return "無現價"
+
+
+def _derive(title, rows, hl=()):
+    return VTable(title, "derive", ("步驟", "數值", "來源／假設"), tuple(rows), tuple(hl))
+
+
+def _pin_row(step, label, pins, source=""):
+    return (step, PIN + " " + pins[label], f"＝卡片『{label}』" + source)
+
+
+def _price_table(card, p, pins, fwd):
+    pb = p["metric"] == "pb"
+    method = "股價淨值比" if pb else "本益比"
+    growth = card.get("type") == "growth"
+    months, gate = ("36", "30") if growth else ("60", "36")
+    window = "全歷史，自建股價淨值比" if pb else f"近 {months} 個月" + ("（高成長）" if growth else "") + "，自建" + method
+    rows = [("倍數窗", p["window"], window),
+            ("有效月數", f"{p['n_valid']:d}" if pb else f"{p['n_valid']:d}／{months}", "門檻 60 個月" if pb else f"門檻 {gate} 個月")]
+    base_label = "前瞻 4 季 EPS" if fwd else "基準"
+    base_step = "基準每股淨值" if pb else "基準 EPS"
+    if fwd:
+        rows.append((base_step, fmt_eps(p["base"]), "見 ① 前瞻 4 季合計"))
+    elif base_label in pins:
+        rows.append(_pin_row(base_step, base_label, pins, f"（{p['base_name']}）"))
+    for i, (pct, key, name, source) in enumerate((("20%", "cheap", "便宜價", "只有 20% 的月份比這更低"), ("50%", "fair", "合理價", "中位數"), ("80%", "dear", "昂貴價", "—"))):
+        raw, mult = p["raw_mults"][i], p["mults"][i]
+        if p.get("cap") is not None and _valid(raw) and raw > p["cap"]:
+            source = f"原始 {fmt_mult(raw, p['metric'])}，上限 {fmt_mult(p['cap'], p['metric'])}截斷"
+        rows.append((f"× 歷史 {pct} 位置{method}", fmt_mult(mult, p["metric"]), source))
+        label = ("前瞻" if fwd else "") + name
+        if label in pins:
+            rows.append(_pin_row("＝ " + name, label, pins))
+    hl = tuple(i for i, r in enumerate(rows) if r[1].startswith(PIN))
+    return _derive("③-2 前瞻三價推導" if fwd else "③ 三價推導", rows, hl)

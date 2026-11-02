@@ -383,18 +383,17 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "估值位置")
-    if per is not None and not per.empty:
-        pp = per.sort_values("date")
-        pe_valid = pd.to_numeric(pp["per"], errors="coerce")
-        pe_now = pe_valid[pe_valid > 0].iloc[-1] if (pe_valid > 0).any() else None
-        pb_now = pd.to_numeric(pp["pbr"], errors="coerce").iloc[-1]
-        pe_ptile, pb_ptile = _pctile(pp["per"], pe_now), _pctile(pp["pbr"], pb_now)
-        g("PE 位於自身歷史低檔", "5+ 年分位 ≤ 40%",
-          f"PE {_f(pe_now)}（分位 {_pct(pe_ptile, 0)}）",
-          None if pe_ptile is None else pe_ptile <= 0.40)
-        g("PB 位於自身歷史低檔", "5+ 年分位 ≤ 40%",
-          f"PB {_f(pb_now)}（分位 {_pct(pb_ptile, 0)}）",
-          None if pb_ptile is None else pb_ptile <= 0.40)
+    from screener.multiples_self import hist_position
+    asof = d.get("asof")
+    if asof is None:
+        asof = pd.Timestamp.now(tz="Asia/Taipei").tz_localize(None).normalize()
+    for metric, name, months, gate, dp in [
+        ("pe", "本益比", 60, "近 5 年分位 ≤ 40%", 1),
+        ("pb", "股價淨值比", None, "全歷史分位 ≤ 40%", 2),
+    ]:
+        pos = hist_position(d.get("mh"), metric, asof, months)
+        cur = f"{name} {_f(pos['now'], dp)} 倍（分位 {_pct(pos['pct'], 0)}）" if pos else "—"
+        g(f"{name}歷史位置（自建）", gate, cur, pos["pct"] <= 0.40 if pos else None)
 
     g = _G(rows, "風險揭露")
     if q is not None and not q.empty:

@@ -208,7 +208,9 @@ def nonop_median(rows: list[dict]) -> float | None:
     """P4：業外中位數（_estimate 與 val_card 共用，不准兩份）。rows＝最近 NONOP_QUARTERS 個已公布季（dict 含
     pretax_income、op_income）；有限的 pretax−op 少於 NONOP_MIN_VALID 個 → None；否則中位數（float）。
     _estimate 改呼叫本函式，None 時照舊 raise「試算停用：業外有效季數不足」。"""
-    raise NotImplementedError
+    values = [r["pretax_income"] - r["op_income"] for r in rows
+              if _finite(r.get("pretax_income")) and _finite(r.get("op_income"))]
+    return float(pd.Series(values).median()) if len(values) >= NONOP_MIN_VALID else None
 
 
 def _finite(value) -> bool:
@@ -320,11 +322,9 @@ def _estimate(period: pd.Period, actual: dict, months: dict,
     opex = (last["gross_profit"] - last["op_income"]) / last["revenue"]
     # 取最近八個已公布季；個別參數缺值不當成零。
     recent = [actual[k] for k in sorted(actual)[-NONOP_QUARTERS:]]
-    nonops = [r["pretax_income"] - r["op_income"] for r in recent
-              if _finite(r.get("pretax_income")) and _finite(r.get("op_income"))]
-    if len(nonops) < NONOP_MIN_VALID:
+    nonop = nonop_median(recent)
+    if nonop is None:
         raise ValueError("試算停用：業外有效季數不足")
-    nonop = float(pd.Series(nonops).median())
     tax_rows = [r for r in recent if _finite(r.get("pretax_income"))
                 and _finite(r.get("net_income"))]
     pretax_sum = sum(r["pretax_income"] for r in tax_rows)

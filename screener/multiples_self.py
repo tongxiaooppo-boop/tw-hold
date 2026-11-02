@@ -169,7 +169,18 @@ def hist_position(mh: pd.DataFrame | None, metric: str, asof: pd.Timestamp, mont
     """P4（三軌體檢「本益比／股價淨值比歷史位置（自建）」）：取 month ≤ last_complete_month(asof) 且 valid_{metric}
     為 True 的列；months 不是 None → 只留 month ≥ last_complete_month(asof) − (months−1)（以月份算，不是列數）。
     沒有列 → None。回傳 {"now": 最後一列 metric 值, "pct": (值 ≤ now 的列數) ÷ 列數, "n": 列數, "month": 最後一列 month}。"""
-    raise NotImplementedError
+    if mh is None or mh.empty:
+        return None
+    end = last_complete_month(asof)
+    periods = pd.PeriodIndex(mh["month"], freq="M")
+    mask = (periods <= end) & mh[f"valid_{metric}"].fillna(False).to_numpy(dtype=bool)
+    if months is not None:
+        mask &= periods >= end - (months - 1)
+    rows = mh.loc[mask].sort_values("month")
+    if rows.empty:
+        return None
+    now = float(rows.iloc[-1][metric])
+    return dict(now=now, pct=float((rows[metric] <= now).mean()), n=len(rows), month=str(rows.iloc[-1]["month"]))
 
 
 def revision_streak(rev_hist: pd.DataFrame) -> dict:

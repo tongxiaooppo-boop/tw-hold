@@ -76,7 +76,7 @@ from screener import detect as dt
 from screener import eps_windows as ew
 from screener import growth as gr
 from screener import multiples_self as ms
-from screener.quarterly_prep import last_n_quarters
+from screener.quarterly_prep import last_n_quarters, to_single_quarter_cashflow
 
 
 def _finite(x) -> bool:
@@ -172,20 +172,52 @@ def fwd_note(card: dict, cls: dict | None) -> str | None:
     """P4_spec §1：fwd_prices 有值或 tier≠"A" → None；否則依序 est_off（eps.est_disabled）、pb（route=="PB"）、
     cyclical（type=="cyclical" 或 peak_block(cls)）、same（NOTE_FWD_SAME ∈ notes）、window（eps.fwd 為 None 或 ok False，
     {} 填 eps.fwd 的 reason，None 時填「無資料」）、thin（eps.fwd.eps < EPS_MIN）、其餘 hist。"""
-    raise NotImplementedError
+    if card.get("fwd_prices") is not None or card.get("tier") != "A":
+        return None
+    eps = card.get("eps") or {}
+    if eps.get("est_disabled"):
+        return FWD_NOTES["est_off"]
+    if card.get("route") == "PB":
+        return FWD_NOTES["pb"]
+    if card.get("type") == "cyclical" or peak_block(cls or {}):
+        return FWD_NOTES["cyclical"]
+    if NOTE_FWD_SAME in card.get("notes", []):
+        return FWD_NOTES["same"]
+    fwd = eps.get("fwd")
+    if not fwd or not fwd.get("ok"):
+        return FWD_NOTES["window"].format(fwd.get("reason") if fwd else "無資料")
+    if fwd["eps"] < EPS_MIN:
+        return FWD_NOTES["thin"]
+    return FWD_NOTES["hist"]
 
 
 def nonop_rows(q: pd.DataFrame) -> list[dict]:
     """P4_spec §1：最近 eps_windows.NONOP_QUARTERS 個有實際財報的季（舊→新），每列
     {"q": "2026Q2", "nonop": pretax_income−op_income, "pretax": pretax_income, "share": nonop÷|pretax|}；
     非有限 → None（share 另在 pretax 為 0 時 None）。q 少於 1 季 → []。"""
-    raise NotImplementedError
+    rows = []
+    actual = _quarters(q)
+    actual = actual[actual["eps"].notna() & actual["revenue"].notna()]
+    for r in actual.tail(ew.NONOP_QUARTERS).to_dict("records"):
+        pretax = _number(r["pretax_income"])
+        nonop = _number(r["pretax_income"] - r["op_income"])
+        rows.append(dict(q=str(pd.Timestamp(r["period_end"]).to_period("Q")), nonop=nonop,
+                         pretax=pretax, share=nonop / abs(pretax) if nonop is not None and pretax else None))
+    return rows
 
 
 def buy_where(buy: dict | None, price: float | None) -> dict | None:
     """P4_spec §1：buy 為 None → None；回傳 buy 的複本加 where（"below"／"in"／"above"／None）與 gap
     （above：price÷high−1；below：price÷low−1；其餘 None）。"""
-    raise NotImplementedError
+    if buy is None:
+        return None
+    where, gap = None, None
+    if _finite(price):
+        where = "below" if price < buy["low"] else "above" if price > buy["high"] else "in"
+        if where != "in":
+            edge = buy["low"] if where == "below" else buy["high"]
+            gap = price / edge - 1 if edge else None
+    return dict(buy, where=where, gap=gap)
 
 
 def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFrame | None,
@@ -201,6 +233,8 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
         px_date = pd.Timestamp(last["date"]).strftime("%Y/%m/%d")
     revision = (ms.revision_streak(rev_hist) if rev_hist is not None and not rev_hist.empty
                 else dict(last_pct=None, streak=0, direction=None))
+    revision["last_event"] = rev_hist.sort_values("month").iloc[-1]["event"] if rev_hist is not None and not rev_hist.empty else None
+    actual = q[q["eps"].notna() & q["revenue"].notna()].tail(ew.NONOP_QUARTERS)
     result = dict(ok=cls is not None, tier="D", route=None, reason=None, price=price, px_date=px_date,
                   ticker=cls_data.get("ticker"), type=cls_data.get("type"),
                   display_type=cls_data.get("display_type"), state=cls_data.get("state") or [],
@@ -209,7 +243,8 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
                   eps=dict(reported=None, ttm=None, fwd=None, est_disabled=None), growth=[], prices=None,
                   position="na", fwd_prices=None, buy_range=None, revision=revision, b_tier=None,
                   c_tier=None, roe=None, eps_3y_avg=None, price_note=None, quality=quality(q), status=dt.summarize([]),
-                  notes=[], version=CARD_VERSION)
+                  notes=[], version=CARD_VERSION, nonop_hist=nonop_rows(q) if len(q) >= 4 else [],
+                  nonop_median=ew.nonop_median(actual.to_dict("records")) if len(q) >= 4 else None, fwd_note=None)
     if cls is None:
         result["reason"] = "這檔不在分類母體（上市櫃且財報 ≥12 季），不做估值"
         result["price_note"] = price_note(result)
@@ -266,6 +301,8 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
         if not valid:
             result["tier"] = "B"
             result["b_tier"] = b_tier(price, ttm.eps, (industry_pe or {}).get(cls.get("industry")))
+            result["b_tier"].update(n_valid=pe_stats["n_valid"], n_loss=pe_stats["n_loss"],
+                                    window=f"{pe_stats['start']}～{pe_stats['end']}")
             stats = pe_stats
         else:
             result["tier"], stats = "A", pe_stats
@@ -292,11 +329,12 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
                 if fs["n_valid"] >= ms.VALID_MIN[key]:
                     result["fwd_prices"] = three_prices(fwd.eps, fs, "pe_fwd", BASE_FWD, cap)
     result["position"] = position(price, result["prices"])
-    result["buy_range"] = buy_range(result["prices"], result["fwd_prices"], revision, price)
+    result["buy_range"] = buy_where(buy_range(result["prices"], result["fwd_prices"], revision, price), price)
     checks += dt.comparability_checks(cls, stats)
     result["status"] = dt.summarize(checks)
     result["notes"] = list(dict.fromkeys(result["notes"]))
     result["price_note"] = price_note(result)
+    result["fwd_note"] = fwd_note(result, cls)
     return result
 
 
@@ -515,8 +553,11 @@ def roe_ttm(q: pd.DataFrame) -> float | None:
 
 def quality(q: pd.DataFrame) -> dict:
     """近 4 季（曆季相鄰）：cfo_ni＝Σocf ÷ Σni_parent（Σni_parent ≤0 → None）；
-    accrual＝(Σnet_income − Σocf) ÷ 平均 total_assets（第 −4 季與最新季；≤0 → None）。缺值 → None。"""
+    accrual＝(Σnet_income − Σocf) ÷ 平均 total_assets（第 −4 季與最新季；≤0 → None）。缺值 → None。
+    ocf 在財報裡是年初至今累計（11/2 對帳發現），先用 quarterly_prep.to_single_quarter_cashflow 轉單季再加總。"""
     q = _quarters(q)
+    if "ocf" in q.columns and "ticker" in q.columns:
+        q = to_single_quarter_cashflow(q, ("ocf",))
     ocf, ni, net = (_tail(q, c) for c in ("ocf", "ni_parent", "net_income"))
     cfo = float(ocf.sum() / ni.sum()) if ocf is not None and ni is not None and ni.sum() > 0 else None
     assets = None

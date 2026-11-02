@@ -26,4 +26,49 @@ def river_frame(q: pd.DataFrame, px_raw: pd.DataFrame, mh: pd.DataFrame | None, 
     card["prices"] 為 None 或 mults 任一 None → 不畫河道。
     note：metric pe 且有河道時給 NOTE_BASE_DIFF.format(base_name=prices.base_name)；**例外**：base_name=="近 4 季 EPS"
     且 card["eps"]["ttm"]["n_est"]==0（兩者同口徑）→ None。PB → None。"""
-    raise NotImplementedError
+    import math
+    from reference import share_basis
+    from screener import eps_windows
+
+    metric = "pb" if card.get("route") == "PB" else "pe"
+    prices = card.get("prices") or {}
+    mults = prices.get("mults")
+    if mults is None or any(v is None or not math.isfinite(v) for v in mults):
+        mults = None
+    else:
+        mults = tuple(mults)
+    frame = px_raw.reindex(columns=["date", "close"]).copy()
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame = frame[frame["date"] <= asof].sort_values("date").drop_duplicates("date", keep="last")
+    frame = frame.rename(columns={"close": "price"}).reset_index(drop=True)
+    # 按事件日切段；事件當天已是新股數基準，不再調整。
+    for event in share_basis.events(ticker):
+        m = event.get("m")
+        if m is not None and math.isfinite(m) and m > 0:
+            frame.loc[frame["date"] < pd.Timestamp(event["date"]), "price"] /= m
+    bases = []
+    if not frame.empty:
+        if metric == "pb":
+            if mh is not None and not mh.empty:
+                for row in mh.sort_values("month").to_dict("records"):
+                    bases.append((pd.Period(row["month"], "M").end_time.normalize(), row["bvps"]))
+        else:
+            for month in pd.period_range(frame["date"].iloc[0].to_period("M") - 1, asof.to_period("M"), freq="M"):
+                t = month.end_time.normalize()
+                if t <= asof:
+                    window = eps_windows.reported_window(q, t, live=False)
+                    bases.append((t, window.eps if window.ok else float("nan")))
+    if bases:
+        base = pd.DataFrame(bases, columns=["date", "base"]).drop_duplicates("date", keep="last").sort_values("date")
+        frame = pd.merge_asof(frame, base, on="date", direction="backward")
+    else:
+        frame["base"] = float("nan")
+    for i, name in enumerate(("p20", "p50", "p80")):
+        frame[name] = frame["base"] * mults[i] if mults else float("nan")
+    note = None
+    ttm = (card.get("eps") or {}).get("ttm") or {}
+    if metric == "pe" and mults and not (prices.get("base_name") == "近 4 季 EPS" and ttm.get("n_est") == 0):
+        note = NOTE_BASE_DIFF.format(base_name=prices.get("base_name"))
+    return dict(ok=not frame.empty, metric=metric, frame=frame, mults=mults,
+                legend=LEGEND_PB if metric == "pb" else LEGEND_PE,
+                reason=None if mults else card.get("price_note") or NO_MULT, note=note)

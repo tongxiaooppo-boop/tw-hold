@@ -134,7 +134,7 @@ def test_swing_checks_基本流程():
     assert s["月營收 YoY > 0"] == cl._OK
     assert s["法人 20 日淨買超 > 0"] == cl._OK
     assert "Minervini 趨勢模板" in s
-    assert any(r["項目"] == "PE 位於自身歷史低檔" for r in rows)
+    assert any(r["項目"] == "本益比歷史位置（自建）" for r in rows)   # P4：改自建
 
 
 # ── 融資融券（2026-10-03 起 bundle 帶 margin.parquet）──
