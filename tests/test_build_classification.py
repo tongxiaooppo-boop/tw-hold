@@ -150,6 +150,7 @@ def test_主程式_單檔分類例外只略過不拖垮整批(fake_data, monkeyp
         return real(inp)
 
     monkeypatch.setattr(cl, "classify", boom)
+    monkeypatch.setattr(bc, "MIN_SUCCESS", 0.5)   # 樣本只有 6 檔，壞 1 檔＝83%；成功率門檻另有測試
     out = fake_data / "sc.json"
     assert bc.main(["--out", str(out), "--no-history"]) == 0
     d = json.loads(out.read_text(encoding="utf-8"))
@@ -166,6 +167,27 @@ def test_主程式_整批零檔不寫檔且回傳1(fake_data, monkeypatch):
     out = fake_data / "sc.json"
     assert bc.main(["--out", str(out), "--no-history"]) == 1
     assert not out.exists()
+
+
+def test_主程式_成功率低於90pct不寫檔且回傳1(fake_data, monkeypatch, capsys):
+    real = cl.classify
+
+    def boom(inp):
+        if inp.ticker == "1002":                    # 6 檔壞 1 檔＝83% < 90%
+            raise ValueError("故意壞")
+        return real(inp)
+
+    monkeypatch.setattr(cl, "classify", boom)
+    out = fake_data / "sc.json"
+    assert bc.main(["--out", str(out), "--no-history"]) == 1
+    assert not out.exists()
+    assert "不寫檔" in capsys.readouterr().err
+
+
+def test_主程式_快照寫入最新季有效檔數(fake_data):
+    out = fake_data / "sc.json"
+    assert bc.main(["--out", str(out), "--no-history"]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["valid_count"] == len(TK)
 
 
 # ---- 季更閘門 new_quarter_ready ----
@@ -231,3 +253,58 @@ def test_rebalance_dates_match_build_lists():
     got = sorted((v[0], v[1]) for v in bc.REBALANCE_FOR_QUARTER.values())
     assert got == sorted(bl.REBALANCE_MD)
     assert bc.rebalance_date_for("2026-12-31") == pd.Timestamp("2027-03-31")
+
+
+def test_gate_分母是上一季有效股票不是整份universe():
+    # 2026-11 實況：universe 1985 檔只有 1019 檔有季報，用整份 universe 當分母永遠約 51%
+    tk = [f"{1000 + i}" for i in range(100)]
+    no_fin = [f"{5000 + i}" for i in range(100)]          # 在 universe 但從來沒有季報
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk + no_fin), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    assert ok and "100/100" in why
+
+
+def test_gate_必要欄位空值不算涵蓋():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    latest = q["period_end"] == pd.Timestamp("2026-09-30")
+    q.loc[latest & q["ticker"].isin(tk[:10]), "eps"] = np.nan        # 10 檔只有空列
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    assert not ok and "90/100" in why and "不分型" in why
+
+
+def test_gate_結構性缺欄的股票不拉低涵蓋率():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    q.loc[q["ticker"].isin(tk[:10]), "ni_parent"] = np.nan          # 10 檔每季都沒有歸母淨利
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    assert ok and "100.0%（90/90）" in why
+
+
+def test_gate_同季補資料才重建():
+    tk = [f"{1000 + i}" for i in range(100)]
+    q = _quarterly(tk, n=4, start="2025-12-31")
+    snap = pd.Timestamp("2026-09-30")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20", current_fresh=96)
+    assert ok and "同季補資料 96→100" in why
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20", current_fresh=100)
+    assert not ok and "沒有新補的財報" in why
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20")   # 舊快照沒有 valid_count
+    assert not ok and "已是最新季" in why
+
+
+def test_主程式_季更模式同季補資料會重建(fake_data, monkeypatch):
+    import datetime as _dt
+    out = fake_data / "sc.json"
+    assert bc.main(["--out", str(out)]) == 0
+    d = json.loads(out.read_text(encoding="utf-8"))
+    d["valid_count"] = len(TK) - 1                  # 假裝上次寫檔時少 1 檔
+    d["generated_at"] = "old"
+    out.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    assert bc.main(["--out", str(out), "--if-new-quarter"]) == 0
+    d2 = json.loads(out.read_text(encoding="utf-8"))
+    assert d2["generated_at"] != "old" and d2["valid_count"] == len(TK)
+    h = pd.read_parquet(fake_data / "class_history.parquet")
+    assert len(h) == len(TK)                         # 同季重建取代原列，不重複
+    assert bc.main(["--out", str(out), "--if-new-quarter"]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["generated_at"] == d2["generated_at"]   # 沒新資料不動檔

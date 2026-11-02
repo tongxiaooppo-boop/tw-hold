@@ -179,7 +179,10 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
     return out
 
 
-MIN_COVERAGE = 0.95   # 新季財報涵蓋 universe 的比例門檻；未達 → 還在公布期，不分型（避免用殘缺的橫斷面分位）
+MIN_COVERAGE = 0.95   # 新季財報涵蓋率門檻；未達 → 還在公布期，不分型（避免用殘缺的橫斷面分位）
+MIN_SUCCESS = 0.90    # 分類成功檔數 ÷ 組好輸入檔數；未達 → 不寫檔（避免大批失敗時寫出殘缺快照）
+# 「這季財報到了」的判定欄位：三欄都有值才算（只有空列不算）
+REQUIRED_COLS = ("eps", "revenue", "ni_parent")
 
 # 季末月 → 該季的換股日（月, 日, 年位移）。必須與 build_lists.REBALANCE_MD（3/31、5/15、8/14、11/14）一致；
 # tests 有一致性檢查。分型季更跟價值／定存的季換股同一天上線（使用者 2026-11-01 指定）。
@@ -193,14 +196,31 @@ def rebalance_date_for(period_end) -> pd.Timestamp:
     return pd.Timestamp(year=pe.year + dy, month=m, day=d)
 
 
+def _valid_tickers(q: pd.DataFrame, period_end: pd.Timestamp) -> set[str]:
+    """該季末 REQUIRED_COLS 三欄都有值的 ticker。"""
+    cols = [c for c in REQUIRED_COLS if c in q.columns]
+    if len(cols) < len(REQUIRED_COLS):
+        return set()
+    rows = q[q["period_end"] == period_end]
+    return set(rows.loc[rows[cols].notna().all(axis=1), "ticker"])
+
+
 def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_asof,
-                      today=None, min_coverage: float = MIN_COVERAGE) -> tuple[bool, str, pd.Timestamp | None]:
+                      today=None, min_coverage: float = MIN_COVERAGE,
+                      current_fresh: int | None = None) -> tuple[bool, str, pd.Timestamp | None]:
     """季更閘門（純函式）：回傳 (要不要重算, 原因, 最新季末)。
 
-    三條都成立才 True：
-      1. 最新季末 > 目前快照的 asof（current_asof 為 None＝沒有快照，視為成立）；
+    涵蓋率＝「上一季有有效財報（REQUIRED_COLS 都有值）的 universe 股票」中，最新季也有有效財報的比例。
+    分母不用整份 universe：universe 含沒有季報的股票（2026-11 實測 1985 檔只有 1019 檔有季報，
+    用整份當分母永遠只有約 51%）。上一季沒有任何有效列時（例如資料只有一季），分母退回
+    「universe 裡在季度面板出現過的股票」。
+
+    要重算須同時成立：
+      1. 最新季末 > 快照 asof（current_asof 為 None＝沒有快照，視為成立）；或
+         最新季末 == 快照 asof 且 current_fresh（快照的 valid_count）不是 None、且最新季有效檔數 > current_fresh
+         （同季補資料：晚公布的公司補進來就重建；同季重建冪等，遲滯只看更早的季）；
       2. today ≥ 該季換股日（today 為 None 則不檢查此條，測試／手動用）；
-      3. 該季已有財報的 universe 檔數 ≥ min_coverage × universe 檔數。
+      3. 涵蓋率 ≥ min_coverage。
     任一不成立 → False 並給原因（下次 rebuild 再看）。換股日已過但涵蓋率不足時原因會明講，
     此時卡片會一直顯示「分類過期」，要人工看是哪些公司沒公布。
     """
@@ -210,17 +230,27 @@ def new_quarter_ready(quarterly: pd.DataFrame, universe: pd.DataFrame, current_a
     if q.empty:
         return False, "季度面板為空", None
     latest = q["period_end"].max()
-    if current_asof is not None and latest <= pd.Timestamp(current_asof):
+    uni = {_t(x) for x in universe["ticker"]}
+    valid_latest = _valid_tickers(q, latest) & uni
+    same_quarter = current_asof is not None and latest == pd.Timestamp(current_asof)
+    if current_asof is not None and latest < pd.Timestamp(current_asof):
         return False, f"快照已是最新季（{pd.Timestamp(current_asof):%Y-%m-%d}）", latest
+    if same_quarter and (current_fresh is None or len(valid_latest) <= current_fresh):
+        return False, f"快照已是最新季（{pd.Timestamp(current_asof):%Y-%m-%d}），沒有新補的財報", latest
     rb = rebalance_date_for(latest)
     if today is not None and pd.Timestamp(today).normalize() < rb:
         return False, f"{latest:%Y-%m-%d} 季未到換股日 {rb:%Y-%m-%d}，等價值／定存一起換", latest
-    uni = {_t(x) for x in universe["ticker"]}
-    have = set(q.loc[q["period_end"] == latest, "ticker"]) & uni
-    cov = len(have) / max(len(uni), 1)
+    prev = latest - pd.offsets.QuarterEnd(1)
+    base = _valid_tickers(q, prev) & uni
+    if not base:
+        base = set(q["ticker"]) & uni
+    cov = len(valid_latest & base) / max(len(base), 1)
     if cov < min_coverage:
-        return False, f"{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%} < {min_coverage:.0%}，不分型", latest
-    return True, f"{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%}，換股日 {rb:%Y-%m-%d}", latest
+        return False, (f"{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%}（{len(valid_latest & base)}/{len(base)}）"
+                       f" < {min_coverage:.0%}，不分型"), latest
+    head = f"同季補資料 {current_fresh}→{len(valid_latest)} 檔，" if same_quarter else ""
+    return True, (f"{head}{latest:%Y-%m-%d} 季財報涵蓋 {cov:.1%}（{len(valid_latest & base)}/{len(base)}），"
+                  f"換股日 {rb:%Y-%m-%d}"), latest
 
 
 def _empty_history() -> pd.DataFrame:
@@ -249,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-history", action="store_true", help="不讀不寫 class_history.parquet（遲滯視為首次）")
     ap.add_argument("--asof", default=None, help="分類基準季末（預設＝資料內最新季）")
     ap.add_argument("--if-new-quarter", action="store_true",
-                    help="季更模式（CI 用）：只有「出現比快照更新的季、已到該季換股日、且財報涵蓋率 ≥ 95%%」才重算，否則直接 exit 0 不動檔")
+                    help="季更模式（CI 用）：只有「出現比快照更新的季、已到該季換股日、且財報涵蓋率 ≥ 95%%」才重算（同季有新公司補上財報也重算），否則直接 exit 0 不動檔")
     args = ap.parse_args(argv)
 
     t0 = time.time()
@@ -267,15 +297,17 @@ def main(argv: list[str] | None = None) -> int:
     monthly = pd.read_parquet(REVENUE)
     universe = pd.read_parquet(UNIVERSE)
     if args.if_new_quarter:
-        cur = None
+        cur, fresh = None, None
         if out_path.exists():
             try:
-                cur = pd.Timestamp(json.loads(out_path.read_text(encoding="utf-8")).get("asof"))
+                snap = json.loads(out_path.read_text(encoding="utf-8"))
+                cur = pd.Timestamp(snap.get("asof"))
+                fresh = snap.get("valid_count")   # 寫檔當下最新季有效檔數（閘門同一把尺）；舊快照沒有＝None
             except Exception:  # noqa: BLE001 — 快照壞了就當沒有，涵蓋率夠就重建
-                cur = None
+                cur, fresh = None, None
         from zoneinfo import ZoneInfo
         today = _dt.datetime.now(ZoneInfo("Asia/Taipei")).date()
-        ok, why, _ = new_quarter_ready(quarterly, universe, cur, today=today)
+        ok, why, _ = new_quarter_ready(quarterly, universe, cur, today=today, current_fresh=fresh)
         print(("季更：重算 — " if ok else "季更：略過 — ") + why)
         if not ok:
             return 0
@@ -303,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
         for t, why in list(skipped.items())[:5]:
             print(f"  略過 {t}：{why}", file=sys.stderr)
         return 1
+    rate = len(results) / max(len(inputs), 1)
+    if rate < MIN_SUCCESS:
+        print(f"錯誤：分類成功 {len(results)}/{len(inputs)}（{rate:.1%}）< {MIN_SUCCESS:.0%}，不寫檔。", file=sys.stderr)
+        for t, why in list(skipped.items())[:5]:
+            print(f"  略過 {t}：{why}", file=sys.stderr)
+        return 1
 
     stocks, new_rows = [], []
     for t, raw, final in results:
@@ -322,7 +360,9 @@ def main(argv: list[str] | None = None) -> int:
             "candidate_states": cl.STATE_SEP.join(raw.state),
             "final_states": cl.STATE_SEP.join(final.state)})
 
-    payload = {"asof": asof.date().isoformat(), "rule_version": cl.RULE_VERSION,
+    qn = quarterly.assign(ticker=quarterly["ticker"].map(_t), period_end=pd.to_datetime(quarterly["period_end"]))
+    valid_count = len(_valid_tickers(qn, asof) & {_t(x) for x in universe["ticker"]})
+    payload = {"asof": asof.date().isoformat(), "rule_version": cl.RULE_VERSION, "valid_count": valid_count,
                "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
                "count": len(stocks), "stocks": stocks}
     out_path.parent.mkdir(parents=True, exist_ok=True)
