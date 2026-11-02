@@ -91,7 +91,7 @@ def trend_template(prices_adj: pd.DataFrame, index_0050: pd.DataFrame,
 
 
 def atr14(prices_adj: pd.DataFrame, asof: pd.Timestamp) -> pd.Series:
-    """ATR14（Wilder，用還原 OHLC）→ index=ticker。"""
+    """14 筆真實波幅的簡單平均（不是 Wilder 平滑），與 research/backtest_longswing.py 一致；改算法會動停損，要另外討論。"""
     d = prices_adj.copy()
     d["date"] = pd.to_datetime(d["date"])
     d["ticker"] = _bare(d["ticker"])
@@ -113,9 +113,9 @@ def institutional_net20(chips: pd.DataFrame, asof: pd.Timestamp) -> pd.Series:
     c["date"] = pd.to_datetime(c["date"])
     c["ticker"] = _bare(c["ticker"])
     c = c[c["date"] <= pd.Timestamp(asof)].sort_values(["ticker", "date"])
-    c["net"] = c["foreign_net"].fillna(0) + c["trust_net"].fillna(0)
+    c["net"] = c["foreign_net"] + c["trust_net"]
     return (c.groupby("ticker")["net"]
-             .apply(lambda s: s.tail(INST_WINDOW).sum() if len(s) >= INST_WINDOW else np.nan)
+             .apply(lambda s: s.tail(INST_WINDOW).sum(min_count=INST_WINDOW) if len(s) >= INST_WINDOW else np.nan)
              .rename("inst_net20"))
 
 
@@ -129,7 +129,9 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     q = q.drop_duplicates(["ticker", "period_end"], keep="last")
     g = q.groupby("ticker", sort=False)
     q["eps_base_q"] = qp.panel_lag(q, "eps", 4)
-    q["eps_yoy_q"] = q["eps"] / q["eps_base_q"] - 1.0
+    # 去年同季 ≤0 時比例沒有意義（−2→−4 舊式算 +100%）；
+    # 虧轉盈本來就不會過（舊式也算負），所以只擋錯誤通過。
+    q["eps_yoy_q"] = (q["eps"] / q["eps_base_q"] - 1.0).where(q["eps_base_q"] > 0)
     q["ttm_eps_3y"] = qp.panel_lag(q, "ttm_eps", 12)
     q["gm_p1"] = qp.panel_lag(q, "gross_margin", 1)
     q["gm_p2"] = qp.panel_lag(q, "gross_margin", 2)
@@ -149,8 +151,10 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     out["c_eps_yoy"] = latest["eps_yoy_q"] > EPS_YOY_MIN
     out["c_eps_3y_growth"] = (latest["ttm_eps"] > latest["ttm_eps_3y"]) & (latest["ttm_eps"] > 0)
     out["c_roe"] = latest["roe"] > ROE_MIN
-    out["c_gm_not_deteriorating"] = ~(
-        (latest["gross_margin"] < latest["gm_p1"]) & (latest["gm_p1"] < latest["gm_p2"]))
+    gm = latest[["gross_margin", "gm_p1", "gm_p2"]]
+    out["c_gm_not_deteriorating"] = gm.isna().all(axis=1) | (
+        gm.notna().all(axis=1) & ~(
+            (latest["gross_margin"] < latest["gm_p1"]) & (latest["gm_p1"] < latest["gm_p2"])))
     out["c_fscore"] = latest["f_score"] >= FSCORE_MIN
     return out
 

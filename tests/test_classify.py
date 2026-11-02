@@ -220,7 +220,7 @@ def test_TTM_CAGR():
 def test_穿越檢定_市場收縮期個股仍成長():
     stk, mkt = _monthly(0.1)
     r = cl.crossing_test(stk, mkt)
-    assert r == {"n": 12, "k": 0, "passed": True, "executed": True}
+    assert r == {"n": 12, "k": 0, "passed": True, "executed": True, "no_data": False}
 
 
 def test_穿越檢定_市場收縮期個股也縮():
@@ -233,7 +233,7 @@ def test_穿越檢定_期間無市場收縮月_未執行():
     stk, mkt = _monthly(0.1)
     mkt[:] = 0.05
     r = cl.crossing_test(stk, mkt)
-    assert r == {"n": 0, "k": 0, "passed": True, "executed": False}
+    assert r == {"n": 0, "k": 0, "passed": True, "executed": False, "no_data": False}
 
 
 # ── 0 資料閘門、1 金融 ───────────────────────────────

@@ -166,6 +166,7 @@ SPECIAL_TA_JUMP = 0.30                # ③b：扣掉盈餘累積後總資產仍
 GROWTH_MIN_YOY = -0.10             # ③ 近 12 季 TTM 營收年增最低須 ≥ −10%（原「從未 < 0」放寬）【經驗】
 GROWTH_EXIT_CAGR3 = 0.12           # 退出門檻（遲滯）
 GROWTH_MIN_LISTED_Q = 20           # 上市 < 20 季降一級
+GROWTH_CAGR5_REQ_Q = 24  # 5 年 TTM CAGR 需要 t−20 季的 TTM（再往前 4 季）→ 滿 24 季才算得出
 SPECIAL_BIOTECH_WINDOW_Q = 12
 SPECIAL_BIOTECH_LOSS_Q = 8
 SPECIAL_CAP_CHANGE = 0.30
@@ -487,16 +488,14 @@ def ttm_cagr(ttm_series: pd.Series, years: int) -> float:
 
 def crossing_test(stock_rev_ttm_yoy: pd.Series, market_rev_ttm_yoy: pd.Series,
                   asof: pd.Timestamp | None = None, window_months: int = CYCLE_WINDOW_Q * 3) -> dict:
-    """穿越循環檢定（§1.3 ④）。
+    """穿越檢定：在 (asof − window_months 個月, asof] 內檢查市場收縮月。
 
-    看 (asof − window_months 個月, asof] 內（asof 預設＝market 最後一個月），
-    market < 0 且 stock 非 NaN 的月份集合 M。
-      n＝|M|，k＝M 中 stock ≤ 0 的月數。
-      n == 0 → {"n": 0, "k": 0, "passed": True, "executed": False}（暫定：無市場收縮月視為通過但標未執行）
-      否則 passed＝(k == 0)，executed＝True。
-    回傳 {"n": int, "k": int, "passed": bool, "executed": bool}。
+    沒有 market < 0 的月份（含市場全空）：n=k=0、passed=True、executed=False、no_data=False。
+    有收縮月但個股全缺：n=k=0、passed=False、executed=False、no_data=True。
+    其餘只計個股非 NaN 月數 n，其中 ≤0 的月數 k；passed=(k==0)、executed=True、no_data=False。
+    asof 未指定時用市場最後有值月份。回傳 n、k、passed、executed、no_data。
     """
-    none = {"n": 0, "k": 0, "passed": True, "executed": False}
+    none = {"n": 0, "k": 0, "passed": True, "executed": False, "no_data": False}
     market = market_rev_ttm_yoy.dropna()
     if asof is None:
         if len(market) == 0:
@@ -507,9 +506,9 @@ def crossing_test(stock_rev_ttm_yoy: pd.Series, market_rev_ttm_yoy: pd.Series,
     stk = stock_rev_ttm_yoy.reindex(shrink.index).dropna()
     n = int(len(stk))
     if n == 0:
-        return none
+        return ({**none, "passed": False, "no_data": True} if len(shrink) else none)
     k = int((stk <= 0).sum())
-    return {"n": n, "k": k, "passed": k == 0, "executed": True}
+    return {"n": n, "k": k, "passed": k == 0, "executed": True, "no_data": False}
 
 
 # ── 主函式 ────────────────────────────────────────────────────
@@ -517,8 +516,9 @@ def crossing_test(stock_rev_ttm_yoy: pd.Series, market_rev_ttm_yoy: pd.Series,
 def classify(inp: ClassInputs) -> Classification:
     """依檔頭「判斷順序」「景氣循環」「高成長」「狀態」產生本季**候選**分類（未套遲滯）。
 
+    - no_data=True 表示收縮月份個股無資料，穿越不通過；需要裁決時歸循環＋成長型循環副標。
     - TYPE_SPECIAL 仍判狀態；TYPE_INSUFFICIENT 的 state＝[]、subtags＝[]。
-    - 穿越檢定未執行（crossing["executed"] False）且需要它裁決時 → 視為通過，
+    - 穿越檢定因無收縮月而未執行（crossing["executed"] False）且需要它裁決時 → 視為通過，
       加降級原因「期間無市場營收收縮月，穿越檢定未執行」。
     - 疑似循環 → 降級原因「疑似循環（缺輔助條件）」；循環未觀察完整 → 降級原因「循環未觀察完整」。
     - metrics["asof"]＝quarters 最後一列的 period_end（遲滯會用到）。
@@ -597,7 +597,7 @@ def classify(inp: ClassInputs) -> Classification:
                     and int((yoy_tail < GROWTH_MIN_YOY).sum()) <= GROWTH_RELAX_BAD_Q
                     and len(yoy_q) >= 4 and (yoy_q.tail(4) >= 0).all())
     listed_q = inp.listed_quarters if inp.listed_quarters is not None else len(q)
-    if listed_q >= GROWTH_MIN_LISTED_Q:        # 5 年 CAGR：上市滿 20 季起必填（算不出＝不成立）
+    if listed_q >= GROWTH_CAGR5_REQ_Q:         # 5 年 TTM CAGR：滿 24 季起必填（算不出＝不成立）
         c5_ok = bool(pd.notna(c5) and c5 >= GROWTH_REV_CAGR5)
     else:
         c5_ok = bool(pd.isna(c5) or c5 >= GROWTH_REV_CAGR5)
@@ -729,7 +729,10 @@ def classify(inp: ClassInputs) -> Classification:
                     why.append(f"市場營收收縮的 {crossing['n']} 個月，"
                                f"個股有 {crossing['k']} 個月 ≤ 0")
             else:
-                degrade.append("期間無市場營收收縮月，穿越檢定未執行")
+                if crossing["no_data"]:
+                    degrade.append("市場營收收縮月份個股無營收資料，穿越檢定無法執行")
+                else:
+                    degrade.append("期間無市場營收收縮月，穿越檢定未執行")
             if crossing_pass:
                 ctype = TYPE_GROWTH
                 subtags.append(SUB_CYCLICAL_GROWTH)

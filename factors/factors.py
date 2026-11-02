@@ -203,14 +203,19 @@ def annual_eps(q: pd.DataFrame) -> pd.DataFrame:
 
 
 def _normalized_eps(q: pd.DataFrame, ann: pd.DataFrame, years: int = 5) -> pd.Series:
-    """每 (ticker, period_end) 取「該期別年份之前 `years` 個完整年度」的年度 EPS
-    均值——Shiller CAPE 精神，攤平景氣循環。"""
-    ann = ann.dropna(subset=["annual_eps"]).sort_values(["ticker", "_year"])
-    roll = (ann.groupby("ticker")["annual_eps"]
-               .transform(lambda s: s.rolling(years, min_periods=3).mean()))
-    ann = ann.assign(_norm=roll)
-    lut = ann.set_index(["ticker", "_year"])["_norm"].to_dict()
+    """期別年份 y 取曆年 y−5～y−1 的年度 EPS 平均，有值年度少於 3 年回傳 NaN。
+
+    以連續曆年補齊缺年，並延伸到查表需要的 y−1；years 預設為 5。
+    """
     yr = q["period_end"].dt.year - 1        # 只信「已結束」的年度
+    targets = yr.groupby(q["ticker"]).max()
+    lut = {}
+    for ticker, g in ann.groupby("ticker", sort=False):
+        annual = g.set_index("_year")["annual_eps"].sort_index()
+        end = max(annual.index.max(), targets.get(ticker, annual.index.max()))
+        annual = annual.reindex(range(int(annual.index.min()), int(end) + 1))
+        roll = annual.rolling(years, min_periods=3).mean()
+        lut.update({(ticker, year): value for year, value in roll.items()})
     return pd.Series(
         [lut.get((t, y), np.nan) for t, y in zip(q["ticker"], yr)],
         index=q.index)

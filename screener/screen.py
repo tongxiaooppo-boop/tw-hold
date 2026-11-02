@@ -161,16 +161,19 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
     d = _latest_per_ticker(qf, asof).set_index("ticker")
     ind = industry.reindex(d.index) if industry is not None else None
 
-    # 營收 YoY 走弱：近 3 季 rev_yoy 都 < 0
-    ry3 = (qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
-             .groupby("ticker", sort=False).tail(3))
-    weak_rev = ry3.assign(_n=ry3["rev_yoy"] < 0).groupby("ticker")["_n"].sum() == 3
-    # 毛利率 5 年趨勢向下：現在的 gross_margin < 5 年（20 季）前
+    from screener import quarterly_prep as qp
+
+    q = qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
+    q = q.drop_duplicates(["ticker", "period_end"], keep="last").copy()
+    q["rev_p1"] = qp.panel_lag(q, "rev_yoy", 1)
+    q["rev_p2"] = qp.panel_lag(q, "rev_yoy", 2)
+    q["gm_old"] = qp.panel_lag(q, "gross_margin", 20)
+    latest = q.groupby("ticker", sort=False).tail(1).set_index("ticker").reindex(d.index)
+    # 營收 YoY 走弱：最新與前兩個曆季都 < 0，缺季不算走弱。
+    weak_rev = (latest["rev_yoy"] < 0) & (latest["rev_p1"] < 0) & (latest["rev_p2"] < 0)
+    # 毛利率與剛好 20 個曆季前比較，缺季保留 NaN。
     gm_now = d["gross_margin"]
-    gm_old = (qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
-                .groupby("ticker", sort=False).nth(-20))
-    gm_old = gm_old.set_index("ticker")["gross_margin"] if "ticker" in gm_old.columns \
-        else gm_old["gross_margin"]
+    gm_old = latest["gm_old"]
 
     if prices is not None:
         px = prices.set_index("ticker")["close"]

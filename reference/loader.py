@@ -98,11 +98,17 @@ def load_dividends() -> pd.DataFrame:
     # 配股／分割前的每股現金股利 ÷ m 搬到最新股本基準（逐筆、加總前做：同一年可能跨事件）
     from reference.corporate_actions import adjust_dividends
     d = adjust_dividends(d, ["cash_earnings", "cash_surplus"])
-    agg = {"cash_earnings": "sum", "stock_earnings": "sum",
-           "pay_date": "max", "announce_date": "max", "ex_date": "max"}
+    sum_cols = ["cash_earnings", "stock_earnings"]
     if "cash_surplus" in d.columns:
-        agg["cash_surplus"] = "sum"
-    out = (d.groupby(["ticker", "year"], as_index=False).agg(agg)
-             .sort_values(["ticker", "year"]).reset_index(drop=True))
-    out["cash_dividend"] = out["cash_earnings"] + out.get("cash_surplus", 0.0)
+        sum_cols.append("cash_surplus")
+    grouped = d.groupby(["ticker", "year"])
+    out = grouped[sum_cols].sum(min_count=1)
+    dates = ["pay_date", "announce_date", "ex_date"]
+    out = out.join(grouped[dates].max())
+    cols = ["cash_earnings", "stock_earnings", *dates]
+    if "cash_surplus" in d.columns:
+        cols.append("cash_surplus")
+    out = out[cols].reset_index().sort_values(["ticker", "year"]).reset_index(drop=True)
+    cash_cols = [c for c in ["cash_earnings", "cash_surplus"] if c in out.columns]
+    out["cash_dividend"] = out[cash_cols].sum(axis=1, min_count=1)
     return out
