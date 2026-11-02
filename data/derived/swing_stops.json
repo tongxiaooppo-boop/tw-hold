@@ -5,6 +5,12 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
+    "9933": {
+      "name": "中鼎",
+      "status": "pending_entry",
+      "signal_date": "2026-11-02",
+      "risk_stop_ref": 42.34
+    },
     "2006": {
       "name": "東和鋼鐵",
       "first_seen": "2026-10-30",
@@ -19,12 +25,6 @@
       "dropped_date": null,
       "exit_date": null,
       "exit_price": null
-    },
-    "9933": {
-      "name": "中鼎",
-      "status": "pending_entry",
-      "signal_date": "2026-11-02",
-      "risk_stop_ref": 42.34
     },
     "1560": {
       "name": "中砂",
