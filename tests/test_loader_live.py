@@ -26,3 +26,14 @@ def test_預設回測模式_維持期末加45天(monkeypatch):
     q = loader.load_quarterly()
     assert q["disclosure_date"].iloc[0] == pd.Timestamp("2026-11-14")
     assert not (q["disclosure_date"] <= pd.Timestamp("2026-11-02")).any()
+
+
+def test_回測模式_各季用法定期限_Q4是隔年3月31():
+    pe = pd.Series(pd.to_datetime(["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]))
+    got = loader.statement_deadline(pe)
+    assert list(got) == list(pd.to_datetime(["2025-05-15", "2025-08-14", "2025-11-14", "2026-03-31"]))
+
+
+def test_回測模式_年報2月中還看不到():
+    pe = pd.Series([pd.Timestamp("2025-12-31")])
+    assert not (loader.statement_deadline(pe) <= pd.Timestamp("2026-02-20")).any()

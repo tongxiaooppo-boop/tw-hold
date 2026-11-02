@@ -13,8 +13,8 @@ bundle 目錄由 `TWHOLD_BUNDLE_DIR` 環境變數指定，預設 `<repo>/data/up
 ## 公告日安全邊界
 
 `income`／`balance`／`cashflow` 的 `period_end` 是**期別結束日不是公告日**。
-台灣季報法定期限約季末 +45 天（Q4 是次年 3/31，45 天對 Q4 偏早）。
-回測／重播每一季掛 `disclosure_date = period_end + 45 天`——「某天看得到
+台灣季報法定期限：Q1 5/15、Q2 8/14、Q3 11/14、Q4 年報次年 3/31。
+回測／重播每一季掛 `disclosure_date = 法定期限`——「某天看得到
 哪一期財報」的判斷都用這個，不用 `period_end`。線上產品（`live=True`）資料在就算
 已公布（`period_end + 1 天`），提早公布的公司抓到就用。
 """
@@ -33,10 +33,22 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_DIR = Path(os.environ.get("TWHOLD_BUNDLE_DIR", _REPO_ROOT / "data" / "upstream"))
 FUND_DIR = BUNDLE_DIR / "fundamentals"
 
-#: 季報公告落後（季末 → 看得到），只給回測／重播用（線上產品見 `load_quarterly(live=True)`）。
-#: 法定 Q1-Q3 是季末 +45 天；Q4 年報法定次年 3/31，用 45 天（2/14）其實**偏早**，
-#: 回測在 2/14～3/31 之間可能用到還沒公布的年報（前視偏誤，bugs_ledger §G2，尚未修）。
+#: 舊常數（期末 +45 天），只留給還在引用它的研究腳本；loader 回測模式已改用法定期限。
 STATEMENT_LAG_DAYS = 45
+
+#: 各季財報法定公布期限（季末月 → (月, 日)）；Q4 年報在隔年 3/31。
+#: 與 `corporate_actions._DEADLINE` 同一份規則。金融業半年報期限 8/31 較晚，這裡沒分產業
+#: （金融股回測 Q2 最多早 17 天看到，已知缺口）。
+STATEMENT_DEADLINE = {3: (5, 15), 6: (8, 14), 9: (11, 14), 12: (3, 31)}
+
+
+def statement_deadline(period_end: pd.Series) -> pd.Series:
+    """每季財報的法定公布期限（向量化）；非季末月份（異常資料）退回期末 +45 天。"""
+    pe = pd.to_datetime(period_end)
+    year = pe.dt.year + (pe.dt.month == 12).astype(int)
+    md = pe.dt.month.map(STATEMENT_DEADLINE)
+    out = pd.to_datetime(dict(year=year, month=md.str[0], day=md.str[1]), errors="coerce")
+    return out.fillna(pe + pd.Timedelta(days=STATEMENT_LAG_DAYS))
 
 
 def _read(name: str) -> pd.DataFrame:
@@ -79,11 +91,14 @@ def load_quarterly(live: bool = False) -> pd.DataFrame:
 
     live=True（線上產品，asof＝今天）：資料裡有的季就是已經公布，`disclosure_date`
     設成期末隔天，提早公布的公司抓到就用（跟月營收一樣搶時間差）。
-    live=False（回測／重播，預設）：維持期末 +45 天，避免用到當時還沒公布的財報。
+    live=False（回測／重播，預設）：用法定公布期限（Q1 5/15、Q2 8/14、Q3 11/14、
+    Q4 隔年 3/31），不會用到當時還沒公布的財報。
     """
     q = merge_statements(_read("income"), _read("balance"), _read("cashflow"))
-    lag = 1 if live else STATEMENT_LAG_DAYS
-    q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=lag)
+    if live:
+        q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=1)
+    else:
+        q["disclosure_date"] = statement_deadline(q["period_end"])
     return q
 
 
