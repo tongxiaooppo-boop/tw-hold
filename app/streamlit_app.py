@@ -2380,7 +2380,10 @@ def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
     計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。label＝「代號 股名」，放股價欄最前面。"""
     import valuation as va
 
-    r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
+    try:
+        r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
+    except Exception as e:
+        r = {"ok": False, "reason": f"舊版試算算不出來：{type(e).__name__}: {e}"}
     a = r.get("asof") or {}
     try:
         from screener import val_card

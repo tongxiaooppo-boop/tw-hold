@@ -5,7 +5,7 @@
 #   其中至少須有四筆資料。季節偏差使用截至最後財報季的最近三年。
 # - ni_parent 欄位缺少時，等同整欄 NaN，以 net_income 代替。
 # - 非有限數值視為缺值；月營收最新月依輸入索引判定，不因該月缺值而前移。
-# - g3 缺失使試算路徑失敗；k=0 的 eps_nc 仍可直接使用已公布 TTM。
+# - 補缺月時才需要 g3；k=0 的 eps_nc 仍可直接使用已公布 TTM。
 # - 淨利合計為零時無法計算 m；營收或同比基期合計為零時無法計算比率。
 # - 季節偏差的符號以 numpy.sign 判定，零與正／負數視為不同符號。
 # - ok 表示基礎參數有效且至少有一個可用的 eps_nc／eps_future；
@@ -341,7 +341,11 @@ def _calibrate(q: pd.DataFrame, result: dict[str, Any]) -> str | None:
     if any(value is None for value in (nonop, pretax_sum, net_sum, parent_sum)):
         return "業外、稅率或少數股權比無法計算"
 
-    tax = 0.0 if pretax_sum <= 0 else _number(1 - net_sum / pretax_sum)
+    if pretax_sum <= 0:
+        tax = DEFAULT_TAX_RATE
+        _flag(result, "近八季稅前合計 ≤0，稅率改用 20%")
+    else:
+        tax = _number(1 - net_sum / pretax_sum)
     if tax is None:
         return "有效稅率無法計算"
     if not MIN_TAX_RATE <= tax <= MAX_TAX_RATE:
@@ -353,6 +357,8 @@ def _calibrate(q: pd.DataFrame, result: dict[str, Any]) -> str | None:
     minority = _number(1 - parent_sum / net_sum)
     if minority is None:
         return "少數股權比無法計算"
+    if parent_sum * net_sum < 0 or abs(minority) > 1:
+        return "歸母與合併淨利方向不一致或少數股權比 >100%，無法試算"
     if abs(minority) > LARGE_MINORITY_RATIO:
         _flag(result, "少數股權比重大")
 
@@ -389,9 +395,6 @@ def _estimate(
         _flag(result, "最新一季毛利率／費用率缺值")
         return None
     has_monthly = _has_monthly(monthly, period)
-    if params["g3"] is None and (not latest or has_monthly):
-        _flag(result, "近三月或去年同期月營收不足，無法計算 g3")
-        return None
 
     if has_monthly:
         revenue = 0.0
@@ -401,6 +404,9 @@ def _estimate(
                 previous = _number(monthly.get(month - G12_MONTHS, np.nan))
                 if previous is None:
                     _flag(result, f"{period} 去年同月營收缺漏：{month - G12_MONTHS}")
+                    return None
+                if params["g3"] is None:
+                    _flag(result, "近三月或去年同期月營收不足，無法計算 g3")
                     return None
                 value = previous * (1 + params["g3"])
             revenue += value
@@ -428,10 +434,12 @@ def _estimate(
     op = gp - opex
     # "latest" 口徑與估值展開表一致：試算季排除業外（使用者 2026-10-29 主版本）；舊 "ttm" 口徑加近 8 季中位數。
     nonop = 0.0 if latest else params["nonop_med"]
-    conv = (1 - params["t"]) * (1 - params["m"])
+    # 稅只課在賺錢的季：試算季稅前 ≤0 不給節稅（台股虧損多半認列不了遞延所得稅資產）
+    t = params["t"] if (op + nonop) > 0 else 0.0
+    conv = (1 - t) * (1 - params["m"])
     net = (op + nonop) * conv
     # 舊口徑保留原有運算順序。
-    eps = ((op + nonop) * (1 - params["t"]) * (1 - params["m"])
+    eps = ((op + nonop) * (1 - t) * (1 - params["m"])
            / params["shares"])
     if any(_number(value) is None for value in (revenue, gm, op, eps)):
         _flag(result, f"{period} 試算 EPS 或中間值非有限值")
@@ -604,7 +612,7 @@ def _future(q: pd.DataFrame, result: dict[str, Any]) -> None:
         gm, opex_ratio = p["gm_last"], p["opex_last"]
         gp, opex = rev * gm, rev * opex_ratio
         op = gp - opex
-        conv = (1 - p["t"]) * (1 - p["m"])
+        conv = (1 - (p["t"] if op > 0 else 0.0)) * (1 - p["m"])     # 稅只課在賺錢的季
         net = op * conv
         details.append(dict(q=str(pd.Period(qs[-1]["q"], freq="Q-DEC") + j),
                             kind="grow", rev=rev, rev_src="grow", gm=gm, gp=gp,

@@ -32,6 +32,7 @@ STATES_NO_PE = ("虧損", "獲利不穩", "轉機", "預估轉虧", "谷底回�
 # 金融、特殊、資料不足＝2021–2025 年底橫斷面錨（口徑不同於前兩者，不往全體收縮）。
 FALLBACK_MULTS = {"normal": (12.8, 16.5, 21.1), "growth": (17.2, 19.2, 26.2), "cyclical": (13.6, 17.6, 22.7),
                   "financial": (9.9, 11.8, 14.0), "special": (8.8, 11.5, 15.2), "insufficient": (13.1, 15.9, 19.4)}
+BVPS_MAX_AGE_DAYS = 31
 PER_STALE_DAYS = 10         # 反推 EPS 用的交易所本益比，最新一筆不得落後最新收盤日超過這麼多天
 REF_MARGIN = 0.10          # 購買參考價：滾動獲利估值價須比現價高 ≥10%（使用者 2026-11-01 指定）
 DIFF_WARN = 0.30            # 滾動與已公布獲利估值價差 >30% → 獲利口徑差異大（對照三價警示、gap_big 共用同一門檻）
@@ -55,7 +56,7 @@ def _monthly(rev: pd.DataFrame) -> pd.Series:
         return pd.Series(dtype=float)
     m = pd.to_datetime(rev["month"]).dt.to_period("M").dt.to_timestamp()
     s = pd.Series(pd.to_numeric(rev["revenue"], errors="coerce").to_numpy(), index=m)
-    return s[~s.index.duplicated(keep="last")].dropna().sort_index()
+    return s[~s.index.duplicated(keep="last")].sort_index()
 
 
 def _yearly_eps(q: pd.DataFrame) -> dict[int, float]:
@@ -75,7 +76,7 @@ def _last_px(px: pd.DataFrame):
 
 
 def _bvps(per: pd.DataFrame, px: pd.DataFrame) -> float | None:
-    """每股淨值 ＝ 收盤價 ÷ 交易所股價淨值比（同一天），與倍數序列同口徑。"""
+    """每股淨值 ＝ 收盤價 ÷ 交易所股價淨值比（同一天），與倍數序列同口徑。合併日期距股價最後一天不得超過 31 天。"""
     if per is None or per.empty or px is None or px.empty:
         return None
     p = per[["date", "pbr"]].copy()
@@ -84,7 +85,7 @@ def _bvps(per: pd.DataFrame, px: pd.DataFrame) -> float | None:
     c = px[["date", "close"]].copy()
     c["date"] = pd.to_datetime(c["date"])
     j = p.merge(c.dropna(), on="date").tail(1)
-    if j.empty:
+    if j.empty or j["date"].iloc[0] < c["date"].max() - pd.Timedelta(days=BVPS_MAX_AGE_DAYS):
         return None
     return float(j["close"].iloc[0]) / float(j["pbr"].iloc[0])
 
@@ -140,7 +141,7 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
 
     # ── 前瞻 EPS（非金融才有毛利欄可試算）──
     nc = None
-    if typ != "financial" and len(monthly):
+    if typ != "financial" and monthly.notna().any():
         nc = en.nowcast(q, monthly, g_far_zero=(typ == "cyclical"))
         out["eps"] = nc
         if (nc.get("variability") or {}).get("flag"):
@@ -156,7 +157,9 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
             for f in nc.get("flags") or []:
                 checks.append(dt.Check(f, "degrade", None, f))
             checks += [dt.shares_check(q), dt.bridge_residual(q, nc.get("params") or {}),
-                       dt.nonop_gate(q), dt.revenue_caliber(q, monthly)]
+                       dt.nonop_gate(q), dt.revenue_caliber(q, monthly),
+                       dt.quarter_sanity(q, construction=("construction" in
+                           ((cls.get("metrics") or {}).get("special_triggers") or [])))]
 
     # ── 路由 ──
     if typ not in ("insufficient", "special", "financial", "cyclical", "normal", "growth"):

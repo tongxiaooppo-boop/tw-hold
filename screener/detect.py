@@ -41,6 +41,31 @@ def _ok(name: str, value: float | None = None) -> Check:
     return Check(name, "ok", value, "")
 
 
+def quarter_sanity(q: pd.DataFrame, n: int = 8, construction: bool = False) -> Check:
+    """近 n 季檢查 EPS 與歸母淨利異號、非營建營收 ≤0、毛利大於營收。
+
+    依 period_end 排序後取最後 n 列；缺欄位時略過該條，不刪季或修改數字。
+    """
+    d = q.sort_values("period_end").tail(n)
+    bad = pd.Series(False, index=d.index)
+    if "eps" in d.columns and "ni_parent" in d.columns:
+        eps, ni = d["eps"], d["ni_parent"]
+        bad |= eps.notna() & ni.notna() & (eps != 0) & (ni != 0) & (np.sign(eps) != np.sign(ni))
+    if "revenue" in d.columns:
+        if not construction:
+            bad |= d["revenue"] <= 0
+        if "gross_profit" in d.columns:
+            bad |= (d["gross_profit"].notna() & d["revenue"].notna()
+                    & (d["gross_profit"] > d["revenue"]))
+    count = int(bad.sum())
+    if not count:
+        return _ok("財報矛盾")
+    quarters = "、".join(pd.to_datetime(d.loc[bad, "period_end"]).dt.to_period("Q").astype(str))
+    return Check("財報矛盾", "degrade", count,
+                 f"近 {n} 季有 {count} 季財報數字互相矛盾（{quarters}）："
+                 "EPS 與淨利正負相反／營收 ≤0／毛利 > 營收，相關數字可能不準")
+
+
 def shares_check(q: pd.DataFrame) -> Check:
     """capital_stock÷10（期末股數）vs 近 4 季隱含股數（歸母淨利÷EPS 中位數，是加權平均）。"""
     n = "股數對不上"
