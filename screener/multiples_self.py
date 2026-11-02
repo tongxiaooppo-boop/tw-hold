@@ -1,9 +1,23 @@
-"""自建歷史倍數（估值 2.0，upgrade_guide §4）：PE、前瞻 PE、PB 月度序列與有效月數。
+"""自建歷史倍數（估值 2.0，upgrade_guide §4、§5-4）：PE、前瞻 PE、PB 月度序列、有效月數、上修判斷。
 
-【框架由 Opus 定，實作者不得改介面、常數、欄位】函式本體由 P2 實作。
-每個月底 t：price_adj = 原始收盤 ÷ share_basis.share_factor_after(t)（不做股利還原）；
-EPS 用 eps_windows.ttm_window／fwd_window(asof=t, live=False)；bvps＝最近可見季歸母權益 ÷ 該季隱含股數
-（換到最新基準）。T-4／T-5：窗口以估值日錨定、先取完整月份月底觀測再判有效，當月未結束不算。
+【框架由 Opus 定，實作者不得改介面、常數、欄位、docstring】函式本體由 P2 實作。
+
+每個完整月份的月底交易日 t（asof＝t，live=False）：
+- price_adj(t) = 原始收盤(t) ÷ share_basis.share_factor_after(ticker, t)。**不做股利還原**。
+- eps_ttm = eps_windows.ttm_window(q, monthly_rev, asof=t, live=False, financial).eps；
+  eps_fwd = eps_windows.fwd_window(..., base=上面的 ttm).eps；窗口 ok=False → NaN。
+  q 由呼叫端先做 corporate_actions.adjust_eps（EPS 已在最新股數基準），這裡不再調整。
+- bvps(t)：最近一季「quarter_visible(period_end, t)」且 equity_parent 有限 >0 的季 Q；
+  股數＝Q 的隱含股數 ni_parent ÷ eps（|eps| ≥ EPS_MIN、結果有限 >0；eps 已在最新基準，
+  所以股數也在最新基準）。Q 推不出股數 → 往前找最多 4 個「可見」季中最近一個推得出的；都沒有 → NaN。
+  bvps = Q 的 equity_parent ÷ 該股數。
+- 倍數（T-3：有效值＝有限且 >0）：
+  pe     = price_adj ÷ eps_ttm，有效＝price_adj 有限 >0、eps_ttm 有限 ≥ EPS_MIN、pe ≤ MULT_MAX_PE、非 excluded
+  pe_fwd = 同上，用 eps_fwd
+  pb     = price_adj ÷ bvps，有效＝price_adj、bvps 有限 >0、非 excluded（PB 無上限）
+  無效月 pe／pe_fwd／pb 寫 NaN、valid_* 寫 False；**月份列保留**（T-4、T-7）。
+- excluded：月份 ∈ share_basis.excluded_months(ticker)。
+- pe_exchange：交易所 PER 在同一天 t 的值（ticker 裸代號比對）；沒有、≤0 或非有限 → NaN。
 """
 from __future__ import annotations
 
@@ -16,31 +30,72 @@ VALID_EXIT = {"normal": 33, "growth": 27, "pb": 54}
 WINDOW_MONTHS = {"normal": 60, "cyclical": 60, "growth": 36, "pb": None}   # None＝全部歷史
 MULT_CAP = {"normal": 30.0, "normal_exc": 50.0, "growth": 50.0, "pb": None}
 PCTS = (0.20, 0.50, 0.80)
+REV_STEP = 0.02
+REV_STREAK = 2
+REV_EVENTS = ("normal", "roll", "report")
 
 HIST_COLUMNS = ("ticker", "month", "date", "price_adj", "eps_ttm", "eps_fwd", "bvps",
                 "n_est_ttm", "n_est_fwd", "pe", "pe_fwd", "pb",
                 "valid_pe", "valid_pe_fwd", "valid_pb", "excluded", "pe_exchange")
 
 
+def last_complete_month(asof: pd.Timestamp) -> pd.Period:
+    """asof ≥ 該月最後一個日曆日 → 該月算完整；否則上一個月。回傳 pd.Period("M")。
+    例：2026-11-02 → 2026-10；2026-10-31 → 2026-10；2026-10-30 → 2026-09。"""
+    raise NotImplementedError
+
+
 def monthly_closes(raw_close: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
-    """日線原始收盤（ticker, date, close）→ 每個完整月份最後一個交易日（ticker, month, date, close）。
-    asof 所在月未結束 → 不含該月。"""
+    """日線原始收盤（ticker, date, close；ticker 可帶 .TW／.TWO）→ 每檔每個完整月份
+    （≤ last_complete_month(asof)）**最後一個交易日那一列**（ticker 裸代號, month "YYYY-MM", date, close）。
+    T-5：先取月底那一列再看值；月底那天 close 是 NaN 就保留 NaN，不往前找。依 ticker、month 排序。"""
     raise NotImplementedError
 
 
 def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: pd.DataFrame,
                   per: pd.DataFrame | None, financial: bool = False) -> pd.DataFrame:
-    """單檔月度倍數序列，欄位＝HIST_COLUMNS。closes＝該檔 monthly_closes 結果；per＝交易所 PER（核對用）。"""
+    """單檔月度倍數序列，欄位＝HIST_COLUMNS（順序照常數），每個 closes 列一列，month 舊→新。
+    q＝該檔季報（已 adjust_eps）；monthly_rev＝月營收（index＝月初 Timestamp）；
+    closes＝該檔 monthly_closes 結果；per＝交易所 PER（ticker, date, per；可為 None → pe_exchange 全 NaN）。
+    算法見模組說明。n_est_*＝窗口 n_est（窗口 ok=False 時 0）。
+    share_basis.EventsUnavailable 不攔截，往上丟。"""
     raise NotImplementedError
 
 
 def window_stats(mh: pd.DataFrame, kind: str, metric: str, asof: pd.Timestamp,
                  cap: float | None) -> dict:
-    """倍數窗統計。kind ∈ WINDOW_MONTHS；metric ∈ {"pe","pe_fwd","pb"}。
-    回傳 {start, end, n_valid, n_loss, mults:(p20,p50,p80) 截斷後, raw_mults:(…) 未截斷, capped: bool}。"""
+    """倍數窗統計（T-4：窗口以估值日錨定）。kind ∈ WINDOW_MONTHS；metric ∈ {"pe","pe_fwd","pb"}。
+    end＝last_complete_month(asof)；start＝end − (WINDOW_MONTHS[kind] − 1)，None → mh 最早月份。
+    只看 start ≤ month ≤ end 的列；mh 沒有的月份就是沒有（不補列，不算有效）。
+    n_valid＝valid_{metric} 為 True 的列數；n_loss＝窗內 eps 有限且 ≤0 的列數
+    （pe／pb 看 eps_ttm，pe_fwd 看 eps_fwd）。
+    raw_mults＝有效值的 PCTS 分位（pandas quantile 預設線性內插）；n_valid=0 → (None, None, None)。
+    mults＝raw 各值 min(v, cap)（cap=None 不截）；capped＝cap 不是 None 且任一 raw > cap。
+    回傳 {start:"YYYY-MM", end:"YYYY-MM", n_valid:int, n_loss:int, mults:tuple, raw_mults:tuple, capped:bool}。"""
     raise NotImplementedError
 
 
 def is_valid_tier_a(n_valid: int, kind: str, was_a: bool) -> bool:
-    """A 層門檻含緩衝：was_a 時 ≥ VALID_EXIT[kind]，否則 ≥ VALID_MIN[kind]。"""
+    """A 層門檻含緩衝：was_a 時 n_valid ≥ VALID_EXIT[k]，否則 ≥ VALID_MIN[k]。
+    k＝kind；"cyclical" 視為 "normal"；其他不在 VALID_MIN 的 kind → KeyError。"""
+    raise NotImplementedError
+
+
+def revision_event(prev: dict | None, cur: dict) -> str:
+    """eps_revision 的 event 欄。prev／cur＝{"window": "2026Q1-2026Q4", "actual_qs": tuple[str, ...]}。
+    cur 或 prev 的 window 為 None（前瞻窗口不可用）→ "roll"；
+    prev 為 None 或 window 不同 → "roll"；window 相同但 actual_qs 不同（試算季換成財報）→ "report"；
+    其餘 → "normal"。"""
+    raise NotImplementedError
+
+
+def revision_streak(rev_hist: pd.DataFrame) -> dict:
+    """上修判斷（§5-4）。rev_hist＝該檔 eps_revision（欄 month, window, eps_fwd, event），依 month 舊→新處理。
+    從第 2 列起逐列：
+    - event 為 "roll"／"report" → 不比較，streak、direction 不變；
+    - event "normal"：pct = 本列 eps_fwd ÷ 上一列 eps_fwd − 1（任一非有限或上一列 ≤0 → 視為持平）；
+      pct ≥ REV_STEP → 上修；pct ≤ −REV_STEP → 下修；其餘持平。
+      同方向 → streak+1；方向相反 → streak=1、direction 換邊；持平 → streak=0、direction=None。
+    回傳 {"last_pct": 最後一列為 normal 時的 pct（持平因非有限者為 None），否則 None,
+          "streak": int, "direction": "up"|"down"|None}。空表或只有 1 列 → {None, 0, None}。"""
     raise NotImplementedError
