@@ -26,6 +26,9 @@ for _p in (str(REPO), str(REPO / "app")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from app import val_inputs, val_view
+from screener import river, val_card
+
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
 
 ATTRIBUTION = (
@@ -906,6 +909,7 @@ div[data-testid="stMarkdownContainer"] table th{
   background:var(--thc-surface2);padding:.35rem .55rem;}
 .thc-vt td{padding:.4rem .55rem;border-top:1px solid var(--thc-line);color:var(--thc-ink);
   vertical-align:top;overflow-wrap:anywhere;}
+.thc-vt tr.hl td{background:color-mix(in srgb,var(--thc-accent) 14%,var(--thc-surface));}  /* 📌 列：surface2 跟表格底太接近，看不出來 */
 .thc-vt .n{font-family:var(--thc-mono);font-variant-numeric:tabular-nums;text-align:right;
   white-space:nowrap;}
 .thc-vt th.n{font-family:inherit;}
@@ -1060,6 +1064,21 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .ir-tag{display:inline-block;margin-left:.5rem;font-size:.7rem;color:var(--thc-soft);
   background:var(--thc-surface2,var(--thc-line));border:1px solid var(--thc-line);
   border-radius:4px;padding:.05rem .4rem;white-space:nowrap;}
+
+/* 估值卡：數值由 val_view 提供，這裡只排版。 */
+.val-price{font:600 2.7rem var(--thc-mono);color:var(--thc-ink);}
+.val-sub,.val-hint{font-size:.78rem;color:var(--thc-faint);}
+.val-label{margin-top:1rem;font-weight:600;}
+.val-tri{display:flex;gap:.5rem;margin:.5rem 0;}
+.val-tri > div{flex:1;background:var(--thc-surface2);padding:.6rem .35rem;border-radius:.35rem;text-align:center;}
+.val-tri strong{display:block;font:600 1.2rem var(--thc-mono);margin-top:.3rem;}
+.val-pos{padding:.4rem .65rem;border-radius:.3rem;background:var(--thc-surface2);}
+.val-pos.good{color:var(--thc-good,var(--thc-accent));}
+.val-pos.mid{color:var(--thc-soft);}
+.val-pos.bad{color:var(--thc-bad,var(--thc-ink));}
+.val-eps-row{display:flex;justify-content:space-between;gap:.7rem;padding:.7rem 0;border-bottom:1px solid var(--thc-line);}
+.val-eps-row strong{white-space:nowrap;font-family:var(--thc-mono);}
+
 /* 估值速覽兩欄卡等高（2026-10-29）：欄撐滿列高、卡片撐滿欄高；手機堆疊時不影響 */
 .st-key-valcards [data-testid="stColumn"] [data-testid="stLayoutWrapper"]{flex:1 1 auto;}
 .st-key-valcards [class*="st-key-valcard_"]{height:100%;}
@@ -1939,7 +1958,7 @@ def _stock_data(code: str) -> dict:
     mgn = _g(bd.margin, code)
     qf = _g(quarterly_factors, fin) if not fin.empty else fin
     return {"px": px, "per": per, "fin": fin, "div": div, "qf": qf, "rev": rev,
-            "chips": chp, "margin": mgn, "_errs": errs}
+            "chips": chp, "margin": mgn, "mh": _g(val_inputs.load_mh, code), "_errs": errs}
 
 
 def _qf_display(df: pd.DataFrame):
@@ -2017,7 +2036,7 @@ class _RawHtml(str):
 
 
 def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = frozenset(),
-            wide: bool = False) -> None:
+            wide: bool = False, hl: set[int] = frozenset()) -> None:
     """估值展開用的 HTML 表（.thc-vt）。`num`＝數字欄 index；`src`＝來源欄 index（桌面顯示、
     手機收掉）。cell 可為 (主字, 手機才顯示的小字)——搭配 src 欄，手機把來源改放主字下方。
     不用 st.dataframe：手機上它會截欄、要在表格內左右／上下捲（2026-10-29 使用者回報）。"""
@@ -2030,12 +2049,12 @@ def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = fr
             main, note = v
             body = _e(main) + (f'<span class="note m-only">{_esc(note)}</span>' if note else "")
         else:
-            body = _e(v)
+            body = _e(v).replace("\n", "<br>")
         return f"<{tag}{cls}>{body}</{tag}>"
     html = [f'<table class="thc-vt{" w3" if src else ""}{" wide" if wide else ""}"><tr>'
             + "".join(_cell(h, i, "th") for i, h in enumerate(head)) + "</tr>"]
-    for r in rows:
-        html.append("<tr>" + "".join(_cell(v, i, "td") for i, v in enumerate(r)) + "</tr>")
+    for rowno, r in enumerate(rows):
+        html.append(('<tr class="hl">' if rowno in hl else "<tr>") + "".join(_cell(v, i, "td") for i, v in enumerate(r)) + "</tr>")
     st.markdown("".join(html) + "</table>", unsafe_allow_html=True)
 
 
@@ -2043,116 +2062,8 @@ def _zone(z: dict | None) -> str:
     return f"{z['lo']:,.1f}～{z['hi']:,.1f}（{z['share']:.0%}）" if z else "—"
 
 
-def _risk_lines(rk: dict | None) -> tuple[str, str]:
-    """回（卡片裡的停損參考／支撐壓力候選兩行，含結尾換行；卡片下方的算式說明）。
-    rk＝valuation.risk_levels 的結果。算式放卡片下方，卡片才不會變高（使用者 2026-10-30）。"""
-    if not rk:
-        return "", ""
-    # 停損與支撐分開（2026-10-30 定案）：停損只看波動；支撐／壓力是日 K 估計的大量區，各自列
-    # 卡片裡只放數字；規則與註解全部寫在框外（使用者 2026-10-30：卡片不要變大、規則要寫清楚）
-    lines = []
-    hd = rk.get("hold")
-    if rk.get("buyable") and rk.get("stop"):
-        stop = f"停損參考 約 **{_px(rk['stop'])}**（距現價 {rk['risk']:+.0%}）"
-        lines.append(
-            f"🛑 **停損參考**（現價在買進區間內才列）＝現價 {_px(rk['price'])} − 2×週ATR14 "
-            f"{_px(rk['watr'])} ＝ {_px(rk['stop'])}。**買進後記下這個價，別跟著每天重算往下移。**"
-            + (f" {rk['hint']}。" if rk.get("hint") else ""))
-    elif rk.get("buyable"):
-        # 現價在買進區間但 2×週ATR ≥ 現價（波動極大）→ 算不出正的停損價
-        stop = "停損參考：—（波動太大，算不出）"
-        lines.append("🛑 **停損參考**＝現價 − 2×週ATR14；這檔週波動超過現價一半，算出來 ≤ 0，不列。")
-    elif hd:
-        # 不在買進區間 → 給已持有的人（2026-10-30 使用者拍板：混合版，週收盤、不存使用者狀態）；
-        # 使用者要求持股停損在卡片上要清楚、跟其他字不能互相矛盾
-        ln, dist = _px(hd["line"]), f"{hd['dist']:+.0%}"
-        if hd["state"] == "new":
-            stop = (f":red[**🛡️ 本週收盤跌破持股停損 {_px(hd['brk_line'])}**]  \n"
-                    f"　沒賣的話，新參考線 **{ln}**（距現價 {dist}"
-                    + ("，現價已在線下，看週五收盤）" if hd["line"] >= hd["price"] else "）"))
-        elif hd["state"] == "na":
-            stop = f":gray[🛡️ 持股停損：暫無（重算後的線 {ln} 仍高於上週收盤，下週再看）]"
-        else:
-            stop = (f"🛡️ **持股停損 {ln}**（{'跌破後重算，' if hd['reset'] else ''}距現價 {dist}）"
-                    + ("｜:orange[**現價已在線下，看週五收盤**]" if hd["under_now"]
-                       else "｜週收盤跌破才算"))
-        base = (f"{hd['since']} 起的最高 {_px(hd['hh'])}" if hd["reset"] and hd["since"]
-                else f"近 22 週最高 {_px(hd['hh'])}")
-        if not (hd["reset"] and hd.get("brk_date")):
-            last = ""
-        elif hd["since"] and hd["since"] != hd["brk_date"]:
-            # 最近一次跌破的是 22 週那條線，重算線的起點是更早那次跌破（sol 審查 2026-10-30）
-            last = (f"最近一次跌破：{hd['brk_date']}（{_px(hd['brk_line'])}）；目前這條線從 "
-                    f"{hd['since']} 那次跌破起算。")
-        else:
-            last = f"{hd['brk_date']} 週收盤跌破 {_px(hd['brk_line'])}，線從那週起重算。"
-        lines.append(
-            f"🛡️ **持股停損**（{'買進區間停用中，' if rk.get('paused') else '現價不在買進區間時列，'}"
-            "給已持有的人；**不知道你的成本**）"
-            f"＝{base} − 2×週ATR14 {_px(hd['watr'])} ＝ {ln}。  \n"
-            "　・**看週收盤**：週五收盤跌破 → 下週一處理；盤中跌破不算。  \n"
-            "　・**跌破後重新起算**：22 週高點的線跑到價格上方時，改從近期跌破那週往後算，"
-            "線會往下一次。**這不是取消停損**——跌破那週的訊號照算，新線是給「當時沒賣、現在還抱著」"
-            f"的人。{last}  \n"
-            "　・週線持股停損，2015～2026 年 603 檔模擬：最差 5% 從 −26% 縮到約 −14%；代價是**半年內約 96% 會出場、"
-            "約六成賣後又漲回**。")
-    else:
-        why = ("買進區間停用中" if rk.get("paused") else ("沒有成長價" if rk.get("no_growth") else "現價不在買進區間"))
-        stop = f"停損參考：—（{why}）"
-        lines.append(f"🛑 **停損參考**只在現價落在買進區間內時列出（這檔{why}，持股停損也算不出）"
-                     "——這是顯示條件，不代表風險比較低。")
-
-    sp, at, sup = rk.get("sup_px"), rk.get("at"), rk.get("support")
-    sup_s = ("支撐候選 —" if sp is None else
-             f"支撐候選 {_px(sp)}" + ("（偏遠）" if rk.get("sup_far") else ""))
-    rp = rk.get("res_px")
-    res_s = (f"壓力候選 {_px(rp)}" if rp else
-             f"壓力候選 —（近一年高 {_px(rk['high'])}）")
-    if at is not None:
-        where = f"現價在大量區 {_px(at['lo'])}～{_px(at['hi'])} 內：支撐＝區下緣、壓力＝區上緣"
-    else:
-        where = "支撐＝下方最近大量區的上緣" if sup else "下方沒有大量區"
-        where += "；壓力＝上方最近大量區的下緣" if rp else "；上方沒有大量區（近一年高不算套牢量）"
-    if rk.get("sup_far"):
-        where += "；支撐在停損之下＝偏遠"
-    lines.append(
-        f"📊 **支撐／壓力候選**＝近一年成交量最集中的價格帶。{where}。上方＝解套賣壓（減碼參考）、"
-        "下方＝可能有人接，**不保證**。")
-    lines.append("⚠️ 量區用日 K 估計，跟券商分價量表會有出入；**跳空、跌停時會虧得比停損多**。"
-                 "數字細節見「試算細節」。")
-    return f"{stop}  \n{sup_s}｜{res_s}  \n", "  \n".join(lines)
 
 
-def _buy_lines(b: dict | None) -> tuple[str, str]:
-    """回（卡片裡買進區間一行，含結尾換行；展開裡的規則說明）。b＝valuation.buy_range 的結果。"""
-    if not b:
-        return "", ""
-    g = f"{b['min_growth']:.0%}"
-    hi = _px(b["hi"])
-    st_ = b["state"]
-    # 不寫「預估獲利成長」：EPS 卡的「年增」比的是去年全年，會看起來互相矛盾（2353：年增 +24% vs −5%）
-    # 成長幅度四捨五入後跟門檻一樣（10.8% vs 11.1% 都顯示 +11%）會看起來像過了 → 多給一位小數
-    im = f"{b['impl']:+.0%}" + ("，差一點未達" if round(b["impl"] * 100) >= round(b["min_growth"] * 100)
-                                 else "")
-    if st_ == "in":
-        line = f"買進區間 **{_px(b['lo'])}～{hi}**"
-    elif st_ == "in_above_fair":
-        line = f"買進區間 **{_px(b['lo'])}～{hi}**（現價高於合理價）"
-    elif st_ == "above":
-        line = f"買進區間 {_px(b['lo'])}～{hi}：現價不在區間（成長價需比現價高 {g}，目前 {im}）"
-    elif st_ == "none":
-        line = f"不在買進區間（成長價需比現價高 {g}，目前 {im}）"
-    elif st_ == "cap_in":
-        line = f"買進上限 **{hi}**（沒有合理價）"
-    else:
-        line = f"買進上限 {hi}：現價高於上限（成長價需比現價高 {g}，目前 {im}）"
-    c = f"{b['c']:g}"
-    why = f"這檔{('、'.join(b['why']))}，試算 EPS 容易偏高，所以用 0.8" if b["why"] else "一般用 0.9"
-    how = (f"🛒 **買進區間**＝合理價（現價更低就用現價）～ 成長價 × {c}（{why}；營益率在歷史高峰或"
-           f"業外占稅前 >20% 時改 0.8）。上限的意思是「預估獲利至少比近四季多 {g}」——這是**成長門檻**，"
-           "不是估值打折；它會跟著現價一起動，不是等回檔的固定買點。卡片上「目前 X%」＝成長價 ÷ 現價 − 1（＝成長價後面括號那個數），"
-           "約等於今年預估 EPS 比**近四季**多多少；EPS 卡的「年增」是跟**去年全年**比，兩個數不同。便宜程度看合理價。不是進場訊號。")
-    return f"{line}  \n", how
 
 
 def _px(v: float) -> str:
@@ -2171,10 +2082,8 @@ def _stock_class(code: str) -> dict | None:
 
 
 _MD_BR = "  " + chr(10)      # markdown 強制換行（兩個空白＋換行）
-_POS_ZH = {"cheap": ("便宜區", "green"), "fair": ("合理區", "blue"), "dear": ("昂貴區", "red"), "na": ("—", "gray")}
 
 
-_NC_KIND_TEXT = {"actual": "實際", "est": "推算", "copy": "預測（延續最近一季）"}
 
 
 def _kv_table(rows: list[tuple], head: str = "內容") -> None:
@@ -2185,29 +2094,8 @@ def _kv_table(rows: list[tuple], head: str = "內容") -> None:
     _vtable(["項目", head], [[k, cell(v)] for k, v in rows if v not in (None, "", [])], set(), wide=True)
 
 
-def _card_explain_rows(c: dict) -> list[tuple]:
-    """「怎麼算」的規則列（項目、規則）。口徑句來自引擎常數，不在這裡手寫第二份。"""
-    from screener.eps_nowcast import TRIAL_BASIS_TEXT, FUTURE_TEXT
-    basis = TRIAL_BASIS_TEXT[(c.get("eps") or {}).get("basis", "latest")].replace(chr(10), "")
-    return [
-        ("三價", "便宜／合理／昂貴＝EPS×倍數；倍數＝這檔自己歷史倍數的第 20／50／80 百分位（補位時另註）。"
-                 "EPS 預設用前瞻 4 季，試算不可用或財報落後 3 季以上改用過去 4 季。"),
-        ("倍數窗", "一般看近 5 年、高成長近 3 年、金融與資產重循環看股價淨值比的全部歷史；每月底取一個點。"
-                   "本益比的分母是已公布近 4 季 EPS，乘前瞻 4 季 EPS 時口徑不完全相同。"),
-        ("不給價", "賠錢不給價；高變動、前瞻退回、倍數補位只降可信度或換基準，不擋價。"),
-        ("前瞻 4 季", basis.removeprefix("前瞻 4 季：")),
-        ("未來 4 季", FUTURE_TEXT.removeprefix("未來 4 季：")),
-        ("對照價", "過去 4 季 EPS×同一組倍數；兩者差逾 30% 標「獲利口徑差異大」，不判便宜／昂貴、不給購買參考價。"),
-        ("購買參考價", "合理價÷1.10，且須比現價高 10% 以上才給；補位、前瞻退回都不給。"),
-        ("回測狀態", "回測採舊口徑，新口徑沒有驗證；購買參考價規則沒有直接回測。"),
-        ("提醒", "情境估算，非買進建議。"),
-    ]
 
 
-def _render_explain(c: dict, risk_how: str = "") -> None:
-    _kv_table(_card_explain_rows(c), "規則")
-    if risk_how:
-        st.markdown(risk_how)
 
 
 def _pct_floor(v) -> str:
@@ -2218,283 +2106,178 @@ def _pct_floor(v) -> str:
     return f"{math.floor(v * 1000) / 10:+.1f}%"
 
 
-def _card_lines(c: dict) -> str:
-    """卡片一的估值行：三價（便宜／合理／昂貴＋位置＋EPS 基準）、對照價、購買參考價。每個數字只出現一次，說明在展開區。"""
-    if not c.get("ok"):
-        return ":gray[" + (c.get("reason") or "估值：—") + "]"
-    p, f = c.get("prices"), c.get("forward")
-    out = []
-    if p:
-        pos, col = _POS_ZH.get(c.get("position") or "na", ("—", "gray"))
-        unit = "PB" if c.get("method") == "PB" else "PE"
-        src = "類型參考倍數" if p.get("source") == "補位" else "自身歷史"
-        base = (p.get("base_name") or "").replace(" EPS", "")
-        out.append(f"便宜 {p['cheap']:,.1f}｜合理 **{p['fair']:,.1f}**｜昂貴 {p['dear']:,.1f}　:{col}[{pos}]（{unit}・{src}・{base}）")
-    else:
-        out.append(f":gray[三價：不給（{c.get('no_price') or '—'}）]")
-    if f:
-        reported = f.get("reported")
-        if reported:
-            big = "　:gray[⚠️ 獲利口徑差異大]" if f.get("gap_big") else ""
-            out.append(f"對照 過去 4 季：合理 {reported['base']:,.1f}（差 {f['gap']:+.0%}）{big}")
-        if f.get("gap_big"):
-            out.append(":gray[購買參考價：不給（獲利口徑差異大）]")
-        elif f.get("ref_ok"):
-            out.append(f"購買參考價 **≤ {f['ref_price']:,.1f}**（空間 {f['margin']:+.0%}）")
-        else:
-            out.append(":gray[購買參考價：不給]")
-    elif p:
-        out.append(":gray[購買參考價：不給]")
-    return _MD_BR.join(out) + _MD_BR
 
 
-def _card_detail_rows(c: dict) -> list[tuple]:
-    """估值定位細節的列（項目、內容）：全部讀引擎／val_card 欄位，不重算。"""
-    conf = c.get("confidence") or {}
-    tags = [c.get("display_type") or "—"] + list(c.get("state") or []) + list(c.get("subtags") or [])
-    nc = c.get("eps") or {}
-    pp = c.get("prices") or {}
-    f, cp = c.get("forward"), c.get("compare")
-    rows = [("類型", "・".join(dict.fromkeys(tags))),
-            ("可信度", [conf.get("level") or "—"] + ["⚠️ " + d for d in conf.get("degrades") or []]
-                       + ["⛔ " + ch["why"] for ch in c.get("checks") or [] if ch["level"] == "block"])]
-    qs = nc.get("nc_quarters") or []
-    if pp.get("base_name"):
-        span = f"，涵蓋 {qs[0]['q']}–{qs[-1]['q']}" if nc.get("ok") and qs and pp["base_name"] == "前瞻 4 季 EPS" else ""
-        rows.append(("三價基準", f"{pp['base_name']} {_fmt_x(pp.get('base'))}{span}"))
-    rows.append(("倍數", _mult_text(c)))
-    if f and f.get("implied_pe") is not None:
-        rows.append(("現價倍數", f"現價是前瞻 EPS 的 {_fmt_x(f['implied_pe'], 1)} 倍（歷史中位 {_fmt_x(f.get('mult_p50'), 1)} 倍）"))
-    if cp:
-        warn = "　⚠️ 獲利口徑差異大（>30%）" if cp["warn"] else ""
-        rows.append((f"對照 過去 4 季", f"EPS {cp['eps_ttm']:,.2f}：便宜 {cp['cheap']:,.1f}｜合理 {cp['fair']:,.1f}｜"
-                                         f"昂貴 {cp['dear']:,.1f}（合理價差 {cp['diff']:+.0%}）{warn}"))
-    if qs:
-        rows.append(("前瞻 4 季", [f"{x['q']} {_NC_KIND_TEXT[x['kind']]} {x['eps']:.2f}" for x in qs]))
-    fq = nc.get("future_quarters") or []
-    if fq:
-        rows.append(("未來 4 季", [f"{x['q']} {'沿用前瞻' if i < 2 else '成長預測'} {x['eps']:.2f}" for i, x in enumerate(fq)]))
-    prm = nc.get("params") or {}
-    if prm:
-        rows.append(("試算參數", [
-            f"稅率 {_fmt_pct(prm.get('t'), False)}｜少數股權比 {_fmt_pct(prm.get('m'), False)}",
-            f"毛利率（最新一季）{_fmt_pct(prm.get('gm_last'), False)}｜費損率（最新一季）{_fmt_pct(prm.get('opex_last'), False)}",
-            f"近 3 月營收年增 {_fmt_pct(prm.get('g3'))}｜近 12 月營收年增 {_fmt_pct(prm.get('g12'))}（未來 4 季用）"]))
-    rows.append(("備註", ["ℹ️ " + n for n in c.get("notes") or []]))
-    rows.append(("分類原因", [str(w) for w in c.get("why") or []]))
-    rows.append(("樣本", "現行上市櫃（無下市股，存活者偏差）；"
-                         f"分類基準 {str(c.get('class_asof') or '—')[:10]}、規則 {c.get('version')}"))
-    return rows
 
 
-def _card_block(c: dict) -> None:
-    """估值定位細節：一張「項目｜內容」表（與「試算細節」同字級）。三價、對照價、購買參考價在卡一（_card_lines），
-    算式與警語在「怎麼算」（_render_explain）。"""
-    if not c.get("ok"):
-        st.caption(c.get("reason") or "—")
-        return
-    with st.expander("📊 估值定位細節（類型、可信度、降級原因、分類原因）"):
-        _kv_table(_card_detail_rows(c))
 
 
-def _mult_text(c: dict) -> str:
-    """倍數是三價的依據，用正常字級、白話寫：哪一段歷史、幾個月、便宜／合理／昂貴各是幾倍。只讀引擎欄位。"""
-    p, b = c.get("prices") or {}, c.get("band") or {}
-    unit = "股價淨值比" if c.get("method") == "PB" else "本益比"
-    if p.get("source") == "補位":
-        lo, mid, hi = p.get("mults") or (None, None, None)
-        return (f"類型參考，不是這檔自己的歷史：便宜 {lo:g}｜合理 {mid:g}｜昂貴 {hi:g} 倍；"
-                f"三價＝EPS × 這三個倍數") if lo is not None else ""
-    cp = b.get("capped") or {}
-    if not b.get("ok") or cp.get("p50") is None:
-        return ""
-    years = b.get("years")
-    span = "全部歷史" if years is None else f"近 {years} 年"
-    why = ("，金融與資產重循環看全部歷史" if years is None else "，高成長股只看近 3 年" if years == 3 else "")
-    nd = 2 if c.get("method") == "PB" else 1
-    base = "每股淨值" if c.get("method") == "PB" else "EPS"
-    return (f"這檔{span}（{b.get('window_start')}～{b.get('window_end')}，{b.get('n_months')} 個月底{why}）的{unit}由低到高排，"
-            f"第 20%／50%／80% 位置＝便宜 {cp['p20']:.{nd}f}｜合理 {cp['p50']:.{nd}f}｜昂貴 {cp['p80']:.{nd}f} 倍；"
-            f"三價＝{base} × 這三個倍數")
 
 
-def _eps_quarter_tables(nc: dict, fin_q: str = "") -> None:
-    """逐季呈現引擎提供的中間值，畫面不重算獲利或 EPS。"""
-    qs = nc.get("nc_quarters") or []
-    future = nc.get("future_quarters") or []
-    kinds = {"actual": "實際", "est": "推算", "copy": "預測", "grow": "成長預測"}
-    est = [x for x in qs if x["kind"] != "actual"] + future[2:]
-    for x in est:
-        rev, gm, op = x.get("rev"), x.get("gm"), x.get("op")
-        gp, opex, conv, net = (x.get(key) for key in ("gp", "opex", "conv", "net"))
-        shares = x.get("shares")
-        rev_note = ("沿用前瞻末季營收並套成長因子" if x.get("rev_src") == "grow" else
-                    "延續最近一季營收" if x.get("rev_src") == "flat" else
-                    "月營收合計；缺月依近 3 月年增補")
-        rows = [
-            (f"{x['q']} 營收", _fmt_yi(rev), rev_note),
-            ("× 毛利率", _fmt_pct(gm, False), f"{fin_q} 財報（最新一季）"),
-            ("＝ 毛利", _fmt_yi(gp), ""),
-            ("－ 營業費用", _fmt_yi(opex), f"費用率 {_fmt_pct(x.get('opex_ratio'), False)} × 試算營收"),
-            ("＝ 營業利益（試算）", _fmt_yi(op), ""),
-            ("＋ 業外", _fmt_yi(x.get("nonop")), "推算與預測季排除業外" if nc.get("basis") == "latest" else "舊口徑"),
-            ("× 歸母淨利 ÷ 稅前", _fmt_pct(conv, False), "(1−稅率)×(1−少數股權比)，取近 8 季"),
-            ("＝ 歸母淨利（單季試算）", _fmt_yi(net), ""),
-            ("÷ 股數", "—" if shares is None else f"{shares / 1e8:,.2f} 億股", "近 4 季「歸母淨利 ÷ EPS」中位數"),
-            (f"＝ {x['q']} 試算 EPS", _fmt_x(x["eps"]), ""),
-        ]
-        st.markdown(f"**{x['q']} {kinds[x['kind']]}推導表**")
-        _vtable(["步驟", "數值", "來源／假設"], [[(a_, c_), b_, c_] for a_, b_, c_ in rows], {1}, {2})
-    if qs:
-        st.markdown(f"**前瞻 4 季合計 {_fmt_x(nc.get('eps_nc'))}**")
-        _vtable(["季", "類別", "EPS"],
-                [[x["q"], kinds[x["kind"]], _fmt_x(x["eps"])] for x in qs], {2})
-    if future:
-        st.markdown(f"**未來 4 季合計 {_fmt_x(nc.get('eps_future'))}**")
-        _vtable(["季", "類別", "EPS"],
-                [[x["q"], "沿用前瞻" if i < 2 else "成長預測", _fmt_x(x["eps"])]
-                 for i, x in enumerate(future)], {2})
-    from screener.eps_nowcast import TRIAL_BASIS_TEXT
-    st.caption(TRIAL_BASIS_TEXT[nc.get("basis", "latest")])
 
 
-def _card_eps_lines(nc: dict) -> list[str]:
-    """卡片只讀引擎數值。"""
-    if not nc.get("ok") or nc.get("fallback"):
-        out = [f"過去 4 季：{_fmt_x(nc.get('eps_ttm'))}（4 季實際）"] if nc.get("eps_ttm") is not None else []
-        return out + [":gray[前瞻／未來 4 季：不試算（金融股、月營收不足或試算退回）]"]
-    qs = nc.get("nc_quarters") or []
-    na = sum(x["kind"] == "actual" for x in qs)
-    ne = sum(x["kind"] == "est" for x in qs)
-    npred = sum(x["kind"] == "copy" for x in qs)
-    status = nc.get("future_status", "no_data")
-    future = (_fmt_x(nc.get("eps_future")) if status == "ok" else
-              "未呈成長，不外推" if status == "not_growth" else "資料不足")
-    return [f"過去 4 季：{_fmt_x(nc.get('eps_ttm'))}（4 季實際）",
-            f"前瞻 4 季：**{_fmt_x(nc.get('eps_nc'))}**（{na} 實際＋{ne} 推算＋{npred} 預測）",
-            f"未來 4 季：{future}" + ("（2 季沿用前瞻＋2 季成長預測）" if status == "ok" else "")]
 
 
-def _valuation_block(d: dict, label: str = "", code: str = "") -> None:
-    """估值速覽（2026-10-29）：營收／EPS／股價三欄摘要放頁面最上方，推導細節收進展開。
-    計算在 valuation.py；這裡只排版。試算不是預測、不是目標價。label＝「代號 股名」，放股價欄最前面。"""
-    import valuation as va
 
+
+def _val_card(d: dict, code: str) -> tuple:
+    """同一頁只組裝並計算一次；明確傳入既有 bundle 模組。"""
+    import bundle_data as bd
     try:
-        r = va.estimate(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"))
+        asof = pd.Timestamp(_taipei_today())
+        inputs = val_inputs.card_inputs(code, asof, _stock_class(code), bundle=bd)
+        if "missing" in inputs:
+            return None, inputs
+        return val_card.build_card(**inputs), inputs
     except Exception as e:
-        r = {"ok": False, "reason": f"舊版試算算不出來：{type(e).__name__}: {e}"}
-    a = r.get("asof") or {}
-    try:
-        from screener import val_card
-        from reference.corporate_actions import _events
-        card = val_card.build_card(d.get("qf"), d.get("rev"), d.get("px"), d.get("per"), _stock_class(code),
-                                   share_events=_events(code))
-    except Exception as e:  # noqa: BLE001  新版估值卡掛掉不連累舊的三卡
-        card = {"ok": False, "reason": f"新版估值卡算不出來：{type(e).__name__}: {e}"}
+        return None, {"error": f"估值卡算不出來：{type(e).__name__}: {e}"}
+
+
+def _view_table(table) -> None:
+    """依 VTable 的表格種類排版；手機把推導來源收到步驟下方。"""
+    if table.title:
+        st.markdown(f"**{table.title}**")
+    if table.kind == "kv":
+        _kv_table(table.rows, table.headers[1])
+    elif table.kind == "derive":
+        rows = [[(step, source), value, source] for step, value, source in table.rows]
+        _vtable(table.headers, rows, {1}, {2}, hl=set(table.hl))
+    else:
+        num = {2} if table.headers[1] == "實際／試算" else set(range(1, len(table.headers)))
+        _vtable(table.headers, table.rows, num, hl=set(table.hl))
+
+
+def _price_tri(tri) -> str:
+    return '<div class="val-tri">' + ''.join(
+        f'<div>{_esc(label)}<strong>{_esc(value)}</strong></div>' for label, value in tri) + '</div>'
+
+
+def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True) -> tuple:
+    """估值速覽只畫 val_view 的字串，並將同一次計算交給河流圖。"""
     st.markdown("#### 💰 估值速覽（開發中）")
     st.caption("🚧 開發中：估值規則還在修正，數字僅供參考。")
-    if not r["ok"]:
-        st.caption(r["reason"])
-        if card.get("ok"):       # 舊版試算失敗，新版估值卡仍可能算得出來（Opus #12）
-            st.markdown(f"**{_esc(label)}**" + _MD_BR + _card_lines(card), unsafe_allow_html=True)
-            _card_block(card)
-            with st.expander("📐 怎麼算（含警語與回測狀態，點開看）"):
-                _render_explain(card)
+    meta = _load("stock_class.json") or {}
+    coverage = val_view.coverage_line(meta)
+    if coverage:
+        st.caption(coverage)
+    card, inputs = _val_card(d, code)
+    if card is None:
+        st.caption(val_view.MSG_NO_MULTIPLES if "missing" in inputs else inputs["error"])
+        return card, inputs
+    v = val_view.card_view(card, label, meta)
+    st.caption(val_view.asof_line(card))
+    cpx, ceps = st.container(key="valcards").columns(2)
+    p = v.price
+    with cpx.container(border=True, key="valcard_px"):
+        body = f'<b>{_esc(p.head)}</b><div class="val-sub">{_esc(p.head_sub)}</div>'
+        body += f'<div class="val-price">{_esc(p.price)}</div><div class="val-sub">{_esc(p.price_sub)}</div>'
+        if p.tri_label:
+            body += f'<div class="val-label">{_esc(p.tri_label)}</div><div class="val-hint">{_esc(p.tri_hint)}</div>'
+        if p.tri:
+            body += _price_tri(p.tri)
+        if p.tri_note:
+            body += f'<p>{_esc(p.tri_note)}</p>'
+        if p.pos:
+            position, tone = p.pos
+            body += f'<div class="val-pos {tone}">{_esc(position)}</div>'
+        for text in (p.base_text, *p.extra):
+            if text:
+                body += f'<p class="val-sub">{_esc(text)}</p>'
+        if p.buy:
+            value, sub = p.buy
+            body += f'<div class="val-label">{_esc(p.buy_label)}</div><div class="val-hint">{_esc(p.buy_hint)}</div><h3>{_esc(value)}</h3><div class="val-sub">{_esc(sub)}</div>'
+        if p.fwd_label:
+            body += f'<div class="val-label">{_esc(p.fwd_label)}</div>'
+            if p.fwd_tri:
+                body += _price_tri(p.fwd_tri)
+            elif p.fwd_note:
+                body += f'<p class="val-sub">{_esc(p.fwd_note)}</p>'
+        st.markdown(body, unsafe_allow_html=True)
+    if v.eps:
+        with ceps.container(border=True, key="valcard_fin"):
+            for title, sub, value in v.eps.kv:
+                st.markdown(f'<div class="val-eps-row"><div><b>{_esc(title)}</b><div class="val-sub">{_esc(sub)}</div></div><strong>{_esc(value)}</strong></div>', unsafe_allow_html=True)
+            st.markdown(f"**{v.eps.growth_label}**")
+            _view_table(v.eps.growth_table)
+    if full and v.full:
+        for title, make_tables in ((val_view.EXP_DETAIL, val_view.detail_tables),
+                                   (val_view.EXP_EXPLAIN, val_view.explain_tables),
+                                   (val_view.EXP_TRIAL, val_view.trial_tables)):
+            with st.expander(title):
+                st.caption(val_view.legend_row())
+                for table in make_tables(card):
+                    _view_table(table)
+                if title == val_view.EXP_TRIAL:
+                    _risk_table(d, card)
+    return card, inputs
+
+
+def _risk_table(d: dict, card: dict) -> None:
+    """⑦ 沿用還原價的停損與大量區算法。"""
+    import valuation as va
+    rk = va.risk_levels(d["px"])
+    if not rk:
         return
-    st.caption(("延續最新一季毛利率與費用率的試算" if (card.get("eps") or {}).get("ok") else "資料不足")
-               + f"，**非預測、非目標價**　｜　財報 {a['fin_q']}｜"
-               f"月營收至 {a['rev_month']}｜股價 {a.get('px_date') or '—'}")
+    rk["buyable"] = bool(card.get("buy_range") and card["buy_range"].get("where") == "in")
+    rk["hold"] = None if rk["buyable"] else va.hold_stop(d["px"])
+    st.markdown("**⑦ 停損與大量區（現價在購買區間內給週線進場停損、不在給週線持股停損）**")
+    show = bool(rk["buyable"] and rk["stop"])
+    sup, at, hd = rk["support"], rk["at"], rk.get("hold")
+    hold_row = [] if not hd else [(
+        "週線持股停損", (_px(hd["line"]) + f"（距現價 {hd['dist']:+.1%}）") if hd["state"] != "na" else "—",
+        ("跌破後重算：" + (f"{hd['since']} 起" if hd["since"] else "近 22 週") if hd["reset"]
+         else "近 22 週") + f"最高 {_px(hd['hh'])} − 2×週ATR14"
+        + {"above": "；週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
+           "new": f"；本週收盤剛跌破 {_px(hd['brk_line'])}",
+           "na": "；重算後仍高於上週收盤，暫無"}[hd["state"]]
+        + (f"（最近一次跌破 {hd['brk_date']}）" if hd.get("brk_date") and hd["reset"]
+           and hd["state"] != "new" else ""))]
+    rows = hold_row + [
+        ("週線進場停損", (_px(rk["stop"]) + f"（距現價 {rk['risk']:+.1%}）") if show else "—",
+         (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
+          + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
+         else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
+               else ("沒有購買區間" if not card.get("buy_range") else "現價不在購買區間")
+               + "，不列（顯示條件，不代表風險比較低）")),
+        ("週 ATR14", _px(rk["watr"]),
+         f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
+        ("大量區支撐", "—" if rk["sup_px"] is None else _px(rk["sup_px"]),
+         ("現價所在大量區 " + _zone(at) + " 的下緣") if (sup is not None and sup is at)
+         else (("下方最近大量區 " + _zone(sup) + " 的上緣"
+                + ("；在週線進場停損之下，偏遠，不算近端支撐" if rk["sup_far"] else ""))
+               if sup is not None else "下方沒有辨識到大量區")),
+        ("大量區壓力", "—" if rk["res_px"] is None else _px(rk["res_px"]),
+         ("現價所在大量區 " + _zone(at) + " 的上緣") if (rk["resist"] is not None
+                                                       and rk["resist"] is at)
+         else (("上方最近大量區 " + _zone(rk["resist"]) + " 的下緣：套牢量，減碼參考")
+               if rk["resist"] is not None else "上方沒有辨識到大量區")),
+        ("近一年高", _px(rk["high"]), "近 250 個交易日最高價（不是大量區，另列）"),
+    ]
+    if hd:                                     # 有週線持股停損就不再列一行空的週線進場停損
+        rows = [x for x in rows if x[0] != "週線進場停損"]
+    # 手機把說明收到項目下方（同推導表），不然第一欄被擠成一字一行
+    _vtable(["項目", "價位", "說明"],
+            [[(it, note), val, note] for it, val, note in rows], {1}, {2})
+    st.caption(
+        f"大量區＝近 {rk['days']} 個交易日，用日 K 估計：典型價 (高+低+收)/3 分 40 箱、整天量"
+        "歸到該箱，量 ≥ 平均 1.5 倍的相鄰箱併成一區（括號＝占全期量）。不是實際分價成交，"
+        "也不是現存持股成本；價格用還原價（換算到目前基準），跟券商分價量表會有出入。"
+        "週線進場停損的倍數依 2015～2026 年 603 檔、15 萬個買點的 26 週模擬選定：2×週ATR 讓「虧超過"
+        " 30%」從 3.5% 降到 0.4%，2022、2025 兩次空頭的最差 5% 少虧約 10 個百分點；代價是"
+        "半年內約 45% 會被停掉、其中三成之後又漲回來。跳空、跌停鎖死時會虧得比停損多。")
 
-    rv, e, pe, yb = r["rev"], r["eps"], r["pe"], r["year"]
-    # 股價（建議價）排第一張（使用者 2026-10-30）；手機堆疊也是它在最上面
-    c3, c1 = st.container(key="valcards").columns(2)
-    risk_txt, risk_how = _risk_lines(r.get("risk"))
-    buy_txt, buy_how = _buy_lines(r.get("buy"))
-    if va.BUY_RANGE_PAUSED:
-        buy_txt = ""       # 舊買進區間已由「購買參考價」取代（見卡片估值行與下方「怎麼算」）
-    with c1.container(border=True, key="valcard_fin"):
-        nc = card.get("eps") or {}
-        rows = [f"**營收**（{rv['first_month']}–{rv['last_month'][-2:]}）",
-                f"近 3 月合計 **{_fmt_yi(rv['m3_sum'])}**",
-                f"vs 上季 {a['fin_q']}：{_fmt_pct(rv['vs_last_q'])}｜年增：{_fmt_pct(rv['yoy'])}",
-                "**EPS（滾動獲利估值）**"]
-        rows.extend(_card_eps_lines(nc))
-        st.markdown(_MD_BR.join(rows))
-    with c3.container(border=True, key="valcard_px"):
-        px0 = card.get("price")
-        tiers = _card_lines(card)
-        # 卡片只放數字；公式與 PE 倍數變化收進下方展開（使用者 2026-10-30：股價說明太多）
-        st.markdown(f"{'**' + _esc(label) + '**　' if label else ''}"
-                    f"**股價**　現價 **{_fmt_x(px0, 1)}**  \n{tiers}"
-                    f"{buy_txt}{risk_txt}", unsafe_allow_html=True)
-    _card_block(card)
-    with st.expander("📐 怎麼算（含警語與回測）"):
-        _render_explain(card, risk_how)
 
-    inp = r["inputs"]
-    with st.expander("🔍 試算細節（推導表／業外）"):
-        if nc.get("ok"):
-            _eps_quarter_tables(nc, a.get("fin_q") or "")
-        else:
-            st.caption("資料不足")
 
-        rk = r.get("risk")
-        if rk:
-            st.markdown("**停損與大量區（買進區間停用中，只給持股停損）**" if va.BUY_RANGE_PAUSED
-                        else "**停損與大量區（在買進區間內給停損參考、不在給持股停損）**")
-            show = bool(rk["buyable"] and rk["stop"])
-            sup, at, hd = rk["support"], rk["at"], rk.get("hold")
-            hold_row = [] if not hd else [(
-                "持股停損", (_px(hd["line"]) + f"（距現價 {hd['dist']:+.1%}）") if hd["state"] != "na" else "—",
-                ("跌破後重算：" + (f"{hd['since']} 起" if hd["since"] else "近 22 週") if hd["reset"]
-                 else "近 22 週") + f"最高 {_px(hd['hh'])} − 2×週ATR14"
-                + {"above": "；週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
-                   "new": f"；本週收盤剛跌破 {_px(hd['brk_line'])}",
-                   "na": "；重算後仍高於上週收盤，暫無"}[hd["state"]]
-                + (f"（最近一次跌破 {hd['brk_date']}）" if hd.get("brk_date") and hd["reset"]
-                   and hd["state"] != "new" else ""))]
-            rows = hold_row + [
-                ("停損參考", (_px(rk["stop"]) + f"（距現價 {rk['risk']:+.1%}）") if show else "—",
-                 (f"現價 {_px(rk['price'])} − 2×週ATR14；跟支撐分開，不因大量區調整"
-                  + (f"。{rk['hint']}" if rk.get("hint") else "")) if show
-                 else ("週波動超過現價一半，現價 − 2×週ATR ≤ 0，不列" if rk["buyable"]
-                       else ("買進區間停用中" if rk.get("paused") else ("缺估值資料" if rk.get("no_growth") else "現價不在買進區間"))
-                       + "，不列（顯示條件，不代表風險比較低）")),
-                ("週 ATR14", _px(rk["watr"]),
-                 f"占現價 {rk['watr'] / rk['price']:.1%}；已收完的週 K、Wilder 平均真實波幅"),
-                ("支撐候選", "—" if rk["sup_px"] is None else _px(rk["sup_px"]),
-                 ("現價所在大量區 " + _zone(at) + " 的下緣") if (sup is not None and sup is at)
-                 else (("下方最近大量區 " + _zone(sup) + " 的上緣"
-                        + ("；在停損參考之下，偏遠，不算近端支撐" if rk["sup_far"] else ""))
-                       if sup is not None else "下方沒有辨識到大量區")),
-                ("壓力候選", "—" if rk["res_px"] is None else _px(rk["res_px"]),
-                 ("現價所在大量區 " + _zone(at) + " 的上緣") if (rk["resist"] is not None
-                                                               and rk["resist"] is at)
-                 else (("上方最近大量區 " + _zone(rk["resist"]) + " 的下緣：套牢量，減碼參考")
-                       if rk["resist"] is not None else "上方沒有辨識到大量區")),
-                ("近一年高", _px(rk["high"]), "近 250 個交易日最高價（不是大量區，另列）"),
-            ]
-            if hd:                                     # 有持股停損就不再列一行空的停損參考
-                rows = [x for x in rows if x[0] != "停損參考"]
-            # 手機把說明收到項目下方（同推導表），不然第一欄被擠成一字一行
-            _vtable(["項目", "價位", "說明"],
-                    [[(it, note), val, note] for it, val, note in rows], {1}, {2})
-            st.caption(
-                f"大量區＝近 {rk['days']} 個交易日，用日 K 估計：典型價 (高+低+收)/3 分 40 箱、整天量"
-                "歸到該箱，量 ≥ 平均 1.5 倍的相鄰箱併成一區（括號＝占全期量）。不是實際分價成交，"
-                "也不是現存持股成本；價格用還原價（換算到目前基準），跟券商分價量表會有出入。"
-                "週線進場停損的倍數依 2015～2026 年 603 檔、15 萬個買點的 26 週模擬選定：2×週ATR 讓「虧超過"
-                " 30%」從 3.5% 降到 0.4%，2022、2025 兩次空頭的最差 5% 少虧約 10 個百分點；代價是"
-                "半年內約 45% 會被停掉、其中三成之後又漲回來。跳空、跌停鎖死時會虧得比停損多。")
-
-        st.markdown("**試算排除業外，僅供參考**")
-        _vtable(["季", "業外", "稅前", "占稅前"],
-                [[h["q"], _fmt_yi(h["nonop"]), _fmt_yi(h["pretax"]),
-                  _fmt_pct(h["nonop"] / abs(h["pretax"])) if h["pretax"] else "—"]
-                 for h in r["nonop_hist"]], {1, 2, 3})
-        st.caption("業外＝稅前 − 營業利益（匯兌、投資、處分、利息都在裡面）。排除業外"
-                   "也一併拿掉了利息費用，有大額借款的公司會偏樂觀。")
+def _river_chart(card, inputs: dict, code: str, name: str, start=None) -> None:
+    """兩頁共用河流圖接線，註記在圖下方顯示。"""
+    import stockcharts as ch
+    if card is None:
+        st.caption(river.NO_MULT)
+        return
+    rf = river.river_frame(inputs["qf"], inputs["px"], inputs["mh"], card, code, inputs["asof"])
+    _chart(ch.pe_river, rf, name, start)
+    if rf["note"]:
+        st.caption(rf["note"])
 
 
 def _rev_name(r: dict) -> str:
@@ -2740,8 +2523,9 @@ def _stock_page() -> None:
         st.markdown(f'<div class="thc-chips">{_active_chip(_aef)}</div>', unsafe_allow_html=True)
         st.caption((_sx or _ox) + "　—　" + _active_legend(_aflags))
 
+    card, inputs = None, {}
     try:
-        _valuation_block(d, f"{code} {stock_name}".strip(), code)
+        card, inputs = _valuation_block(d, f"{code} {stock_name}".strip(), code)
     except Exception as e:  # noqa: BLE001  試算掛掉不連累下面的圖
         st.warning(f"估值速覽算不出來：{type(e).__name__}: {e}")
 
@@ -2758,8 +2542,7 @@ def _stock_page() -> None:
         short = rng in ("3月", "今年至資料日期", "1年")
         ma = ch._MA_SHORT if short else ch._MA_LONG
         _chart(ch.kline, d["px"], name, start, ma)
-        if not d["per"].empty:
-            _chart(ch.pe_river, d["px"], d["per"], name, start)
+        _river_chart(card, inputs, code, name, start)
 
     # 以下都跟著上面「顯示區間」走（同一個 start/xstart）——2026-09-24 使用者
     # 要求把「會跟著變的」都排在「固定的」前面，不要混在一起。
@@ -3024,8 +2807,8 @@ def _checklist_page() -> None:
             c1, c2 = st.columns(2)
             _chart(ch.roe_trend, qf, nm, target=c1)
             _chart(ch.margins, qf, nm, target=c2)
-        if not px.empty and not per.empty:
-            _chart(ch.pe_river, px, per, nm, _ago(1825))
+        card, inputs = _val_card(d, code)
+        _river_chart(card, inputs, code, nm, _ago(1825))
     with t3:
         # 定存看長期：股利圖固定 13 年（DIVIDEND_YEARS_LOOKBACK，2026-09-24
         # Opus 審核抓到改 5 年是退步——定存軌「連續配息≥7年」判準需要更長

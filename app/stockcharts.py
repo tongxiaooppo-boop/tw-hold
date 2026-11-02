@@ -243,39 +243,26 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
                        "同年多段＝分次配息）", 340)
 
 
-def pe_river(px: pd.DataFrame, per: pd.DataFrame, name: str, start=None) -> go.Figure:
-    """本益比河流圖：股價 + 「TTM EPS(t) × 自身 PE 分位」的河道。
-    TTM EPS(t) ≈ 收盤 ÷ per（TWSE 報的 per 本來就是 trailing）。"""
-    if per.empty:
-        return _style(go.Figure(), f"{name} 本益比河流圖（無 per 資料）", 380)
-    m = px[["date", "close"]].merge(per[["date", "per"]], on="date", how="inner")
-    m = m[m["per"] > 0]
-    if m.empty:
-        return _style(go.Figure(), f"{name} 本益比河流圖（per 全為 0/負）", 380)
-    m = m.assign(date=pd.to_datetime(m["date"]))
-    m["ttm_eps"] = m["close"] / m["per"]
-    qs = m["per"].quantile([0.1, 0.3, 0.5, 0.7, 0.9])
+def pe_river(rf: dict, name: str, start=None) -> go.Figure:
+    """只畫 river_frame 提供的股價與三條河道，不在圖表端重算估值。"""
+    frame = rf["frame"]
+    title = f"{name} {'股價淨值比' if rf['metric'] == 'pb' else '本益比'}河流圖"
+    if rf.get("reason"):
+        title += f"（{rf['reason']}）"
     fig = go.Figure()
-    # 三段有意義的顏色：便宜區（P10–P30）綠、中性（P30–P70）灰、偏貴（P70–P90）赭
-    fills = [None, "rgba(92,122,114,.22)", "rgba(138,151,163,.14)",
-             "rgba(138,151,163,.14)", "rgba(138,106,95,.22)"]
-    for (q, mult), col in zip(qs.items(), fills):
-        fig.add_trace(go.Scatter(x=m["date"], y=m["ttm_eps"] * mult,
-                                 name=f"PE {mult:.0f}x（P{int(q*100)}）",
-                                 line=dict(width=0.6, color="rgba(138,151,163,.35)"),
-                                 fill="tonexty" if col else None, fillcolor=col))
-    fig.add_trace(go.Scatter(x=m["date"], y=m["close"], name="收盤",
-                             line=dict(color="#2B333B", width=1.6)))
-    if start is not None:
-        eff_start, _ = _min_start(m["date"], start, MIN_POINTS_DAILY)
-        fig.update_xaxes(range=[eff_start, m["date"].max()])
-        vis = m.loc[m["date"] >= eff_start]
-        if not vis.empty:
-            lo = min(vis["close"].min(), (vis["ttm_eps"] * qs.iloc[0]).min())
-            hi = max(vis["close"].max(), (vis["ttm_eps"] * qs.iloc[-1]).max())
-            pad = (hi - lo) * 0.06 or 1
-            fig.update_yaxes(range=[lo - pad, hi + pad])
-    return _style(fig, f"{name} 本益比河流圖", 440)
+    if not frame.empty:
+        if rf.get("mults") is not None:
+            for column, label in (("p20", "20%"), ("p50", "50%"), ("p80", "80%")):
+                fig.add_trace(go.Scatter(x=frame["date"], y=frame[column], name=label,
+                                         legendgroup="river", legendgrouptitle_text=rf["legend"],
+                                         line=dict(width=1)))
+        fig.add_trace(go.Scatter(x=frame["date"], y=frame["price"], name="收盤",
+                                 line=dict(color="#2B333B", width=1.6)))
+        if start is not None:
+            eff_start, _ = _min_start(frame["date"], start, MIN_POINTS_DAILY)
+            fig.update_xaxes(range=[eff_start, frame["date"].max()])
+    return _style(fig, title, 440)
+
 
 
 def roe_trend(qf: pd.DataFrame, name: str, quarters: int = QUARTERS_LOOKBACK) -> go.Figure:

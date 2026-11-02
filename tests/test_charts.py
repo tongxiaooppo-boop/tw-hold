@@ -43,25 +43,33 @@ def test_kline_有區間_用短均線且設x軸範圍():
     assert fig.layout.xaxis.range is not None       # 有裁顯示窗
 
 
+def _river_frame(frame, mults=(10, 15, 20)):
+    return {"frame": frame, "metric": "pe", "mults": mults,
+            "legend": "已公布 4 季 EPS × 歷史 20%／50%／80% 本益比",
+            "reason": None if mults else "沒有估值倍數", "note": None}
+
+
 def test_pe_river_有區間():
-    import pandas as pd
-    px = _px(400)
-    per = pd.DataFrame({"date": px["date"], "per": 15.0})
+    px = _px(400).rename(columns={"close": "price"})
+    for column in ("p20", "p50", "p80"):
+        px[column] = 20.0
     start = pd.Timestamp(px["date"].max()) - pd.Timedelta(days=180)
-    fig = ch.pe_river(px, per, "測試", start=start)
+    fig = ch.pe_river(_river_frame(px), "測試", start=start)
     assert fig.layout.xaxis.range is not None
+    assert [t.name for t in fig.data] == ["20%", "50%", "80%", "收盤"]
 
 
 def test_pe_river_空_per_不爆():
-    fig = ch.pe_river(_px(), pd.DataFrame(columns=["date", "per"]), "測試")
-    assert "無 per 資料" in fig.layout.title.text
+    px = _px().rename(columns={"close": "price"})
+    fig = ch.pe_river(_river_frame(px, None), "測試")
+    assert "沒有估值倍數" in fig.layout.title.text
+    assert len(fig.data) == 1 and fig.data[0].name == "收盤"
 
 
 def test_pe_river_有河道():
-    px = _px()
-    per = pd.DataFrame({"date": px["date"], "per": 15.0})
-    fig = ch.pe_river(px, per, "測試")
-    assert len(fig.data) >= 6                       # 5 河道 + 收盤
+    frame = pd.DataFrame(columns=["date", "price", "base", "p20", "p50", "p80"])
+    fig = ch.pe_river(_river_frame(frame), "測試")
+    assert len(fig.data) == 0
 
 
 def test_fscore_table_9項_不加總():

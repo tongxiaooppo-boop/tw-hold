@@ -297,7 +297,7 @@ def detail_tables(card: dict) -> list[VTable]:
         rows.append(("應計比率", fmt_pct(quality["accrual"], False)))
     if card.get("notes"):
         rows.append(("備註", "；".join(card["notes"])))
-    rows.append(("樣本", "存活者偏差；分類基準 " + (card.get("class_asof") or "未提供") + "；版本 " + card.get("version", "")))
+    rows.append(("樣本", "存活者偏差；分類基準 " + (card.get("class_asof") or "未提供").split("T")[0] + "；版本 " + card.get("version", "")))
     return [VTable(None, "kv", ("項目", "內容"), tuple(rows))]
 
 
