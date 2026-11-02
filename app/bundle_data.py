@@ -11,6 +11,8 @@ PAT：`fetch_bundle._read_pat()`（.env / 環境變數 / `st.secrets["TWSWING_BU
 from __future__ import annotations
 
 import sys
+import json
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -36,24 +38,36 @@ def _dest(name: str) -> Path:
 
 
 def ensure_assets() -> dict:
-    """把個股頁要的 bundle 檔下載到 `data/upstream/`。
-    回傳 `{name: bool 有沒有}`。呼叫端用 `st.cache_resource` 包一次。
+    """下載個股頁需要的 bundle，回傳各檔是否可用。
 
-    ⚠️ 本地檔大小和 Release 資產不一致就**重抓**——bundle schema 換過（如
-    revenue.parquet 從單月快照改長表）而容器沒重建時，舊版「存在且非空」會被
-    永遠留著。比對 `size` 最省（不用雜湊）。
+    優先以記憶體中的 Release meta 雜湊判斷版本，其次用資產 digest；
+    兩者皆無時維持大小比對。下載後雜湊不符只記錄警告。
     """
     pat = fb._read_pat()
     if not pat:
         return {n: _dest(n).exists() for n in _ASSETS}
     by_name = {a["name"]: a for a in fb._release_assets(pat)}
+    hashes = {}
+    try:
+        meta = json.loads(fb._api(by_name["_meta.json"]["url"], pat,
+                                  accept="application/octet-stream"))
+        hashes = {Path(rel).name: info.get("sha256")
+                  for rel, info in meta["files"].items()}
+    except Exception:
+        pass
     got = {}
     for name in _ASSETS:
         d = _dest(name)
         asset = by_name.get(name)
         want_size = asset.get("size") if asset else None
-        if d.exists() and d.stat().st_size > 0 and (
-                want_size is None or d.stat().st_size == want_size):
+        digest = asset.get("digest", "") if asset else ""
+        expected = hashes.get(name) or (digest.removeprefix("sha256:")
+                                       if digest and digest.startswith("sha256:") else None)
+        local_ok = d.exists() and d.stat().st_size > 0
+        if local_ok:
+            local_ok = (fb._sha256(d) == expected if expected else
+                        want_size is None or d.stat().st_size == want_size)
+        if local_ok:
             got[name] = True
             continue
         if asset is None:
@@ -61,6 +75,8 @@ def ensure_assets() -> dict:
             continue
         d.parent.mkdir(parents=True, exist_ok=True)
         d.write_bytes(fb._api(asset["url"], pat, accept="application/octet-stream"))
+        if expected and fb._sha256(d) != expected:
+            logging.warning("%s 下載後 SHA256 不符", name)
         got[name] = True
     return got
 
@@ -83,9 +99,20 @@ def _read(name: str, code: str, suffixed: bool, columns: list[str] | None = None
         columns = [c for c in columns if c in have]
     try:
         df = pd.read_parquet(p, filters=[("ticker", "in", vals)], columns=columns)
-    except Exception:
-        df = pd.read_parquet(p, columns=columns)
-        df = df[df["ticker"].astype(str).map(_t) == c]
+    except Exception as exc:
+        import pyarrow.parquet as pq
+        logging.warning("%s 篩選讀取失敗，改逐批讀取（%s）", name, type(exc).__name__)
+        read_columns = None if columns is None else list(dict.fromkeys([*columns, "ticker"]))
+        parquet = pq.ParquetFile(p)
+        parts = []
+        for batch in parquet.iter_batches(columns=read_columns):
+            part = batch.to_pandas()
+            part = part[part["ticker"].astype(str).map(_t) == c]
+            if columns is not None:
+                part = part[columns]
+            parts.append(part)
+        df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
+            columns=columns if columns is not None else parquet.schema_arrow.names)
     return df.reset_index(drop=True)
 
 

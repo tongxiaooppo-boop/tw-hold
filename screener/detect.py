@@ -27,6 +27,7 @@ REV_CALIBER_TOL = 0.05
 NEAR_ZERO_REL = 0.2          # EPS_NC < 近 5 年 TTM EPS 中位數 × 0.2 視為近零
 RATIO_DEGRADE = 2.5
 RATIO_BLOCK = 4.0
+FWD_JUMP_REL = 1.5          # 【經驗】前瞻與過去四季 EPS 的跳升倍數
 
 
 @dataclass
@@ -158,6 +159,18 @@ def near_zero_eps(eps_base: float | None, q: pd.DataFrame) -> Check:
     if med > 0 and eps_base < med * NEAR_ZERO_REL:
         return Check(n, "block", eps_base, f"前瞻 4 季 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，改用過去 4 季 EPS")
     return _ok(n, eps_base)
+
+
+def forward_jump(eps_fwd: float | None, ttm: float | None) -> Check:
+    """前瞻 4 季 EPS 比過去 4 季 EPS 高出 FWD_JUMP_REL 倍以上 → degrade（營收成長未必全轉成獲利）。
+    任一為 None／非有限、或 ttm ≤ 0 → ok（不判斷）。"""
+    n = "前瞻跳升"
+    if eps_fwd is None or ttm is None or not np.isfinite(eps_fwd) or not np.isfinite(ttm) or ttm <= 0:
+        return _ok(n)
+    r = eps_fwd / ttm
+    if r > FWD_JUMP_REL:
+        return Check(n, "degrade", r, f"前瞻 4 季 EPS {eps_fwd:.2f} 比過去 4 季 {ttm:.2f} 高 {r-1:.0%}（>{FWD_JUMP_REL-1:.0%}），營收成長未必全轉成獲利")
+    return _ok(n, r)
 
 
 def dist_check(b: dict | None) -> Check:

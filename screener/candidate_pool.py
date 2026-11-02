@@ -159,7 +159,7 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     return out
 
 
-def revenue_yoy(revenue: pd.DataFrame) -> pd.DataFrame:
+def revenue_yoy(revenue: pd.DataFrame, asof=None) -> pd.DataFrame:
     """每檔最新月的月營收 YoY + `revenue_accel`（本月 YoY > 上月 YoY）→ index=ticker，
     欄 [revenue_yoy, revenue_accel]。
 
@@ -172,6 +172,10 @@ def revenue_yoy(revenue: pd.DataFrame) -> pd.DataFrame:
     r["ticker"] = _bare(r["ticker"])
 
     if "month" in r.columns:                     # 新長表
+        if asof is not None:
+            month = pd.to_datetime(r["month"].astype(str), errors="coerce").dt.to_period("M").dt.to_timestamp()
+            visible = month + pd.DateOffset(months=1) + pd.Timedelta(days=9)
+            r = r[visible <= pd.Timestamp(asof)]
         r = monthly_yoy(r)
         last = r.groupby("ticker", sort=False).tail(1).set_index("ticker")
         return pd.DataFrame({
@@ -282,6 +286,7 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
     出場」——現實中不會因市況轉空就強制平倉，這裡沒有持倉概念也無從平倉。空頭週
     回傳空池只代表「這週沒有新的候選可以看」，不代表「你手上的部位有問題」。
     """
+    asof_given = asof is not None
     asof = pd.Timestamp(asof or pd.Timestamp.now()).normalize()
     if not market_regime_ok(index_0050, asof):
         return []
@@ -289,7 +294,7 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
     tt = trend_template(prices_adj, index_0050, asof)
     inst = institutional_net20(chips, asof)
     atr = atr14(prices_adj, asof)
-    rev_df = revenue_yoy(revenue)
+    rev_df = revenue_yoy(revenue, asof if asof_given else None)
     ryoy = rev_df["revenue_yoy"].to_dict()
     raccel = rev_df["revenue_accel"].to_dict()
 

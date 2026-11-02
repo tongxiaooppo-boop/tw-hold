@@ -597,10 +597,7 @@ def classify(inp: ClassInputs) -> Classification:
                     and int((yoy_tail < GROWTH_MIN_YOY).sum()) <= GROWTH_RELAX_BAD_Q
                     and len(yoy_q) >= 4 and (yoy_q.tail(4) >= 0).all())
     listed_q = inp.listed_quarters if inp.listed_quarters is not None else len(q)
-    if listed_q >= GROWTH_CAGR5_REQ_Q:         # 5 年 TTM CAGR：滿 24 季起必填（算不出＝不成立）
-        c5_ok = bool(pd.notna(c5) and c5 >= GROWTH_REV_CAGR5)
-    else:
-        c5_ok = bool(pd.isna(c5) or c5 >= GROWTH_REV_CAGR5)
+    c5_ok = _cagr5_ok(listed_q, c5)
     cond1 = bool(pd.notna(c3) and c3 >= GROWTH_REV_CAGR3 and c5_ok)
     cond2 = bool(pd.notna(o3) and o3 >= GROWTH_OP_CAGR3)
     no_neg_any = no_neg or (relax_ok and not (suspect or is_cyc))
@@ -968,3 +965,10 @@ def display_type(c: Classification) -> str:
             return DISPLAY_LOSS
     return TYPE_ZH[c.type]
 
+
+
+def _cagr5_ok(listed_q: int, c5: float) -> bool:
+    """滿 24 季起必須有達標的五年 CAGR；未滿時允許缺值。"""
+    if listed_q >= GROWTH_CAGR5_REQ_Q:
+        return bool(pd.notna(c5) and c5 >= GROWTH_REV_CAGR5)
+    return bool(pd.isna(c5) or c5 >= GROWTH_REV_CAGR5)

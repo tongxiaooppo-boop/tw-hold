@@ -317,6 +317,7 @@ def _eps_base(typ: str, nc: dict | None, q: pd.DataFrame, ttm: float, avg3: floa
             checks.append(dt.Check("財報落後", "degrade", None, "財報已落後 3 季以上，三價改用過去 4 季 EPS"))
     if typ in ("normal", "growth") and nc_eps is not None and nc_eps > 0:
         checks.append(dt.near_zero_eps(nc_eps, q))
+        checks.append(dt.forward_jump(nc_eps, ttm))
         gate = any(c.level == "block" and c.name in GATE_NAMES for c in checks)
         if not gate and not peak:
             return float(nc_eps), "前瞻 4 季 EPS", True

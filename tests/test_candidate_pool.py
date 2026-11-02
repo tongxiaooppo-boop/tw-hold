@@ -55,7 +55,7 @@ def _revenue(ticker: str, yoy: float = 0.3):
 
 def _revenue_hist(ticker: str, yoy: float = 0.3, accel: bool = True):
     """新長表 schema：25 個月，最後一個月 YoY = `yoy`、上月 YoY 視 `accel` 高或低。"""
-    months = pd.period_range("2024-08", periods=25, freq="M").astype(str)
+    months = pd.period_range("2024-07", periods=25, freq="M").astype(str)
     base = 100.0
     rev = [base] * 13
     prev_yoy = yoy - 0.1 if accel else yoy + 0.1
