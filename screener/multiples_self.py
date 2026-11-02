@@ -21,7 +21,11 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+
+from reference import share_basis as sb
+from screener import eps_windows as ew
 
 MULT_MAX_PE = 100.0
 EPS_MIN = 0.05
@@ -42,14 +46,24 @@ HIST_COLUMNS = ("ticker", "month", "date", "price_adj", "eps_ttm", "eps_fwd", "b
 def last_complete_month(asof: pd.Timestamp) -> pd.Period:
     """asof ≥ 該月最後一個日曆日 → 該月算完整；否則上一個月。回傳 pd.Period("M")。
     例：2026-11-02 → 2026-10；2026-10-31 → 2026-10；2026-10-30 → 2026-09。"""
-    raise NotImplementedError
+    asof = pd.Timestamp(asof)
+    month = asof.to_period("M")
+    return month if asof.normalize() >= month.end_time.normalize() else month - 1
 
 
 def monthly_closes(raw_close: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     """日線原始收盤（ticker, date, close；ticker 可帶 .TW／.TWO）→ 每檔每個完整月份
     （≤ last_complete_month(asof)）**最後一個交易日那一列**（ticker 裸代號, month "YYYY-MM", date, close）。
     T-5：先取月底那一列再看值；月底那天 close 是 NaN 就保留 NaN，不往前找。依 ticker、month 排序。"""
-    raise NotImplementedError
+    rows = raw_close.loc[:, ["ticker", "date", "close"]].copy()
+    rows["ticker"] = rows["ticker"].astype(str).str.split(".").str[0]
+    rows["date"] = pd.to_datetime(rows["date"])
+    rows["month"] = rows["date"].dt.to_period("M")
+    rows = rows[rows["month"] <= last_complete_month(asof)]
+    rows = rows.sort_values(["ticker", "date"], kind="stable")
+    rows = rows.drop_duplicates(["ticker", "month"], keep="last")
+    rows["month"] = rows["month"].astype(str)
+    return rows[["ticker", "month", "date", "close"]].reset_index(drop=True)
 
 
 def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: pd.DataFrame,
@@ -59,7 +73,52 @@ def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: 
     closes＝該檔 monthly_closes 結果；per＝交易所 PER（ticker, date, per；可為 None → pe_exchange 全 NaN）。
     算法見模組說明。n_est_*＝窗口 n_est（窗口 ok=False 時 0）。
     share_basis.EventsUnavailable 不攔截，往上丟。"""
-    raise NotImplementedError
+    excluded = sb.excluded_months(ticker)
+    quarters = q.copy()
+    quarters["period_end"] = pd.to_datetime(quarters["period_end"])
+    quarters = quarters.sort_values("period_end", kind="stable").drop_duplicates("period_end", keep="last")
+    exchange = {}
+    if per is not None and not per.empty:
+        selected = per[per["ticker"].astype(str).str.split(".").str[0] == str(ticker)]
+        exchange = dict(zip(pd.to_datetime(selected["date"]), selected["per"]))
+    result = []
+    for r in closes.sort_values("month").itertuples(index=False):
+        t = pd.Timestamp(r.date)
+        price = r.close / sb.share_factor_after(ticker, t)
+        ttm = ew.ttm_window(q, monthly_rev, asof=t, live=False, financial=financial)
+        fwd = ew.fwd_window(q, monthly_rev, asof=t, base=ttm, live=False, financial=financial)
+        eps_ttm = ttm.eps if ttm.ok else np.nan
+        eps_fwd = fwd.eps if fwd.ok else np.nan
+        visible = quarters[[ew.quarter_visible(d, t) for d in quarters["period_end"]]]
+        bvps = np.nan
+        equity_rows = visible[np.isfinite(visible["equity_parent"]) & (visible["equity_parent"] > 0)]
+        if not equity_rows.empty:
+            latest = equity_rows.iloc[-1]
+            candidates = visible[visible["period_end"] <= latest["period_end"]].tail(5)   # 本季＋往前 4 季
+            for v in candidates.iloc[::-1].itertuples(index=False):
+                if np.isfinite(v.eps) and abs(v.eps) >= EPS_MIN and np.isfinite(v.ni_parent):
+                    shares = v.ni_parent / v.eps
+                    if _positive(shares):
+                        bvps = latest["equity_parent"] / shares
+                        break
+        is_excluded = pd.Period(r.month, "M") in excluded
+        mults = {}
+        for name, denominator in (("pe", eps_ttm), ("pe_fwd", eps_fwd), ("pb", bvps)):
+            valid = _positive(price) and _positive(denominator) and not is_excluded
+            value = price / denominator if valid else np.nan
+            valid = valid and _positive(value)
+            if name != "pb":
+                valid = valid and denominator >= EPS_MIN and value <= MULT_MAX_PE
+            mults[name] = value if valid else np.nan
+            mults["valid_" + name] = bool(valid)
+        pe_exchange = exchange.get(t, np.nan)
+        result.append(dict(ticker=ticker, month=r.month, date=t, price_adj=price,
+                           eps_ttm=eps_ttm, eps_fwd=eps_fwd, bvps=bvps,
+                           n_est_ttm=ttm.n_est if ttm.ok else 0,
+                           n_est_fwd=fwd.n_est if fwd.ok else 0,
+                           excluded=is_excluded,
+                           pe_exchange=pe_exchange if _positive(pe_exchange) else np.nan, **mults))
+    return pd.DataFrame(result, columns=HIST_COLUMNS)
 
 
 def window_stats(mh: pd.DataFrame, kind: str, metric: str, asof: pd.Timestamp,
@@ -72,13 +131,27 @@ def window_stats(mh: pd.DataFrame, kind: str, metric: str, asof: pd.Timestamp,
     raw_mults＝有效值的 PCTS 分位（pandas quantile 預設線性內插）；n_valid=0 → (None, None, None)。
     mults＝raw 各值 min(v, cap)（cap=None 不截）；capped＝cap 不是 None 且任一 raw > cap。
     回傳 {start:"YYYY-MM", end:"YYYY-MM", n_valid:int, n_loss:int, mults:tuple, raw_mults:tuple, capped:bool}。"""
-    raise NotImplementedError
+    end = last_complete_month(asof)
+    size = WINDOW_MONTHS[kind]
+    if metric not in {"pe", "pe_fwd", "pb"}:
+        raise KeyError(metric)
+    start = str(end - (size - 1)) if size is not None else (str(mh["month"].min()) if not mh.empty else str(end))
+    rows = mh[(mh["month"] >= start) & (mh["month"] <= str(end))]
+    valid = rows["valid_" + metric].fillna(False).astype(bool)
+    values = rows.loc[valid, metric]
+    raw = tuple(float(v) for v in values.quantile(PCTS)) if len(values) else (None, None, None)
+    eps = rows["eps_fwd" if metric == "pe_fwd" else "eps_ttm"]
+    return dict(start=start, end=str(end), n_valid=int(valid.sum()),
+                n_loss=int((np.isfinite(eps) & (eps <= 0)).sum()), raw_mults=raw,
+                mults=tuple(min(v, cap) if cap is not None and v is not None else v for v in raw),
+                capped=bool(cap is not None and any(v is not None and v > cap for v in raw)))
 
 
 def is_valid_tier_a(n_valid: int, kind: str, was_a: bool) -> bool:
     """A 層門檻含緩衝：was_a 時 n_valid ≥ VALID_EXIT[k]，否則 ≥ VALID_MIN[k]。
     k＝kind；"cyclical" 視為 "normal"；其他不在 VALID_MIN 的 kind → KeyError。"""
-    raise NotImplementedError
+    key = "normal" if kind == "cyclical" else kind
+    return n_valid >= (VALID_EXIT if was_a else VALID_MIN)[key]
 
 
 def revision_event(prev: dict | None, cur: dict) -> str:
@@ -86,7 +159,9 @@ def revision_event(prev: dict | None, cur: dict) -> str:
     cur 或 prev 的 window 為 None（前瞻窗口不可用）→ "roll"；
     prev 為 None 或 window 不同 → "roll"；window 相同但 actual_qs 不同（試算季換成財報）→ "report"；
     其餘 → "normal"。"""
-    raise NotImplementedError
+    if prev is None or cur["window"] is None or prev["window"] is None or cur["window"] != prev["window"]:
+        return "roll"
+    return "report" if cur["actual_qs"] != prev["actual_qs"] else "normal"
 
 
 def revision_streak(rev_hist: pd.DataFrame) -> dict:
@@ -98,4 +173,21 @@ def revision_streak(rev_hist: pd.DataFrame) -> dict:
       同方向 → streak+1；方向相反 → streak=1、direction 換邊；持平 → streak=0、direction=None。
     回傳 {"last_pct": 最後一列為 normal 時的 pct（持平因非有限者為 None），否則 None,
           "streak": int, "direction": "up"|"down"|None}。空表或只有 1 列 → {None, 0, None}。"""
-    raise NotImplementedError
+    result = dict(last_pct=None, streak=0, direction=None)
+    rows = rev_hist.sort_values("month")
+    for i in range(1, len(rows)):
+        cur, prev = rows.iloc[i], rows.iloc[i - 1]
+        result["last_pct"] = None
+        if cur["event"] in ("roll", "report"):
+            continue
+        a, b = cur["eps_fwd"], prev["eps_fwd"]
+        pct = a / b - 1 if np.isfinite(a) and _positive(b) else None
+        result["last_pct"] = pct
+        direction = "up" if pct is not None and pct >= REV_STEP else ("down" if pct is not None and pct <= -REV_STEP else None)
+        result["streak"] = (result["streak"] + 1 if direction == result["direction"] else 1) if direction else 0
+        result["direction"] = direction
+    return result
+
+
+def _positive(value) -> bool:
+    return value is not None and bool(np.isfinite(value) and value > 0)
