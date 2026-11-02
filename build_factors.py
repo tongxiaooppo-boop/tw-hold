@@ -466,11 +466,11 @@ def _write_report(dep: pd.DataFrame, val: pd.DataFrame) -> None:
         "",
         "## 定存區（存股安全分）",
         "",
-        "門檻：近 4 季 EPS 全正 / 連續配息 ≥ 5 年無減配 / FCF 覆蓋股利 / "
+        "門檻：已公布 4 季 EPS 全正 / 連續配息 ≥ 5 年無減配 / FCF 覆蓋股利 / "
         "配息來自盈餘 / 負債比 ≤ 0.75（金融業改用產業中位數）/ "
         "近 5 年填息率 ≥ 60% / 近 3 年含息報酬 ≥ 0。"
         "排序 = FCF 殖利率 × 低波動 × ROE × 連續年數 × (−payout) × 景氣循環懲罰。"
-        "買價（§7.3）= 近 3 年均現金股利 ÷ max(近 5 年均殖利率, 5%)。",
+        "定存買價（§7.3）= 近 3 年均現金股利 ÷ max(近 5 年均現金殖利率, 5%)。",
         f"> verdict（§7.4）："
         + "、".join(f"{k} {v}" for k, v in
                    dep[dep["passes"] & dep["in_top500"]]["verdict"]
@@ -486,7 +486,7 @@ def _write_report(dep: pd.DataFrame, val: pd.DataFrame) -> None:
         "門檻：Piotroski F-Score ≥ 6 / 營收非連 3 季衰退 / 毛利率 5 年未下滑 / "
         "FCF 為正。排序 = rank(品質: F-Score, ROE) + rank(便宜: normalized 盈餘"
         "殖利率, FCF 殖利率, EV/EBIT, 淨現金/市值)。",
-        f"> verdict（§6.3，只由便宜門檻驅動）："
+        f"> verdict（§6.3，只由價值買價驅動）："
         + "、".join(f"{k} {v}" for k, v in
                    val[val["passes"] & val["in_top500"]]["verdict"]
                    .value_counts().items()),

@@ -231,7 +231,7 @@ def comparability_checks(cls: dict | None, stats: dict | None) -> list[Check]:
         p20, _, p80 = stats["raw_mults"]
         r = p80 / p20 if _finite(p20) and p20 > 0 and _finite(p80) and p80 > 0 else None
         out.append(Check("comparability", "倍數分布", "warn", r,
-                         f"歷史倍數 P80÷P20＝{r:.1f}，分布寬，三價參考性較低")
+                         f"歷史 80% 位置的倍數÷歷史 20% 位置的倍數＝{r:.1f}，分布寬，三價參考性較低")
                    if r is not None and r > RATIO_WARN else _ok("comparability", "倍數分布", r))
         out.append(Check("comparability", "倍數截斷", "warn", None, "歷史倍數高於上限，已截斷")
                    if stats["capped"] else _ok("comparability", "倍數截斷"))
@@ -433,5 +433,5 @@ def forward_jump(eps_fwd: float | None, eps_reported: float | None) -> Check:
     r = eps_fwd / eps_reported
     if r > FWD_JUMP_REL:
         return Check("estimate", "前瞻跳升", "warn", r,
-                     f"前瞻 4 季 EPS {eps_fwd:.2f} 比過去 4 季 {eps_reported:.2f} 高 {r-1:.0%}（>{FWD_JUMP_REL-1:.0%}），營收成長未必全轉成獲利")
+                     f"前瞻 4 季 EPS {eps_fwd:.2f} 比已公布 4 季 EPS {eps_reported:.2f} 高 {r-1:.0%}（>{FWD_JUMP_REL-1:.0%}），營收成長未必全轉成獲利")
     return _ok("estimate", "前瞻跳升", r)

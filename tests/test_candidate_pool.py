@@ -149,7 +149,7 @@ def test_canslim_fundamental_低基期標註():
     assert rec["eps_yoy_low_base"] is True
     assert any("基期過低" in s for s in rec["oppose"])
     # 事實（YoY 數字本身）照樣進支持欄——只是附註改成「基期過低」而不是「遠超門檻」
-    assert any("季 EPS YoY" in s and "基期過低" in s for s in rec["support"])
+    assert any("季 EPS 年增" in s and "基期過低" in s for s in rec["support"])
     assert not any("遠超 25% 門檻" in s for s in rec["support"])
     assert "基期過低" in rec["conditions"][0]["狀態"]
 
@@ -160,7 +160,7 @@ def test_build_pool_新長表營收_進池且帶accel():
         _chips("1001"), _revenue_hist("1001", yoy=0.3, accel=True),
         universe={"1001"}, asof=ASOF)
     assert len(pool) == 1 and pool[0]["revenue_accel"] is True
-    assert "月營收 YoY 較上月加速" in pool[0]["support"]
+    assert "最新月營收年增較上月加速" in pool[0]["support"]
 
 
 def test_build_pool_停損太近_緩衝不到1ATR_不進池(monkeypatch):

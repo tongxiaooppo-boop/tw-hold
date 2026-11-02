@@ -136,7 +136,7 @@ def test_monthly_revenue_柱加YoY線():
                         "revenue": np.linspace(1e8, 3e8, 30)})
     fig = ch.monthly_revenue(rev, "測試")
     names = {t.name for t in fig.data}
-    assert "月營收（億）" in names and "YoY %" in names
+    assert "月營收（億）" in names and "月營收年增 %" in names
     fig2 = ch.monthly_revenue(rev, "測試", pd.Timestamp("2023-06-01"))
     assert list(fig2.layout.xaxis.range)[0] == pd.Timestamp("2023-06-01")
 

@@ -137,13 +137,13 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
     fig = go.Figure([
         go.Bar(x=d["month"], y=d["revenue"] / 1e8, name="月營收（億）",
                marker_line_width=0),
-        go.Scatter(x=d["month"], y=d["yoy"] * 100, name="YoY %", yaxis="y2",
+        go.Scatter(x=d["month"], y=d["yoy"] * 100, name="月營收年增 %", yaxis="y2",
                    line=dict(width=2, color="#8A6A5F")),
     ])
     fig.update_layout(
         yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
                     zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
-    title = f"{name} 月營收 + YoY"
+    title = f"{name} 月營收與年增率"
     if start is not None:
         eff_start, widened = _min_start(d["month"], start, MIN_POINTS_MONTHLY)   # 夾到資料起點＋至少 13 根
         fig.update_xaxes(range=[eff_start, d["month"].max() + _right_pad(d["month"])])
@@ -269,12 +269,12 @@ def roe_trend(qf: pd.DataFrame, name: str, quarters: int = QUARTERS_LOOKBACK) ->
     """ROE / ROA（TTM，%）逐季——價值軌「獲利品質」的走勢版（三率圖沒有 ROE）。"""
     d = qf.tail(quarters)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=d["period_end"], y=d["roe"] * 100, name="ROE(TTM)",
+    fig.add_trace(go.Scatter(x=d["period_end"], y=d["roe"] * 100, name="近 4 季 ROE",
                              line=dict(width=2)))
     if "roa" in d.columns:
-        fig.add_trace(go.Scatter(x=d["period_end"], y=d["roa"] * 100, name="ROA(TTM)",
+        fig.add_trace(go.Scatter(x=d["period_end"], y=d["roa"] * 100, name="近 4 季 ROA",
                                  line=dict(width=1.4)))
-    return _style(fig, f"{name} ROE / ROA（%，TTM，近{_span_years(d['period_end'])}年）", 340)
+    return _style(fig, f"{name} ROE / ROA（%，近 4 季，近{_span_years(d['period_end'])}年）", 340)
 
 
 def balance_health(qf: pd.DataFrame, name: str,

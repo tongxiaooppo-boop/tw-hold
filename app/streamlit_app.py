@@ -71,27 +71,27 @@ _SWING_SHARE_URL = "https://tw-swing.pages.dev/share-latest.json"
 LABELS = {
     "ticker": "代號", "name": "名稱", "industry": "產業", "close": "現價", "market_cap": "市值",
     "verdict": "verdict", "value_score": "價值分數", "safety_score": "存股安全分",
-    "f_score": "F-Score", "roe": "ROE", "norm_pe": "normalized PE",
+    "f_score": "F-Score", "roe": "ROE", "norm_pe": "normalized 本益比",
     "norm_ey": "normalized 盈餘殖利率", "fcf_yield": "FCF 殖利率", "ev_ebit": "EV/EBIT",
     "net_cash_to_mktcap": "淨現金/市值", "gross_margin": "毛利率",
-    "cheap_threshold": "便宜門檻", "valuation_ceiling": "估值上緣", "upside_pct": "空間%",
+    "cheap_threshold": "價值買價", "valuation_ceiling": "價值上緣", "upside_pct": "空間%",
     "cyclical_peak_flag": "循環高峰旗標", "eps_basis_suspect": "EPS 基準存疑",
     "industry_headwind": "產業逆風", "industry_ret_6m": "產業近6月中位報酬",
-    "pe_p30": "PE P30", "pe_p70": "PE P70", "pe_market": "市場 PE",
+    "pe_p30": "歷史 30% 位置的本益比", "pe_p70": "歷史 70% 位置的本益比", "pe_market": "交易所本益比（核對用）",
     "buy_low": "買區下界", "buy_high": "買區上界", "buy_note": "買區備註",
     "reject_reason": "剔除原因", "cur_yield": "現價殖利率", "yield_floor": "殖利率門檻",
-    "est_buy_price": "估值買價", "fill_rate": "近5年填息率", "ret3y_incl": "近3年含息報酬",
+    "est_buy_price": "定存買價", "fill_rate": "近5年填息率", "ret3y_incl": "近3年含息報酬",
     "avg_yield_3y": "近3年均殖利率", "avg_yield_5y": "近5年均殖利率",
     "yield_pctile_5y": "殖利率5年分位", "div_years": "連續配息年", "last_cash_dividend": "近一次現金股利",
-    "ann_vol": "年化週波動", "payout_ratio_ttm": "配息率TTM", "cyclical_penalty": "景氣循環懲罰",
+    "ann_vol": "年化週波動", "payout_ratio_ttm": "近 4 季配息率", "cyclical_penalty": "景氣循環懲罰",
     "debt_ratio": "負債比",
     "peer_metric_median": "同業ROE中位數", "peer_rank": "產業內排名", "peer_n": "產業檔數",
     # 長波段候選池（狀態型，沒有 verdict）——沒登記的話「複製給 AI」會吐英文欄名，
     # 而且比率欄不會換算成 %（0.92 其實是 +92%，AI 讀不出來，2026-09-11 修）。
-    "eps_yoy_q": "季 EPS YoY", "revenue_yoy": "月營收 YoY", "revenue_accel": "月營收 YoY 加速",
-    "inst_net20": "法人 20 日淨買超（股）", "trend_cnt": "Minervini 趨勢模板（滿分 8）",
+    "eps_yoy_q": "季 EPS 年增", "revenue_yoy": "最新月營收年增", "revenue_accel": "最新月營收年增加速",
+    "inst_net20": "法人近 20 日淨買超（股）", "trend_cnt": "趨勢模板 8 項（候選池）",
     "dist_50ma": "距 50MA", "dist_52w_high": "距 52 週高", "dist_200ma": "距 200MA",
-    "risk_stop": "停損參考位", "risk_pct_at_close": "現價到停損位的風險",
+    "risk_stop": "進場停損（候選池）", "risk_pct_at_close": "現價到停損位的風險",
     "max_buy": "可買上限", "conditions": "進場條件狀態", "invalidation": "失效條件現況",
     "support": "支持", "oppose": "反對",
     "first_seen": "首次進榜", "streak_days": "連續入選天數",
@@ -123,7 +123,7 @@ SORT_KEYS = {
                "現價": "close"},
     "swing": {"市值": "market_cap", "進榜日期": "first_seen", "上榜天數": "streak_days",
               "現價": "close",
-             "月營收 YoY": "revenue_yoy", "季 EPS YoY": "eps_yoy_q"},
+             "最新月營收年增": "revenue_yoy", "季 EPS 年增": "eps_yoy_q"},
 }
 #: 預設由大到小；列在這裡的排序鍵改由小到大（上榜天數：剛進池的排前面）。
 SORT_ASC = {"streak_days"}
@@ -178,7 +178,7 @@ BACKTEST_NOTES = {
                  "「不推薦」＋原因。\n\n"
                  "**怎麼算的**：F-Score ≥ 6 + Magic Formula 精神（歸一化本益比／"
                  "盈餘殖利率排序），季換（3/31、5/15、8/14、11/14），前 15、單一"
-                 "產業 ≤ 40%。verdict 只由便宜門檻驅動（PRD §6.3），不做總分排名式"
+                 "產業 ≤ 40%。verdict 只由價值買價驅動（PRD §6.3），不做總分排名式"
                  "的推薦。"),
         "glossary": (
             "- **F-Score（Piotroski F-Score）**：9 項財務體質指標各自二元判斷（有沒有賺錢、"
@@ -279,15 +279,15 @@ BACKTEST_NOTES = {
             "🔴 生存者偏差：universe 是回測當時的前 ~500 大，**結論當上界看待，真實會更差**。"),
     },
     "swing": {
-        "logic": ("**這頁在看什麼**：CANSLIM + Minervini 趨勢模板組成的「主動選股候選"
+        "logic": ("**這頁在看什麼**：CANSLIM＋趨勢模板 8 項組成的「主動選股候選"
                  "池」，每日重算，狀態型條件全過才進池，不排名次不配權重。篩選規則"
                  "本身已有回測驗證，但風控推導的可買上限與失效條件不是。\n\n"
-                 "**怎麼算的**：候選池六條件全過才進池：CANSLIM 兩條（季 EPS YoY>25%、"
-                 "近3年TTM EPS成長）"
+                 "**怎麼算的**：候選池六條件全過才進池：CANSLIM 兩條（季 EPS 年增>25%、"
+                 "近3年已公布 4 季 EPS成長）"
                  "∩ 另外疊加的品質門檻——非 CANSLIM 本身（ROE>15%、毛利率未連兩季惡化、"
-                 "F-Score≥6）∩ 月營收 YoY>0 且加速 ∩ 法人20日淨買超>0 ∩ Minervini 趨勢模板"
-                 " 8/8。停損參考位 = max(50MA, 近20週前低, 現價−2×ATR14)。失效條件（任一"
-                 "觸發）：收盤跌破50MA、趨勢模板<5/8、月營收 YoY 連2個月轉負、季 EPS YoY 轉負。"
+                 "F-Score≥6）∩ 最新月營收年增>0 且加速 ∩ 法人20日淨買超>0 ∩ 趨勢模板 8 項（候選池）"
+                 " 8/8。進場停損（候選池） = max(50MA, 近20週前低, 現價−2×ATR14)。失效條件（任一"
+                 "觸發）：收盤跌破50MA、趨勢模板<5/8、最新月營收年增連2個月轉負、季 EPS 年增轉負。"
                  "**不含大盤方向（CANSLIM 的「M」）當硬性 gate**——2026-09-14 測過拿「只在"
                  "多頭週新進場」當硬性門檻，回測結果變差；改測「排除空頭週（多頭+震盪皆可）」"
                  "才是有效的市況篩選，加上移動 ATR 停損是目前驗證過最好的組合，"
@@ -298,13 +298,13 @@ BACKTEST_NOTES = {
             "| 字母 | 原始定義 | 這裡做了嗎 |\n"
             "| :-- | :-- | :-- |\n"
             "| **C** 當季盈餘 | 季 EPS 年增 ≥18–20% | ✅ 做了（門檻設 25%，比原始更嚴） |\n"
-            "| **A** 年度盈餘成長 | 近 3 年每年都要成長 | 🟡 變形——只檢查「現在 TTM EPS "
-            "> 3 年前 TTM EPS」，不是逐年都要達標 |\n"
+            "| **A** 年度盈餘成長 | 近 3 年每年都要成長 | 🟡 變形——只檢查「現在 已公布 4 季 EPS "
+            "> 3 年前 已公布 4 季 EPS」，不是逐年都要達標 |\n"
             "| **N** 新產品/新高 | 新產品、新管理層、股價創新高 | ❌ 沒做——bundle 沒有"
-            "新聞/產品資料；技術面「離52週高點」是 Minervini 模板自己的條件，不是為 N 做的 |\n"
+            "新聞/產品資料；技術面「離52週高點」是 趨勢模板 8 項（候選池）自己的條件，不是為 N 做的 |\n"
             "| **S** 籌碼供需 | 流通股數少、庫藏股、爆量上漲 | ❌ 沒做——沒有股數變化/"
             "庫藏股資料源 |\n"
-            "| **L** 領導股 | 產業內相對強度排名最前 | 🟡 變形——借用 Minervini 的 RS "
+            "| **L** 領導股 | 產業內相對強度排名最前 | 🟡 變形——借用 趨勢模板 8 項（候選池）的 RS "
             "百分位（對比0050），概念相通但不是 CANSLIM 自己算的 |\n"
             "| **I** 法人認養 | 法人持股家數增加、優質基金買進 | 🟡 變形——用「法人20日"
             "淨買超股數（畫面換算成張）」當代理，不是「持股家數變化」 |\n"
@@ -316,7 +316,7 @@ BACKTEST_NOTES = {
             "**另外三條門檻（ROE>15%、毛利率未連兩季惡化、F-Score≥6）根本不是 CANSLIM**，"
             "是另外借用 Piotroski F-Score 精神加的品質篩選，混在同一句「CANSLIM 基本面」"
             "裡容易誤會成原始定義的一部分，這裡拆開講清楚。\n\n"
-            "**Minervini 趨勢模板（Mark Minervini「動能大師」的 Stage 2 判定）**：8 條"
+            "**趨勢模板 8 項（候選池）（Stage 2 判定）**：8 條"
             "均線排列＋相對高低點的條件（例如股價站上 MA50/150/200、MA200 向上、離 52 週"
             "低點夠遠……），用來篩「目前處於健康上升趨勢」的股票，**純技術面過濾，不保證"
             "會繼續漲**——這裡做了 8 條裡的 8 條，checklist 頁的「波段」分頁因為算力/資料"
@@ -327,7 +327,7 @@ BACKTEST_NOTES = {
             "universe 609 檔，市況進場 × 移動停損組合矩陣，共 7 種口徑）**\n\n"
             "🔴 **2026-09-23 查證：候選池 2016-01～2019-02 結構性恆空，原本的年化被"
             "拖低了近10個百分點，甚至翻案了「打不打得過0050」的結論**——候選池六條件"
-            "之一「近3年TTM EPS要成長」需要12季前財報，但季度財報只從2015-Q1開始，"
+            "之一「近3年已公布 4 季 EPS要成長」需要12季前財報，但季度財報只從2015-Q1開始，"
             "第一個候選池非空的週落在2019-02-15。原本算年化是拿整個2016-2026"
             "（10.65年）當分母，把這近3年的0%死區也算進去；下表「年化」欄已經改成"
             "排除死區、只從2019-01-01起算的正確版本（回撤/勝率不受死區影響，維持"
@@ -380,7 +380,7 @@ BACKTEST_NOTES = {
             "不是「少曝險=安全」這種直覺，是空頭週的候選池訊號品質本身就比較差，篩掉"
             "有實質作用。\n\n"
             "完整結果：`docs/reports/backtest_longswing_20260923.md`。\n\n"
-            "⚠️ **回測與現行候選池的差異（2026-10-20）**：候選池現在會擋掉「現價離停損參考位"
+            "⚠️ **回測與現行候選池的差異（2026-10-20）**：候選池現在會擋掉「現價離進場停損（候選池）"
             "不到 1 倍 ATR14」的股票（停損太近，一點雜訊就被洗出去），回測沒有這道過濾，"
             "上面的數字是**沒有這道過濾的版本**，還沒重跑。\n\n"
             "🔴 生存者偏差：universe 是今天 bundle 的 609 檔（市值/成交值前段班），"
@@ -398,7 +398,7 @@ BACKTEST_NOTES = {
             "刻意並存。"
             "\n\n"
             "🔴 **2026-09-23 查證：2016-01～2019-02 這段候選池恆空，是資料地基問題**——"
-            "CANSLIM 六條件之一「近 3 年 TTM EPS 要成長」的算法要拿 12 季前的財報"
+            "CANSLIM 六條件之一「近 3 年 已公布 4 季 EPS 要成長」的算法要拿 12 季前的財報"
             "比較，但季度財報資料只從 2015-Q1 開始，往回推第一次算得出來要到 "
             "2019-Q1 附近，實測第一個候選池非空的週是 **2019-02-15**。下面表格"
             "**只列 2019 起、真正有資料可以評估的年份**——2016-2018 不是策略評估過"
@@ -478,11 +478,11 @@ BACKTEST_NOTES = {
             " PRD 規定不能改既有規則的 entry，要測新出場一律用另開變體的方式）。\n\n"
             "**Y4 · 上升軌道突破 + 月營收年增加速 + 估值未過熱（CANSLIM 精神）**——"
             "進場：A3 突破上升軌道線 + 月營收年增率轉正 + 營收年增**正在加速**（比"
-            "只要求轉正更嚴）+ PE 百分位 < 75（估值還沒過熱）四個條件疊加。出場**跟 "
+            "只要求轉正更嚴）+ 本益比百分位 < 75（估值還沒過熱）四個條件疊加。出場**跟 "
             "H2-trailatr2 用同一套機制**（2×ATR 移動停損 + 1R 保本、60 天到期）——"
             "Y4 這條規則本身的定義裡就內建了移動停損，不是額外疊加的變體。\n\n"
             "**W6 · 月營收創年高 + 估值便宜（GARP：Growth At a Reasonable Price）**——"
-            "進場：最新月營收創近 12 個月新高 + PE 百分位 < 40（相對自身歷史便宜）"
+            "進場：最新月營收創近 12 個月新高 + 本益比百分位 < 40（相對自身歷史便宜）"
             "兩個背景條件成立時，等**當天 MA5 上穿 MA20**才真正觸發。**出場是三條"
             "裡最簡單的一條**——固定停損（進場當根最低價 − 0.5×ATR14），沒有移動"
             "停損、沒有保本機制、也沒有基本面轉弱就出場的邏輯，純粹撐到觸發停損或"
@@ -490,7 +490,7 @@ BACKTEST_NOTES = {
             "原因——好的進場訊號配笨出場，抱不住波動。\n\n"
             "三條規則的訊號、進場價、停損位都是 tw-swing 每日盤後產生、tw-hold 原樣"
             "轉呈，不在這裡重算。"),
-        "glossary": ("`pool_label`＝命中哪組規則、`進場`／`停損`＝進場價與停損參考位、"
+        "glossary": ("`pool_label`＝命中哪組規則、`進場`／`停損`＝進場價與訊號停損、"
                  "`風險%`／`部位%`＝那個停損位換算出的部位風險與建議部位大小、`RS`＝相對強度"
                  "百分位、`量比`＝成交量對均量的倍數、`觸發日`＝訊號出現的那天。"
                  "規則本身完整的逐規則排行榜（111 條全掃）記在 tw-swing 自己的文件裡"
@@ -576,7 +576,7 @@ BACKTEST_NOTES = {
             "（權益曲線、回撤水下圖、**月報酬熱力圖**、滾動夏普）用的是它自己"
             "風險%配置的 `portfolio_sim`，現在對應到 `capital_watch` 組合的版本在 "
             "`tw-swing/docs/reports/tearsheet_20260923-bba58b2-capital_watch.html`"
-            "（2026-09-23 重新產生，CAGR +18.73%、最大回撤 −30.7%、Sharpe 1.08）——"
+            "（2026-09-23 重新產生，回測期間組合淨值年複合成長 +18.73%、最大回撤 −30.7%、Sharpe 1.08）——"
             "**這是另一套模型**（風險%配置，不是資金天花板）——bench.html 逐規則"
             "篩選／tw-hold 資金天花板（連續複利+每年歸零兩個角度）／tw-swing 風險%"
             "配置 tearsheet，三套方法論各自回答不同問題，數字不能互相替代或加總。\n\n"
@@ -1194,7 +1194,7 @@ def _ctx_line(r: dict, kind: str) -> str:
         ct, cl = r.get("cheap_threshold"), r.get("close")
         if ct is not None and cl is not None:
             rel = "之下（有安全邊際）" if cl <= ct else "之上（無安全邊際）"
-            return _esc(f"{ind}　·　現價 {cl:,.2f} 在便宜門檻 {ct:,.2f} {rel}")
+            return _esc(f"{ind}　·　現價 {cl:,.2f} 在價值買價 {ct:,.2f} {rel}")
     else:
         cy, yf = r.get("cur_yield"), r.get("yield_floor")
         if cy is not None and yf is not None:
@@ -1207,10 +1207,10 @@ def _buy_block(r: dict, kind: str) -> str:
     """買入區間視覺：有數字買區 → 長條；只有 buy_note → 一句話；都沒有 → 空。"""
     bl, bh, bn = r.get("buy_low"), r.get("buy_high"), r.get("buy_note")
     if bl and bh:
-        return (f'<div class="thc-note"><b>買入區間</b>　{bl:,.2f} – {bh:,.2f}</div>')
+        return (f'<div class="thc-note"><b>{'定存買價上下限' if kind == 'deposit' else '價值買價上下限'}</b>　{bl:,.2f} – {bh:,.2f}</div>')
     cl = r.get("close")
     ref = r.get("est_buy_price") if kind == "deposit" else r.get("cheap_threshold")
-    label = "估值買價" if kind == "deposit" else "便宜門檻"
+    label = "定存買價" if kind == "deposit" else "價值買價"
     out = ""
     if cl is not None and ref is not None and ref > 0:
         top = max(cl, ref) * 1.12
@@ -1231,7 +1231,7 @@ def _chips(r: dict, kind: str) -> str:
                  ("F-Score", _fmt("f_score", r.get("f_score"))),
                  ("ROE", _fmt("roe", r.get("roe")))]
     else:
-        pairs = [("估值買價", _fmt("est_buy_price", r.get("est_buy_price"))),
+        pairs = [("定存買價", _fmt("est_buy_price", r.get("est_buy_price"))),
                  ("連配", (f"{int(r['div_years'])} 年" if r.get("div_years") else "—")),
                  ("3年含息", _fmt("ret3y_incl", r.get("ret3y_incl")))]
         if r.get("fill_rate") is not None:
@@ -1266,12 +1266,12 @@ def _card_b_html(r: dict, kind: str) -> str:
     if kind == "value":
         up = r.get("upside_pct")
         if sev == "good" and up is not None:
-            big, cap, is_up = f"+{up*100:.0f}%", "到估值上緣的空間", up > 0
+            big, cap, is_up = f"+{up*100:.0f}%", "到價值上緣的空間", up > 0
         else:
             # 無安全邊際 / 資料不足時，「空間%」會誤導——臉上放便宜門檻，現價當註腳
             ct, cl = r.get("cheap_threshold"), r.get("close")
             big = f"{ct:,.2f}" if ct is not None else "—"
-            cap = f"便宜門檻（現價 {cl:,.2f}）" if cl is not None else "便宜門檻"
+            cap = f"價值買價（現價 {cl:,.2f}）" if cl is not None else "價值買價"
             is_up = False
     else:
         cy = r.get("cur_yield")
@@ -1325,7 +1325,7 @@ def _swing_b_html(c: dict, flag: dict | None = None) -> str:
         f"市值 {_fmt('market_cap', c.get('market_cap'))}" if c.get("market_cap") is not None else "",
         f"現價 {c['close']:,.2f}" if c.get("close") is not None else "",
         f"可買上限 {c['max_buy']:,.2f}" if c.get("max_buy") is not None else "",
-        f"停損 {c['risk_stop']:,.2f}" if c.get("risk_stop") is not None else "",
+        f"進場停損（候選池） {c['risk_stop']:,.2f}" if c.get("risk_stop") is not None else "",
         _esc(streak_txt),
     ] if x)
     dist = "　·　".join([
@@ -1555,9 +1555,9 @@ def _swing_risk_explainer() -> None:
     互推。"""
     with st.expander("📖 「可買上限」是什麼（點開看）"):
         st.markdown(
-            "- **停損參考位** ＝ `max(50MA, 20 週前低, 現價 − 2×ATR14)`——"
+            "- **進場停損（候選池）** ＝ `max(50MA, 20 週前低, 現價 − 2×ATR14)`——"
             "取三者最高，是這個進場點合理的防守線。\n"
-            "- **可買上限** ＝ `停損參考位 ÷ (1 − 10%)`——照這個停損位反推："
+            "- **可買上限** ＝ `進場停損（候選池） ÷ (1 − 10%)`——照這個停損位反推："
             "**如果買在可買上限，萬一真的跌到停損位，賠的正好是 10%**。\n"
             "- **現價超過可買上限，代表照這條規則的風控標準，現在買下去、"
             "萬一跌到停損位會賠超過 10%**——不是說這檔股票不好或太貴，是"
@@ -1652,7 +1652,7 @@ def _short_b_html(c: dict, flag: dict | None = None) -> str:
     ctxbits = "　·　".join(x for x in [
         _esc(c.get("pool_label") or ""),
         f"進場 {_n(c.get('entry'), '{:,.2f}')}",
-        f"停損 {_n(c.get('stop'), '{:,.2f}')}",
+        f"訊號停損 {_n(c.get('stop'), '{:,.2f}')}",
         f"風險 {_n(c.get('risk_pct'), '{:.1%}')}",
         f"部位 {_n(c.get('position_pct'), '{:.1%}')}",
     ] if x and not x.endswith("—"))
@@ -1677,7 +1677,7 @@ def _short_scan_card(x: dict, flag: dict | None = None) -> str:
     """短線條件掃描的單檔卡——狀態型：沒有 verdict / 買價 / 排名（同 `_short_b_html` 視覺）。"""
     code = str(x.get("ticker") or "")
     risk, pend = x.get("risk") or [], x.get("pending") or []
-    bits = [f"收 {x['close']:,.2f}"] if isinstance(x.get("close"), (int, float)) else []
+    bits = [f"現價 {x['close']:,.2f}"] if isinstance(x.get("close"), (int, float)) else []
     streak = x.get("streak_days")
     if streak == 1 and not x.get("_first_day"):
         bits.append("🆕 今日新進")
@@ -1819,7 +1819,7 @@ def _history_body(keys: list[str], tag: str) -> None:
                     + ("　⚠當時資料不完整" if d.get("deg") else "")
                     + (f"　·　{d['note']}" if d.get("note") else ""))
         if d.get("c"):
-            st.dataframe(pd.DataFrame(d["c"]).drop(columns=["src"], errors="ignore").rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "停損",
+            st.dataframe(pd.DataFrame(d["c"]).drop(columns=["src"], errors="ignore").rename(columns={"t": "代號", "nm": "名稱", "px": "價", "stop": "訊號停損",
                                                            "sig": "訊號", "fs": "進榜日", "st": "連續天數",
                                                            "src": "來源"}),
                          hide_index=True, width="stretch")
@@ -1882,7 +1882,7 @@ def _shortterm_page() -> None:
             f"tw-swing 在 {asof} 收盤後跑完，**當日無訊號**。" if not bad else
             f"tw-swing 在 {asof} 顯示「無訊號」，**但資料有問題（見上方警示），這個結果不可信**。")
         st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
-                   "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
+                   "進場價／訊號停損只在**訊號隔日開盤**可執行，過了就失效。")
         for d in data.get("disclaimer", []):
             st.caption("· " + d)
         _short_scan_section()
@@ -1901,13 +1901,13 @@ def _shortterm_page() -> None:
         for c in cands:
             lines.append(
                 f"- {c.get('ticker')} {c.get('name','')}｜{c.get('signal','')}"
-                f"｜進場 {c.get('entry')}｜停損 {c.get('stop')}｜觸發日 {c.get('signal_date')}"
+                f"｜進場 {c.get('entry')}｜訊號停損 {c.get('stop')}｜觸發日 {c.get('signal_date')}"
                 f"｜{c.get('note','')}")
         st.code("\n".join(lines), language="markdown")
 
     st.divider()
     st.caption("這份清單由 **tw-swing** 每個交易日盤後產出，tw-hold 只是原樣轉呈。"
-               "進場價／停損只在**訊號隔日開盤**可執行，過了就失效。")
+               "進場價／訊號停損只在**訊號隔日開盤**可執行，過了就失效。")
     for d in data.get("disclaimer", []):
         st.caption("· " + d)
     _short_scan_section()
@@ -2298,7 +2298,7 @@ def _rev_time(r: dict) -> str:
 
 
 def _rev_view_list(rows: list[dict], has_fs: bool) -> None:
-    head = ["代號", "公布時間", "營收", "月增", "年增", "累計年增", "備註"]
+    head = ["代號", "公布時間", "營收", "月增", "年增", "今年累計營收年增", "備註"]
     if not has_fs:
         head.remove("公布時間")
 
@@ -2353,7 +2353,7 @@ def _rev_view_growth(rows: list[dict]) -> None:
     if not top:
         st.caption("沒有符合的公司。")
         return
-    _vtable(["代號", "年增", "月增", "累計年增", "連續年增", "創新高", "營收"],
+    _vtable(["代號", "年增", "月增", "今年累計營收年增", "連續年增", "創新高", "營收"],
             [[(_rev_name(r), f"累計 {_fmt_pct(r.get('cum_yoy'))} · 營收 {_fmt_yi(r.get('revenue'))}"
                            + (" · 創新高" if r.get("record_high") else "")),
               _fmt_pct(r.get("yoy")), _fmt_pct(r.get("mom")),
@@ -2555,7 +2555,7 @@ def _stock_page() -> None:
     if rev is not None and len(rev) >= 13:
         _chart(ch.monthly_revenue, rev, name, xstart)
     elif rev is not None and not rev.empty:
-        st.info(f"📊 月營收：目前只有 {len(rev)} 個月，滿 13 個月才畫 YoY 圖"
+        st.info(f"📊 月營收：目前只有 {len(rev)} 個月，滿 13 個月才畫月營收年增圖"
                 "（等 revenue 歷史隨下次 bundle 發佈進來）。")
     else:
         st.info("📊 月營收走勢圖：這檔在 bundle 沒有月營收資料。")
@@ -2828,7 +2828,7 @@ def _checklist_page() -> None:
     st.divider()
     with st.expander("📖 四軌各自怎麼算的（點開看）"):
         st.markdown("**⚡ 短線**：日線技術面＋法人／融資融券餘額變化，條件逐條攤開（融資融券資料缺時該列不出現）。")
-        st.markdown("**🟠 波段**：門檻取自主畫面「長波段候選池」（CANSLIM + Minervini）。"
+        st.markdown("**🟠 波段**：門檻取自主畫面「長波段候選池」（CANSLIM＋趨勢模板 8 項）。"
                     "趨勢模板只做 7 條，不含相對強弱 RS（需全市場橫斷面）。")
         st.markdown("**🔵 價值**：F-Score + Magic Formula 精神；門檻與價值清單同一份因子。")
         st.markdown("**🟢 定存**：殖利率硬底線 5% + 填息率 / 含息報酬 / 配息穩定。"
@@ -3147,7 +3147,7 @@ def _active_etf_page() -> None:
     _disclaimer()
 
 
-_MC_VERDICT = {"bull": ("多頭", "good"), "bear": ("空頭", "warn"), "chop": ("盤整", "neutral")}
+_MC_VERDICT = {"bull": ("偏多", "good"), "bear": ("偏空", "warn"), "chop": ("貼近", "neutral")}
 _MC_LABEL = {"ma60": "MA60", "ma200": "MA200"}
 #: (代號, 市場標籤) ——0050 對應上市（大盤代理，同 reference.regime 用的那檔）、
 #: 006201 元大富櫃50 是唯一追蹤櫃買（TPEx）指數的 ETF，對應上櫃。
@@ -3839,7 +3839,7 @@ def _macro_compass_page() -> None:
         st.caption(_fetched)
 
     st.divider()
-    st.subheader("波動度／殖利率／匯率")
+    st.subheader("波動度／美債殖利率／匯率")
     gauge_cards = [_gz_card(sym, name, gauge_close[sym], suffix=suf, stale=stale_map.get(sym))
                    for sym, name, suf in _US_GAUGES]
     st.markdown(f'<div class="gz-grid">{"".join(gauge_cards)}</div>', unsafe_allow_html=True)
@@ -3866,10 +3866,10 @@ def _macro_compass_page() -> None:
             "- **純顯示，不影響任何清單判斷**——跟其他分頁的 verdict／候選池完全脫鉤。\n"
             "- **上市＝0050**（臺灣50指數，讀 bundle）；**上櫃＝006201**（元大富櫃50，"
             "唯一追蹤櫃買富櫃50指數的 ETF，不在 bundle 的 universe 裡，改直接向 FinMind 拉）。\n"
-            "- **多空判斷**＝乖離帶：|收盤/均線-1| 在 ±2% 內算「盤整」，超過算當下窗口的多／空——"
+            "- **均線位置**＝乖離帶：|收盤/均線-1| 在 ±2% 內算「貼近」，超過算當下窗口的偏多／偏空——"
             "示意用簡單門檻，**沒有回測調過**，不是進出場依據。\n"
-            "- **台股列 MA60+MA200 兩條**（法人習慣同時盯季線/年線）；**國際指數只列 MA200**"
-            "（國際機構慣例看年線）。日經/恆生/KOSPI 是亞股情緒領先指標，隔夜表現常直接"
+            "- **台股列 MA60+MA200 兩條**（法人習慣同時盯季線/200 日線）；**國際指數只列 MA200**"
+            "（國際機構慣例看200 日線）。日經/恆生/KOSPI 是亞股情緒領先指標，隔夜表現常直接"
             "影響台股開盤，跟道瓊/那斯達克/費半併在同一段。\n"
             "- **VIX／美元指數／美債殖利率**不是「市場」，沒有多空判斷，只有現值＋漲跌"
             "（＋近一年分位；分位是分佈位置，不是「貴不貴」的判斷）。黃金/白銀/BTC 刻意"

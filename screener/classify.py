@@ -620,7 +620,7 @@ def classify(inp: ClassInputs) -> Classification:
     group = inp.industry_group
     if group == "financial":
         ctype = TYPE_FINANCIAL
-        why.append("產業為金融保險，走 PB")
+        why.append("產業為金融保險，走股價淨值比")
     else:
         triggers: list[str] = []
         k_loss = int((eps.tail(SPECIAL_BIOTECH_WINDOW_Q) < 0).sum())
@@ -630,7 +630,7 @@ def classify(inp: ClassInputs) -> Classification:
                        f"（≥ {SPECIAL_BIOTECH_LOSS_Q}）")
         if group == "construction":
             triggers.append("construction")
-            why.append("建材營造：營收認列不連續，只給 PB 位置")
+            why.append("建材營造：營收認列不連續，只給股價淨值比位置")
         cap = q["capital_stock"].astype(float)
         cap_prev = _lag(cap, 4).iloc[-1]
         cap_now = cap.iloc[-1]
@@ -667,7 +667,7 @@ def classify(inp: ClassInputs) -> Classification:
             metrics["ta_jump_ex_earnings"] = ta_ex
             if pd.notna(ta_ex) and ta_ex > SPECIAL_TA_JUMP and not is_cyc:
                 triggers.append("rev_jump_cap")
-                why.append(f"TTM 營收年增 {yoy_now:+.0%} 且股本同步增 {chg:+.0%}，"
+                why.append(f"近 4 季營收年增 {yoy_now:+.0%} 且股本同步增 {chg:+.0%}，"
                            f"扣除盈餘後總資產仍增 {ta_ex:+.0%}，疑似併購/重組")
             else:
                 metrics["comparability_pending"] = True
@@ -680,8 +680,8 @@ def classify(inp: ClassInputs) -> Classification:
         # 景氣循環／高成長的 why（成立才寫）
         if cyc_ok:
             why.append(f"OROA 振幅 {amp:.1%}，位於全體前 {1 - amp_pct:.0%}")
-            why.append(f"TTM 營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
-                       f"期間 TTM 營收年增最低 {dd['rev_yoy_min']:+.0%}")
+            why.append(f"近 4 季營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
+                       f"期間近 4 季營收年增最低 {dd['rev_yoy_min']:+.0%}")
             if aux_ok:
                 if beta_ok:
                     why.append(f"營收 beta {inp.rev_beta:.2f}（≥ {CYCLE_BETA_MIN:g}）")
@@ -691,18 +691,18 @@ def classify(inp: ClassInputs) -> Classification:
                 why.append(f"缺輔助條件（營收 beta {inp.rev_beta:.2f}、"
                            f"產業同步度 {inp.ind_sync:.2f}），列疑似循環")
         elif prior_ok:
-            why.append(f"TTM 營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
-                       f"期間 TTM 營收年增最低 {dd['rev_yoy_min']:+.0%}；"
+            why.append(f"近 4 季營業利益自 {_qlabel(dd['dd_peak'])} 高點最多跌 {dd['max_dd']:.0%}，"
+                       f"期間近 4 季營收年增最低 {dd['rev_yoy_min']:+.0%}；"
                        f"屬傳統循環產業（{inp.industry_name}），OROA 振幅未達前 {CYCLE_AMP_TOP_PCT:.0%}")
         if growth_core:
             c5_txt = "—" if pd.isna(c5) else f"{c5:.0%}"
-            why.append(f"TTM 營收 3 年 CAGR {c3:.0%}、5 年 {c5_txt}")
-            why.append(f"TTM 營業利益 3 年 CAGR {o3:.0%}")
+            why.append(f"3 年營收年複合成長 {c3:.0%}、5 年營收年複合成長 {c5_txt}")
+            why.append(f"3 年營業利益年複合成長 {o3:.0%}")
             if no_neg:
-                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
+                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季中，近 4 季營收年增最低 {float(yoy_tail.min()):+.0%}"
                            f"（≥ {GROWTH_MIN_YOY:.0%}）")
             else:
-                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季 TTM 營收年增最低 {float(yoy_tail.min()):+.0%}"
+                why.append(f"近 {GROWTH_NO_NEG_YOY_Q} 季中，近 4 季營收年增最低 {float(yoy_tail.min()):+.0%}"
                            f"（≥ {GROWTH_RELAX_MIN_YOY:.0%}，低於 {GROWTH_MIN_YOY:.0%} 的季數 "
                            f"{int((yoy_tail < GROWTH_MIN_YOY).sum())} ≤ {GROWTH_RELAX_BAD_Q}，最近 4 季皆 ≥ 0%）")
 
@@ -761,7 +761,7 @@ def classify(inp: ClassInputs) -> Classification:
                     degrade.append("回撤後未回到前高 50%（可能為結構衰退）")
             if ctype == TYPE_GROWTH:
                 if pd.isna(c5):
-                    degrade.append("營收歷史不足 5 年，5 年 CAGR 未檢查")
+                    degrade.append("營收歷史不足 5 年，5 年營收年複合成長未檢查")
                 listed = inp.listed_quarters if inp.listed_quarters is not None else len(q)
                 if listed < GROWTH_MIN_LISTED_Q:
                     degrade.append(f"上市未滿 {GROWTH_MIN_LISTED_Q} 季")
@@ -781,10 +781,10 @@ def classify(inp: ClassInputs) -> Classification:
         is_loss = bool(pd.notna(ttm_eps_now) and ttm_eps_now <= 0)
         if is_loss:
             state.append(STATE_LOSS)
-            why.append(f"近四季 EPS 合計 {ttm_eps_now:.2f} ≤ 0")
+            why.append(f"已公布 4 季 EPS 合計 {ttm_eps_now:.2f} ≤ 0")
         unstable_reason: str | None = None
         if any_neg4:
-            unstable_reason = f"近四季有 {int((last4 < 0).sum())} 季 EPS < 0"
+            unstable_reason = f"已公布 4 季有 {int((last4 < 0).sum())} 季 EPS < 0"
         if unstable_reason:
             state.append(STATE_UNSTABLE)
             why.append(unstable_reason)
@@ -794,7 +794,7 @@ def classify(inp: ClassInputs) -> Classification:
             if len(t3) == 3 and not np.isnan(t3).any() and t3[2] > t3[1] > t3[0]:
                 name = STATE_TROUGH_RECOVERY if ctype == TYPE_CYCLICAL else STATE_TURNAROUND
                 state.append(name)
-                why.append(f"{name}：近四季曾虧損，最新季營業利益轉正且 TTM 營業利益連 2 季上升")
+                why.append(f"{name}：已公布 4 季曾虧損，最新季營業利益轉正且近 4 季營業利益連 2 季上升")
         zone_win = oroa.tail(CYCLE_WINDOW_Q)
         zone_vals = zone_win.dropna()
         zone: str | None = None
@@ -816,10 +816,10 @@ def classify(inp: ClassInputs) -> Classification:
             if pd.notna(ind_last):
                 if zone == STATE_PROFIT_HIGH and ind_last > 0:
                     state.append(STATE_CYCLE_HIGH)
-                    why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史高獲利區同向")
+                    why.append(f"產業近 4 季營收年增 {ind_last:+.1%}，與歷史高獲利區同向")
                 elif zone == STATE_PROFIT_LOW and ind_last < 0:
                     state.append(STATE_CYCLE_LOW)
-                    why.append(f"產業營收 TTM 年增 {ind_last:+.1%}，與歷史低獲利區同向")
+                    why.append(f"產業近 4 季營收年增 {ind_last:+.1%}，與歷史低獲利區同向")
         return subtags, state, degrade, why, decoration_metrics
 
     subtags, state, degrade, why, dm = _decorate(ctype)
@@ -934,7 +934,7 @@ def apply_hysteresis(new: Classification, history: pd.DataFrame) -> Classificati
 
     if cand == current:                                                      # 4
         if stayed and current == TYPE_GROWTH:
-            out.why.append(f"高成長留任：3 年營收 CAGR 仍 ≥ {GROWTH_EXIT_CAGR3:.0%}")
+            out.why.append(f"高成長留任：3 年營收年複合成長仍 ≥ {GROWTH_EXIT_CAGR3:.0%}")
         return result(current, cand)
 
     if last_sw is not None and _qord(new_q) < _qord(last_sw) + HYST_LOCK_Q:  # 5

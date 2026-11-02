@@ -145,7 +145,7 @@ def add_value_verdict(val: pd.DataFrame, per_hist: pd.DataFrame | None,
     has_gate = d["cheap_threshold"].notna()
     verdict = pd.Series(np.nan, index=d.index, dtype="object")
     verdict = verdict.where(d["passes"], "不推薦（品質）")           # reject_reason 已載明細因
-    verdict = verdict.mask(verdict.isna() & ~has_gate, "資料不足（PE 分位算不出）")
+    verdict = verdict.mask(verdict.isna() & ~has_gate, "資料不足（本益比分位算不出）")
     verdict = verdict.mask(verdict.isna() & d["eps_basis_suspect"],
                            "資料不足（EPS 基準存疑）")
     verdict = verdict.mask(verdict.isna() & (d["close"] >= d["cheap_threshold"]),

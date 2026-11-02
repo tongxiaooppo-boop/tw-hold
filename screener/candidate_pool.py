@@ -221,22 +221,22 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
 
     if eps is not None and eps > 0.60:
         note = "（基期過低，數字供參考）" if eps_low_base else "（遠超 25% 門檻）"
-        support.append(f"季 EPS YoY {eps:+.0%}{note}")
+        support.append(f"季 EPS 年增 {eps:+.0%}{note}")
     if eps_low_base:
         oppose.append(f"去年同期單季 EPS 僅 {eps_base:.2f} 元"
-                      "（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）")
+                      "（基期過低，上面那個季 EPS 年增比例參考價值有限，不代表可持續成長）")
     if rev is not None and rev > 0.20:
-        support.append(f"月營收 YoY {rev:+.0%}（成長明確）")
+        support.append(f"最新月營收年增 {rev:+.0%}（成長明確）")
     elif rev is not None and rev < 0.05:
-        oppose.append(f"月營收 YoY 僅 {rev:+.0%}（勉強過門檻）")
+        oppose.append(f"最新月營收年增僅 {rev:+.0%}（勉強過門檻）")
     if rec.get("revenue_accel") is True:
-        support.append("月營收 YoY 較上月加速")
+        support.append("最新月營收年增較上月加速")
     elif rec.get("revenue_accel") is False:
-        oppose.append("月營收 YoY 較上月減速")
+        oppose.append("最新月營收年增較上月減速")
     if rec.get("inst_net20") and rec["inst_net20"] > 0:
-        support.append(f"法人 20 日淨買超 {rec['inst_net20']/1e3:,.0f} 張")
+        support.append(f"法人近 20 日淨買超 {rec['inst_net20']/1e3:,.0f} 張")
     if d50 is not None and 0 <= d50 <= 0.08:
-        support.append(f"距 50MA 僅 {d50:+.0%}（進場點貼近支撐）")
+        support.append(f"距 50MA 僅 {d50:+.0%}（進場點貼近 50 日線支撐）")
     elif d50 is not None and d50 > 0.20:
         oppose.append(f"距 50MA {d50:+.0%}（乖離大、追漲風險）")
     if d52 is not None and d52 < -0.15:
@@ -244,9 +244,9 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
     elif d52 is not None and d52 > -0.03:
         oppose.append(f"距 52 週高僅 {d52:+.0%}（追高風險）")
     if riskp is not None and riskp > 0.12:
-        oppose.append(f"到停損位 {riskp:+.0%}（停損位遠、單筆風險高）")
+        oppose.append(f"到進場停損（候選池） {riskp:+.0%}（停損位遠、單筆風險高）")
     if rec.get("close") and rec["close"] > 1000:
-        oppose.append(f"股價 {rec['close']:.0f} 元（高價股，零股以外難分批）")
+        oppose.append(f"現價 {rec['close']:.0f} 元（高價股，零股以外難分批）")
     return support, oppose
 
 
@@ -344,15 +344,15 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
         rec["close"] = round(close, 2)
 
         rec["conditions"] = [
-            {"項": "季 EPS YoY > 25%",
+            {"項": "季 EPS 年增 > 25%",
              "狀態": "成立（基期過低，數字供參考）" if rec["eps_yoy_low_base"] else "成立"},
-            {"項": "近 3 年 TTM EPS 成長", "狀態": "成立"},
+            {"項": "近 3 年 已公布 4 季 EPS 成長", "狀態": "成立"},
             {"項": "ROE > 15%", "狀態": "成立"},
             {"項": "毛利率未連兩季惡化", "狀態": "成立"},
             {"項": "F-Score ≥ 6", "狀態": "成立"},
-            {"項": "月營收 YoY > 0", "狀態": "成立"},
+            {"項": "最新月營收年增 > 0", "狀態": "成立"},
             {"項": "法人 20 日淨買超 > 0", "狀態": "成立"},
-            {"項": "Minervini 趨勢模板", "狀態": f"{rec['trend_cnt']}/8"},
+            {"項": "趨勢模板 8 項（候選池）", "狀態": f"{rec['trend_cnt']}/8"},
         ]
         support, oppose = _support_oppose(rec)
         rec["support"] = support
@@ -374,11 +374,11 @@ def _invalidation(rec: dict) -> list[dict]:
         {"條件": "收盤跌破 50MA", "目前": "已跌破" if rec["dist_50ma"] is not None
          and rec["dist_50ma"] < 0 else "未觸發"},
         {"條件": "趨勢模板 < 5/8", "目前": "已觸發" if rec["trend_cnt"] < 5 else "未觸發"},
-        {"條件": "月營收 YoY 轉負", "目前": "已轉負" if (rec["revenue_yoy"] or 0) < 0
-         else ("未觸發（YoY 仍加速）" if rec.get("revenue_accel") is True
-               else "未觸發（但 YoY 已較上月減速）" if rec.get("revenue_accel") is False
+        {"條件": "最新月營收年增轉負", "目前": "已轉負" if (rec["revenue_yoy"] or 0) < 0
+         else ("未觸發（月營收年增仍加速）" if rec.get("revenue_accel") is True
+               else "未觸發（但 月營收年增已較上月減速）" if rec.get("revenue_accel") is False
                else "未觸發")},
-        {"條件": "季 EPS YoY 轉負", "目前": "已轉負" if eps_negative
+        {"條件": "季 EPS 年增轉負", "目前": "已轉負" if eps_negative
          else "未觸發"},
     ]
 

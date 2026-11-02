@@ -154,7 +154,7 @@ def asof_line(card: dict) -> str:
     if month:
         parts.append(f"月營收至 {month['period']}")
     if card.get("px_date"):
-        parts.append(f"股價 {card['px_date']}")
+        parts.append(f"現價 {card['px_date']}")
     return "｜".join(parts) + ("　｜　" if parts else "") + NOT_FORECAST
 
 
@@ -310,7 +310,7 @@ def explain_tables(card: dict) -> list[VTable]:
     rows = [
         ("近 4 季 EPS", "最近連續四季，營收齊全時可含一季試算；停用時只用已公布財報。"),
         ("前瞻 4 季 EPS", "新季營收出現後窗口向前一季，最多含兩季試算；新季營收未出時與近 4 季相同。"),
-        ("試算", "月營收補齊季營收，套用最新季毛利率與費用率、近八季業外中位數、稅率及少數股權比，再除以隱含股數。"),
+        ("試算", "月營收補齊季營收，套用最新季毛利率與營業費用率、近八季業外中位數、稅率及少數股權比，再除以隱含股數。"),
         ("三價", f"{'每股淨值' if pb else '基準 EPS'} × 自身歷史{method}的 20%／50%／80% 位置。"),
         ("倍數窗", "股價淨值比採全歷史。" if pb else "一般與循環股近 60 月，高成長近 36 月；本益比上限依類型截斷。"),
         ("有效月", "倍數、基準與股數資料有效，排除不可比月份；本益比須有正獲利且倍數不超過 100 倍。" if not pb else "每股淨值及股價有效，排除不可比月份。"),
