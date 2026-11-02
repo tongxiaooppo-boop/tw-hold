@@ -149,6 +149,10 @@ view 回傳結構化資料（`PriceCard`、`EpsCard`，見骨架），streamlit 
 - 依 `upgrade_guide.md` §15-1、§15-2「統一寫法／禁用」改 `app/`、`screener/`、`build_*.py` 的**畫面文字**（非 docstring 的中文字串）。不改算法、不改 schema 欄名、不改 JSON key。
 - `tests/test_glossary.py`（框架已寫好禁用清單與掃描法）全過。白名單只准放程式內部訊息（log、例外訊息），每條註明理由；月營收封印頁（`_rev_view_value`、`_rev_view_hold`、`app/valuation.py`）整段排除，解封時移除排除。
 - 改完列「改了哪些字串（舊→新、檔案）」給 Opus。
+- 框架（11/3 Opus 補寫）：`tests/test_glossary.py`。基準：`test_glossary_禁用寫法` 100 處、`test_glossary_估值名詞只在估值模組` 1 處（`build_factors.py:469`），其餘 61 條（掃描法、規則正反例、`test_glossary_同名同源` 5 種卡）已過。
+  - 實作者只准改檔內 `WHITELIST`（只放程式內部訊息）與 `OUTSIDE_OK`（估值名詞在估值模組群以外合法出現：同一欄位，或明講無關），每條寫理由；`RULES`、掃描法、排除範圍不准動，覺得誤判停下回報。
+  - `MANUAL` 列的 10 類（裸稱年增／停損／支撐／殖利率、不帶日期的股價、市況兩套詞……）無法機械判斷，P4c 要人工掃過 `ui_strings`，在回報逐類寫「改了哪些／為什麼不改」。
+  - 估值卡沒有「複製給 AI」匯出，§15-3 的同名同源先比卡片 ↔ 引擎欄位 ↔ 三個展開區的 📌；日後加匯出要一起比。
 
 ## 9. 驗收（Opus）
 
