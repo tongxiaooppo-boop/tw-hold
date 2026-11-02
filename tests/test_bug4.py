@@ -93,3 +93,24 @@ def test_quarter_sanity_flags():
     assert dt.quarter_sanity(q).level == "degrade"
     assert dt.quarter_sanity(_quarterly()).level == "ok"
     assert dt.quarter_sanity(_quarterly().drop(columns=["ni_parent", "gross_profit"])).level == "ok"
+
+
+def test_loss_quarter_not_taxed():
+    """Opus 驗收修正：稅只課在賺錢的季；虧損試算季 conv＝1−m（不打 1−t 折）。"""
+    q = _quarterly()
+    q[["op_income", "pretax_income", "net_income", "ni_parent", "eps"]] = [-10.0, -8.0, -8.0, -8.0, -0.8]
+    r = en.nowcast(q, _monthly())
+    assert r["ok"] and r["params"]["t"] == en.DEFAULT_TAX_RATE
+    est = [d for d in r["nc_quarters"] if d["kind"] in ("est", "copy")]
+    assert est and all(d["op"] + d["nonop"] < 0 and d["conv"] == 1.0 for d in est)
+
+
+def test_quarter_sanity_runs_without_monthly():
+    """sol 審查 D4-1：沒有月營收（試算跑不了）也要查財報矛盾。"""
+    q = _quarterly()
+    q.loc[q.index[-1], ["eps", "ni_parent"]] = [0.09, -6e7]
+    px = pd.DataFrame({"date": pd.to_datetime(["2026-03-02"]), "close": [50.0]})
+    card = vc.build_card(q, pd.DataFrame(columns=["month", "revenue"]), px,
+                         pd.DataFrame(columns=["date", "pbr", "per"]),
+                         {"type": "normal", "decided_at": "2025-12-31", "state": [], "subtags": [], "metrics": {}})
+    assert any(c["name"] == "財報矛盾" for c in card["checks"])

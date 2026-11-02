@@ -157,9 +157,11 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
             for f in nc.get("flags") or []:
                 checks.append(dt.Check(f, "degrade", None, f))
             checks += [dt.shares_check(q), dt.bridge_residual(q, nc.get("params") or {}),
-                       dt.nonop_gate(q), dt.revenue_caliber(q, monthly),
-                       dt.quarter_sanity(q, construction=("construction" in
-                           ((cls.get("metrics") or {}).get("special_triggers") or [])))]
+                       dt.nonop_gate(q), dt.revenue_caliber(q, monthly)]
+    # 財報矛盾跟月營收、試算成不成功無關（試算不出來的反而最該看）；金融業沒有毛利、營收口徑不同，不查
+    if typ != "financial":
+        checks.append(dt.quarter_sanity(q, construction=("construction" in
+                      ((cls.get("metrics") or {}).get("special_triggers") or []))))
 
     # ── 路由 ──
     if typ not in ("insufficient", "special", "financial", "cyclical", "normal", "growth"):
