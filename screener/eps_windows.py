@@ -56,7 +56,11 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+import math
+
 import pandas as pd
+
+from reference import corporate_actions as ca
 
 # ── 常數（upgrade_guide §12；實作者不得改名或改值）──
 EPS_MIN = 0.05          # 推隱含股數的最小 |EPS|
@@ -121,24 +125,45 @@ class EpsWindow:
 
 def quarter_visible(period_end: pd.Timestamp, asof: pd.Timestamp) -> bool:
     """live=False 口徑：asof ≥ report_deadline(period_end)。"""
-    raise NotImplementedError
+    return pd.Timestamp(asof) >= ca.report_deadline(period_end)
 
 
 def month_visible(month: pd.Timestamp, asof: pd.Timestamp) -> bool:
     """asof ≥ month 的次月 REVENUE_VISIBLE_DAY 日。"""
-    raise NotImplementedError
+    deadline = pd.Timestamp(month).to_period("M").start_time + pd.offsets.MonthBegin(1)
+    deadline += pd.Timedelta(days=REVENUE_VISIBLE_DAY - 1)
+    return pd.Timestamp(asof) >= deadline
 
 
 def reported_window(q: pd.DataFrame, asof: pd.Timestamp, live: bool = False) -> EpsWindow:
     """已公布 4 季：P−3..P，全 actual。少於 4 季或有缺季 → ok=False、status="no_data"。
     所有股票（含金融）都要給（T-9）。"""
-    raise NotImplementedError
+    actual = _actuals(q, asof, live)
+    if not actual:
+        return _unavailable("no_data", "沒有已公布財報")
+    return _assemble(actual, max(actual))
 
 
 def ttm_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
                live: bool = False, financial: bool = False) -> EpsWindow:
     """近 4 季（見模組說明）。financial=True → 等於 reported_window。"""
-    raise NotImplementedError
+    actual = _actuals(q, asof, live)
+    if not actual:
+        return _unavailable("no_data", "沒有已公布財報")
+    p = max(actual)
+    reported = _assemble(actual, p)
+    if financial:
+        return reported
+    months = _months(monthly, asof, live)
+    if _known(p + 1, months) == 3 and _known(p + 2, months) == 3:
+        return _assemble(actual, p, status="report_late", reason="財報延遲")
+    if _known(p + 1, months) < 3:
+        return _assemble(actual, p, reason="新季營收未齊")
+    try:
+        row, detail = _estimate(p + 1, actual, months, asof)
+    except ValueError as exc:
+        return _assemble(actual, p, reason=str(exc))
+    return _assemble(actual, p + 1, {p + 1: (row, detail)})
 
 
 def fwd_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
@@ -146,10 +171,190 @@ def fwd_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
                financial: bool = False) -> EpsWindow:
     """前瞻 4 季（見模組說明）。base＝同一 asof 的 ttm_window 結果（None 就自己算）。
     financial=True → 與近 4 季相同。"""
-    raise NotImplementedError
+    if base is None:
+        base = ttm_window(q, monthly, asof, live=live, financial=financial)
+    if financial or base.status in ("report_late", "no_data") or not base.quarters:
+        return base
+    end = pd.Period(base.quarters[-1].q, freq="Q")
+    months = _months(monthly, asof, live)
+    if _known(end + 1, months) == 0:
+        return base
+    actual = _actuals(q, asof, live)
+    estimates = {
+        pd.Period(row.q, freq="Q"): (row, detail)
+        for row in base.quarters if row.kind == "est"
+        for detail in base.details if detail.q == row.q
+    }
+    try:
+        for period in pd.period_range(end - 2, end + 1, freq="Q"):
+            if period not in actual and period not in estimates:
+                estimates[period] = _estimate(period, actual, months, asof)
+    except ValueError as exc:
+        return _unavailable("not_estimable", str(exc))
+    return _assemble(actual, end + 1, estimates)
 
 
 def windows(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
             live: bool = False, financial: bool = False) -> dict[str, EpsWindow]:
     """一次算三個：{"reported", "ttm", "fwd"}。前瞻與近 4 季共用的試算季必須是同一個 EstDetail。"""
-    raise NotImplementedError
+    reported = reported_window(q, asof, live=live)
+    ttm = ttm_window(q, monthly, asof, live=live, financial=financial)
+    fwd = fwd_window(q, monthly, asof, base=ttm, live=live, financial=financial)
+    return {"reported": reported, "ttm": ttm, "fwd": fwd}
+
+
+
+def _finite(value) -> bool:
+    return value is not None and bool(pd.notna(value)) and math.isfinite(float(value))
+
+
+def _actuals(q: pd.DataFrame, asof: pd.Timestamp, live: bool) -> dict:
+    if q.empty:
+        return {}
+    rows = {}
+    # 先按輸入順序去重，再判可見性，不讓舊筆蓋過最後一筆。
+    for row in q.to_dict("records"):
+        pe = pd.Timestamp(row["period_end"])
+        if pd.notna(pe):
+            rows[pe.to_period("Q")] = row
+    return {p: r for p, r in rows.items()
+            if _finite(r.get("eps")) and _finite(r.get("revenue"))
+            and (live or quarter_visible(p.end_time.normalize(), asof))}
+
+
+def _months(monthly: pd.Series, asof: pd.Timestamp, live: bool) -> dict:
+    raw = {pd.Timestamp(m).to_period("M"): v for m, v in monthly.items()}
+    return {m: float(v) for m, v in raw.items()
+            if _finite(v) and v > 0 and (live or month_visible(m.start_time, asof))}
+
+
+def _quarter_months(period: pd.Period) -> pd.PeriodIndex:
+    return pd.period_range(period.asfreq("M", "start"), periods=3, freq="M")
+
+
+def _known(period: pd.Period, months: dict) -> int:
+    return sum(m in months for m in _quarter_months(period))
+
+
+def _unavailable(status: str, reason: str) -> EpsWindow:
+    return EpsWindow(False, status, reason, (), None, 0)
+
+
+def _assemble(actual: dict, end: pd.Period, estimates: dict | None = None,
+              status: str = "ok", reason: str | None = None) -> EpsWindow:
+    estimates = estimates or {}
+    rows, details = [], []
+    for period in pd.period_range(end - 3, end, freq="Q"):
+        if period in estimates:
+            row, detail = estimates[period]
+            rows.append(row)
+            details.append(detail)
+        elif period in actual:
+            r = actual[period]
+            rows.append(QuarterRow(str(period), "actual", float(r["eps"]),
+                                   float(r["revenue"]), 3, None, None))
+        else:
+            return _unavailable("no_data", f"缺少 {period} 財報")
+    return EpsWindow(True, status, reason, tuple(rows), sum(r.eps for r in rows),
+                     len(details), tuple(details))
+
+
+def _revenue(period: pd.Period, months: dict, asof: pd.Timestamp) -> tuple:
+    target = _quarter_months(period)
+    known = [m for m in target if m in months]
+    for m in target:
+        if m not in months and month_visible(m.start_time, asof):
+            raise ValueError(f"{m.month} 月營收應公布未公布")
+    if not known:
+        raise ValueError("新季營收未出")
+    if len(known) == 3:
+        return tuple((str(m), months[m], "actual") for m in target), None, 3
+    average = sum(months[m] for m in known) / len(known)
+    growth_months = known
+    method = "yoy_q"
+    if period.quarter == 1 and known == [target[0]]:
+        growth_months = sorted(m for m in months if m <= known[0])[-3:]
+        method = "q1_3m"
+    usable = (len(growth_months) == (3 if method == "q1_3m" else len(known))
+              and all(m - 12 in months for m in growth_months))
+    factor = (sum(months[m] for m in growth_months)
+              / sum(months[m - 12] for m in growth_months)) if usable else None
+    result, methods = [], []
+    for m in target:
+        if m in months:
+            result.append((str(m), months[m], "actual"))
+        else:
+            fill = method if factor is not None and m - 12 in months else "avg"
+            value = months[m - 12] * factor if fill != "avg" else average
+            result.append((str(m), value, fill))
+            methods.append(fill)
+    return tuple(result), ("avg" if "avg" in methods else method), len(known)
+
+
+def _shares(row: dict) -> float | None:
+    eps, ni = row.get("eps"), row.get("ni_parent")
+    if not _finite(eps) or abs(eps) < EPS_MIN or not _finite(ni):
+        return None
+    shares = ni / eps
+    return float(shares) if _finite(shares) and shares > 0 else None
+
+
+def _estimate(period: pd.Period, actual: dict, months: dict,
+              asof: pd.Timestamp) -> tuple[QuarterRow, EstDetail]:
+    p = max(actual)
+    last = actual[p]
+    month_rows, fill, count = _revenue(period, months, asof)
+    revenue = sum(r[1] for r in month_rows)
+    flags = []
+    if (last["revenue"] <= 0 or not _finite(last.get("gross_profit"))
+            or not _finite(last.get("op_income"))):
+        raise ValueError("試算停用：最新季毛利或費用率缺漏")
+    gm = last["gross_profit"] / last["revenue"]
+    opex = (last["gross_profit"] - last["op_income"]) / last["revenue"]
+    # 取最近八個已公布季；個別參數缺值不當成零。
+    recent = [actual[k] for k in sorted(actual)[-NONOP_QUARTERS:]]
+    nonops = [r["pretax_income"] - r["op_income"] for r in recent
+              if _finite(r.get("pretax_income")) and _finite(r.get("op_income"))]
+    if len(nonops) < NONOP_MIN_VALID:
+        raise ValueError("試算停用：業外有效季數不足")
+    nonop = float(pd.Series(nonops).median())
+    tax_rows = [r for r in recent if _finite(r.get("pretax_income"))
+                and _finite(r.get("net_income"))]
+    pretax_sum = sum(r["pretax_income"] for r in tax_rows)
+    pretax_abs = sum(abs(r["pretax_income"]) for r in tax_rows)
+    if pretax_abs == 0 or abs(pretax_sum) / pretax_abs < OFFSET_MIN:
+        raise ValueError("試算停用：稅前抵銷比過小")
+    tax = 1 - sum(r["net_income"] for r in tax_rows) / pretax_sum
+    if pretax_sum <= 0 or not 0 <= tax <= TAX_MAX:
+        tax = TAX_DEFAULT
+        flags.append("稅率不適用，改用 20%")
+    minority_rows = [r for r in recent if _finite(r.get("net_income"))
+                     and _finite(r.get("ni_parent"))]
+    net_sum = sum(r["net_income"] for r in minority_rows)
+    net_abs = sum(abs(r["net_income"]) for r in minority_rows)
+    parent_sum = sum(r["ni_parent"] for r in minority_rows)
+    if net_abs == 0 or abs(net_sum) / net_abs < OFFSET_MIN:
+        raise ValueError("試算停用：淨利抵銷比過小")
+    minority = 1 - parent_sum / net_sum
+    if parent_sum * net_sum < 0 or not -MINORITY_MAX <= minority <= MINORITY_MAX:
+        raise ValueError("試算停用：少數股權比不適用")
+    shares = _shares(last)
+    if shares is None:
+        raise ValueError(f"試算停用：{p} EPS 太小或歸母淨利缺漏，推不出股數")
+    shares_from = str(p)
+    previous = _shares(actual[p - 1]) if p - 1 in actual else None
+    if previous is not None and abs(shares / previous - 1) > SHARE_JUMP:
+        shares = previous
+        shares_from = f"{p - 1}（Q{p.quarter} 股數跳動）"
+        flags.append(f"{p} 股數跳動，改用前季")
+    op = revenue * (gm - opex)
+    pretax = op + nonop
+    applied_tax = tax if pretax > 0 else 0.0
+    parent = pretax * (1 - applied_tax) * (1 - minority)
+    eps = parent / shares
+    if not all(_finite(v) for v in (revenue, gm, opex, op, nonop, parent, eps)):
+        raise ValueError("試算停用：推算結果非有限值")
+    detail = EstDetail(str(period), month_rows, revenue, gm, opex, op, nonop,
+                       applied_tax, minority, parent, shares, shares_from, eps, tuple(flags))
+    row = QuarterRow(str(period), "est", eps, revenue, count, fill, str(p))
+    return row, detail

@@ -10,7 +10,11 @@ EventsUnavailable（T-17：不得靜默當成「沒有事件」）。
 """
 from __future__ import annotations
 
+import math
+
 import pandas as pd
+
+from reference import corporate_actions as ca
 
 
 class EventsUnavailable(RuntimeError):
@@ -19,18 +23,36 @@ class EventsUnavailable(RuntimeError):
 
 def events(ticker: str) -> list[dict]:
     """該檔全部事件（date 轉 Timestamp），依日期排序；裸代號比對（"2330.TW" → "2330"）。"""
-    raise NotImplementedError
+    if not ca.EVENTS_OK:
+        raise EventsUnavailable("股數事件表讀取失敗")
+    rows = [dict(e, date=pd.Timestamp(e["date"]))
+            for e in ca.SPLITS.get(str(ticker).split(".")[0], [])]
+    return sorted(rows, key=lambda e: e["date"])
 
 
 def share_factor_after(ticker: str, t: pd.Timestamp) -> float:
     """t 之後（事件日 > t，不含 t）所有 m 有限且 >0 的事件 m 之乘積；無事件 = 1.0。
     用途：price_adj(t) = 原始收盤(t) ÷ share_factor_after(t)，把歷史價換到今天的股數基準（不做股利還原）。"""
-    raise NotImplementedError
+    factor = 1.0
+    for e in events(ticker):
+        m = e.get("m")
+        if e["date"] > pd.Timestamp(t) and m is not None and math.isfinite(m) and m > 0:
+            factor *= m
+    return factor
 
 
 def par_value_at(ticker: str, t: pd.Timestamp, today_par: float | None) -> float | None:
     """t 當時面額 = today_par × Π(事件日 > t 的 par_change 事件 m)；today_par 為 None → None。"""
-    raise NotImplementedError
+    rows = events(ticker)
+    if today_par is None:
+        return None
+    value = float(today_par)
+    for e in rows:
+        m = e.get("m")
+        if (e["date"] > pd.Timestamp(t) and e.get("type") == "par_change"
+                and m is not None and math.isfinite(m) and m > 0):
+            value *= m
+    return value
 
 
 def excluded_months(ticker: str) -> set[pd.Period]:
@@ -38,4 +60,10 @@ def excluded_months(ticker: str) -> set[pd.Period]:
     Q＝第一個 period_end ≥ e.date 的曆季季末；V＝report_deadline(Q)；
     剔除月份＝[e.date 所在月, V 所在月的前一個月]（V 當月月底財報已可見，不剔除）。
     回傳 pd.Period("M") 的集合。"""
-    raise NotImplementedError
+    excluded = set()
+    for e in events(ticker):
+        if e.get("type") == "cap_reduction" and e.get("m") is None:
+            quarter_end = e["date"].to_period("Q").end_time.normalize()
+            visible = ca.report_deadline(quarter_end).to_period("M")
+            excluded.update(pd.period_range(e["date"].to_period("M"), visible - 1, freq="M"))
+    return excluded
