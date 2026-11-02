@@ -34,6 +34,7 @@
 | `revision["last_event"]` | `rev_hist` 依 month 排序最後一列的 `event`（"normal"／"roll"／"report"）；沒有 rev_hist → None。`revision_streak` 本身不改 |
 | `buy_range["where"]`、`buy_range["gap"]` | where＝"below"（現價 < low）／"in"／"above"（現價 > high）／None（沒現價）；gap＝above 時 現價 ÷ high − 1、below 時 現價 ÷ low − 1、其餘 None（demo「現價高於上緣 +230%」，畫面不准自己除） |
 | `fwd_note` | 前瞻三價那格的短句（demo：前瞻沒有時也要有字）。fwd_prices 有值 → None；tier ≠ A → None；否則依序：試算停用 `FWD_NOTES["est_off"]`、route PB `["pb"]`、循環或高獲利區 `["cyclical"]`、前瞻季＝近 4 季 `["same"]`、前瞻窗口不 ok `["window"].format(reason)`、前瞻 EPS < EPS_MIN `["thin"]`、前瞻有效月不足 `["hist"]`。常數見骨架 |
+| `b_tier` 多 `n_valid`、`n_loss`、`window` | B 層從 build_card 內部的 pe_stats 帶出（與 prices 同名欄位同義）；📊 的「有效月數／虧損月數／倍數期間」B 層讀這裡，A 層讀 prices。C／D 層沒有就**省略這幾列**（不寫「—」）。（P4a sol 回報後 Opus 補，11/2 深夜） |
 | `nonop_hist` 每列 `share` | nonop ÷ \|pretax\|（pretax 0／缺 → None），「占稅前」欄用 |
 
 - `CARD_VERSION = "card-v4-val2"`。模組 docstring「回傳欄位」補這兩項。
