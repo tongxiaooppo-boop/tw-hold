@@ -1,14 +1,20 @@
-"""估值失效偵測與可信度（草案 §6、§8.3 的精簡版；2026-11-01）。
+"""估值可信度四組（估值 2.0，upgrade_guide §8）。
 
-每個檢查回 `Check(name, level, value, why)`：level ∈ ok／degrade／severe／block。
-`confidence()` 彙總：任何 block → 不給價；severe（仍給價）→ 低；degrade 0 條＝高、1 條＝中、≥2 條＝低。
-（val_card 不再用 block 擋價：它把 block 轉成 severe，見 val_card 檔頭。）
-純函式，不讀檔。
+【框架由 Opus 定（P3，2026-11-02），實作者不得改介面、常數名與值、Check 欄位、group／name 字串】函式本體由 P3 實作。
 
-已做（草案 11 項裡的 8 項）：股數對不上(2)、橋接殘差(3)、業外閘門(4)、稅/少數股權超界(5，由
-eps_nowcast 的 flags 轉入)、月營收口徑(6)、近零 EPS(10)、倍數分布失效(11)、歷史不可比/循環涵蓋(8、9，
-看分類結果)。
-未做：單季化混入(1，loader 已保證)、估計器實績(7，要先累積 estimator_log)。
+每個檢查回 `Check(group, name, level, value, why)`：
+- group ∈ GROUPS：data／share_basis／comparability／estimate
+- level ∈ LEVELS：ok／warn（只提示）／stop（停用受影響的窗口或方法）／unchecked（沒檢查到；≠ ok）
+- why：畫面用中文短句；level=="ok" 時可為 ""（例外：estimate 沒有試算季時寫「沒有試算季」）
+`summarize()` 彙總成每組一個狀態（嚴重度 stop > warn > unchecked > ok），val_card 依它停用：
+- data stop → 該窗口不可用（val_card 判 D）
+- share_basis stop → PE／PB 都不給價（val_card 判 D，原因寫 why）
+- estimate stop → 停用所有試算季（近 4 季退回已公布 4 季、前瞻不給）
+- comparability 只提示
+純函式，不讀檔（share_checks 例外：透過 reference.share_basis 讀事件表）。
+
+舊版（card-v2）的 degrade／severe／block 三級、confidence()、dist_check()、class_flags()、pb_events() 全部刪除；
+P80÷P20、倍數截斷、分類旗標改進 comparability_checks。
 """
 from __future__ import annotations
 
@@ -17,232 +23,147 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-SHARES_DEGRADE = 0.03
-SHARES_BLOCK = 0.15
-BRIDGE_DEGRADE = 0.10
-BRIDGE_BLOCK = 0.25
-NONOP_SHARE = 0.20           # 近 8 季業外占稅前
-NONOP_DISPERSION = 0.5       # 業外 P90−P10 ÷ |稅前中位數|
-REV_CALIBER_TOL = 0.05
-NEAR_ZERO_REL = 0.2          # EPS_NC < 近 5 年 TTM EPS 中位數 × 0.2 視為近零
-RATIO_DEGRADE = 2.5
-RATIO_BLOCK = 4.0
-FWD_JUMP_REL = 1.5          # 【經驗】前瞻與過去四季 EPS 的跳升倍數
+LEVELS = ("ok", "warn", "stop", "unchecked")
+GROUPS = ("data", "share_basis", "comparability", "estimate")
+SEVERITY = {"ok": 0, "unchecked": 1, "warn": 2, "stop": 3}
+
+# ── 門檻（沿用舊值者註明）──
+SHARES_WARN = 0.15           # 隱含股數 vs 股本÷面額 差距（舊 SHARES_BLOCK；EPS 已調股數，差距多為調整時點 → 只提示）
+BRIDGE_WARN = 0.10           # 沿用
+BRIDGE_STOP = 0.25           # 沿用
+NONOP_SHARE = 0.20           # 沿用：近 8 季業外占稅前
+NONOP_DISPERSION = 0.5       # 沿用：業外 P90−P10 ÷ |稅前中位數|
+REV_CALIBER_TOL = 0.05       # 沿用
+NEAR_ZERO_REL = 0.2          # 沿用
+RATIO_WARN = 2.5             # 沿用（舊 RATIO_DEGRADE）；>4 也只提示（§5-2「只降級」）
+FWD_JUMP_REL = 1.5           # 沿用
+VAR_PP = 0.30                # 【起始值】高變動：最新季季增減 − 去年同季季增減，絕對值 ≥ 30 個百分點
+PAR_DEFAULT = 10.0           # 沒有面額資料時假設 10 元（company_basic 要到 P5）
 
 
-@dataclass
+@dataclass(frozen=True)
 class Check:
+    group: str
     name: str
-    level: str            # ok／degrade／severe（仍給價、可信度低）／block
+    level: str
     value: float | None
     why: str
 
 
-def _ok(name: str, value: float | None = None) -> Check:
-    return Check(name, "ok", value, "")
+def summarize(checks: list[Check]) -> dict[str, dict]:
+    """{group: {"level": str, "items": [{"name", "level", "value", "why"}...]}}，GROUPS 四組都要有。
+    level＝該組 items 中 SEVERITY 最高者；該組沒有任何 Check → level="unchecked"、items=[]。
+    items 只列 level != "ok" 的 Check，**例外**：estimate 組的「試算季」ok 項（why＝沒有試算季）要列。
+    items 依 SEVERITY 由高到低、同級照原順序。"""
+    raise NotImplementedError
+
+
+def stopped(status: dict[str, dict], group: str) -> str | None:
+    """status＝summarize() 結果；該組 level=="stop" → 回傳第一個 stop 項的 why，否則 None。"""
+    raise NotImplementedError
+
+
+# ── data ──────────────────────────────────────────────────────────
+
+def data_checks(q: pd.DataFrame, monthly: pd.Series, windows: dict, cls: dict | None,
+                asof: pd.Timestamp, financial: bool = False, construction: bool = False) -> list[Check]:
+    """windows＝eps_windows.windows(...) 結果（{"reported","ttm","fwd"}）。依序產生：
+    1. 「財報缺季」：windows["reported"].ok 為 False → stop，why＝"近 4 季財報不連續或不足（{reason}）"；否則 ok。
+    2. 「財報延遲」：windows["ttm"].status=="report_late" → warn，why＝"新季營收已出兩季、財報還沒出，近 4 季用已公布財報"。
+       （ok 時不必產生）
+    3. 「月營收缺」（financial=True 跳過，不產生）：M＝asof 時「應已公布」的最近月（asof ≥ 次月 10 日的最近一個月）；
+       monthly 在 M 沒有有限 >0 的值 → warn，why＝f"{M:%Y-%m} 月營收應已公布但沒有資料，新季不試算"；否則 ok。
+    4. 「分類過期」：cls 有 decided_at 且早於 q 最新 period_end → warn（why 沿用舊句：
+       "分類基準 YYYY-MM-DD 落後最新財報 YYYY-MM-DD，類型與狀態可能過期"）；解析失敗略過。
+    5. 「財報矛盾」：quarter_sanity(q, construction=construction)，financial=True 跳過。"""
+    raise NotImplementedError
 
 
 def quarter_sanity(q: pd.DataFrame, n: int = 8, construction: bool = False) -> Check:
-    """近 n 季檢查 EPS 與歸母淨利異號、非營建營收 ≤0、毛利大於營收。
-
-    依 period_end 排序後取最後 n 列；缺欄位時略過該條，不刪季或修改數字。
-    """
-    d = q.sort_values("period_end").tail(n)
-    bad = pd.Series(False, index=d.index)
-    if "eps" in d.columns and "ni_parent" in d.columns:
-        eps, ni = d["eps"], d["ni_parent"]
-        bad |= eps.notna() & ni.notna() & (eps != 0) & (ni != 0) & (np.sign(eps) != np.sign(ni))
-    if "revenue" in d.columns:
-        if not construction:
-            bad |= d["revenue"] <= 0
-        if "gross_profit" in d.columns:
-            bad |= (d["gross_profit"].notna() & d["revenue"].notna()
-                    & (d["gross_profit"] > d["revenue"]))
-    count = int(bad.sum())
-    if not count:
-        return _ok("財報矛盾")
-    quarters = "、".join(pd.to_datetime(d.loc[bad, "period_end"]).dt.to_period("Q").astype(str))
-    return Check("財報矛盾", "degrade", count,
-                 f"近 {n} 季有 {count} 季財報數字互相矛盾（{quarters}）："
-                 "EPS 與淨利正負相反／營收 ≤0／毛利 > 營收，相關數字可能不準")
+    """沿用 card-v2 算法（近 n 季 EPS 與歸母淨利異號、非營建營收 ≤0、毛利 > 營收；缺欄位略過該條）。
+    group="data"、name="財報矛盾"；有矛盾 → warn（舊 degrade），why 沿用舊句。"""
+    raise NotImplementedError
 
 
-def shares_check(q: pd.DataFrame) -> Check:
-    """capital_stock÷10（期末股數）vs 近 4 季隱含股數（歸母淨利÷EPS 中位數，是加權平均）。"""
-    n = "股數對不上"
-    if "capital_stock" not in q.columns:
-        return _ok(n)
-    t = q.tail(4)
-    ni = t["ni_parent"].fillna(t["net_income"]) if "ni_parent" in t.columns else t["net_income"]
-    s = (ni / t["eps"])[(t["eps"].abs() >= 0.05)]
-    s = s[s > 0]
-    cap = q["capital_stock"].dropna()
-    if s.empty or cap.empty or cap.iloc[-1] <= 0:
-        return _ok(n)
-    dev = abs(float(s.median()) / (float(cap.iloc[-1]) / 10) - 1)
-    if dev > SHARES_BLOCK:
-        # EPS 已被 loader 依分割／配股調整、股本是帳面值 → 差距大多是調整時點，不是資料壞；降級不擋
-        return Check(n, "degrade", dev, f"隱含股數與股本差 {dev:.0%}（>15%，可能是分割／配股調整），股數用隱含值")
-    if dev > SHARES_DEGRADE:
-        return Check(n, "degrade", dev, f"隱含股數與股本差 {dev:.0%}（>3%），股數用隱含值")
-    return _ok(n, dev)
+# ── share_basis ───────────────────────────────────────────────────
+
+def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, today_par: float | None = None) -> list[Check]:
+    """1. 事件表：reference.share_basis.events(ticker) 丟 EventsUnavailable → 只回
+          [Check("share_basis","股數事件表","stop",None,"股數事件表讀取失敗，股數基準無法確認，不給價")]（T-17）。
+    2. 「現金減資區間」（卡片端即時版，與歷史序列的 excluded_months 不同）：share_basis.events(ticker) 中
+       type=="cap_reduction" 且 m 為 None、date ≤ asof 的事件 e，Qe＝e.date 所在曆季季末；
+       q 沒有任何 period_end ≥ Qe 且 eps 有限的列（事件後的財報還沒進來）→ stop，
+       why＝"現金減資後、新財報出來前，EPS 與股價的股數基準不一致，不給價"；否則 ok。
+    3. 「股數對不上」：最新一季（period_end 最大且 |eps| ≥ 0.05、ni_parent 有限）隱含股數 S＝ni_parent ÷ eps；
+       股本股數 C＝capital_stock ÷ (today_par 或 PAR_DEFAULT)；dev＝|S ÷ C − 1|；
+       dev > SHARES_WARN → warn（why：f"隱含股數與股本差 {dev:.0%}，可能是分割／配股調整時點"），否則 ok（value=dev）；
+       推不出 S 或 C 非有限 >0 → unchecked，why＝"推不出隱含股數或缺股本"。
+    4. 「面額與特別股」：today_par 為 None → unchecked，why＝"面額與特別股資料尚未收集，假設面額 10 元"；否則 ok。"""
+    raise NotImplementedError
 
 
-def bridge_residual(q: pd.DataFrame, params: dict) -> Check:
-    """用實際近 8 季營業利益＋業外中位數，走「稅/少數股權/股數」橋接，重算 EPS 對比實際。"""
-    n = "橋接殘差"
-    try:
-        t, m, S, N = params["t"], params["m"], params["shares"], params["nonop_med"]
-        if None in (t, m, S, N) or not S:
-            return _ok(n)
-        d = q.tail(8)
-        hat = (d["op_income"] + N) * (1 - t) * (1 - m) / S
-        err = float((hat - d["eps"]).abs().sum())
-        base = float(d["eps"].abs().sum())
-        if base <= 0 or np.isnan(err):
-            return _ok(n)
-        r = err / base
-    except (KeyError, TypeError):
-        return _ok(n)
-    if r > BRIDGE_BLOCK:
-        return Check(n, "block", r, f"用實際營業利益重算 EPS，近 8 季平均誤差 {r:.0%}（>25%）")
-    if r > BRIDGE_DEGRADE:
-        return Check(n, "degrade", r, f"用實際營業利益重算 EPS，近 8 季平均誤差 {r:.0%}（>10%）")
-    return _ok(n, r)
+# ── comparability ─────────────────────────────────────────────────
+
+def comparability_checks(cls: dict | None, stats: dict | None) -> list[Check]:
+    """全部只提示（warn）。stats＝val_card 採用的那組 multiples_self.window_stats 結果（沒有就 None，不產生倍數項）。
+    1. 「倍數分布」：raw_mults P20、P80 皆有限 >0 且 P80÷P20 > RATIO_WARN → warn，
+       why＝f"歷史倍數 P80÷P20＝{r:.1f}，分布寬，三價參考性較低"，value=r；否則 ok。
+    2. 「倍數截斷」：stats["capped"] → warn，why＝"歷史倍數高於上限，已截斷"。
+    3. 分類旗標（cls subtags）：「疑似循環」「循環未觀察完整」「僅單一景氣事件」各一條 warn（why 沿用舊句）。
+    4. cls metrics：comparability_pending → 「歷史可比性」warn；switched → 「剛換類」warn（why 沿用舊句）。"""
+    raise NotImplementedError
+
+
+# ── estimate ──────────────────────────────────────────────────────
+
+def estimate_checks(q: pd.DataFrame, monthly: pd.Series, windows: dict) -> list[Check]:
+    """試算季的可靠度。E＝windows["ttm"]、windows["fwd"] 兩窗口所有 EstDetail（依 q 去重）。
+    E 為空 → 只回 [Check("estimate","試算季","ok",None,"沒有試算季")]。否則依序：
+    1. bridge_residual(q, E[0])
+    2. nonop_gate(q)
+    3. revenue_caliber(q, monthly)
+    4. variability(q)
+    5. E 每個 EstDetail 的 flags（去重）→ 各一條 warn，name＝「稅率／少數股權」，why＝flag 原文
+    6. near_zero_eps(windows["fwd"].eps 若 fwd.ok 且 n_est>0，否則 windows["ttm"].eps, q)
+    7. forward_jump(windows["fwd"].eps, windows["reported"].eps)（fwd 或 reported 不 ok → 傳 None）"""
+    raise NotImplementedError
+
+
+def bridge_residual(q: pd.DataFrame, detail) -> Check:
+    """驗「試算公式本身」（§8：零業外改業外中位數）：對 q 最近 8 個 eps、op_income 皆有限的實際季 i：
+      pretax_i = op_income_i + detail.nonop；t_i = 0 if pretax_i ≤ 0 else tax8；
+      eps_hat_i = pretax_i × (1 − t_i) × (1 − detail.minority) ÷ detail.shares
+    tax8＝1 − Σnet_income ÷ Σpretax_income（同 8 季）；Σpretax ≤0 或 tax8 ∉ [0, 0.35] → 0.20。
+    r＝Σ|eps_hat − eps| ÷ Σ|eps|；有效季 <4 或 Σ|eps|=0 → unchecked（why＝"實際季不足，無法驗證試算公式"）。
+    r > BRIDGE_STOP → stop；> BRIDGE_WARN → warn；否則 ok。group="estimate"、name="橋接殘差"、value=r，
+    why：f"用試算公式重算近 8 季 EPS，平均誤差 {r:.0%}"（stop 再加「，試算停用」）。"""
+    raise NotImplementedError
 
 
 def nonop_gate(q: pd.DataFrame) -> Check:
-    """業外占比 ≥20% 且離散 ≥0.5 → block（不給 PE 類價格）；占比高但穩定 → degrade。"""
-    n = "業外閘門"
-    d = q.tail(8)
-    nonop = (d["pretax_income"] - d["op_income"]).dropna()
-    pre = d["pretax_income"].dropna()
-    if len(nonop) < 4 or pre.abs().sum() == 0:
-        return _ok(n)
-    share = abs(float(nonop.sum())) / abs(float(pre.sum())) if float(pre.sum()) != 0 else 9.9
-    med = abs(float(pre.median()))
-    disp = float(nonop.quantile(0.9) - nonop.quantile(0.1)) / med if med > 0 else 9.9
-    if share >= NONOP_SHARE and disp >= NONOP_DISPERSION:
-        return Check(n, "block", share, f"近 8 季業外占稅前 {share:.0%} 且逐季差距大，EPS 試算不可靠")
-    if share >= NONOP_SHARE:
-        return Check(n, "degrade", share, f"近 8 季業外占稅前 {share:.0%}（穩定，可能是控股/權益法）")
-    return _ok(n, share)
+    """沿用 card-v2 算法；舊 block → stop（why 結尾改「，試算停用」）、degrade → warn。name="業外閘門"。"""
+    raise NotImplementedError
 
 
 def revenue_caliber(q: pd.DataFrame, monthly: pd.Series) -> Check:
-    """近 4 季「3 個月月營收合計 ÷ 季報營收」≥2 季偏離 >5% → 月營收與季報口徑不符。"""
-    n = "月營收口徑"
-    bad = tot = 0
-    for r in q.tail(4).itertuples():
-        end = pd.Timestamp(r.period_end)
-        months = [(end.to_period("M") - i).to_timestamp() for i in range(3)]
-        if all(m in monthly.index for m in months) and r.revenue:
-            tot += 1
-            ratio = float(sum(monthly[m] for m in months)) / float(r.revenue)
-            bad += abs(ratio - 1) > REV_CALIBER_TOL
-    if tot >= 3 and bad >= 2:
-        return Check(n, "block", float(bad), f"近 4 季有 {bad} 季月營收合計與季報營收差 >5%，前瞻 4 季不可靠")
-    return _ok(n, float(bad))
+    """沿用 card-v2 算法（近 4 季曆季相鄰，用 period_end 推 3 個月）；舊 block → stop。name="月營收口徑"。"""
+    raise NotImplementedError
+
+
+def variability(q: pd.DataFrame) -> Check:
+    """高變動（§8 新門檻）：P＝最新一季；需要 P、P−1、P−4、P−5 曆季都有 revenue 有限 >0，否則 ok。
+    g_now＝rev(P)÷rev(P−1)−1；g_ly＝rev(P−4)÷rev(P−5)−1；d＝g_now − g_ly。
+    |d| ≥ VAR_PP → warn，value=d，why＝f"最新一季營收季增減比去年同期多 {d:+.0%}（排除淡旺季後仍偏離），試算延續該季水準"。
+    name="高變動"。"""
+    raise NotImplementedError
 
 
 def near_zero_eps(eps_base: float | None, q: pd.DataFrame) -> Check:
-    n = "近零EPS"
-    if eps_base is None:
-        return _ok(n)
-    e = q["eps"].dropna()
-    if len(e) < 20:
-        return _ok(n)
-    from screener import quarterly_prep as qp
-
-    ttm = qp.ttm(q.set_index("period_end")["eps"]).dropna().tail(20)
-    med = float(ttm.median())
-    if med > 0 and eps_base < med * NEAR_ZERO_REL:
-        return Check(n, "block", eps_base, f"前瞻 4 季 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，改用過去 4 季 EPS")
-    return _ok(n, eps_base)
+    """沿用 card-v2 算法（近 20 個 TTM 中位數 × NEAR_ZERO_REL）；舊 block → stop，
+    why＝f"試算後 4 季 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，試算停用"。name="近零EPS"。"""
+    raise NotImplementedError
 
 
-def forward_jump(eps_fwd: float | None, ttm: float | None) -> Check:
-    """前瞻 4 季 EPS 比過去 4 季 EPS 高出 FWD_JUMP_REL 倍以上 → degrade（營收成長未必全轉成獲利）。
-    任一為 None／非有限、或 ttm ≤ 0 → ok（不判斷）。"""
-    n = "前瞻跳升"
-    if eps_fwd is None or ttm is None or not np.isfinite(eps_fwd) or not np.isfinite(ttm) or ttm <= 0:
-        return _ok(n)
-    r = eps_fwd / ttm
-    if r > FWD_JUMP_REL:
-        return Check(n, "degrade", r, f"前瞻 4 季 EPS {eps_fwd:.2f} 比過去 4 季 {ttm:.2f} 高 {r-1:.0%}（>{FWD_JUMP_REL-1:.0%}），營收成長未必全轉成獲利")
-    return _ok(n, r)
-
-
-def dist_check(b: dict | None) -> Check:
-    n = "倍數分布"
-    if not b or not b.get("ok"):
-        return Check(n, "block", None, (b or {}).get("reason") or "歷史倍數不足")
-    r = b.get("ratio")
-    if r and r > RATIO_BLOCK:
-        return Check(n, "block", r, f"歷史倍數 P80÷P20＝{r:.1f}（>4），分布太寬")
-    if r and r > RATIO_DEGRADE:
-        return Check(n, "degrade", r, f"歷史倍數 P80÷P20＝{r:.1f}（>2.5）")
-    return _ok(n, r)
-
-
-def class_flags(cls: dict | None) -> list[Check]:
-    """分類結果帶來的降級原因（循環/歷史可比性/剛切換）。"""
-    out: list[Check] = []
-    if not cls:
-        return out
-    sub = cls.get("subtags") or []
-    for s, why in (("疑似循環", "疑似景氣循環股（輔助條件未過）"),
-                   ("循環未觀察完整", "循環沒觀察完整"),
-                   ("僅單一景氣事件", "循環只靠單一景氣事件成立")):
-        if s in sub:
-            out.append(Check(s, "degrade", None, why))
-    m = cls.get("metrics") or {}
-    if m.get("comparability_pending"):
-        out.append(Check("歷史可比性", "degrade", None, "歷史可比性待確認（股本/營收斷點）"))
-    if m.get("switched"):
-        out.append(Check("剛切換類型", "degrade", None, "分類上季剛切換"))
-    return out
-
-
-def confidence(checks: list[Check]) -> dict:
-    """彙總：{'level': '不給價'|'高'|'中'|'低', 'blocks': [...], 'degrades': [...]}（中文原因句）。"""
-    blocks = [c.why for c in checks if c.level == "block"]
-    deg = list(dict.fromkeys(c.why for c in checks if c.level in ("degrade", "severe") and c.why))
-    if blocks:
-        lv = "不給價"
-    elif any(c.level == "severe" for c in checks):      # 嚴重（試算不可靠改用實際 EPS／倍數補位）：可信度上限為低，不看條數
-        lv = "低"
-    elif not deg:
-        lv = "高"
-    elif len(deg) == 1:
-        lv = "中"
-    else:
-        lv = "低"
-    return {"level": lv, "blocks": blocks, "degrades": deg}
-
-
-PB_EVENT_BLOCK = 0.10       # 股數事件 |m−1| ≥10% → PB 分布被汙染，不給價
-PB_EVENT_DEGRADE = 0.03
-
-
-def pb_events(per: pd.DataFrame, events: list[tuple[pd.Timestamp, float]] | None) -> Check:
-    """交易所 PER 已由 fix_exchange_ratios 修回同一把尺，但 **PBR 沒人修**（交接 A8：6669 在 2026-09-02
-    由 8.8 掉到 3.5）。倍數窗內有股數事件（分割／配股／減資，events＝[(日期, m)]）→ PB 分布被汙染：
-    |m−1| ≥10% → block；3～10% → degrade。events 為 None＝不知道（呼叫端沒給）→ 視為 ok 並無從把關。"""
-    n = "PB股數事件"
-    if events is None:
-        return Check(n, "degrade", None, "未取得股數事件資料，PB 歷史分布是否被股數調整汙染無從確認")
-    if not events or per is None or per.empty:
-        return _ok(n)
-    d0, d1 = pd.to_datetime(per["date"]).min(), pd.to_datetime(per["date"]).max()
-    hit = [(pd.Timestamp(t), float(m)) for t, m in events if d0 <= pd.Timestamp(t) <= d1 and m]
-    if not hit:
-        return _ok(n)
-    t, m = max(hit, key=lambda x: abs(x[1] - 1))
-    dev = round(abs(m - 1), 9)      # 0.9 → 0.09999999999999998 會漏過 ≥10% 的門檻
-    msg = f"{t:%Y-%m-%d} 有股數調整事件（股數 ×{m:.2f}），交易所股價淨值比未修正，PB 歷史分布被汙染"
-    if dev >= PB_EVENT_BLOCK:
-        return Check(n, "block", dev, msg + "，PB 不給價")
-    if dev >= PB_EVENT_DEGRADE:
-        return Check(n, "degrade", dev, msg + "（影響小）")
-    return _ok(n, dev)
+def forward_jump(eps_fwd: float | None, eps_reported: float | None) -> Check:
+    """沿用 card-v2 算法與 why；degrade → warn。name="前瞻跳升"。"""
+    raise NotImplementedError

@@ -21,8 +21,9 @@ rebuild 時在 build_classification 之後、build_lists 之前跑（P5 才接 w
   · 每月一筆，asof_m＝該月 11 日（月營收 10 日可見之後），fwd_window(live=False)
   · window＝f"{第一季}-{最後一季}"（例 "2026Q1-2026Q4"），窗口 ok=False → window=None、eps_fwd=NaN、n_est_q=0
   · event＝multiples_self.revision_event(上一列, 本列)，actual_qs＝窗口內 kind=="actual" 的季
-- industry_pe.json：{"asof", "month", "industries": {產業: {"median_pe": float, "n": int}}}
-  · 樣本＝非金融股、last_complete_month(asof) 那一列 valid_pe=True 的 pe（P3 再依分層篩）
+- industry_pe.json：{"asof", "month", "industries": {產業: {"median_pe": float, "n": int, "values": [float…]}}}
+  · 樣本＝非金融股、last_complete_month(asof) 那一列 valid_pe=True 的 pe（P3 定：不再依分層篩）
+  · values＝樣本 pe 由小到大、round 4（P3 新增：B 層產業百分位用）
 - multiples_check.json（§4-5）：
   · {"asof", "n_tickers", "n_ok", "n_failed", "failed": [{ticker, error}], "no_price": [ticker…],
      "pe_vs_exchange": {"n_compared", "abs_median_p50", "abs_median_p90", "abs_median_max",
@@ -222,7 +223,8 @@ def main(argv: list[str] | None = None) -> int:
     sample["industry"] = sample["ticker"].map(lambda t: metadata[t].get("industry", ""))
     sample = sample[sample["ticker"].map(lambda t: metadata[t].get("industry_group") != "financial")]
     for name, group in sample.groupby("industry"):
-        industries[name] = dict(median_pe=float(group["pe"].median()), n=len(group))
+        industries[name] = dict(median_pe=float(group["pe"].median()), n=len(group),
+                                values=[round(float(v), 4) for v in sorted(group["pe"])])
     diffs = np.array([abs(r["median_diff"]) for r in comparisons])
     checks = dict(asof=asof, n_tickers=len(stocks), n_ok=len(stocks) - len(failed), n_failed=len(failed),
                   failed=failed, no_price=sorted(no_price),
