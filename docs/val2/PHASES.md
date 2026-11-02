@@ -12,7 +12,7 @@
 | **P3** 估值卡引擎 | `val_card` 改寫（分層 A～D、三價、前瞻三價、購買區間、B／C 層）；`detect` 可信度四組；`classify`／`build_classification` 刪死狀態＋遲滯重算；`candidate_pool` 改用 `growth`；`eps_nowcast` 刪窗口邏輯 | 見 guide §1 | §10 其餘＋既有測試改寫 | 全市場分層檔數、翻轉清單抽 20、指定 12 檔 |
 | **P3b** 分類／推薦卡 ✅ | 規格 `docs/val2/P3b_spec.md`：classify 刪死狀態、金融閘門看 EPS、`by_type` 遲滯後重算；build_classification 金融有效檔＋`coverage_mktcap_k`；loader 歸母淨利頂替集中；candidate_pool 用 growth。**eps_nowcast 移到 P4 整檔刪**（已無引擎呼叫） | P3b_spec §1～4 | `test_val2_p3b.py` | 金融資料不足＝0、新舊分類交叉表、subtags_recomputed 清單、推薦卡進池差異 |
 | **P4** 畫面 | 規格 `docs/val2/P4_spec.md`（版面照 `card_demo.html`，使用者認可）：P4a 引擎補欄＋`val_inputs`／`val_view`／`river`／`hist_position` → P4b 接 streamlit、刪 eps_nowcast 與舊畫面 → P4c 全站改名（§15） | `app/val_view.py`、`app/val_inputs.py`、`screener/river.py`、`app/streamlit_app.py`、`app/checklist.py`、`app/stockcharts.py` | `test_val2_p4.py`、`test_glossary.py`（P4c） | 12 檔 app 路徑＝乾跑；桌面＋手機截圖（Playwright） |
-| **P5** 資料與上線 | 自建上游收 `company_basic`；tw-swing bundle 加 `monthly_raw_close`；rebuild.yml 接 `build_multiples`；使用說明網頁；拿掉「開發中」 | workflows、selfhost、tw-swing | 全套 | guide §11 全項 → 合回 main、push、Reboot |
+| **P5** 資料與上線 | 規格 `docs/val2/P5_spec.md`（P5a tw-swing bundle：company_basic＋monthly_raw_close；P5b tw-hold 接收、share_checks 吃 basic、rebuild 接倍數、app 下載、說明頁；P5c Opus 上線）。原列：自建上游收 `company_basic`；tw-swing bundle 加 `monthly_raw_close`；rebuild.yml 接 `build_multiples`；使用說明網頁；拿掉「開發中」 | workflows、selfhost、tw-swing | 全套 | guide §11 全項 → 合回 main、push、Reboot |
 
 ## 不准做的事（每階段任務書都重申）
 - 改骨架介面、常數值、測試預期值。
