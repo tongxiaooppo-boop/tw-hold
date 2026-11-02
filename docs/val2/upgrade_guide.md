@@ -219,7 +219,7 @@ def excluded_months(ticker: str, q: pd.DataFrame) -> set[pd.Period]:
 
 | 層 | `prices` | `fwd_prices` | `buy_range` | 其他 |
 |---|---|---|---|---|
-| A-PE | 近 4 季 EPS × 自建 PE P20/P50/P80 | 前瞻 EPS × 自建前瞻 PE（前瞻有效月達標才給） | 5-3 | 循環：EPS＝min(近 4 季, 3 年平均)，名稱「較低獲利情境」，另給 `eps_5y_avg` |
+| A-PE | 近 4 季 EPS × 自建 PE P20/P50/P80 | 前瞻 EPS × 自建前瞻 PE（前瞻有效月達標才給） | 5-3 | 循環（及高獲利區＋循環跡象）：EPS＝min(近 4 季, 3 年平均)，名稱「較低獲利情境」；另給 `eps_3y_avg`。畫面三價旁寫「較低獲利情境 X 元（3 年平均 Y；近 4 季 Z）」，不列 5 年平均（使用者 11/2） |
 | A-PB | 每股淨值 × 自建 PB 分位 | 無 | 便宜～合理（PB），無前瞻 | 金融附 `roe`＝近 4 季歸母淨利 ÷ 平均歸母權益 |
 | B | 無 | 無 | 無 | `pe_now`、`industry_pct`、`eps_needed`＝現價 ÷ 產業中位 PE；同產業有效樣本 <8 → 只給 `pe_now` |
 | C | 無 | 無 | 無 | `ps_position` 或 `pb_position`（自身歷史分位）；「虧損中，不用獲利估價」 |
@@ -254,7 +254,7 @@ def build_card(qf, rev, px, cls: dict | None, mh: pd.DataFrame | None,
 
 ### 5-5 `build_card` 回傳欄位（app 只讀這些）
 
-`ok, tier("A"|"B"|"C"|"D"), route("PE"|"PB"|None), reason, price, px_date, type, display_type, state, subtags, eps{reported, ttm, fwd: EpsWindow 轉 dict}, growth{見第 6 節}, prices{cheap, fair, dear, base, base_name, mults, raw_mults, n_valid, window}, position, fwd_prices{...同上} | None, buy_range{low, high, state, note} | None, revision{last_pct, streak, direction}, b_tier{pe_now, industry_pct, eps_needed, n_peers} | None, c_tier{...} | None, roe | None, eps_5y_avg | None, status{data, share_basis, comparability, estimate}, notes[], version`
+`ok, tier("A"|"B"|"C"|"D"), route("PE"|"PB"|None), reason, price, px_date, type, display_type, state, subtags, eps{reported, ttm, fwd: EpsWindow 轉 dict}, growth{見第 6 節}, prices{cheap, fair, dear, base, base_name, mults, raw_mults, n_valid, window}, position, fwd_prices{...同上} | None, buy_range{low, high, state, note} | None, revision{last_pct, streak, direction}, b_tier{pe_now, industry_pct, eps_needed, n_peers} | None, c_tier{...} | None, roe | None, eps_3y_avg | None, price_note | None, status{data, share_basis, comparability, estimate}, notes[], version`
 
 ## 6. 年增率（`screener/growth.py`）
 
@@ -296,7 +296,7 @@ def yoy_revenue(cur: float | None, prev: float | None) -> Growth: ...
 |---|---|
 | 第 1～6 節全部 | ✅ |
 | 可信度分組（第 8 節） | ✅ |
-| 循環改名＋5 年平均、金融 ROE、營建 PB | ✅ |
+| 循環改名＋3 年平均與近 4 季並列、金融 ROE、營建 PB | ✅ |
 | 分類：刪死狀態、遲滯後重算子分類 | ✅ |
 | 拿掉未來 4 季、購買參考價 1.10、補位主三價 | ✅ |
 | 給網友的使用說明網頁 | ✅ |
@@ -328,6 +328,8 @@ def yoy_revenue(cur: float | None, prev: float | None) -> Growth: ...
 |---|---|
 | 股價卡 A 層 | 現價｜三價（相對自身歷史）便宜／合理／昂貴＋位置｜購買區間 X～Y（狀態）｜前瞻三價（相對自身前瞻倍數） |
 | 股價卡 B／C／D | 依 5-2 |
+| 收錄範圍（卡片外、估值速覽標題下一行，使用者 11/2） | 「估值收錄 N 檔（成交值或市值較大、有財報的股票）」，N＝`stock_class.json` 的 `count`（動態，不寫死）。不在範圍的股票：整個估值卡不顯示，只在三價位置放 `price_note`「不在估值範圍」。2.0 上線後再評估補抓其餘約 970 檔財報（FinMind 本機一次約 8 小時） |
+| 沒有三價時（B／C／D、P20≥上限） | **三價那一格一定要有字**（使用者 11/2）：放引擎的 `price_note` 短句（≤15 字，例「自身歷史太短，改看產業本益比」「虧損中，不估價」），後面接「詳見 📊 估值定位細節」；詳細原因（reason、notes、可信度）只放展開區。不准留空白或「—」 |
 | EPS 卡 | 上：近 4 季 EPS（期間、含幾季試算）｜前瞻 4 季 EPS（比上月、連續上修）。下：**年增率表「期間｜營收｜EPS」**（使用者 11/2：同期間營收與 EPS 放同一列，不分兩區）：最新月（營收；EPS「—」）／近 4 季末季（標試算或財報、營收已公布 n 個月；營收＝本季營收年增、EPS＝季 EPS 年增）／近 4 季／前瞻 4 季（EPS＝前瞻 EPS 年增；新季營收未出時不列）。不另寫「季 EPS 年增」「本季營收年增」兩個獨立標題 |
 | 展開區 | 三個，內容見 9-1 |
 | 怎麼算 | 用詞說明（便宜＝歷史上該倍數只有 20% 的月份比這更低，再換算成價格…）、歷史重建（近似）、規則未經驗證 |

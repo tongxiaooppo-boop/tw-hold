@@ -69,28 +69,22 @@ def test_monthly_keeps_nan():
     assert dt.revenue_caliber(_quarterly(), m).level == "ok"
 
 
-def test_bvps_stale_returns_none():
-    last = pd.Timestamp("2026-03-31")
-    dates = [last - pd.Timedelta(days=n) for n in (40, 10, 0)]
-    px = pd.DataFrame({"date": dates, "close": 20.0})
-    assert vc._bvps(pd.DataFrame({"date": dates[:1], "pbr": 2.0}), px) is None
-    assert vc._bvps(pd.DataFrame({"date": dates[1:2], "pbr": 2.0}), px) == 10.0
 
 
 def test_quarter_sanity_flags():
     q = _quarterly()
     q.loc[q.index[-1], ["eps", "ni_parent"]] = [0.09, -6e7]
     c = dt.quarter_sanity(q.sample(frac=1, random_state=4))
-    assert c.level == "degrade" and c.value == 1
+    assert c.level == "warn" and c.value == 1
     assert "2025Q4" in c.why
     q = _quarterly()
     q.loc[q.index[-1], ["revenue", "gross_profit"]] = [0.0, 0.0]
     assert dt.quarter_sanity(q, construction=True).level == "ok"
     q.loc[q.index[-1], "revenue"] = -1.0
-    assert dt.quarter_sanity(q).level == "degrade"
+    assert dt.quarter_sanity(q).level == "warn"
     q = _quarterly()
     q.loc[q.index[-1], "gross_profit"] = 101.0
-    assert dt.quarter_sanity(q).level == "degrade"
+    assert dt.quarter_sanity(q).level == "warn"
     assert dt.quarter_sanity(_quarterly()).level == "ok"
     assert dt.quarter_sanity(_quarterly().drop(columns=["ni_parent", "gross_profit"])).level == "ok"
 
@@ -111,6 +105,6 @@ def test_quarter_sanity_runs_without_monthly():
     q.loc[q.index[-1], ["eps", "ni_parent"]] = [0.09, -6e7]
     px = pd.DataFrame({"date": pd.to_datetime(["2026-03-02"]), "close": [50.0]})
     card = vc.build_card(q, pd.DataFrame(columns=["month", "revenue"]), px,
-                         pd.DataFrame(columns=["date", "pbr", "per"]),
-                         {"type": "normal", "decided_at": "2025-12-31", "state": [], "subtags": [], "metrics": {}})
-    assert any(c["name"] == "財報矛盾" for c in card["checks"])
+                         {"type": "normal", "decided_at": "2025-12-31", "state": [], "subtags": [], "metrics": {}},
+                         None, None, None, pd.Timestamp("2026-03-02"))
+    assert any(c["name"] == "財報矛盾" for c in card["status"]["data"]["items"])

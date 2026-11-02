@@ -97,17 +97,12 @@ def test_revenue_yoy_asof_visibility():
 
 def test_forward_jump():
     c = dt.forward_jump(277, 179)
-    assert c.level == 'degrade' and c.value == pytest.approx(277/179)
+    assert c.level == 'warn' and c.value == pytest.approx(277/179)   # P3：degrade→warn
     for e,t in [(150,120),(1,None),(1,-1),(None,1),(np.inf,1),(1,np.nan),(1,0),(1,np.inf)]:
         assert dt.forward_jump(e,t).level == 'ok'
 
 
-def test_eps_base_adds_forward_jump():
-    checks = []
-    eps, _, forward = vc._eps_base('normal', {'ok':True,'eps_nc':3.,'flags':[],'k':1},
-                                  pd.DataFrame({'eps':[1.]}), 1.5, None, False, checks)
-    assert eps == 3. and forward
-    assert any(c.name == '前瞻跳升' and c.level == 'degrade' for c in checks)
+# test_eps_base_adds_forward_jump 刪除（P3）：_eps_base 已移除，前瞻跳升改由 detect.estimate_checks 產生（test_val2_detect 涵蓋）
 
 
 def test_cagr5_ok_boundary():

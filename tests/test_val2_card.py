@@ -81,7 +81,7 @@ def card(q=None, rev=None, px=None, cls="default", mh=None, rh=None, ind=None):
 
 FIELDS = {"ok", "tier", "route", "reason", "price", "px_date", "ticker", "type", "display_type", "state", "subtags",
           "why", "class_asof", "eps", "growth", "prices", "position", "fwd_prices", "buy_range", "revision",
-          "b_tier", "c_tier", "roe", "eps_5y_avg", "quality", "status", "notes", "version"}
+          "b_tier", "c_tier", "roe", "eps_3y_avg", "price_note", "quality", "status", "notes", "version"}
 
 
 # ── 回傳結構 ─────────────────────────────────────────────
@@ -125,7 +125,7 @@ def test_A_PE_三價與購買區間():
     assert c["buy_range"] == pytest.approx({"low": 36.864, "high": 46.08, "state": "normal", "note": None})
     assert c["eps"]["ttm"]["n_est"] == 1 and c["eps"]["ttm"]["eps"] == pytest.approx(TTM)
     assert c["eps"]["est_disabled"] is None
-    assert c["b_tier"] is None and c["c_tier"] is None and c["roe"] is None and c["eps_5y_avg"] is None
+    assert c["b_tier"] is None and c["c_tier"] is None and c["roe"] is None and c["eps_3y_avg"] is None
 
 
 def test_前瞻_新季營收未出不給前瞻三價():
@@ -187,7 +187,7 @@ def test_循環_較低獲利情境():
     p = c["prices"]
     assert c["tier"] == "A" and p["base_name"] == vc.BASE_LOW
     assert p["base"] == pytest.approx(15.68 / 3)                # min(近 4 季 8.0, 3 年平均 5.2267)
-    assert c["eps_5y_avg"] == pytest.approx(23.36 / 5)
+    assert c["eps_3y_avg"] == pytest.approx(15.68 / 3)      # 使用者 11/2：只列 3 年平均
     assert c["fwd_prices"] is None
 
 
@@ -195,7 +195,7 @@ def test_高獲利區加循環跡象_較低獲利情境():
     hi = {"eps": 2.0, "ni_parent": 200.0, "net_income": 200.0, "pretax_income": 250.0}
     q = Q(**{p: hi for p in ("2025Q3", "2025Q4", "2026Q1", "2026Q2")})
     c = card(q=q, rev=REV("2026-06"), cls=CLS("normal", state=["歷史高獲利區"], sub=["疑似循環"]))
-    assert c["prices"]["base_name"] == vc.BASE_LOW and c["eps_5y_avg"] is None
+    assert c["prices"]["base_name"] == vc.BASE_LOW and c["eps_3y_avg"] == pytest.approx(15.68 / 3)
 
 
 # ── A-PB ────────────────────────────────────────────────
@@ -261,11 +261,10 @@ def test_B層_產業百分位與反推EPS():
 # ── 可信度帶來的停用 ─────────────────────────────────────
 
 def test_試算停用_近4季退回已公布():
-    nonop = {str(p): {"pretax_income": 200.0 if i % 2 == 0 else 100.0}
-             for i, p in enumerate(pd.period_range("2024Q3", "2026Q2", freq="Q"))}
-    c = card(q=Q(**nonop))
+    # 方案 B（11/2）：業外閘門改提示，改用營收劇變觸發停用
+    c = card(rev=REV("2026-09", **{"2026-07": 1000.0, "2026-08": 1000.0, "2026-09": 1000.0}))
     assert c["status"]["estimate"]["level"] == "stop"
-    assert "業外" in c["eps"]["est_disabled"]
+    assert "營收" in c["eps"]["est_disabled"]
     t = c["eps"]["ttm"]
     assert t["n_est"] == 0 and t["eps"] == pytest.approx(TTM)
     assert [r["q"] for r in t["quarters"]] == ["2025Q3", "2025Q4", "2026Q1", "2026Q2"]
@@ -317,3 +316,37 @@ def test_年增率_新季未出不列前瞻():
 
 def test_品質_現金流與應計():
     assert card()["quality"] == pytest.approx({"cfo_ni": 1.25, "accrual": -0.048})
+
+
+# ── P3 驗收後補（Opus，2026-11-02 乾跑發現）──────────────────
+
+def test_金融業分類資料不足仍走PB():
+    c = card(px=PX(15.0), cls=CLS("insufficient", group="financial"), mh=MH(**PB72))
+    assert (c["tier"], c["route"]) == ("A", "PB") and c["roe"] == pytest.approx(0.384)
+
+
+def test_歸母淨利缺_用合併淨利推股數():
+    q = Q()
+    q["ni_parent"] = np.nan
+    assert vc.bvps_live(q) == pytest.approx(10.0)
+
+
+def test_微利為C():
+    thin = {"eps": 0.004, "ni_parent": 0.4, "net_income": 0.4}
+    q = Q(**{str(p): thin for p in pd.period_range("2019Q1", "2026Q2", freq="Q")})
+    c = card(q=q, rev=REV("2026-06"))
+    assert c["tier"] == "C" and c["c_tier"]["text"] == vc.C_TEXT_THIN and c["b_tier"] is None
+
+
+def test_沒有三價時三價位置放短句():
+    """使用者 11/2：沒有三價的地方務必放簡單說明，詳細點開看。"""
+    assert card()["price_note"] is None
+    assert vc.build_card(Q(), REV(), PX(), None, MH(), None, None, ASOF)["price_note"] == vc.PRICE_NOTES["universe"]
+    assert card(cls=CLS("special"))["price_note"] == vc.PRICE_NOTES["special"]
+    assert card(cls=CLS("insufficient"))["price_note"] == vc.PRICE_NOTES["few"]
+    assert card(mh=MH(valid_until="2023-06"))["price_note"] == vc.PRICE_NOTES["b_only"]
+    assert card(mh=MH(pe=(55, 60, 65, 70, 75)))["price_note"] == vc.PRICE_NOTES["cap"]
+    q = Q(**{str(p): LOSS for p in pd.period_range("2019Q1", "2026Q2", freq="Q")})
+    assert card(q=q, px=PX(20.0))["price_note"] == vc.PRICE_NOTES["loss"]
+    assert card(cls=CLS("financial", group="financial"), mh=MH(start="2022-01", pe=10, pb=2.0))["price_note"] == vc.PRICE_NOTES["pb_hist"]
+    assert all(len(v) <= 15 for v in vc.PRICE_NOTES.values())      # 短句：卡片一行放得下

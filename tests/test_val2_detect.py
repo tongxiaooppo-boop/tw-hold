@@ -145,8 +145,23 @@ def test_試算_合成資料全部正常():
 def test_橋接殘差_公式誤差大停用():
     q, m = Q(), make_monthly("2026-09")
     d = _windows(q, m)["ttm"].details[0]
-    c = dt.bridge_residual(q, dataclasses.replace(d, shares=60.0))      # eps_hat 1.6 vs 0.96
-    assert c.level == "stop" and c.value == pytest.approx(2 / 3)
+    c = dt.bridge_residual(q, dataclasses.replace(d, shares=60.0), 3.84)    # eps_hat 1.6 vs 0.96 → 0.64÷3.84
+    assert c.level == "stop" and c.value == pytest.approx(0.64 / 3.84)
+    assert dt.bridge_residual(q, d, None).level == "unchecked"
+
+
+def test_營收劇變_停用():
+    """方案 B（11/2 投票）：試算季營收 3000 vs 參數季 1000，去年同期持平 → J=+200%。"""
+    q, m = Q(), make_monthly("2026-09", **{"2026-07": 1000.0, "2026-08": 1000.0, "2026-09": 1000.0})
+    out = {c.name: c for c in dt.estimate_checks(q, m, _windows(q, m))}
+    assert out["營收劇變"].level == "stop" and out["營收劇變"].value == pytest.approx(2.0)
+    assert "2026Q3" in out["營收劇變"].why and "2026Q2" in out["營收劇變"].why
+
+
+def test_業外不穩只提示():
+    nonop = {str(p): {"pretax_income": 200.0 if i % 2 == 0 else 100.0}
+             for i, p in enumerate(pd.period_range("2024Q3", "2026Q2", freq="Q"))}
+    assert dt.nonop_gate(Q(**nonop)).level == "warn"
 
 
 def test_高變動_排除淡旺季():
@@ -159,3 +174,17 @@ def test_高變動_排除淡旺季():
 
 def test_高變動_資料不足不判():
     assert dt.variability(make_q("2026Q2", n=4)).level == "ok"
+
+
+def test_資料_金融沒營收欄不算缺季():
+    """P3：銀行／證券沒有營收欄（revenue 全 NaN），財報連續性改看歸母淨利與權益。"""
+    q = Q()
+    q["revenue"] = np.nan
+    q["equity_parent"] = 1000.0
+    m = make_monthly("2026-09")
+    out = {c.name: c for c in dt.data_checks(q, m, _windows(q, m, financial=True), None, ASOF, financial=True)}
+    assert out["財報缺季"].level == "ok"
+    gap = Q(drop=("2026Q1",))
+    gap["equity_parent"] = 1000.0
+    out = {c.name: c for c in dt.data_checks(gap, m, _windows(gap, m, financial=True), None, ASOF, financial=True)}
+    assert out["財報缺季"].level == "stop"
