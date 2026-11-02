@@ -126,7 +126,9 @@ def near_zero_eps(eps_base: float | None, q: pd.DataFrame) -> Check:
     e = q["eps"].dropna()
     if len(e) < 20:
         return _ok(n)
-    ttm = e.rolling(4).sum().dropna().tail(20)
+    from screener import quarterly_prep as qp
+
+    ttm = qp.ttm(q.set_index("period_end")["eps"]).dropna().tail(20)
     med = float(ttm.median())
     if med > 0 and eps_base < med * NEAR_ZERO_REL:
         return Check(n, "block", eps_base, f"前瞻 4 季 EPS {eps_base:.2f} 遠低於近 5 年中位 {med:.2f}，改用過去 4 季 EPS")

@@ -31,7 +31,7 @@ def _number(value):
         result = float(value)
     except (TypeError, ValueError, OverflowError):
         return None
-    return None if np.isnan(result) else result
+    return None if not np.isfinite(result) else result
 
 
 def _daily_values(per, col):
@@ -64,7 +64,7 @@ def _daily_values(per, col):
 
 
 def _positive_values(values):
-    return values.loc[values.notna() & (values > 0)]
+    return values.loc[np.isfinite(values) & (values > 0)]
 
 
 def _monthly_last(values):

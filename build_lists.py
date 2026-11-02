@@ -296,6 +296,10 @@ def _build(name: str, df: pd.DataFrame, score: str, cols: list[str],
 
 
 def main() -> int:
+    import sys
+    from reference.corporate_actions import EVENTS_OK, EVENTS_ERROR
+    if not EVENTS_OK:
+        print(f"警告：股數事件表讀取失敗：{EVENTS_ERROR}", file=sys.stderr)
     r = screen_all()
     ctx = r["context"]
     asof = date.fromisoformat(ctx["trading_date"]) if ctx.get("trading_date") \

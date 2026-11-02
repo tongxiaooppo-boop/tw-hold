@@ -33,10 +33,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+EVENTS_OK: bool = True
+EVENTS_ERROR: str | None = None
 
 _RESOLVED_PATH = Path(__file__).with_name("corporate_actions_resolved.json")
 
@@ -52,17 +56,64 @@ PRICE_MIN_RATIO = 1.5
 EXCHANGE_LAG_TYPES = ("ex_rights", "ex_both")
 
 
+def _event_problem(e, v2: bool) -> str | None:
+    """單筆事件的格式問題（None＝沒問題）。"""
+    if not isinstance(e, dict) or "date" not in e:
+        return "缺少日期"
+    try:
+        if pd.isna(pd.Timestamp(e["date"])):
+            return "日期無效"
+    except (TypeError, ValueError):
+        return "日期無效"
+    keys = ("m", "pf", "factor") if v2 else ("factor",)
+    if v2 and "m" not in e and "factor" not in e:
+        return "缺少股數倍率"
+    for key in keys:
+        if e.get(key) is None:
+            if not v2:
+                return "倍率無效"
+            continue
+        try:
+            v = float(e[key])
+        except (TypeError, ValueError):
+            return "倍率無效"
+        if not np.isfinite(v) or v <= 0:
+            return "倍率無效"
+    return None
+
+
 def _load_resolved() -> dict[str, list[dict]]:
-    if not _RESOLVED_PATH.exists():
-        return {}
+    global EVENTS_OK, EVENTS_ERROR
     try:
         raw = json.loads(_RESOLVED_PATH.read_text(encoding="utf-8"))
-    except Exception:
+        if not isinstance(raw, dict) or not any(k in raw for k in ("events", "splits")):
+            raise ValueError("缺少 events 或 splits 物件")
+        events = raw["events"] if "events" in raw else raw["splits"]
+        if not isinstance(events, dict):
+            raise ValueError("事件表必須是物件")
+        out, bad = {}, []
+        for tk, evs in events.items():
+            if not isinstance(evs, list):
+                bad.append(f"{tk}（事件不是陣列）")
+                continue
+            keep = []
+            for e in evs:
+                why = _event_problem(e, v2="events" in raw)
+                if why:
+                    bad.append(f"{tk}（{why}）")
+                    continue
+                keep.append(dict(e) if "events" in raw else {"date": e["date"], "factor": float(e["factor"])})
+            if keep:
+                out[str(tk)] = keep
+        # 單筆壞事件只跳過並警告（其餘事件照常還原）；整檔讀不到或結構壞才停用（下面 except）
+        if bad:
+            print(f"警告：股數事件表有 {len(bad)} 筆格式不對已略過：{'、'.join(bad[:5])}", file=sys.stderr)
+    except Exception as exc:
+        EVENTS_OK, EVENTS_ERROR = False, str(exc)
+        print(f"警告：股數事件表讀取失敗：{EVENTS_ERROR}", file=sys.stderr)
         return {}
-    if "events" in raw:                       # v2：resolve_splits.py 從 corp_actions 產
-        return {str(tk): [dict(e) for e in evs] for tk, evs in raw["events"].items() if evs}
-    return {str(tk): [{"date": e["date"], "factor": float(e["factor"])} for e in evs]
-            for tk, evs in raw.get("splits", {}).items() if evs}
+    EVENTS_OK, EVENTS_ERROR = True, None
+    return out
 
 
 def _merge() -> dict[str, list[dict]]:
@@ -505,8 +556,11 @@ def fix_exchange_ratios(per: pd.DataFrame, quarterly: pd.DataFrame | None = None
             stale = fallback.copy()
             xw = x[win]
             if qt is not None and np.isfinite(xw).any():
+                from screener import quarterly_prep as qp
+
+                qt = qt.drop_duplicates("period_end", keep="last").sort_values("period_end")
                 eps = pd.to_numeric(adjust_eps(qt, upto=E)["eps"], errors="coerce").to_numpy(float)
-                ttm = pd.Series(eps).rolling(4).sum().to_numpy()        # ttm[k]：第 k-3～k 季
+                ttm = qp.ttm(pd.Series(eps, index=pd.DatetimeIndex(qt["period_end"]))).to_numpy()        # ttm[k]：第 k-3～k 季
                 pend = qt["period_end"].to_numpy()
                 dl = np.array([report_deadline(p).to_datetime64() for p in qt["period_end"]])
                 n = np.searchsorted(np.sort(dl), dts[win], side="left")  # 期限已過的季數

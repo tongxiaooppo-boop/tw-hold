@@ -118,6 +118,10 @@ def assemble_inputs(quarterly: pd.DataFrame, monthly_rev: pd.DataFrame, universe
     by_t = {t: g.set_index("period_end")[qcols].astype(float).sort_index()
             for t, g in q[q["ticker"].isin(pop)].groupby("ticker")}
 
+    # 補齊曆季，讓近 N 列固定代表近 N 個曆季。
+    by_t = {t: g.reindex(pd.date_range(g.index[0], g.index[-1], freq="QE",
+                                      name="period_end")) for t, g in by_t.items()}
+
     m = _prep_monthly(monthly_rev)
     if asof is not None:
         m = m[m["month"] <= pd.Timestamp(asof)]
@@ -293,7 +297,12 @@ def main(argv: list[str] | None = None) -> int:
         print("錯誤：找不到 universe.parquet 或 revenue.parquet，中止且不覆寫。", file=sys.stderr)
         return 1
     from reference.loader import load_quarterly
+    from reference.corporate_actions import adjust_eps, EVENTS_OK, EVENTS_ERROR
+    if not EVENTS_OK:
+        print(f"錯誤：股數事件表讀取失敗：{EVENTS_ERROR}", file=sys.stderr)
+        return 1
     quarterly = load_quarterly()
+    quarterly = adjust_eps(quarterly)
     monthly = pd.read_parquet(REVENUE)
     universe = pd.read_parquet(UNIVERSE)
     if args.if_new_quarter:

@@ -20,6 +20,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from screener import quarterly_prep as qp
+
 _FLOW = ["revenue", "eps", "net_income", "gross_profit", "op_income",
          "pretax_income", "ocf", "ocf_net", "capex"]
 _STOCK_COLS = ["equity_parent", "total_assets", "total_liabilities",
@@ -27,10 +29,16 @@ _STOCK_COLS = ["equity_parent", "total_assets", "total_liabilities",
 
 
 def _ttm(df: pd.DataFrame, col: str) -> pd.Series:
-    if col not in df.columns:
-        return pd.Series(np.nan, index=df.index)
-    return (df.groupby("ticker", sort=False)[col]
-              .transform(lambda s: s.rolling(4, min_periods=4).sum()))
+    return qp.panel_ttm(df, col)
+
+
+def _safe_div(num, den) -> pd.Series:
+    """規模量分母必須為有限正數，非有限結果視為缺值。"""
+    valid = den.where((den > 0) & np.isfinite(den))
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        result = num / valid
+    return result.where(np.isfinite(result))
+
 
 
 _YTD_TOL = 0.10   # net_income 與單季／累計歸母淨利的相對差容忍度
@@ -89,7 +97,8 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
       只顯示不進門檻）、f_* 各分項（缺資料是 NaN，不是悄悄算 0 分）、
       normalized_eps（近 5 年年度 EPS 均值）。
     """
-    q = q.sort_values(["ticker", "period_end"]).reset_index(drop=True).copy()
+    q = q.sort_values(["ticker", "period_end"], kind="stable").drop_duplicates(
+        ["ticker", "period_end"], keep="last").reset_index(drop=True).copy()
     fin_tickers = fin_tickers or set()
     # 單檔呼叫（個股頁、月營收 build）時，上游沒給的資產負債表欄整欄不存在 → 補 NaN，
     # 讓相關因子變 NaN 而不是整檔 KeyError（2026-10-29：1709、3094 等 7 檔缺 total_assets）
@@ -113,7 +122,7 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     # 股數來自 universe（market_cap / close），非金融不受影響。
     if fin_tickers and shares and "eps" in q.columns:
         sh = q["ticker"].map(shares)
-        est_eps = q["net_income"] / sh
+        est_eps = _safe_div(q["net_income"], sh)
         need = q["ticker"].isin(fin_tickers) & q["eps"].isna() & sh.notna()
         q.loc[need, "eps"] = est_eps[need]
 
@@ -123,22 +132,20 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     q["ttm_ocf"] = q["ttm_ocf"].fillna(q["ttm_ocf_net"])
     q["ttm_fcf"] = q["ttm_ocf"] - q["ttm_capex"].abs()
 
-    g = q.groupby("ticker", sort=False)
-
-    q["roe"] = q["ttm_net_income"] / q["equity_parent"]
-    q["roa"] = q["ttm_net_income"] / q["total_assets"]
-    q["gross_margin"] = q["ttm_gross_profit"] / q["ttm_revenue"]
-    q["debt_ratio"] = q["total_liabilities"] / q["total_assets"]
-    q["current_ratio"] = q["current_assets"] / q["current_liabilities"]
-    q["asset_turnover"] = q["ttm_revenue"] / q["total_assets"]
-    q["rev_yoy"] = q["ttm_revenue"] / g["ttm_revenue"].shift(4) - 1.0
+    q["roe"] = _safe_div(q["ttm_net_income"], q["equity_parent"])
+    q["roa"] = _safe_div(q["ttm_net_income"], q["total_assets"])
+    q["gross_margin"] = _safe_div(q["ttm_gross_profit"], q["ttm_revenue"])
+    q["debt_ratio"] = _safe_div(q["total_liabilities"], q["total_assets"])
+    q["current_ratio"] = _safe_div(q["current_assets"], q["current_liabilities"])
+    q["asset_turnover"] = _safe_div(q["ttm_revenue"], q["total_assets"])
+    q["rev_yoy"] = _safe_div(q["ttm_revenue"], qp.panel_lag(q, "ttm_revenue", 4)) - 1.0
 
     # ── Piotroski F-Score（跟去年同期比）───────────────────────
-    roa_p = g["roa"].shift(4)
-    dr_p = g["debt_ratio"].shift(4)
-    cr_p = g["current_ratio"].shift(4)
-    gm_p = g["gross_margin"].shift(4)
-    at_p = g["asset_turnover"].shift(4)
+    roa_p = qp.panel_lag(q, "roa", 4)
+    dr_p = qp.panel_lag(q, "debt_ratio", 4)
+    cr_p = qp.panel_lag(q, "current_ratio", 4)
+    gm_p = qp.panel_lag(q, "gross_margin", 4)
+    at_p = qp.panel_lag(q, "asset_turnover", 4)
 
     def _pt_item(cond: pd.Series, *sources: pd.Series) -> pd.Series:
         """Piotroski 分項：cond 轉 0.0/1.0；`sources`（比較用到的欄位）任一為 NaN
@@ -161,7 +168,7 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     f_cols = ["f_roa", "f_ocf", "f_droa", "f_accrual", "f_leverage",
               "f_liquidity", "f_margin", "f_turnover"]
     if "capital_stock" in q.columns:
-        cs_p = g["capital_stock"].shift(4)
+        cs_p = qp.panel_lag(q, "capital_stock", 4)
         q["f_noissue"] = _pt_item(q["capital_stock"] <= cs_p * 1.001, q["capital_stock"], cs_p)
         f_cols = f_cols + ["f_noissue"]
 

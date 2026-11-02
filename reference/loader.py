@@ -46,29 +46,35 @@ def _read(name: str) -> pd.DataFrame:
     return pd.read_parquet(p)
 
 
+def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
+                     how: str = "outer") -> pd.DataFrame:
+    """三表去重合併；歸母淨利與業主權益分開，權益只取資產負債表。"""
+    keys = ["ticker", "period_end"]
+
+    def prep(frame):
+        out = frame.copy() if len(frame.columns) else pd.DataFrame(columns=keys)
+        out["period_end"] = pd.to_datetime(out["period_end"])
+        return out.drop_duplicates(keys, keep="last")
+
+    inc, bal, cf = map(prep, (inc, bal, cf))
+    # 維持既有面板欄序：淨利另置末欄，權益保留原欄位位置。
+    order = list(inc.columns)
+    inc = inc.rename(columns={"equity_parent": "ni_parent"})
+    if "ni_parent" not in inc.columns:
+        inc["ni_parent"] = np.nan
+    equity = bal["equity_parent"] if "equity_parent" in bal.columns else pd.Series(np.nan, index=bal.index)
+    bal["equity_parent"] = equity.fillna(bal["equity"] if "equity" in bal.columns else np.nan)
+    q = inc.merge(bal, on=keys, how=how, suffixes=("", "_b"), validate="one_to_one")
+    q = q.merge(cf, on=keys, how=how, suffixes=("", "_c"), validate="one_to_one")
+    q = q.drop(columns=[c for c in q.columns if c.endswith(("_b", "_c"))])
+    order = [c for c in order if c in q.columns and c != "ni_parent"]
+    order += [c for c in q.columns if c not in order and c != "ni_parent"] + ["ni_parent"]
+    return q[order].sort_values(keys).reset_index(drop=True)
+
+
 def load_quarterly() -> pd.DataFrame:
-    """三表 join 成季度面板：`[ticker, period_end, disclosure_date, <財報欄位>]`，
-    依 (ticker, period_end) 排序、去重（同期別取最後一筆）。"""
-    inc, bal, cf = _read("income"), _read("balance"), _read("cashflow")
-    q = inc.merge(bal, on=["ticker", "period_end"], how="outer", suffixes=("", "_b"))
-    q = q.merge(cf, on=["ticker", "period_end"], how="outer", suffixes=("", "_c"))
-    # 🔴 `equity_parent` 損益表與資產負債表都有，但**意思不同**：
-    #   損益表的 `EquityAttributableToOwnersOfParent` = 歸屬母公司**淨利**（≈ net_income）
-    #   資產負債表的                                  = 歸屬母公司**業主權益**（ROE 的分母）
-    # 舊版「以損益表為準」是反的——害 roe = 淨利 / 淨利 ≈ 3～4（2026-09-07 抓到）。
-    # **只採資產負債表那份，永不退回損益表的**：非金融的 balance `equity_parent`
-    # 100% 有值（2330/1301/2412… 實測），損益表那份是多餘的；金融的 balance 沒有
-    # （金控用不同 XBRL），退回總權益 `equity` 才對——退回損益表的會把淨利當權益。
-    # 損益表那份（歸母淨利）另存 ni_parent：corporate_actions.adjust_eps 算隱含股數用
-    q["ni_parent"] = q["equity_parent"] if "equity_parent_b" in q.columns else np.nan
-    if "equity_parent_b" in q.columns:
-        q["equity_parent"] = q["equity_parent_b"]
-    q["equity_parent"] = q["equity_parent"].fillna(q.get("equity"))
-    q = q.drop(columns=[c for c in q.columns if c.endswith(("_b", "_c"))], errors="ignore")
-    q["period_end"] = pd.to_datetime(q["period_end"])
-    q = (q.sort_values(["ticker", "period_end"])
-           .drop_duplicates(["ticker", "period_end"], keep="last")
-           .reset_index(drop=True))
+    """三表合併成季度面板，依 (ticker, period_end) 排序並加公告日。"""
+    q = merge_statements(_read("income"), _read("balance"), _read("cashflow"))
     q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=STATEMENT_LAG_DAYS)
     return q
 

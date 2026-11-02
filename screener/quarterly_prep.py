@@ -147,6 +147,52 @@ def ttm(series: pd.Series, n: int = 4) -> pd.Series:
     return pd.Series(r.reindex(per).to_numpy(), index=series.index, name=series.name)
 
 
+def last_n_quarters(series: pd.Series, n: int) -> pd.Series | None:
+    """最後 n 個連續曆季皆有值才回傳，保留原索引。"""
+    ttm(series, n)
+    tail = series.tail(n)
+    if len(tail) < n or tail.isna().any():
+        return None
+    if n > 1 and not (tail.index.to_period("Q").asi8[1:] -
+                      tail.index.to_period("Q").asi8[:-1] == 1).all():
+        return None
+    return tail
+
+
+def panel_ttm(df: pd.DataFrame, col: str, n: int = 4,
+              by: str = "ticker", date: str = "period_end") -> pd.Series:
+    """逐檔依日期排序計算曆季 TTM，結果對齊輸入列。"""
+    if n < 1:
+        raise ValueError("n 必須 >= 1")
+    if df.duplicated([by, date]).any():
+        raise ValueError("(by, date) 有重複")
+    out = pd.Series(float("nan"), index=range(len(df)), dtype=float)
+    if col in df.columns:
+        work = df.reset_index(drop=True)
+        for _, g in work.groupby(by, sort=False):
+            g = g.sort_values(date)
+            series = pd.Series(g[col].to_numpy(), index=pd.DatetimeIndex(g[date]))
+            out.iloc[g.index] = ttm(series, n).to_numpy()
+    return pd.Series(out.to_numpy(), index=df.index, dtype=float)
+
+
+def panel_lag(df: pd.DataFrame, col: str, k: int,
+              by: str = "ticker", date: str = "period_end") -> pd.Series:
+    """取同檔往前 k 個曆季的值，缺季保留 NaN。"""
+    if k < 1:
+        raise ValueError("k 必須 >= 1")
+    if df.duplicated([by, date]).any():
+        raise ValueError("(by, date) 有重複")
+    out = pd.Series(float("nan"), index=range(len(df)), dtype=float)
+    if col in df.columns:
+        work = df.reset_index(drop=True)
+        for _, g in work.groupby(by, sort=False):
+            per = pd.DatetimeIndex(g[date]).to_period("Q")
+            values = pd.Series(g[col].to_numpy(dtype=float), index=per)
+            out.iloc[g.index] = values.reindex(per - k).to_numpy()
+    return pd.Series(out.to_numpy(), index=df.index, dtype=float)
+
+
 def industry_group(name: object) -> str:
     """產業名 → 分組：GROUP_FINANCIAL／GROUP_BIOTECH／GROUP_CONSTRUCTION／GROUP_OTHER。
 

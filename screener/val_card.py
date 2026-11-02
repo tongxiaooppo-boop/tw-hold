@@ -121,6 +121,10 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
                class_asof=cls.get("decided_at"), prices=None, forward=None, position=None, eps=None,
                band=None, method=None, no_price=None, compare=None, notes=[], truncated=False)
     checks: list[dt.Check] = dt.class_flags(cls)
+    from reference import corporate_actions as ca
+    if not ca.EVENTS_OK:
+        checks.append(dt.Check("股數事件表", "block", None,
+                               "股數事件表讀取失敗，股數還原可能失效"))
     if len(q) < 4:
         out["no_price"] = "財報不足 4 季"
         return out
@@ -263,8 +267,10 @@ def build_card(qf: pd.DataFrame, rev: pd.DataFrame, px: pd.DataFrame, per: pd.Da
 
 
 def _ttm_eps(q: pd.DataFrame) -> float | None:
-    e = q["eps"].tail(4)
-    return float(e.sum()) if len(e) == 4 and e.notna().all() else None
+    from screener import quarterly_prep as qp
+
+    e = qp.last_n_quarters(q.set_index("period_end")["eps"], 4)
+    return float(e.sum()) if e is not None else None
 
 
 def _ttm_from_per(per: pd.DataFrame, px: pd.DataFrame) -> float | None:
@@ -285,8 +291,10 @@ def _ttm_from_per(per: pd.DataFrame, px: pd.DataFrame) -> float | None:
 
 def _avg3_eps(q: pd.DataFrame) -> float | None:
     """近 12 季 EPS 合計 ÷ 3（3 年平均年 EPS）；不足 12 季或有缺值 → None。"""
-    e = q["eps"].tail(12)
-    return float(e.sum()) / 3 if len(e) == 12 and e.notna().all() else None
+    from screener import quarterly_prep as qp
+
+    e = qp.last_n_quarters(q.set_index("period_end")["eps"], 12)
+    return float(e.sum()) / 3 if e is not None else None
 
 
 def _eps_base(typ: str, nc: dict | None, q: pd.DataFrame, ttm: float, avg3: float | None,

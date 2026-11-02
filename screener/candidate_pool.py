@@ -121,15 +121,18 @@ def institutional_net20(chips: pd.DataFrame, asof: pd.Timestamp) -> pd.Series:
 
 def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     """CANSLIM 基本面（PRD §5.2.1）逐檔狀態。回傳 index=ticker 的 bool 欄 + 數值。"""
+    from screener import quarterly_prep as qp
+
     q = qf.copy()
     q["ticker"] = _bare(q["ticker"])
     q = q[q["disclosure_date"] <= pd.Timestamp(asof)].sort_values(["ticker", "period_end"])
+    q = q.drop_duplicates(["ticker", "period_end"], keep="last")
     g = q.groupby("ticker", sort=False)
-    q["eps_base_q"] = g["eps"].shift(4)
+    q["eps_base_q"] = qp.panel_lag(q, "eps", 4)
     q["eps_yoy_q"] = q["eps"] / q["eps_base_q"] - 1.0
-    q["ttm_eps_3y"] = g["ttm_eps"].shift(12)
-    q["gm_p1"] = g["gross_margin"].shift(1)
-    q["gm_p2"] = g["gross_margin"].shift(2)
+    q["ttm_eps_3y"] = qp.panel_lag(q, "ttm_eps", 12)
+    q["gm_p1"] = qp.panel_lag(q, "gross_margin", 1)
+    q["gm_p2"] = qp.panel_lag(q, "gross_margin", 2)
     latest = g.tail(1).set_index("ticker")
 
     out = pd.DataFrame(index=latest.index)
