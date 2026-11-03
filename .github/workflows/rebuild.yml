@@ -20,6 +20,11 @@ name: 每日重算三清單
 
 on:
   workflow_dispatch:
+    inputs:
+      run_multiples:
+        description: "強制重算估值倍數（季更分類後、上線首次、資料回補後）"
+        type: boolean
+        default: false
   repository_dispatch:
     types: [bundle-published]
   schedule:
@@ -299,34 +304,60 @@ jobs:
           echo "::error::私有參考資料還原或推送失敗，今天的 PCF 快照與 006201／0050 序列可能沒有存進私有 Release（補不回的是 PCF 快照）"
           exit 1
 
-  # 估值 2.0 倍數（P5_spec §2-4，Opus 11/3 改成獨立 job）：全市場 1019 檔、2015 起月度序列，
-  # 本機 4 worker 約 42 分鐘——放進主 job 會拖慢三清單 commit，所以等主 job 推完才跑、另給 120 分鐘。
+  # 估值 2.0 倍數（P5_spec §2-4，Opus 11/3 改成獨立 job）：全市場約 1,100 檔、2015 起月度序列，
+  # 本機 4 worker 約 55 分鐘——放進主 job 會拖慢三清單 commit，所以等主 job 推完才跑、另給 180 分鐘。
   # 失敗不影響清單；app 會沿用 derived-latest 上前一次的檔（val_inputs.ensure_multiples）。
+  # 月更（使用者 11/3）：倍數只到「上個完整月份」、eps_revision 每月 11 日一筆，每天重算結果都一樣。
+  # 所以只在「12 日以後、這個月還沒算過」或手動勾 run_multiples 時跑；失敗沒更新 asof，下次 rebuild 自動再試。
+  # 個股月中的變化（新進母體、分割減資）不拉全市場重算：等月更、手動，或之後的查詢時單檔重算。
   multiples:
     needs: rebuild
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main        # 要拿主 job 剛推上去的 stock_class.json／corporate_actions_resolved.json
 
+      - name: 這個月要不要重算
+        id: due
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.run_multiples }}
+        run: |
+          python3 - <<'PY'
+          import datetime as dt, json, os
+          from pathlib import Path
+          today = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+          p = Path("data/derived/multiples_check.json")
+          last = str(json.loads(p.read_text(encoding="utf-8")).get("asof", ""))[:10] if p.exists() else ""
+          due = today.replace(day=12)
+          run = os.environ.get("FORCE") == "true" or not last or (today >= due and last < due.isoformat())
+          print(f"上次倍數基準 {last or '無'}；今天 {today}；{'重算' if run else '跳過（月更，12 日後才算）'}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"run={'true' if run else 'false'}\n")
+          PY
+
       - uses: actions/setup-python@v5
+        if: steps.due.outputs.run == 'true'
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+        if: steps.due.outputs.run == 'true'
 
       - name: 拉上游 bundle
+        if: steps.due.outputs.run == 'true'
         env:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
 
       - name: 估值倍數（multiples_hist／eps_revision／industry_pe）
+        if: steps.due.outputs.run == 'true'
         run: python build_multiples.py --workers "$(nproc)"
 
       - name: 倍數檔 → derived-latest release
+        if: steps.due.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -337,6 +368,7 @@ jobs:
             data/derived/multiples_hist.parquet data/derived/eps_revision.parquet
 
       - name: commit industry_pe.json + multiples_check.json
+        if: steps.due.outputs.run == 'true'
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
