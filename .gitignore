@@ -20,6 +20,8 @@ data/finmind_raw/
 # ⚠️ data/derived/ **刻意進版控**——但只 commit 清單 JSON（小、可 diff、app 只讀這裡）。
 #    factors.parquet 每天一顆 blob，一年會把 repo 撐到數百 MB → 放 Release 覆蓋。
 data/derived/*.parquet
+# 例外：分類遲滯歷史（約 14KB、只在季更時變）。不進版控的話 CI 每次季更都當首次分類，遲滯失效（11/3 查到）
+!data/derived/class_history.parquet
 
 .streamlit/secrets.toml
 
