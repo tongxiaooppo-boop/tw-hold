@@ -88,7 +88,11 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, basic: dict |
 - `screener/val_card.py::build_card` 加關鍵字參數 `basic: dict | None = None`（放最後，預設 None 讓舊呼叫不壞），原封傳給 `share_checks`。
 - `app/val_inputs.py::card_inputs` 回傳 dict 加 `basic`：`bundle.company_basic(code)`（bundle 物件沒有這個方法 → None）；`_AppBundle` 轉接 `module.company_basic`。乾跑腳本的轉接物件也要有 `company_basic`（讀 `data/upstream/company_basic.parquet`，沒有就回 None）。
 
-### 2-4 rebuild.yml 接 build_multiples（只加步驟，不改 cron、不動其他步驟）
+### 2-4 rebuild.yml 接 build_multiples（只加 job，不改 cron、不動其他步驟）
+
+> **Opus 11/3 驗收後修改**：本機 4 worker 全市場要 42 分鐘（2015 起月數變兩倍，P2 時 23 分鐘），放主 job 會拖慢三清單 commit。
+> 改成同檔另一個 job `multiples`（`needs: rebuild`、`if: !cancelled()`、timeout 120 分、checkout main、fetch_bundle、`--workers $(nproc)`、上傳兩個 parquet、commit 兩個 JSON）。下面原文作廢，保留記錄。
+
 
 - 位置：「估值分型季更」之後、「主動式 ETF PCF 快照」之前（build_lists 不讀倍數檔，所以不必在它前面）。
   ```yaml

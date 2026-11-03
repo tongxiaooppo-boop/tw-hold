@@ -14,6 +14,28 @@ DERIVED = Path(__file__).resolve().parent.parent / "data" / "derived"
 MH_FILE = "multiples_hist.parquet"
 REV_FILE = "eps_revision.parquet"
 IND_FILE = "industry_pe.json"
+DERIVED_RELEASE = "https://github.com/tongxiaooppo-boop/tw-hold/releases/download/derived-latest"
+REFRESH_HOURS = 6
+
+
+def ensure_multiples(derived: Path = DERIVED, now: float | None = None, fetch=None) -> None:
+    """缺檔或超過 6 小時重抓兩個倍數檔；先寫 .part，失敗保留舊檔。"""
+    import time
+    import urllib.request
+    now = time.time() if now is None else now
+    fetch = urllib.request.urlretrieve if fetch is None else fetch
+    derived = Path(derived)
+    derived.mkdir(parents=True, exist_ok=True)
+    for name in (MH_FILE, REV_FILE):
+        path = derived / name
+        if path.exists() and now - path.stat().st_mtime <= REFRESH_HOURS * 3600:
+            continue
+        part = path.with_suffix(path.suffix + ".part")
+        try:
+            fetch(f"{DERIVED_RELEASE}/{name}", part)
+            part.replace(path)
+        except Exception:
+            part.unlink(missing_ok=True)
 
 
 def quarterly(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame) -> pd.DataFrame:
@@ -47,7 +69,7 @@ def load_industry_pe(derived: Path = DERIVED) -> dict | None:
 
 def card_inputs(code: str, asof: pd.Timestamp, cls: dict | None, derived: Path = DERIVED,
                 bundle=None) -> dict:
-    """回傳 build_card 的關鍵字參數 {qf, rev, px, cls, mh, rev_hist, industry_pe, asof}；
+    """回傳 build_card 的關鍵字參數 {qf, rev, px, cls, mh, rev_hist, industry_pe, asof, basic}；
     derived 下三個倍數檔任一不存在 → {"missing": val_view.MSG_NO_MULTIPLES}。
     bundle＝提供 income／balance／cashflow／revenue／prices_raw_close 單檔讀取的物件（app 傳 bundle_data 模組；
     乾跑傳讀 data/upstream 的轉接物件），介面：bundle.read(name: str, code: str) -> pd.DataFrame。
@@ -67,7 +89,8 @@ def card_inputs(code: str, asof: pd.Timestamp, cls: dict | None, derived: Path =
     px = px.loc[px["date"] <= asof, ["date", "close"]].sort_values("date").reset_index(drop=True)
     return dict(qf=q, rev=bundle.read("revenue", code), px=px, cls=cls,
                 mh=load_mh(code, derived), rev_hist=load_rev_hist(code, derived),
-                industry_pe=load_industry_pe(derived), asof=asof)
+                industry_pe=load_industry_pe(derived), asof=asof,
+                basic=bundle.company_basic(code) if hasattr(bundle, "company_basic") else None)
 
 
 def _read_ticker(path, code, columns):
@@ -87,3 +110,6 @@ class _AppBundle:
         if name == "revenue":
             return self.module.revenue(code)
         return self.module._read(name + ".parquet", code, name == "prices_raw_close")
+
+    def company_basic(self, code):
+        return self.module.company_basic(code) if hasattr(self.module, "company_basic") else None

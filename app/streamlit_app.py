@@ -2120,11 +2120,17 @@ def _pct_floor(v) -> str:
 
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _ensure_valuation_multiples() -> None:
+    val_inputs.ensure_multiples()
+
+
 def _val_card(d: dict, code: str) -> tuple:
     """同一頁只組裝並計算一次；明確傳入既有 bundle 模組。"""
     import bundle_data as bd
     try:
         asof = pd.Timestamp(_taipei_today())
+        _ensure_valuation_multiples()
         inputs = val_inputs.card_inputs(code, asof, _stock_class(code), bundle=bd)
         if "missing" in inputs:
             return None, inputs
@@ -2154,8 +2160,7 @@ def _price_tri(tri) -> str:
 
 def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True) -> tuple:
     """估值速覽只畫 val_view 的字串，並將同一次計算交給河流圖。"""
-    st.markdown("#### 💰 估值速覽（開發中）")
-    st.caption("🚧 開發中：估值規則還在修正，數字僅供參考。")
+    st.markdown("#### 💰 估值速覽")
     meta = _load("stock_class.json") or {}
     coverage = val_view.coverage_line(meta)
     if coverage:
@@ -2182,7 +2187,11 @@ def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True
             body += f'<div class="val-pos {tone}">{_esc(position)}</div>'
         for text in (p.base_text, *p.extra):
             if text:
-                body += f'<p class="val-sub">{_esc(text)}</p>'
+                shown = _esc(text)
+                if "反推 EPS 門檻 " in text:
+                    value = _esc(v.pins["反推 EPS 門檻"])
+                    shown = shown.replace(f"反推 EPS 門檻 {value} 元", f"反推 EPS 門檻 {value}&nbsp;元")
+                body += f'<p class="val-sub">{shown}</p>'
         if p.buy:
             value, sub = p.buy
             body += f'<div class="val-label">{_esc(p.buy_label)}</div><div class="val-hint">{_esc(p.buy_hint)}</div><h3>{_esc(value)}</h3><div class="val-sub">{_esc(sub)}</div>'
@@ -2209,6 +2218,14 @@ def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True
                     _view_table(table)
                 if title == val_view.EXP_TRIAL:
                     _risk_table(d, card)
+    if full:
+        try:
+            help_text = Path(__file__).with_name("help_valuation.md").read_text(encoding="utf-8")
+        except OSError:
+            help_text = None
+        if help_text:
+            with st.expander("📖 估值怎麼看"):
+                st.markdown(help_text)
     return card, inputs
 
 

@@ -170,8 +170,12 @@ jobs:
           gh release view derived-latest >/dev/null 2>&1 \
             || gh release create derived-latest --title "derived factors (latest)" \
                  --notes "build_lists.py 產出的逐檔因子表；rebuild.yml 每次覆蓋。app 三軌體檢頁執行期讀。"
-          gh release upload derived-latest --clobber \
-            data/derived/factors_value.parquet data/derived/factors_deposit.parquet
+          ASSETS="data/derived/factors_value.parquet data/derived/factors_deposit.parquet"
+          EXISTING=""
+          for f in $ASSETS; do
+            if [ -f "$f" ]; then EXISTING="$EXISTING $f"; else echo "::warning::derived 缺檔，略過上傳：$f"; fi
+          done
+          if [ -n "$EXISTING" ]; then gh release upload derived-latest --clobber $EXISTING; fi
 
       - name: 自動解不了的分割才告警
         if: always()
@@ -294,6 +298,61 @@ jobs:
         run: |
           echo "::error::私有參考資料還原或推送失敗，今天的 PCF 快照與 006201／0050 序列可能沒有存進私有 Release（補不回的是 PCF 快照）"
           exit 1
+
+  # 估值 2.0 倍數（P5_spec §2-4，Opus 11/3 改成獨立 job）：全市場 1019 檔、2015 起月度序列，
+  # 本機 4 worker 約 42 分鐘——放進主 job 會拖慢三清單 commit，所以等主 job 推完才跑、另給 120 分鐘。
+  # 失敗不影響清單；app 會沿用 derived-latest 上前一次的檔（val_inputs.ensure_multiples）。
+  multiples:
+    needs: rebuild
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main        # 要拿主 job 剛推上去的 stock_class.json／corporate_actions_resolved.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: 拉上游 bundle
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: python fetch_bundle.py
+
+      - name: 估值倍數（multiples_hist／eps_revision／industry_pe）
+        run: python build_multiples.py --workers "$(nproc)"
+
+      - name: 倍數檔 → derived-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view derived-latest >/dev/null 2>&1 \
+            || gh release create derived-latest --title "derived factors (latest)" \
+                 --notes "build_lists.py／build_multiples.py 產出的逐檔表；rebuild.yml 每次覆蓋。app 執行期讀。"
+          gh release upload derived-latest --clobber \
+            data/derived/multiples_hist.parquet data/derived/eps_revision.parquet
+
+      - name: commit industry_pe.json + multiples_check.json
+        run: |
+          git config user.name  "tw-hold-bot"
+          git config user.email "noreply@github.com"
+          git add data/derived/industry_pe.json data/derived/multiples_check.json
+          git diff --cached --quiet && { echo "倍數 JSON 無變更"; exit 0; }
+          git commit -m "rebuild: 估值倍數 $(date -u +%F)"
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if git push; then pushed=1; break; fi
+            sleep $(( (RANDOM % 5) + i * 3 ))
+            git pull --rebase origin main || {
+              git checkout --theirs -- data/derived/industry_pe.json data/derived/multiples_check.json
+              git add data/derived/industry_pe.json data/derived/multiples_check.json
+              GIT_EDITOR=true git rebase --continue || { git rebase --abort || true; }; }
+          done
+          [ "$pushed" = 1 ] || { echo "::error::倍數 JSON push 連續失敗"; exit 1; }
 
   # ⚠️ 這個 job 自己絕對不可以失敗（抄自 tw-swing daily.yml）。
   notify-failure:

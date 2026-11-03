@@ -57,7 +57,8 @@ NEAR_ZERO_REL = 0.2          # 沿用
 RATIO_WARN = 2.5             # 沿用（舊 RATIO_DEGRADE）；>4 也只提示（§5-2「只降級」）
 FWD_JUMP_REL = 1.5           # 沿用
 VAR_PP = 0.30                # 【起始值】高變動：最新季季增減 − 去年同季季增減，絕對值 ≥ 30 個百分點
-PAR_DEFAULT = 10.0           # 沒有面額資料時假設 10 元（company_basic 要到 P5）
+PAR_DEFAULT = 10.0           # 沒有可用官方面額資料時假設 10 元
+BASIC_MAX_AGE_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -170,7 +171,7 @@ def quarter_sanity(q: pd.DataFrame, n: int = 8, construction: bool = False) -> C
 
 # ── share_basis ───────────────────────────────────────────────────
 
-def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, today_par: float | None = None) -> list[Check]:
+def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, basic: dict | None = None) -> list[Check]:
     """1. 事件表：reference.share_basis.events(ticker) 丟 EventsUnavailable → 只回
           [Check("share_basis","股數事件表","stop",None,"股數事件表讀取失敗，股數基準無法確認，不給價")]（T-17）。
     2. 「現金減資區間」（卡片端即時版，與歷史序列的 excluded_months 不同）：share_basis.events(ticker) 中
@@ -178,10 +179,11 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, today_par: fl
        q 沒有任何 period_end ≥ Qe 且 eps 有限的列（事件後的財報還沒進來）→ stop，
        why＝"現金減資後、新財報出來前，EPS 與股價的股數基準不一致，不給價"；否則 ok。
     3. 「股數對不上」：最新一季（period_end 最大且 |eps| ≥ 0.05、ni_parent 有限）隱含股數 S＝ni_parent ÷ eps；
-       股本股數 C＝capital_stock ÷ (today_par 或 PAR_DEFAULT)；dev＝|S ÷ C − 1|；
+       股本股數 C＝capital_stock ÷ 面額 − 特別股；dev＝|S ÷ C − 1|；
        dev > SHARES_WARN → warn（why：f"隱含股數與股本差 {dev:.0%}，可能是分割／配股調整時點"），否則 ok（value=dev）；
        推不出 S 或 C 非有限 >0 → unchecked，why＝"推不出隱含股數或缺股本"。
-    4. 「面額與特別股」：today_par 為 None → unchecked，why＝"面額與特別股資料尚未收集，假設面額 10 元"；否則 ok。"""
+    4. 「面額與特別股」：面額有限且正、資料日距估值日不超過 30 天才可用；
+       缺或過期 → unchecked；有特別股 → warn；否則 ok。"""
     from reference import share_basis as sb
 
     try:
@@ -197,14 +199,23 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, today_par: fl
     out = [Check("share_basis", "現金減資區間", "stop", None,
                  "現金減資後、新財報出來前，EPS 與股價的股數基準不一致，不給價")
            if blocked else _ok("share_basis", "現金減資區間")]
+    usable = False
+    if basic is not None and _finite(basic.get("par_value")) and basic["par_value"] > 0:
+        try:
+            age = abs(pd.Timestamp(asof) - pd.Timestamp(basic.get("asof")))
+            usable = pd.notna(age) and age <= pd.Timedelta(days=BASIC_MAX_AGE_DAYS)
+        except (TypeError, ValueError):
+            pass
+    par = basic["par_value"] if usable else PAR_DEFAULT
+    pref = basic.get("preferred_shares", 0) if usable else 0
+    pref = pref if _finite(pref) else 0
     candidates = d[(_series(d, "eps").abs() >= 0.05) & _series(d, "ni_parent").notna()]
     dev = None
     if not candidates.empty:
         r = candidates.iloc[-1]
         shares = r["ni_parent"] / r["eps"]
-        par = today_par if today_par is not None else PAR_DEFAULT
         capital = r.get("capital_stock")
-        c = capital / par if _finite(capital) and _finite(par) and par > 0 else None
+        c = capital / par - pref if _finite(capital) and _finite(par) and par > 0 else None
         if _finite(shares) and shares > 0 and _finite(c) and c > 0:
             dev = abs(shares / c - 1)
     out.append(Check("share_basis", "股數對不上", "unchecked", None, "推不出隱含股數或缺股本")
@@ -212,8 +223,10 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, today_par: fl
                                         f"隱含股數與股本差 {dev:.0%}，可能是分割／配股調整時點")
                if dev > SHARES_WARN else _ok("share_basis", "股數對不上", dev))
     out.append(Check("share_basis", "面額與特別股", "unchecked", None,
-                     "面額與特別股資料尚未收集，假設面額 10 元")
-               if today_par is None else _ok("share_basis", "面額與特別股"))
+                     "面額與特別股資料缺或過期，假設面額 10 元")
+               if not usable else Check("share_basis", "面額與特別股", "warn", pref,
+                   f"有特別股 {pref/1e8:.2f} 億股，每股淨值含特別股權益、股價淨值比可能偏低")
+               if pref > 0 else _ok("share_basis", "面額與特別股"))
     return out
 
 

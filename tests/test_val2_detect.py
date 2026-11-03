@@ -97,7 +97,7 @@ def test_股數_對得上與面額未收集():
     out = {c.name: c for c in dt.share_checks("9999", Q(), ASOF)}
     assert out["股數對不上"].level == "ok" and out["股數對不上"].value == pytest.approx(0.0)
     assert out["面額與特別股"].level == "unchecked" and out["現金減資區間"].level == "ok"
-    assert {c.name: c for c in dt.share_checks("9999", Q(), ASOF, today_par=10.0)}["面額與特別股"].level == "ok"
+    assert {c.name: c for c in dt.share_checks("9999", Q(), ASOF, basic=dict(par_value=10.0, preferred_shares=0, asof=ASOF))}["面額與特別股"].level == "ok"
 
 
 def test_股數_對不上提示():

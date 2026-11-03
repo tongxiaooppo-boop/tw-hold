@@ -222,7 +222,7 @@ def buy_where(buy: dict | None, price: float | None) -> dict | None:
 
 def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFrame | None,
                cls: dict | None, mh: pd.DataFrame | None, rev_hist: pd.DataFrame | None,
-               industry_pe: dict | None, asof: pd.Timestamp) -> dict:
+               industry_pe: dict | None, asof: pd.Timestamp, *, basic: dict | None = None) -> dict:
     """見模組說明。不得丟例外給呼叫端以外的情況：share_basis.EventsUnavailable 由 share_checks 轉成 stop。"""
     q, monthly = _quarters(qf), _monthly(rev)
     cls_data = cls or {}
@@ -258,7 +258,7 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
     construction = "construction" in ((cls.get("metrics") or {}).get("special_triggers") or [])
     windows = ew.windows(q, monthly, asof, live=True, financial=financial)
     checks = dt.data_checks(q, monthly, windows, cls, asof, financial=financial, construction=construction)
-    checks += dt.share_checks(str(cls.get("ticker") or ""), q, asof)
+    checks += dt.share_checks(str(cls.get("ticker") or ""), q, asof, basic=basic)
     checks += dt.estimate_checks(q, monthly, windows)
     status = dt.summarize(checks)
     disabled = dt.stopped(status, "estimate")

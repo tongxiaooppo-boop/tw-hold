@@ -33,6 +33,20 @@ class LocalBundle:
             self.frames[name][None] = frame.iloc[:0]
         return self.frames[name].get(str(code), self.frames[name][None]).copy()
 
+    def company_basic(self, code):
+        path = ROOT / 'data/upstream/company_basic.parquet'
+        if not path.exists():
+            return None
+        try:
+            rows = self.read('company_basic', code)
+            if rows.empty:
+                return None
+            r = rows.iloc[0]
+            return {**{k: float(r.get(k, float('nan'))) for k in
+                       ('par_value', 'issued_shares', 'preferred_shares')}, 'asof': pd.Timestamp(r.get('asof'))}
+        except Exception:
+            return None
+
 
 def table(headers, rows):
     def cell(value):
@@ -49,6 +63,7 @@ def text_value(value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--derived', type=Path, default=ROOT / '_dryrun')
+    parser.add_argument('--out', type=Path, default=None, help='輸出目錄；未指定時維持原路徑')
     args = parser.parse_args()
     industry = json.loads((args.derived / val_inputs.IND_FILE).read_text(encoding='utf-8'))
     if industry['asof'] != str(ASOF.date()) or not all('values' in v for v in industry['industries'].values()):
@@ -122,10 +137,19 @@ def main():
         except Exception as exc:
             errors.append((code, f'river {type(exc).__name__}: {exc}'))
             lines.extend([f'河流圖 {code} 例外：{exc}', ''])
-    (ROOT / 'p4a_views.md').write_text('\n'.join(lines), encoding='utf-8')
+    if args.out is not None:
+        args.out.mkdir(parents=True, exist_ok=True)
+    views_path = args.out / 'p4a_views.md' if args.out is not None else ROOT / 'p4a_views.md'
+    summary_path = args.out / 'p4a_summary.json' if args.out is not None else ROOT / '_dryrun/p4a_summary.json'
+    views_path.write_text('\n'.join(lines), encoding='utf-8')
     summary = dict(n_stocks=len(stocks), n_ok=len(views), errors=errors, tiers=dict(tiers),
                    tri_notes=dict(tri_notes), fwd_notes=dict(fwd_notes), pins=dict(pin_counts))
-    (ROOT / '_dryrun/p4a_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    # summarize 只保留非正常明細；沒有該項明細即為 ok。
+    summary['share_checks'] = {name: dict(Counter(next((item['level']
+        for item in card['status']['share_basis']['items'] if item['name'] == name), 'ok')
+        for card in cards.values()))
+        for name in ('面額與特別股', '股數對不上')}
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps(summary, ensure_ascii=False), flush=True)
     if errors or any(code not in views for code in CHOSEN):
         raise SystemExit(1)

@@ -6,13 +6,15 @@ rebuild 時在 build_classification 之後、build_lists 之前跑（P5 才接 w
 用法：python build_multiples.py [--asof YYYY-MM-DD] [--tickers 2330,2327] [--out-dir data/derived] [--workers N]
   --asof 預設今天（台北日期）；--tickers 只跑這些（仍寫產出，給除錯用）；--workers 預設 max(1, cpu−1)。
 
-輸入（P2 先用本機檔，P5 換 bundle `monthly_raw_close`）：
+輸入（bundle 月收盤全歷史與近期日線合併）：
 - 母體／產業／金融：data/derived/stock_class.json 的 ["stocks"]（ticker、industry、industry_group；
   industry_group=="financial" → financial=True）
 - 季報：reference.loader.load_quarterly(live=True) → reference.corporate_actions.adjust_eps(q)
 - 月營收：data/upstream/revenue.parquet（ticker, month "YYYY-MM", revenue）→ index＝月初 Timestamp
-- 原始收盤：data/upstream/prices_raw_close.parquet（ticker 帶 .TW/.TWO, date, close）→ multiples_self.monthly_closes
-- 交易所 PER：data/upstream/per.parquet（ticker 裸, date, per）；先只留月底交易日再傳入，省記憶體
+- 原始收盤：data/upstream/monthly_raw_close.parquet（存在才讀）∪ prices_raw_close.parquet
+  （ticker, date, close）→ multiples_self.monthly_closes，取完整月份最後交易列
+- 交易所 PER：data/upstream/fundamentals/per.parquet 優先，否則 data/upstream/per.parquet；
+  ticker 裸, date, per；先只留月底交易日再傳入，省記憶體
 
 產出（--out-dir，全部先寫暫存檔、全部成功才一起取代舊檔）：
 - multiples_hist.parquet：multiples_self.HIST_COLUMNS，全市場串接
@@ -56,6 +58,18 @@ from screener import eps_windows as ew
 from screener import multiples_self as ms
 
 
+def _load_closes(asof, upstream: Path) -> pd.DataFrame:
+    columns = ["ticker", "date", "close"]
+    frames = []
+    monthly = upstream / "monthly_raw_close.parquet"
+    if monthly.exists():
+        frames.append(pd.read_parquet(monthly, columns=columns))
+    else:
+        print("⚠️ 沒有 monthly_raw_close，原始收盤只從 prices_raw_close 起", flush=True)
+    frames.append(pd.read_parquet(upstream / "prices_raw_close.parquet", columns=columns))
+    return ms.monthly_closes(pd.concat(frames, ignore_index=True), pd.Timestamp(asof))
+
+
 def _init_worker(asof: str, tickers: list[str]) -> None:
     global _DATA
     sb.events("")
@@ -67,9 +81,12 @@ def _init_worker(asof: str, tickers: list[str]) -> None:
     rev["ticker"] = rev["ticker"].astype(str)
     rev = rev[rev["ticker"].isin(wanted)].copy()
     rev["month"] = pd.to_datetime(rev["month"])
-    closes = ms.monthly_closes(pd.read_parquet("data/upstream/prices_raw_close.parquet", columns=["ticker", "date", "close"]), pd.Timestamp(asof))
+    closes = _load_closes(pd.Timestamp(asof), Path("data/upstream"))
     closes = closes[closes["ticker"].isin(wanted)]
-    per = pd.read_parquet("data/upstream/per.parquet", columns=["ticker", "date", "per"])
+    per_path = Path("data/upstream/fundamentals/per.parquet")
+    if not per_path.exists():
+        per_path = Path("data/upstream/per.parquet")
+    per = pd.read_parquet(per_path, columns=["ticker", "date", "per"])
     per["ticker"] = per["ticker"].astype(str)
     per["date"] = pd.to_datetime(per["date"])
     per = per.merge(closes[["ticker", "date"]], on=["ticker", "date"], how="inner")
@@ -226,7 +243,14 @@ def main(argv: list[str] | None = None) -> int:
         industries[name] = dict(median_pe=float(group["pe"].median()), n=len(group),
                                 values=[round(float(v), 4) for v in sorted(group["pe"])])
     diffs = np.array([abs(r["median_diff"]) for r in comparisons])
+    closes = _load_closes(pd.Timestamp(asof), Path("data/upstream"))
+    first = closes[closes["ticker"].isin(tickers)].groupby("ticker")["month"].min()
+    first_dates = pd.to_datetime(first)
+    first_month = {"p10": first_dates.quantile(.1).strftime("%Y-%m") if len(first) else None,
+                   "p50": first_dates.quantile(.5).strftime("%Y-%m") if len(first) else None,
+                   "n_from_2015": int((first <= "2015-03").sum())}
     checks = dict(asof=asof, n_tickers=len(stocks), n_ok=len(stocks) - len(failed), n_failed=len(failed),
+                  closes_first_month=first_month,
                   failed=failed, no_price=sorted(no_price),
                   pe_vs_exchange=dict(n_compared=len(comparisons),
                       abs_median_p50=float(np.quantile(diffs, .5)) if len(diffs) else None,
