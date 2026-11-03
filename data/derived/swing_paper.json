@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-11-03T11:00:18+00:00",
+    "updated_at": "2026-11-03T16:17:32+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -571,17 +571,62 @@
       "exit_date": "2026-10-30",
       "exit_price": 45.63,
       "ret_pct": 0.061163
+    },
+    {
+      "ticker": "1560",
+      "name": "中砂",
+      "entry_date": "2026-10-28",
+      "entry_price": 905.0,
+      "exit_date": "2026-11-03",
+      "exit_price": 831.14,
+      "ret_pct": -0.081613
+    },
+    {
+      "ticker": "2535",
+      "name": "達欣工",
+      "entry_date": "2026-10-27",
+      "entry_price": 93.1,
+      "exit_date": "2026-11-03",
+      "exit_price": 91.3,
+      "ret_pct": -0.019334
+    },
+    {
+      "ticker": "2027",
+      "name": "大成鋼",
+      "entry_date": "2026-10-14",
+      "entry_price": 49.85,
+      "exit_date": "2026-11-03",
+      "exit_price": 48.93,
+      "ret_pct": -0.018455
+    },
+    {
+      "ticker": "6491",
+      "name": "晶碩",
+      "entry_date": "2026-10-13",
+      "entry_price": 403.5,
+      "exit_date": "2026-11-03",
+      "exit_price": 410.93,
+      "ret_pct": 0.018414
+    },
+    {
+      "ticker": "6782",
+      "name": "視陽",
+      "entry_date": "2026-10-12",
+      "entry_price": 242.0,
+      "exit_date": "2026-11-03",
+      "exit_price": 257.86,
+      "ret_pct": 0.065537
     }
   ],
   "stats": {
-    "n": 63,
-    "win_rate": 0.36507936507936506,
-    "avg_ret_gross": 0.0069039206349206335,
-    "expectancy_net": 0.001053920634920635,
+    "n": 68,
+    "win_rate": 0.36764705882352944,
+    "avg_ret_gross": 0.005874941176470588,
+    "expectancy_net": 2.4941176470590118e-05,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": -6.492063492063494,
+      "gap_pp": -6.235294117647055,
       "diverging": false
     },
     "by_month": [
@@ -596,6 +641,12 @@
         "n": 55,
         "win_rate": 0.34545454545454546,
         "avg_ret_net": 0.0014842727272727275
+      },
+      {
+        "ym": "2026-11",
+        "n": 5,
+        "win_rate": 0.4,
+        "avg_ret_net": -0.012940200000000002
       }
     ]
   }

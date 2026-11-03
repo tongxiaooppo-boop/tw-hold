@@ -1,15 +1,24 @@
 {
   "_meta": {
-    "asof": "2026-11-02",
+    "asof": "2026-11-03",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
     "9933": {
       "name": "中鼎",
-      "status": "pending_entry",
-      "signal_date": "2026-11-02",
-      "risk_stop_ref": 42.34
+      "first_seen": "2026-11-02",
+      "entry_date": "2026-11-03",
+      "entry_price": 45.7,
+      "atr0": 1.5679,
+      "run_high": 47.150001525878906,
+      "trail_stop": 42.34,
+      "last_close": 46.3,
+      "last_update": "2026-11-03",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "2006": {
       "name": "東和鋼鐵",
@@ -18,9 +27,9 @@
       "entry_price": 90.0,
       "atr0": 2.6071,
       "run_high": 92.9000015258789,
-      "trail_stop": 85.22,
-      "last_close": 91.6,
-      "last_update": "2026-11-02",
+      "trail_stop": 87.69,
+      "last_close": 89.6,
+      "last_update": "2026-11-03",
       "status": "candidate",
       "dropped_date": null,
       "exit_date": null,
@@ -34,12 +43,12 @@
       "atr0": 42.1429,
       "run_high": 905.0,
       "trail_stop": 831.14,
-      "last_close": 864.0,
-      "last_update": "2026-11-02",
-      "status": "dropped_from_pool",
+      "last_close": 778.0,
+      "last_update": "2026-11-03",
+      "status": "stopped_out",
       "dropped_date": "2026-10-30",
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-03",
+      "exit_price": 831.14
     },
     "3265": {
       "name": "台星科",
@@ -79,12 +88,12 @@
       "atr0": 1.45,
       "run_high": 94.19999694824219,
       "trail_stop": 91.3,
-      "last_close": 92.0,
-      "last_update": "2026-11-02",
-      "status": "candidate",
+      "last_close": 90.1,
+      "last_update": "2026-11-03",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-03",
+      "exit_price": 91.3
     },
     "6197": {
       "name": "佳必琪",
@@ -230,7 +239,7 @@
       "run_high": 135.5,
       "trail_stop": 130.57,
       "last_close": 133.0,
-      "last_update": "2026-11-02",
+      "last_update": "2026-11-03",
       "status": "candidate",
       "dropped_date": null,
       "exit_date": null,
@@ -244,12 +253,12 @@
       "atr0": 1.1857,
       "run_high": 51.29999923706055,
       "trail_stop": 48.93,
-      "last_close": 50.3,
-      "last_update": "2026-11-02",
-      "status": "candidate",
+      "last_close": 48.95,
+      "last_update": "2026-11-03",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-03",
+      "exit_price": 48.93
     },
     "6491": {
       "name": "晶碩",
@@ -259,12 +268,12 @@
       "atr0": 13.0357,
       "run_high": 437.0,
       "trail_stop": 410.93,
-      "last_close": 425.0,
-      "last_update": "2026-11-02",
-      "status": "candidate",
+      "last_close": 405.0,
+      "last_update": "2026-11-03",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-03",
+      "exit_price": 410.93
     },
     "2421": {
       "name": "建準",
@@ -304,12 +313,12 @@
       "atr0": 8.5714,
       "run_high": 275.0,
       "trail_stop": 257.86,
-      "last_close": 261.5,
-      "last_update": "2026-11-02",
-      "status": "candidate",
+      "last_close": 256.0,
+      "last_update": "2026-11-03",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-03",
+      "exit_price": 257.86
     },
     "3653": {
       "name": "健策",
