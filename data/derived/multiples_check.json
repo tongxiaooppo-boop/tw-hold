@@ -1,0 +1,763 @@
+{
+  "asof": "2026-11-03",
+  "n_tickers": 1098,
+  "n_ok": 1098,
+  "n_failed": 0,
+  "closes_first_month": {
+    "p10": "2015-01",
+    "p50": "2015-01",
+    "n_from_2015": 827
+  },
+  "failed": [],
+  "no_price": [],
+  "pe_vs_exchange": {
+    "n_compared": 1017,
+    "abs_median_p50": 0.00024609326934910136,
+    "abs_median_p90": 0.022213529626657853,
+    "abs_median_max": 0.43205412856311315,
+    "warn": [
+      {
+        "ticker": "6695",
+        "median_diff": -0.43205412856311315,
+        "n_months": 6
+      },
+      {
+        "ticker": "8033",
+        "median_diff": 0.42108396553742444,
+        "n_months": 6
+      },
+      {
+        "ticker": "8050",
+        "median_diff": -0.3128616415757114,
+        "n_months": 68
+      },
+      {
+        "ticker": "6579",
+        "median_diff": -0.28043021671677487,
+        "n_months": 58
+      },
+      {
+        "ticker": "6028",
+        "median_diff": -0.2362286918608144,
+        "n_months": 6
+      },
+      {
+        "ticker": "3230",
+        "median_diff": -0.15997942010538657,
+        "n_months": 19
+      },
+      {
+        "ticker": "6907",
+        "median_diff": -0.13462106444562583,
+        "n_months": 7
+      },
+      {
+        "ticker": "3339",
+        "median_diff": -0.1212928050587786,
+        "n_months": 18
+      },
+      {
+        "ticker": "3625",
+        "median_diff": -0.11536764134300148,
+        "n_months": 30
+      },
+      {
+        "ticker": "9941",
+        "median_diff": -0.10209481962932676,
+        "n_months": 43
+      },
+      {
+        "ticker": "2614",
+        "median_diff": 0.10093297809560775,
+        "n_months": 30
+      },
+      {
+        "ticker": "6272",
+        "median_diff": -0.10010452934287972,
+        "n_months": 7
+      },
+      {
+        "ticker": "6909",
+        "median_diff": -0.09992372234935165,
+        "n_months": 11
+      },
+      {
+        "ticker": "6877",
+        "median_diff": -0.09675300250584085,
+        "n_months": 8
+      },
+      {
+        "ticker": "6944",
+        "median_diff": -0.09269084137687877,
+        "n_months": 7
+      },
+      {
+        "ticker": "3036",
+        "median_diff": -0.08846449408555435,
+        "n_months": 68
+      },
+      {
+        "ticker": "7786",
+        "median_diff": -0.08305303084520144,
+        "n_months": 7
+      },
+      {
+        "ticker": "6994",
+        "median_diff": -0.08242250978773985,
+        "n_months": 14
+      },
+      {
+        "ticker": "6873",
+        "median_diff": -0.0804433476292844,
+        "n_months": 15
+      },
+      {
+        "ticker": "6725",
+        "median_diff": -0.079696939329504,
+        "n_months": 6
+      },
+      {
+        "ticker": "6658",
+        "median_diff": -0.07214670730483075,
+        "n_months": 20
+      },
+      {
+        "ticker": "7792",
+        "median_diff": -0.07190877209409374,
+        "n_months": 7
+      },
+      {
+        "ticker": "1402",
+        "median_diff": -0.0665308893414801,
+        "n_months": 79
+      },
+      {
+        "ticker": "1102",
+        "median_diff": -0.06551059730250475,
+        "n_months": 73
+      },
+      {
+        "ticker": "7750",
+        "median_diff": -0.06529550941839096,
+        "n_months": 8
+      },
+      {
+        "ticker": "1584",
+        "median_diff": -0.06447006127012389,
+        "n_months": 39
+      },
+      {
+        "ticker": "4760",
+        "median_diff": -0.06302459777175479,
+        "n_months": 40
+      },
+      {
+        "ticker": "7769",
+        "median_diff": -0.06291264176679578,
+        "n_months": 7
+      },
+      {
+        "ticker": "2882",
+        "median_diff": -0.06212022910189141,
+        "n_months": 128
+      },
+      {
+        "ticker": "7810",
+        "median_diff": -0.061109240296793654,
+        "n_months": 6
+      },
+      {
+        "ticker": "7744",
+        "median_diff": -0.060608775282688376,
+        "n_months": 7
+      },
+      {
+        "ticker": "2881",
+        "median_diff": -0.05969867156280395,
+        "n_months": 93
+      },
+      {
+        "ticker": "8045",
+        "median_diff": -0.0595408178546612,
+        "n_months": 10
+      },
+      {
+        "ticker": "7722",
+        "median_diff": -0.05533374778096978,
+        "n_months": 9
+      },
+      {
+        "ticker": "2406",
+        "median_diff": -0.0548632691733319,
+        "n_months": 16
+      },
+      {
+        "ticker": "5425",
+        "median_diff": -0.054653027729346326,
+        "n_months": 77
+      },
+      {
+        "ticker": "7738",
+        "median_diff": -0.053432328063350853,
+        "n_months": 7
+      },
+      {
+        "ticker": "2528",
+        "median_diff": -0.052099832129763324,
+        "n_months": 38
+      },
+      {
+        "ticker": "6869",
+        "median_diff": -0.050303469083012364,
+        "n_months": 20
+      },
+      {
+        "ticker": "4114",
+        "median_diff": -0.048333305859175835,
+        "n_months": 31
+      },
+      {
+        "ticker": "4991",
+        "median_diff": -0.04807655680701167,
+        "n_months": 30
+      },
+      {
+        "ticker": "6770",
+        "median_diff": -0.04768387973185989,
+        "n_months": 18
+      },
+      {
+        "ticker": "2887",
+        "median_diff": 0.04657692738214769,
+        "n_months": 58
+      },
+      {
+        "ticker": "6190",
+        "median_diff": -0.04564645429123054,
+        "n_months": 68
+      },
+      {
+        "ticker": "1784",
+        "median_diff": -0.044372350429755125,
+        "n_months": 50
+      },
+      {
+        "ticker": "6830",
+        "median_diff": -0.04406673394247845,
+        "n_months": 16
+      },
+      {
+        "ticker": "6862",
+        "median_diff": -0.04317207593386385,
+        "n_months": 15
+      },
+      {
+        "ticker": "3162",
+        "median_diff": -0.043113211069683244,
+        "n_months": 20
+      },
+      {
+        "ticker": "5608",
+        "median_diff": -0.042496375982299495,
+        "n_months": 21
+      },
+      {
+        "ticker": "3702",
+        "median_diff": -0.04191616766467077,
+        "n_months": 69
+      },
+      {
+        "ticker": "7714",
+        "median_diff": -0.04151699364465322,
+        "n_months": 11
+      },
+      {
+        "ticker": "5478",
+        "median_diff": -0.03950836604357921,
+        "n_months": 76
+      },
+      {
+        "ticker": "2457",
+        "median_diff": -0.03924626105689977,
+        "n_months": 17
+      },
+      {
+        "ticker": "6591",
+        "median_diff": -0.03885304434978698,
+        "n_months": 59
+      },
+      {
+        "ticker": "4441",
+        "median_diff": -0.038082457656674173,
+        "n_months": 7
+      },
+      {
+        "ticker": "8462",
+        "median_diff": -0.03666345554485184,
+        "n_months": 35
+      },
+      {
+        "ticker": "7765",
+        "median_diff": -0.03576437587657788,
+        "n_months": 7
+      },
+      {
+        "ticker": "5009",
+        "median_diff": -0.03574133821071529,
+        "n_months": 74
+      },
+      {
+        "ticker": "3041",
+        "median_diff": -0.03571877074325891,
+        "n_months": 6
+      },
+      {
+        "ticker": "3264",
+        "median_diff": -0.03525877197154248,
+        "n_months": 68
+      },
+      {
+        "ticker": "2027",
+        "median_diff": 0.03421054953298963,
+        "n_months": 42
+      },
+      {
+        "ticker": "4577",
+        "median_diff": -0.034192743462593156,
+        "n_months": 11
+      },
+      {
+        "ticker": "4123",
+        "median_diff": -0.033972136695796906,
+        "n_months": 13
+      },
+      {
+        "ticker": "6163",
+        "median_diff": -0.033765190290324376,
+        "n_months": 60
+      },
+      {
+        "ticker": "7751",
+        "median_diff": -0.03322930552013459,
+        "n_months": 7
+      },
+      {
+        "ticker": "3543",
+        "median_diff": -0.03243395426245821,
+        "n_months": 17
+      },
+      {
+        "ticker": "9945",
+        "median_diff": -0.032285439751213674,
+        "n_months": 45
+      },
+      {
+        "ticker": "6761",
+        "median_diff": -0.030473720896261658,
+        "n_months": 30
+      },
+      {
+        "ticker": "6719",
+        "median_diff": -0.02902930673579779,
+        "n_months": 26
+      },
+      {
+        "ticker": "6654",
+        "median_diff": 0.029013525242027605,
+        "n_months": 25
+      },
+      {
+        "ticker": "6841",
+        "median_diff": -0.028969809549474312,
+        "n_months": 18
+      },
+      {
+        "ticker": "4906",
+        "median_diff": -0.028758093682552777,
+        "n_months": 55
+      },
+      {
+        "ticker": "6217",
+        "median_diff": -0.028184460147701706,
+        "n_months": 42
+      },
+      {
+        "ticker": "6462",
+        "median_diff": -0.028107530984332607,
+        "n_months": 31
+      },
+      {
+        "ticker": "5392",
+        "median_diff": -0.027799526742527114,
+        "n_months": 34
+      },
+      {
+        "ticker": "3227",
+        "median_diff": -0.02751286969581812,
+        "n_months": 74
+      },
+      {
+        "ticker": "6548",
+        "median_diff": -0.027479972601923808,
+        "n_months": 53
+      },
+      {
+        "ticker": "4714",
+        "median_diff": -0.02744011411967756,
+        "n_months": 46
+      },
+      {
+        "ticker": "4749",
+        "median_diff": -0.027424733362228615,
+        "n_months": 14
+      },
+      {
+        "ticker": "3260",
+        "median_diff": -0.027379899540659614,
+        "n_months": 66
+      },
+      {
+        "ticker": "4534",
+        "median_diff": -0.027336326673003675,
+        "n_months": 24
+      },
+      {
+        "ticker": "8112",
+        "median_diff": -0.027172563844323205,
+        "n_months": 73
+      },
+      {
+        "ticker": "3006",
+        "median_diff": 0.02696258730611112,
+        "n_months": 56
+      },
+      {
+        "ticker": "6962",
+        "median_diff": -0.026685176615764195,
+        "n_months": 11
+      },
+      {
+        "ticker": "6443",
+        "median_diff": -0.026680996058747852,
+        "n_months": 34
+      },
+      {
+        "ticker": "3324",
+        "median_diff": -0.02629718852328944,
+        "n_months": 73
+      },
+      {
+        "ticker": "6414",
+        "median_diff": -0.025636403392371054,
+        "n_months": 105
+      },
+      {
+        "ticker": "6965",
+        "median_diff": -0.02545599593864445,
+        "n_months": 9
+      },
+      {
+        "ticker": "7712",
+        "median_diff": -0.025341130604288442,
+        "n_months": 13
+      },
+      {
+        "ticker": "2439",
+        "median_diff": -0.02481531375341922,
+        "n_months": 74
+      },
+      {
+        "ticker": "6806",
+        "median_diff": -0.024643995058196255,
+        "n_months": 19
+      },
+      {
+        "ticker": "5222",
+        "median_diff": -0.02429436828324938,
+        "n_months": 15
+      },
+      {
+        "ticker": "3207",
+        "median_diff": -0.023745577013258412,
+        "n_months": 23
+      },
+      {
+        "ticker": "2641",
+        "median_diff": -0.023705096073517118,
+        "n_months": 56
+      },
+      {
+        "ticker": "3665",
+        "median_diff": -0.023560272802237714,
+        "n_months": 60
+      },
+      {
+        "ticker": "3545",
+        "median_diff": -0.023533044177052875,
+        "n_months": 42
+      },
+      {
+        "ticker": "6138",
+        "median_diff": -0.023379256873620746,
+        "n_months": 69
+      },
+      {
+        "ticker": "6111",
+        "median_diff": -0.023214236439642266,
+        "n_months": 20
+      },
+      {
+        "ticker": "7788",
+        "median_diff": -0.022443581692471848,
+        "n_months": 7
+      },
+      {
+        "ticker": "6799",
+        "median_diff": -0.02239749733759311,
+        "n_months": 31
+      },
+      {
+        "ticker": "6996",
+        "median_diff": -0.022347825180148773,
+        "n_months": 13
+      },
+      {
+        "ticker": "1815",
+        "median_diff": -0.02233646507929621,
+        "n_months": 38
+      },
+      {
+        "ticker": "6679",
+        "median_diff": -0.02213157265823229,
+        "n_months": 52
+      },
+      {
+        "ticker": "4977",
+        "median_diff": -0.021606916518668196,
+        "n_months": 57
+      },
+      {
+        "ticker": "6209",
+        "median_diff": -0.021312008193895893,
+        "n_months": 15
+      },
+      {
+        "ticker": "4966",
+        "median_diff": -0.021098269008069104,
+        "n_months": 73
+      },
+      {
+        "ticker": "7402",
+        "median_diff": -0.02106580677832004,
+        "n_months": 35
+      },
+      {
+        "ticker": "6914",
+        "median_diff": -0.02085275997547137,
+        "n_months": 14
+      },
+      {
+        "ticker": "6667",
+        "median_diff": -0.020648563503749662,
+        "n_months": 55
+      },
+      {
+        "ticker": "6472",
+        "median_diff": -0.02063933322045408,
+        "n_months": 40
+      },
+      {
+        "ticker": "6741",
+        "median_diff": -0.020471018642635896,
+        "n_months": 34
+      },
+      {
+        "ticker": "3372",
+        "median_diff": -0.02006603386378636,
+        "n_months": 16
+      }
+    ]
+  },
+  "split_jumps": [
+    {
+      "ticker": "2327",
+      "date": "2025-08-25",
+      "type": "par_change",
+      "m": 4.0,
+      "pe_before": 13.353160602397981,
+      "pe_after": 14.459704586680486,
+      "pb_before": 1.7060904469350509,
+      "pb_after": 1.948841641239331
+    },
+    {
+      "ticker": "3086",
+      "date": "2026-04-20",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": null,
+      "pe_after": null,
+      "pb_before": 25.124443704113446,
+      "pb_after": 33.44150093030272
+    },
+    {
+      "ticker": "4763",
+      "date": "2025-06-30",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 10.275007378464954,
+      "pe_after": 10.825240602457255,
+      "pb_before": 4.565137775746684,
+      "pb_after": 4.80960382660157
+    },
+    {
+      "ticker": "5314",
+      "date": "2025-03-31",
+      "type": "par_change",
+      "m": 20.0,
+      "pe_before": 76.69902912621359,
+      "pe_after": 83.06849315068494,
+      "pb_before": 36.3867983552402,
+      "pb_after": 49.94052251360601
+    },
+    {
+      "ticker": "5536",
+      "date": "2022-09-19",
+      "type": "par_change",
+      "m": 2.0,
+      "pe_before": 8.599757183326588,
+      "pe_after": 8.085795224605423,
+      "pb_before": 2.2123696967969195,
+      "pb_after": 2.080148072564821
+    },
+    {
+      "ticker": "5904",
+      "date": "2026-08-10",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 20.569570054552695,
+      "pe_after": 22.045855379188712,
+      "pb_before": 12.006251353488244,
+      "pb_after": 11.009730962579367
+    },
+    {
+      "ticker": "6415",
+      "date": "2022-07-13",
+      "type": "par_change",
+      "m": 4.0,
+      "pe_before": 35.49725804061064,
+      "pe_after": 31.32774428587249,
+      "pb_before": 9.067896142206143,
+      "pb_after": 8.420459716186414
+    },
+    {
+      "ticker": "6531",
+      "date": "2021-10-18",
+      "type": "par_change",
+      "m": 2.0,
+      "pe_before": 37.58586849852797,
+      "pe_after": 39.66789084124631,
+      "pb_before": 15.958089898618768,
+      "pb_after": 22.416324713986675
+    },
+    {
+      "ticker": "6548",
+      "date": "2019-09-09",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 15.829528158295282,
+      "pe_after": 17.6052765093861,
+      "pb_before": 2.2867661228770615,
+      "pb_after": 2.5432943738408347
+    },
+    {
+      "ticker": "6548",
+      "date": "2022-09-05",
+      "type": "par_change",
+      "m": 2.5,
+      "pe_before": 12.548476454293628,
+      "pe_after": 9.97229916897507,
+      "pb_before": 3.6893031214346803,
+      "pb_after": 2.931896520345442
+    },
+    {
+      "ticker": "6613",
+      "date": "2022-08-29",
+      "type": "par_change",
+      "m": 2.0,
+      "pe_before": 7.191550495912319,
+      "pe_after": 8.567348881485009,
+      "pb_before": 2.1117457832858917,
+      "pb_after": 2.3648407000084632
+    },
+    {
+      "ticker": "6763",
+      "date": "2024-09-09",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 23.98632144601856,
+      "pe_after": 21.250610649731314,
+      "pb_before": 3.2719090011062733,
+      "pb_after": 2.8987381170697124
+    },
+    {
+      "ticker": "6919",
+      "date": "2025-07-21",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": null,
+      "pe_after": null,
+      "pb_before": 22.4540696527202,
+      "pb_after": 20.61767733911483
+    },
+    {
+      "ticker": "6949",
+      "date": "2026-09-07",
+      "type": "par_change",
+      "m": 20.0,
+      "pe_before": null,
+      "pe_after": null,
+      "pb_before": 37.86787161709468,
+      "pb_after": 25.71965508489921
+    },
+    {
+      "ticker": "7780",
+      "date": "2026-01-19",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 39.364035087719294,
+      "pe_after": 53.63510012978171,
+      "pb_before": 2.1980086447753564,
+      "pb_after": 3.2694613267689148
+    },
+    {
+      "ticker": "8070",
+      "date": "2020-08-17",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 12.824204011698468,
+      "pe_after": 14.429289303661164,
+      "pb_before": 2.4088255502606013,
+      "pb_after": 2.3808835364510976
+    },
+    {
+      "ticker": "8422",
+      "date": "2025-11-17",
+      "type": "par_change",
+      "m": 10.0,
+      "pe_before": 16.29185448798834,
+      "pe_after": 17.740767559739318,
+      "pb_before": 3.974563169146792,
+      "pb_after": 3.846854839267008
+    },
+    {
+      "ticker": "8932",
+      "date": "2026-03-09",
+      "type": "par_change",
+      "m": 2.0,
+      "pe_before": 50.95914157466886,
+      "pe_after": null,
+      "pb_before": 16.45291242233116,
+      "pb_after": 12.603271059001425
+    }
+  ]
+}
