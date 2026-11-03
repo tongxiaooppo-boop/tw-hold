@@ -164,13 +164,14 @@ PRICE_NOTES = {"universe": "不在估值範圍", "few": "財報太少，不估�
 # P4：前瞻三價那格沒有三價時的短句（P4_spec §1；畫面一定要有字）
 FWD_NOTES = {"est_off": "試算停用，不給前瞻三價", "pb": "淨值比路線，不給前瞻三價",
              "cyclical": "循環股不給前瞻三價（用較低獲利情境）", "same": "新季營收未出，前瞻＝近 4 季，不另給",
+             "peak": "獲利在歷史高檔、可能是景氣高點，不給前瞻三價（用較低獲利情境）",
              "window": "前瞻 4 季不可用（{}），不給", "thin": "前瞻獲利接近零，不給",
              "hist": "前瞻倍數歷史太短，不給"}
 
 
 def fwd_note(card: dict, cls: dict | None) -> str | None:
     """P4_spec §1：fwd_prices 有值或 tier≠"A" → None；否則依序 est_off（eps.est_disabled）、pb（route=="PB"）、
-    cyclical（type=="cyclical" 或 peak_block(cls)）、same（NOTE_FWD_SAME ∈ notes）、window（eps.fwd 為 None 或 ok False，
+    cyclical（type=="cyclical"）、peak（peak_block(cls)）、same（NOTE_FWD_SAME ∈ notes）、window（eps.fwd 為 None 或 ok False，
     {} 填 eps.fwd 的 reason，None 時填「無資料」）、thin（eps.fwd.eps < EPS_MIN）、其餘 hist。"""
     if card.get("fwd_prices") is not None or card.get("tier") != "A":
         return None
@@ -179,8 +180,10 @@ def fwd_note(card: dict, cls: dict | None) -> str | None:
         return FWD_NOTES["est_off"]
     if card.get("route") == "PB":
         return FWD_NOTES["pb"]
-    if card.get("type") == "cyclical" or peak_block(cls or {}):
+    if card.get("type") == "cyclical":
         return FWD_NOTES["cyclical"]
+    if peak_block(cls or {}):              # 非循環股但在高檔（3211 一般股曾顯示「循環股」，P5c 驗收抓到）
+        return FWD_NOTES["peak"]
     if NOTE_FWD_SAME in card.get("notes", []):
         return FWD_NOTES["same"]
     fwd = eps.get("fwd")

@@ -64,7 +64,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--derived', type=Path, default=ROOT / '_dryrun')
     parser.add_argument('--out', type=Path, default=None, help='輸出目錄；未指定時維持原路徑')
+    parser.add_argument('--asof', default=None, help='評價日；預設取倍數產物 industry_pe.json 的 asof')
     args = parser.parse_args()
+    global ASOF
+    industry = json.loads((args.derived / val_inputs.IND_FILE).read_text(encoding='utf-8'))
+    ASOF = pd.Timestamp(args.asof or industry['asof'])
     industry = json.loads((args.derived / val_inputs.IND_FILE).read_text(encoding='utf-8'))
     if industry['asof'] != str(ASOF.date()) or not all('values' in v for v in industry['industries'].values()):
         raise ValueError('倍數產物日期不符或缺少 values，請先完成指定重建')

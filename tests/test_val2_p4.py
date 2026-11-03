@@ -57,6 +57,14 @@ def test_前瞻短句_循環():
     assert c["tier"] == "A" and c["fwd_note"] == vc.FWD_NOTES["cyclical"]
 
 
+def test_前瞻短句_非循環但高檔_不說循環股():
+    cls = CLS("normal")
+    cls["state"] = ["歷史高獲利區"]
+    cls["subtags"] = ["疑似循環"]
+    c = card(cls=cls)
+    assert c["tier"] == "A" and c["fwd_note"] == vc.FWD_NOTES["peak"]
+
+
 def test_前瞻短句_非A層為None():
     c = B()
     assert c["tier"] == "B" and c["fwd_note"] is None
