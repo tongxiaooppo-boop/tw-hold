@@ -288,6 +288,17 @@ def test_試算停用_新季營收齊仍列營收年增():
     assert rows[2]["period"] == "2026Q2" and rows[2]["kind"] == "actual"
 
 
+def test_公式層算不出來也算停用():
+    """11/3：最新季毛利缺 → eps_windows 丟「試算停用：…」；以前 est_disabled=None、可信度「試算」寫正常。"""
+    q = Q()
+    q.loc[q.index[-1], "gross_profit"] = np.nan
+    c = card(q=q, rev=REV("2026-09"))
+    assert c["eps"]["est_disabled"] == "最新季毛利或費用率缺漏"
+    assert c["status"]["estimate"]["level"] == "stop"
+    assert c["eps"]["fwd"] is None
+    assert [r["key"] for r in c["growth"]] == ["month", "next_q", "last_q", "ttm"]
+
+
 def test_股數事件表讀不到為D(monkeypatch):
     monkeypatch.setattr(ca, "EVENTS_OK", False)
     c = card()

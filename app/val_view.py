@@ -243,7 +243,7 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
             pins["前瞻 4 季 EPS"] = fmt_eps(fwd["eps"])
             kv.append(("前瞻 4 季 EPS", f"{_window_sub(fwd, None)}（{rev}）", pins["前瞻 4 季 EPS"] + " 元"))
         else:
-            sub = "試算停用：" + eps["est_disabled"] if eps.get("est_disabled") else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
+            sub = "試算停用：" + _no_suffix(eps["est_disabled"]) if eps.get("est_disabled") else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
             kv.append(("前瞻 4 季 EPS", sub, "—"))
         growth = []
         for r in card.get("growth", []):
@@ -446,11 +446,16 @@ def _same_windows(ttm, fwd):
     return bool(tq) and tuple(r["q"] for r in tq) == tuple(r["q"] for r in fq)
 
 
+def _no_suffix(why: str) -> str:
+    """停用原因字串多半以「，試算停用」結尾；前面已寫「試算停用：」時去掉，避免重複。"""
+    return why[:-len("，試算停用")] if why.endswith("，試算停用") else why
+
+
 def _window_sub(window, disabled):
     qs = window.get("quarters") or []
     period = f"{qs[0]['q']}～{qs[-1]['q']}" if qs else ""
     if disabled:
-        return period + "，試算停用：" + disabled
+        return period + "，試算停用：" + _no_suffix(disabled)
     if not window.get("ok"):
         return window.get("reason") or "無資料"
     return period + (f"，含 {window['n_est']:d} 季試算" if window.get("n_est") else "，4 季皆已公布")

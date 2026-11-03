@@ -49,6 +49,7 @@ SHARES_WARN = 0.15           # 隱含股數 vs 股本÷面額 差距（舊 SHARE
 # 試算停用門檻：方案 B（2026-11-02 Opus／sol／DeepSeek 投票 3:0，使用者授權；待回測的暫行值）
 BRIDGE_WARN = 0.05           # 影響率（單季重算誤差平均 ÷ |已公布近 4 季 EPS|）提示
 BRIDGE_STOP = 0.10           # 影響率停用（全市場約 P75）
+FORMULA_STOP = "試算停用："       # eps_windows._estimate 丟出的原因前綴
 JUMP_STOP = 0.50             # 營收劇變 |J| 停用
 NONOP_SHARE = 0.20           # 沿用：近 8 季業外占稅前
 NONOP_DISPERSION = 0.5       # 沿用：業外 P90−P10 ÷ |稅前中位數|
@@ -266,7 +267,8 @@ def comparability_checks(cls: dict | None, stats: dict | None) -> list[Check]:
 
 def estimate_checks(q: pd.DataFrame, monthly: pd.Series, windows: dict) -> list[Check]:
     """試算季的可靠度。E＝windows["ttm"]、windows["fwd"] 兩窗口所有 EstDetail（依 q 去重）。
-    E 為空 → 只回 [Check("estimate","試算季","ok",None,"沒有試算季")]。否則依序：
+    E 為空 → windows["ttm"].reason 以「試算停用：」開頭（公式層算不出來）→ 只回
+    [Check("estimate","試算公式","stop",None,去掉前綴的原因)]；否則只回 [Check("estimate","試算季","ok",None,"沒有試算季")]。否則依序：
     1. bridge_residual(q, E[0], windows["reported"].eps 若 reported.ok 否則 None)
     2. nonop_gate(q)（方案 B：只提示）
     3. revenue_caliber(q, monthly)
@@ -281,6 +283,9 @@ def estimate_checks(q: pd.DataFrame, monthly: pd.Series, windows: dict) -> list[
             for d in w.details:
                 details.setdefault(d.q, d)
     if not details:
+        reason = windows["ttm"].reason or ""
+        if reason.startswith(FORMULA_STOP):     # 公式層算不出來（eps_windows._estimate 丟出）→ 與後段檢查同樣停用
+            return [Check("estimate", "試算公式", "stop", None, reason[len(FORMULA_STOP):])]
         return [Check("estimate", "試算季", "ok", None, "沒有試算季")]
     reported_eps = windows["reported"].eps if windows["reported"].ok else None
     out = [bridge_residual(q, next(iter(details.values())), reported_eps), nonop_gate(q),
