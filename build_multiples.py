@@ -14,7 +14,7 @@ rebuild 時在 build_classification 之後、build_lists 之前跑（P5 才接 w
 - 原始收盤：data/upstream/monthly_raw_close.parquet（存在才讀）∪ prices_raw_close.parquet
   （ticker, date, close）→ multiples_self.monthly_closes，取完整月份最後交易列
 - 交易所 PER：data/upstream/fundamentals/per.parquet 優先，否則 data/upstream/per.parquet；
-  ticker 裸, date, per；先只留月底交易日再傳入，省記憶體
+  ticker 裸, date, per, pbr；保留每日資料並合併原始收盤，供交易所庫藏股比例判斷
 
 產出（--out-dir，全部先寫暫存檔、全部成功才一起取代舊檔）：
 - multiples_hist.parquet：multiples_self.HIST_COLUMNS，全市場串接
@@ -86,24 +86,37 @@ def _init_worker(asof: str, tickers: list[str]) -> None:
     per_path = Path("data/upstream/fundamentals/per.parquet")
     if not per_path.exists():
         per_path = Path("data/upstream/per.parquet")
-    per = pd.read_parquet(per_path, columns=["ticker", "date", "per"])
+    try:
+        per = pd.read_parquet(per_path, columns=["ticker", "date", "per", "pbr"])
+    except (OSError, ValueError):
+        per = pd.DataFrame(columns=["ticker", "date", "per", "pbr"])
     per["ticker"] = per["ticker"].astype(str)
     per["date"] = pd.to_datetime(per["date"])
-    per = per.merge(closes[["ticker", "date"]], on=["ticker", "date"], how="inner")
+    raw = pd.read_parquet("data/upstream/prices_raw_close.parquet", columns=["ticker", "date", "close"])
+    raw["ticker"] = raw.ticker.astype(str).str.split(".").str[0]
+    raw["date"] = pd.to_datetime(raw.date)
+    per = per.merge(raw, on=["ticker", "date"], how="left")
+    basic_path = Path("data/upstream/company_basic.parquet")
+    basics = {}
+    if basic_path.exists():
+        basic_rows = pd.read_parquet(basic_path)
+        basics = {str(row["ticker"]): {key: row.get(key) for key in
+                  ("par_value", "issued_shares", "preferred_shares", "paid_in_capital", "asof")}
+                  for row in basic_rows.to_dict("records")}
     _DATA = (dict(tuple(q.groupby("ticker"))),
              {t: r.set_index("month")["revenue"].sort_index() for t, r in rev.groupby("ticker")},
-             dict(tuple(closes.groupby("ticker"))), dict(tuple(per.groupby("ticker"))), q.iloc[:0], closes.iloc[:0])
+             dict(tuple(closes.groupby("ticker"))), dict(tuple(per.groupby("ticker"))), q.iloc[:0], closes.iloc[:0], basics)
 
 
 def _build_one(stock: dict, asof: str) -> tuple:
     ticker = str(stock["ticker"])
     try:
-        qs, revenues, prices, pers, empty_q, empty_prices = _DATA
+        qs, revenues, prices, pers, empty_q, empty_prices, basics = _DATA
         q = qs.get(ticker, empty_q)
         monthly = revenues.get(ticker, pd.Series(dtype=float, index=pd.DatetimeIndex([])))
         closes = prices.get(ticker, empty_prices)
         financial = stock.get("industry_group") == "financial"
-        mh = ms.build_history(ticker, q, monthly, closes, pers.get(ticker), financial=financial)
+        mh = ms.build_history(ticker, q, monthly, closes, pers.get(ticker), financial=financial, basic=basics.get(ticker), exch=pers.get(ticker))
         revisions = []
         if not financial:
             end = ms.last_complete_month(pd.Timestamp(asof))
@@ -250,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
                    "p50": first_dates.quantile(.5).strftime("%Y-%m") if len(first) else None,
                    "n_from_2015": int((first <= "2015-03").sum())}
     checks = dict(asof=asof, n_tickers=len(stocks), n_ok=len(stocks) - len(failed), n_failed=len(failed),
+                  bvps_source={source or "none": int(((hist["month"] == end) & (hist["bvps_src"] == source)).sum())
+                               for source in ("treasury", "official", "capital", "reverse", "")},
                   closes_first_month=first_month,
                   failed=failed, no_price=sorted(no_price),
                   pe_vs_exchange=dict(n_compared=len(comparisons),

@@ -25,8 +25,12 @@ class LocalBundle:
     def read(self, name, code):
         if name not in self.frames:
             path = ROOT / 'data/upstream' / (name + '.parquet')
-            if name in ('income', 'balance', 'cashflow') and not path.exists():
+            if name == 'per' and (ROOT / 'data/upstream/fundamentals/per.parquet').exists():
+                path = ROOT / 'data/upstream/fundamentals/per.parquet'
+            if name in ('income', 'balance', 'cashflow', 'per') and not path.exists():
                 path = ROOT / 'data/upstream/fundamentals' / (name + '.parquet')
+            if name == 'per' and not path.exists():
+                return pd.DataFrame(columns=['date', 'pbr'])
             frame = pd.read_parquet(path)
             frame['ticker'] = frame['ticker'].astype(str).str.split('.').str[0]
             self.frames[name] = {str(t): f.reset_index(drop=True) for t, f in frame.groupby('ticker', sort=False)}
@@ -43,7 +47,7 @@ class LocalBundle:
                 return None
             r = rows.iloc[0]
             return {**{k: float(r.get(k, float('nan'))) for k in
-                       ('par_value', 'issued_shares', 'preferred_shares')}, 'asof': pd.Timestamp(r.get('asof'))}
+                       ('par_value', 'issued_shares', 'preferred_shares', 'paid_in_capital')}, 'asof': pd.Timestamp(r.get('asof'))}
         except Exception:
             return None
 

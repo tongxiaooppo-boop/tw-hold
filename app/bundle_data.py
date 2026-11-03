@@ -204,7 +204,7 @@ def company_basic(code: str) -> dict | None:
             return None
         row = d.iloc[0]
         return {**{key: float(row.get(key, float("nan")))
-                   for key in ("par_value", "issued_shares", "preferred_shares")},
+                   for key in ("par_value", "issued_shares", "preferred_shares", "paid_in_capital")},
                 "asof": pd.Timestamp(row.get("asof"))}
     except Exception:
         return None

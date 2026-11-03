@@ -48,7 +48,7 @@ A-PE
 A-PB：prices＝three_prices(bvps_live, pb stats)，base_name＝BASE_BVPS；fwd_prices None；buy_range 只 normal；
   金融另給 roe＝roe_ttm(q)。
 B：b_tier＝b_tier(price, 近 4 季 EPS, industry_pe.get(cls["industry"]))
-C：c_tier＝c_tier(price, bvps_live(q), mh, asof)
+C：c_tier＝c_tier(price, bvps_live(q, str((cls or {}).get("ticker") or ""), basic, exch=exch, upto=asof), mh, asof)
 所有層：growth＝growth_rows(...)、revision、quality（cfo_ni、accrual）、status、notes。
 position：A 層 multiples.classify_position 同規則（price < cheap → cheap；≤ dear → fair…；任一 None → "na"）。
 
@@ -225,7 +225,7 @@ def buy_where(buy: dict | None, price: float | None) -> dict | None:
 
 def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFrame | None,
                cls: dict | None, mh: pd.DataFrame | None, rev_hist: pd.DataFrame | None,
-               industry_pe: dict | None, asof: pd.Timestamp, *, basic: dict | None = None) -> dict:
+               industry_pe: dict | None, asof: pd.Timestamp, *, basic: dict | None = None, exch: pd.DataFrame | None = None) -> dict:
     """見模組說明。不得丟例外給呼叫端以外的情況：share_basis.EventsUnavailable 由 share_checks 轉成 stop。"""
     q, monthly = _quarters(qf), _monthly(rev)
     cls_data = cls or {}
@@ -277,7 +277,7 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
     elif route_pb(cls):
         result["route"] = "PB"
         valid, pb_stats = tier_a(mh, "pb", "pb", asof, None)
-        bvps = bvps_live(q)
+        bvps = bvps_live(q, str((cls or {}).get("ticker") or ""), basic, exch=exch, upto=asof)
         if not valid:
             result["reason"] = PB_NO_HIST
         elif bvps is None:
@@ -292,7 +292,7 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
         result["reason"] = f"近 4 季 EPS 不可用（{dt.stopped(status, 'data') or ttm.reason}）"
     elif ttm.eps < EPS_MIN:      # P3：微利跟虧損一樣不用獲利估價（PE 會上千）
         result["tier"], result["route"] = "C", "PE"
-        result["c_tier"] = c_tier(price, bvps_live(q), mh, asof)
+        result["c_tier"] = c_tier(price, bvps_live(q, str((cls or {}).get("ticker") or ""), basic, exch=exch, upto=asof), mh, asof)
         if ttm.eps > 0:
             result["c_tier"]["text"] = C_TEXT_THIN
     elif typ not in PE_KIND:
@@ -517,23 +517,21 @@ def c_tier(price: float | None, bvps: float | None, mh: pd.DataFrame | None, aso
 
 # ── 基準數字 ──────────────────────────────────────────────────────
 
-def bvps_live(q: pd.DataFrame) -> float | None:
-    """與 multiples_self.build_history 的 bvps 同算法，但所有財報季都視為可見（live）：
-    最近一季 equity_parent 有限 >0 的季 Q；股數＝Q 起往前共 5 季中最近一個 |eps| ≥ EPS_MIN 且 ni_parent÷eps 有限 >0 者
-    （ni_parent（loader 已依規則頂替），與 build_history 相同）；
-    都推不出 → None。回傳 Q.equity_parent ÷ 股數。"""
+def bvps_live(q: pd.DataFrame, ticker: str = "", basic: dict | None = None, *, exch=None, upto=None) -> float | None:
+    """Latest positive equity less preferred equity, using common_shares(live=True).
+
+    Capital-stock shares form the base (official issued only when capital is missing);
+    exchange book value supplies the treasury ratio.
+    """
     q = _quarters(q)
     eq = q[np.isfinite(q["equity_parent"]) & (q["equity_parent"] > 0)]
     if eq.empty:
         return None
     latest = eq.iloc[-1]
-    for r in q[q["period_end"] <= latest["period_end"]].tail(5).iloc[::-1].itertuples(index=False):
-        ni = r.ni_parent
-        if _finite(r.eps) and abs(r.eps) >= EPS_MIN and _finite(ni):
-            shares = ni / r.eps
-            if _finite(shares) and shares > 0:
-                return float(latest["equity_parent"] / shares)
-    return None
+    shares, _ = sb.common_shares(ticker, latest, q, basic, live=True, eps_min=EPS_MIN, exch=exch, upto=upto)
+    equity = sb.common_equity(ticker, latest, basic)
+    return equity / shares if shares is not None and equity is not None else None
+
 
 
 def eps_avg(q: pd.DataFrame, n: int) -> float | None:

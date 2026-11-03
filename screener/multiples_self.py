@@ -8,9 +8,9 @@
   eps_fwd = eps_windows.fwd_window(..., base=上面的 ttm).eps；窗口 ok=False → NaN。
   q 由呼叫端先做 corporate_actions.adjust_eps（EPS 已在最新股數基準），這裡不再調整。
 - bvps(t)：最近一季「quarter_visible(period_end, t)」且 equity_parent 有限 >0 的季 Q；
-  股數＝Q 的隱含股數 ni_parent ÷ eps（|eps| ≥ EPS_MIN、結果有限 >0；ni_parent（loader 已依規則頂替）；eps 已在最新基準，
-  所以股數也在最新基準）。Q 推不出股數 → 往前找最多 4 個「可見」季中最近一個推得出的；都沒有 → NaN。
-  bvps = Q 的 equity_parent ÷ 該股數。
+  股數由共用 common_shares 選擇：股本法優先，交易所淨值訊號可辨識庫藏股，缺股本用原反推法。
+  歷史只傳可見季，不用今天 issued_shares 作 base；面額缺值由 paid_in_capital 推算。
+  bvps = (Q.equity_parent − preferred_shares × 當期面額) ÷ 股數。
 - 倍數（T-3：有效值＝有限且 >0）：
   pe     = price_adj ÷ eps_ttm，有效＝price_adj 有限 >0、eps_ttm 有限 ≥ EPS_MIN、pe ≤ MULT_MAX_PE、非 excluded
   pe_fwd = 同上，用 eps_fwd
@@ -40,7 +40,7 @@ REV_EVENTS = ("normal", "roll", "report")
 
 HIST_COLUMNS = ("ticker", "month", "date", "price_adj", "eps_ttm", "eps_fwd", "bvps",
                 "n_est_ttm", "n_est_fwd", "pe", "pe_fwd", "pb",
-                "valid_pe", "valid_pe_fwd", "valid_pb", "excluded", "pe_exchange")
+                "valid_pe", "valid_pe_fwd", "valid_pb", "excluded", "pe_exchange", "bvps_src")
 
 
 def last_complete_month(asof: pd.Timestamp) -> pd.Period:
@@ -67,10 +67,11 @@ def monthly_closes(raw_close: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
 
 
 def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: pd.DataFrame,
-                  per: pd.DataFrame | None, financial: bool = False) -> pd.DataFrame:
+                  per: pd.DataFrame | None, financial: bool = False, basic: dict | None = None, exch: pd.DataFrame | None = None) -> pd.DataFrame:
     """單檔月度倍數序列，欄位＝HIST_COLUMNS（順序照常數），每個 closes 列一列，month 舊→新。
     q＝該檔季報（已 adjust_eps）；monthly_rev＝月營收（index＝月初 Timestamp）；
     closes＝該檔 monthly_closes 結果；per＝交易所 PER（ticker, date, per；可為 None → pe_exchange 全 NaN）。
+    exch＝該檔每日原始收盤及交易所 PBR（date, close, pbr）；缺值則不啟用庫藏股比例。
     算法見模組說明。n_est_*＝窗口 n_est（窗口 ok=False 時 0）。
     share_basis.EventsUnavailable 不攔截，往上丟。"""
     excluded = sb.excluded_months(ticker)
@@ -91,17 +92,14 @@ def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: 
         eps_fwd = fwd.eps if fwd.ok else np.nan
         visible = quarters[[ew.quarter_visible(d, t) for d in quarters["period_end"]]]
         bvps = np.nan
+        bvps_src = ""
         equity_rows = visible[np.isfinite(visible["equity_parent"]) & (visible["equity_parent"] > 0)]
         if not equity_rows.empty:
             latest = equity_rows.iloc[-1]
-            candidates = visible[visible["period_end"] <= latest["period_end"]].tail(5)   # 本季＋往前 4 季
-            for v in candidates.iloc[::-1].itertuples(index=False):
-                ni = v.ni_parent
-                if np.isfinite(v.eps) and abs(v.eps) >= EPS_MIN and np.isfinite(ni):
-                    shares = ni / v.eps
-                    if _positive(shares):
-                        bvps = latest["equity_parent"] / shares
-                        break
+            shares, bvps_src = sb.common_shares(ticker, latest, visible, basic, eps_min=EPS_MIN, exch=exch, upto=t)
+            equity = sb.common_equity(ticker, latest, basic)
+            if shares is not None and equity is not None:
+                bvps = equity / shares
         is_excluded = pd.Period(r.month, "M") in excluded
         mults = {}
         for name, denominator in (("pe", eps_ttm), ("pe_fwd", eps_fwd), ("pb", bvps)):
@@ -114,7 +112,7 @@ def build_history(ticker: str, q: pd.DataFrame, monthly_rev: pd.Series, closes: 
             mults["valid_" + name] = bool(valid)
         pe_exchange = exchange.get(t, np.nan)
         result.append(dict(ticker=ticker, month=r.month, date=t, price_adj=price,
-                           eps_ttm=eps_ttm, eps_fwd=eps_fwd, bvps=bvps,
+                           eps_ttm=eps_ttm, eps_fwd=eps_fwd, bvps=bvps, bvps_src=bvps_src,
                            n_est_ttm=ttm.n_est if ttm.ok else 0,
                            n_est_fwd=fwd.n_est if fwd.ok else 0,
                            excluded=is_excluded,

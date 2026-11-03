@@ -41,6 +41,106 @@ def share_factor_after(ticker: str, t: pd.Timestamp) -> float:
     return factor
 
 
+def _positive(value) -> bool:
+    return value is not None and math.isfinite(value) and value > 0
+
+
+def common_par_today(basic: dict | None) -> float:
+    """Official par, then paid-in capital per total issued share, then 10."""
+    basic = basic or {}
+    par = basic.get("par_value")
+    if _positive(par):
+        return float(par)
+    issued = basic.get("issued_shares")
+    pref = basic.get("preferred_shares")
+    total = 0.0
+    if issued is not None and math.isfinite(issued) and issued >= 0:
+        total = issued + (pref if _positive(pref) else 0)
+    capital = basic.get("paid_in_capital")
+    return float(capital / total) if _positive(capital) and total > 0 else 10.0
+
+
+def common_equity(ticker: str, latest, basic: dict | None = None) -> float | None:
+    pref = (basic or {}).get("preferred_shares")
+    pref = pref if _positive(pref) else 0.0
+    par = par_value_at(ticker, latest["period_end"], common_par_today(basic))
+    equity = latest["equity_parent"] - pref * par
+    return float(equity) if _positive(equity) else None
+
+
+def exchange_outstanding_ratio(ticker, q_rows, exch, upto) -> float | None:
+    """Exchange outstanding/capital shares, using only visible, event-free days.
+
+    q_rows.attrs['basic'] optionally supplies par and preferred-share metadata.
+    All inputs are supplied in memory; this function performs no I/O.
+    """
+    if exch is None or exch.empty or not {'date', 'close', 'pbr'} <= set(exch.columns):
+        return None
+    upto = pd.Timestamp(upto)
+    basic = q_rows.attrs.get('basic', {}) or {}
+    days = exch[['date', 'close', 'pbr']].copy()
+    days['date'] = pd.to_datetime(days['date'])
+    days = days[(days.date <= upto) & (days.close > 0) & (days.pbr > 0)
+                & days.close.map(math.isfinite) & days.pbr.map(math.isfinite)]
+    days = days.drop_duplicates('date', keep='last')
+    quarters = q_rows.sort_values('period_end').drop_duplicates('period_end', keep='last')
+    visible = quarters[[ca.report_deadline(d) <= upto for d in quarters.period_end]].tail(4)
+    ev = events(ticker)
+    for row in reversed(visible.to_dict('records')):
+        end = pd.Timestamp(row['period_end'])
+        start = ca.report_deadline(end)
+        stop = ca.report_deadline((end + pd.offsets.QuarterEnd(1)).normalize())
+        sample = days[(days.date >= start) & (days.date < stop)]
+        after = [e['date'] for e in ev if e['date'] > end]
+        if after:
+            sample = sample[sample.date < min(after)]
+        if len(sample) < 5:
+            continue
+        par = par_value_at(ticker, end, common_par_today(basic))
+        pref = basic.get('preferred_shares')
+        pref = pref if _positive(pref) else 0.0
+        cap = row.get('capital_stock')
+        cap_shares = cap / par - pref if _positive(cap) and _positive(par) else None
+        equity = common_equity(ticker, row, basic)
+        bv = float((sample.close / sample.pbr).median())
+        if _positive(cap_shares) and _positive(equity) and _positive(bv):
+            return float(equity / bv / cap_shares)
+    return None
+
+
+def common_shares(ticker: str, latest, quarters: pd.DataFrame,
+                  basic: dict | None = None, *, live: bool = False,
+                  eps_min: float = 0.05, exch=None, upto=None) -> tuple[float | None, str]:
+    """Capital base (live falls back to official issued), exchange treasury ratio, then reverse.
+
+    Capital base comes first in live mode too: it is the same quarter as the equity, while
+    issued_shares is today's count and drifts on CB conversions / capital changes that are not
+    in the event table (11/3 r3 check: 42 of 45 such stocks matched the exchange via capital).
+    """
+    basic = basic or {}
+    base = shares_today_basis(ticker, latest.get('capital_stock'), latest['period_end'],
+                              common_par_today(basic), basic.get('preferred_shares'))
+    src = 'capital'
+    if not _positive(base) and live:
+        base = basic.get('issued_shares')
+        src = 'official'
+    if _positive(base):
+        rows = quarters[quarters.period_end <= latest['period_end']].copy()
+        rows.attrs['basic'] = basic
+        ratio = exchange_outstanding_ratio(ticker, rows, exch,
+                    pd.Timestamp.today().normalize() if upto is None else upto)
+        if ratio is not None and .5 <= ratio <= .97:
+            return float(base * ratio), 'treasury'
+        return float(base), src
+    candidates = quarters[quarters.period_end <= latest['period_end']].sort_values('period_end').tail(5)
+    for r in reversed(candidates.to_dict('records')):
+        eps, ni = r.get('eps'), r.get('ni_parent')
+        if (eps is not None and math.isfinite(eps) and abs(eps) >= eps_min
+                and ni is not None and math.isfinite(ni) and _positive(ni / eps)):
+            return float(ni / eps), 'reverse'
+    return None, ''
+
+
 def par_value_at(ticker: str, t: pd.Timestamp, today_par: float | None) -> float | None:
     """t 當時面額 = today_par × Π(事件日 > t 的 par_change 事件 m)；today_par 為 None → None。"""
     rows = events(ticker)
@@ -53,6 +153,25 @@ def par_value_at(ticker: str, t: pd.Timestamp, today_par: float | None) -> float
                 and m is not None and math.isfinite(m) and m > 0):
             value *= m
     return value
+
+
+
+def shares_today_basis(ticker: str, capital_stock: float | None, period_end: pd.Timestamp,
+                       par_today: float | None, preferred_shares: float | None) -> float | None:
+    """季末股本依當期面額扣除特別股，再按期後事件換成今天基準普通股數。
+    股本、當期面額或結果非有限正數回 None；EventsUnavailable 不攔截。
+    """
+    def positive(value):
+        return value is not None and math.isfinite(value) and value > 0
+
+    if not positive(capital_stock):
+        return None
+    par_t = par_value_at(ticker, period_end, par_today if positive(par_today) else 10.0)
+    if not positive(par_t):
+        return None
+    pref = preferred_shares if positive(preferred_shares) else 0.0
+    shares = (capital_stock / par_t - pref) * share_factor_after(ticker, period_end)
+    return float(shares) if positive(shares) else None
 
 
 def excluded_months(ticker: str) -> set[pd.Period]:

@@ -88,7 +88,13 @@ def card_inputs(code: str, asof: pd.Timestamp, cls: dict | None, derived: Path =
     px = bundle.read("prices_raw_close", code).copy()
     px["date"] = pd.to_datetime(px["date"])
     px = px.loc[px["date"] <= asof, ["date", "close"]].sort_values("date").reset_index(drop=True)
+    try:
+        per = bundle.read("per", code)
+        exch = px.merge(per[["date", "pbr"]].assign(date=lambda d: pd.to_datetime(d.date)), on="date")
+    except (OSError, KeyError, ValueError):
+        exch = None
     return dict(qf=q, rev=merge_mops_revenue(bundle.read("revenue", code), code, asof), px=px, cls=cls,
+                exch=exch,
                 mh=load_mh(code, derived), rev_hist=load_rev_hist(code, derived),
                 industry_pe=load_industry_pe(derived), asof=asof,
                 basic=bundle.company_basic(code) if hasattr(bundle, "company_basic") else None)
