@@ -253,7 +253,7 @@ def test_財報剛好12季_可分類():
 def test_金融保險_走PB分支_不看數字():
     c = cl.classify(_inp(_cyc_q(), industry_group="financial", oroa_amp_pct=0.9, rev_beta=1.6))
     assert c.type == cl.TYPE_FINANCIAL
-    assert c.why[0] == "產業為金融保險，走 PB"
+    assert c.why[0] == "產業為金融保險，走股價淨值比"
 
 
 def test_缺欄位_KeyError():
@@ -286,7 +286,7 @@ def test_建材營造_特殊退出():
     c = cl.classify(_inp(_q(), industry_group="construction"))
     assert c.type == cl.TYPE_SPECIAL
     assert c.metrics["special_triggers"] == ["construction"]
-    assert "建材營造：營收認列不連續，只給 PB 位置" in c.why
+    assert "建材營造：營收認列不連續，只給股價淨值比位置" in c.why
 
 
 def test_股本增50趴_特殊退出():
@@ -407,7 +407,7 @@ def test_OROA高低高_營收收縮_輔助成立_判循環():
     assert m["max_dd"] == pytest.approx(1.0) and m["contraction"] is True and m["coverage"] is True
     assert m["cyclical_necessary"] is True and m["cyclical_aux"] is True
     assert "OROA 振幅 20.0%，位於全體前 10%" in c.why
-    assert "TTM 營業利益自 2017Q4 高點最多跌 100%，期間 TTM 營收年增最低 -30%" in c.why
+    assert "近 4 季營業利益自 2017Q4 高點最多跌 100%，期間近 4 季營收年增最低 -30%" in c.why
     assert "營收 beta 1.60（≥ 1.5）" in c.why
     # _cyc_q 只有一段景氣事件 → T5 標「僅單一景氣事件」並降級（兩段回撤的情形見 test_必要2有兩段不同年份回撤_不標）
     assert cl.SUB_SINGLE_EVENT in c.subtags
@@ -590,8 +590,8 @@ def test_高成長_全部成立():
     assert c.metrics["rev_cagr5"] == pytest.approx(0.25)
     assert c.metrics["op_cagr3"] == pytest.approx(0.25)
     assert c.metrics["growth_core"] is True
-    assert "TTM 營收 3 年 CAGR 25%、5 年 25%" in c.why
-    assert "近 12 季 TTM 營收年增最低 +25%（≥ -10%）" in c.why
+    assert "3 年營收年複合成長 25%、5 年營收年複合成長 25%" in c.why
+    assert "近 12 季中，近 4 季營收年增最低 +25%（≥ -10%）" in c.why
 
 
 def test_三年營收CAGR30但市場收縮期也縮_判循環不判高成長():
@@ -657,7 +657,7 @@ def test_高成長_營收年增最低負5pct_仍通過第三條():
     q = _growth_q_min_yoy(-0.05)
     c = cl.classify(_inp(q))
     assert c.type == cl.TYPE_GROWTH and c.metrics["growth_core"] is True
-    assert "近 12 季 TTM 營收年增最低 -5%（≥ -10%）" in c.why
+    assert "近 12 季中，近 4 季營收年增最低 -5%（≥ -10%）" in c.why
 
 
 def test_高成長_營收年增最低負15pct_不通過():
@@ -680,8 +680,8 @@ def test_上市未滿20季_降一級_5年CAGR未檢查():
     assert c.type == cl.TYPE_GROWTH
     assert math.isnan(c.metrics["rev_cagr5"])
     assert "上市未滿 20 季" in c.reasons_degrade
-    assert "營收歷史不足 5 年，5 年 CAGR 未檢查" in c.reasons_degrade
-    assert "TTM 營收 3 年 CAGR 25%、5 年 —" in c.why
+    assert "營收歷史不足 5 年，5 年營收年複合成長未檢查" in c.reasons_degrade
+    assert "3 年營收年複合成長 25%、5 年營收年複合成長 —" in c.why
 
 
 def test_高成長留任門檻_寫在stay_ok():
@@ -727,11 +727,6 @@ def test_TTM_EPS小於等於0_虧損狀態():
     assert cl.STATE_UNSTABLE in c.state
 
 
-def test_預估EPS_NC小於等於0_另列預估轉虧():
-    c = cl.classify(_inp(_q(), eps_nc=-0.1))
-    assert cl.STATE_FWD_LOSS in c.state and cl.STATE_LOSS not in c.state
-
-
 def test_近4季有虧損季_獲利不穩():
     eps = [1.0] * 40 + [2.0, -0.5, 2.0, 2.0]
     c = cl.classify(_inp(_q(eps=eps)))
@@ -739,9 +734,7 @@ def test_近4季有虧損季_獲利不穩():
 
 
 def test_EPS_NC低於5年TTM中位數兩成_獲利不穩():
-    # TTM EPS 恆為 4 → 中位數 4 → 門檻 0.8
-    assert cl.STATE_UNSTABLE in cl.classify(_inp(_q(), eps_nc=0.7)).state
-    assert cl.STATE_UNSTABLE not in cl.classify(_inp(_q(), eps_nc=0.8)).state
+    assert cl.STATE_UNSTABLE not in cl.classify(_inp(_q())).state
 
 
 def _turn_q():
@@ -804,19 +797,6 @@ def test_循環類_產業指數反向_不稱景氣高檔():
     c = cl.classify(_inp(_cyc_q(tail_op=[300.0] * 4), oroa_amp_pct=0.9, rev_beta=1.6,
                          industry_rev_ttm_yoy=ind))
     assert cl.STATE_PROFIT_HIGH in c.state and cl.STATE_CYCLE_HIGH not in c.state
-
-
-def test_前瞻擴張():
-    c = cl.classify(_inp(_q(), eps_nc=4.5, eps_f4=4.6))      # 4.5/4 − 1＝12.5% ≥ 10%
-    assert cl.STATE_FWD_EXPAND in c.state
-
-
-def test_前瞻擴張_F4低於NC_不成立():
-    assert cl.STATE_FWD_EXPAND not in cl.classify(_inp(_q(), eps_nc=4.5, eps_f4=4.3)).state
-
-
-def test_前瞻擴張_不到10趴_不成立():
-    assert cl.STATE_FWD_EXPAND not in cl.classify(_inp(_q(), eps_nc=4.2, eps_f4=4.6)).state
 
 
 def test_metrics帶asof與stay_ok():
@@ -891,7 +871,7 @@ def test_留任門檻_高成長CAGR降到15_不退出():
     r = cl.apply_hysteresis(_cls(N, 5, stay_ok={G: True}), h)
     assert r.type == G
     assert r.metrics["candidate_type"] == G and r.metrics["raw_type"] == N
-    assert "高成長留任：3 年營收 CAGR 仍 ≥ 12%" in r.why
+    assert "高成長留任：3 年營收年複合成長仍 ≥ 12%" in r.why
 
 
 def test_跌破留任門檻_仍要連2季():

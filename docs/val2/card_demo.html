@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>估值卡樣板</title>
+<!-- 使用者 11/2 認可的估值卡版面（原件 https://claude.ai/artifact/6iHMWkFFqd1ACXkopJyPWW）。
+     P4 照這個結構畫；數字是 11/2 簡化版示意。與 2.0 規格不同處以規格為準：
+     ①「5 年平均 EPS（參考）」那行不放（改成基準行裡的 3 年平均）②「現價高於上緣 +230%」的 % 由引擎 buy_range.gap 給。
+     色碼不要搬，用 app `_CSS` 的 :root 變數。 -->
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2430;--muted:#6b7480;--line:#e3e6ea;--accent:#2f6f9f;
+--good:#2e7d5b;--mid:#8a6d1f;--bad:#b04a3c;--hl:#eef4fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:720px){.pair{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h3{margin:0 0 8px;font-size:16px} .sub{color:var(--muted);font-size:12px;font-weight:400}
+.big{font-size:26px;font-weight:700;margin-bottom:6px}
+.label{margin-top:12px;font-size:13px;color:var(--muted)} .hint{font-size:11px;margin-left:6px;color:var(--accent)}
+.tri{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.tri div{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.tri span{display:block;font-size:12px;color:var(--muted)} .tri b{font-size:17px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.muted{color:var(--muted);font-size:13px}
+.pill{padding:1px 10px;border-radius:99px;font-size:13px;font-weight:600;border:1px solid currentColor}
+.good{color:var(--good)} .mid{color:var(--mid)} .bad{color:var(--bad)}
+.kv div{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
+.kv span small{display:block;font-size:11px;color:var(--muted)} .kv b{font-size:16px}
+table.gt{width:100%;border-collapse:collapse;margin-top:4px;font-size:14px}
+.gt th,.gt td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:right;font-variant-numeric:tabular-nums}
+.gt th{color:var(--muted);font-weight:500;font-size:12px} .gt td:first-child,.gt th:first-child{text-align:left}
+.gt td:not(:first-child){font-weight:600;font-size:16px;white-space:nowrap}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:10px;padding:8px 14px}
+summary{cursor:pointer;font-weight:600} h4{margin:14px 0 6px;font-size:14px} .legend{font-size:12px;color:var(--muted);margin:6px 0}
+table.vt{width:100%;border-collapse:collapse;font-size:13px}
+.vt th,.vt td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.vt th{color:var(--muted);font-weight:500} .vt td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vt tr.hl td{background:var(--hl);font-weight:600}
+@media (max-width:520px){.vt th:nth-child(3),.vt td:nth-child(3){display:none}}
+</style></head><body><main>
+<article><div class="pair">
+<section class="card">
+  <h3>股價 <span class="sub">2330 台積電｜高成長</span></h3>
+  <div class="big">2,370 <span class="sub">現價（10/30）</span></div>
+  <div class="label">三價（相對自身歷史）<span class="hint">推導見 🔍 ③</span></div>
+  <div class="tri"><div><span>便宜價</span><b>2,034</b></div><div><span>合理價</span><b>2,592</b></div><div><span>昂貴價</span><b>2,856</b></div></div>
+  <div class="row"><span class="pill mid">合理區</span><span class="muted">基準：近 4 季 EPS 98.73 元</span></div>
+  <div class="label">購買區間 <span class="hint">推導見 🔍 ④</span></div>
+  <div class="row"><b>2,034～2,592</b><span class="muted">一般｜現價在區間內</span></div>
+  <div class="label">前瞻三價（相對自身前瞻倍數）</div>
+  <div class="row muted">新季營收未出，前瞻＝近 4 季，不另給</div>
+</section>
+<section class="card">
+  <h3>EPS 與成長</h3>
+  <div class="kv">
+    <div><span>近 4 季 EPS<small>2025Q4～2026Q3，含 1 季試算</small></span><b>98.73 元</b></div>
+    <div><span>前瞻 4 季 EPS<small>新季營收未出（窗口更換，本月不比較）</small></span><b>＝近 4 季</b></div>
+  </div>
+  <div class="label">年增率（對去年同期）</div>
+  <table class="gt"><thead><tr><th>期間</th><th>營收</th><th>EPS</th></tr></thead><tbody>
+    <tr><td>最新月（09 月）</td><td>+55%</td><td class="muted">—</td></tr>
+    <tr><td>2026Q3（試算；營收已公布 3 個月）</td><td>+51%</td><td>+71%</td></tr>
+    <tr><td>近 4 季</td><td>+36%</td><td>+61%</td></tr>
+  </tbody></table>
+</section></div>
+<!-- 循環股（2327）股價卡的差別：pill bad「昂貴區」；基準行「基準：較低獲利情境 11.45 元（3 年平均 11.45；近 4 季 16.79）」；
+     購買區間狀態「一般｜現價高於上緣 +230%」 -->
+<details open>
+<summary>🔍 試算細節</summary>
+<p class="legend">📌＝主卡片上的數字</p>
+<h4>① 窗口表</h4>
+<table class="vt"><thead><tr><th>季</th><th>實際／試算</th><th>EPS（元）</th></tr></thead><tbody>
+<tr><td>2025Q4</td><td>實際</td><td class="num">19.51</td></tr><tr><td>2026Q1</td><td>實際</td><td class="num">22.08</td></tr><tr><td>2026Q2</td><td>實際</td><td class="num">27.25</td></tr><tr><td>2026Q3</td><td>試算</td><td class="num">29.89</td></tr>
+<tr class="hl"><td>近 4 季合計</td><td>—</td><td class="num">📌 98.73</td></tr>
+<tr><td>前瞻 4 季</td><td colspan="2">新季營收未出 → 與近 4 季相同</td></tr>
+</tbody></table>
+<h4>② 2026Q3 試算（近 4 季、前瞻 4 季共用）</h4>
+<table class="vt"><thead><tr><th>步驟</th><th>數值</th><th>來源／假設</th></tr></thead><tbody>
+<tr><td>07 月營收</td><td class="num">4,676 億</td><td>實際</td></tr><tr><td>08 月營收</td><td class="num">5,148 億</td><td>實際</td></tr><tr><td>09 月營收</td><td class="num">5,119 億</td><td>實際</td></tr>
+<tr><td>＝ 季營收</td><td class="num">14,942 億</td><td>—</td></tr>
+<tr><td>×（毛利率 − 營業費用率）</td><td class="num">67.7% − 7.4%</td><td>2026Q2 財報（最新一季）</td></tr>
+<tr><td>＝ 營業利益（試算）</td><td class="num">9,017 億</td><td>—</td></tr>
+<tr><td>＋ 業外</td><td class="num">261 億</td><td>近 8 季業外中位數</td></tr>
+<tr><td>×（1−稅率）×（1−少數股權比）</td><td class="num">16.5%／-0.1%</td><td>近 8 季合計</td></tr>
+<tr><td>＝ 歸母淨利（試算）</td><td class="num">7,751 億</td><td>—</td></tr>
+<tr><td>÷ 股數</td><td class="num">259.3 億股</td><td>2026Q2 隱含股數</td></tr>
+<tr class="hl"><td>＝ 試算 EPS</td><td class="num">29.89 元</td><td>規則未經驗證</td></tr>
+</tbody></table>
+<h4>③ 三價推導</h4>
+<table class="vt"><thead><tr><th>步驟</th><th>數值</th><th>來源／假設</th></tr></thead><tbody>
+<tr><td>倍數窗</td><td class="num">2023-11～2026-10</td><td>近 36 個月（高成長），自建本益比</td></tr>
+<tr><td>有效月數</td><td class="num">36／36</td><td>門檻 30 個月</td></tr>
+<tr><td>基準 EPS</td><td class="num">📌 98.73 元</td><td>＝卡片『基準』（近 4 季 EPS）</td></tr>
+<tr><td>× 歷史 20% 位置本益比</td><td class="num">20.6 倍</td><td>只有 20% 的月份比這更低</td></tr>
+<tr class="hl"><td>＝ 便宜價</td><td class="num">📌 2,034</td><td>＝卡片『便宜價』</td></tr>
+<tr><td>× 歷史 50% 位置本益比</td><td class="num">26.2 倍</td><td>中位數</td></tr>
+<tr class="hl"><td>＝ 合理價</td><td class="num">📌 2,592</td><td>＝卡片『合理價』</td></tr>
+<tr><td>× 歷史 80% 位置本益比</td><td class="num">28.9 倍</td><td>—</td></tr>
+<tr class="hl"><td>＝ 昂貴價</td><td class="num">📌 2,856</td><td>＝卡片『昂貴價』</td></tr>
+</tbody></table>
+<h4>④ 購買區間</h4>
+<table class="vt"><thead><tr><th>步驟</th><th>數值</th><th>來源／假設</th></tr></thead><tbody>
+<tr><td>下緣</td><td class="num">2,034</td><td>見 ③ 便宜價</td></tr>
+<tr><td>上緣</td><td class="num">2,592</td><td>見 ③ 合理價；前瞻沒有連續 2 個月上修 → 不改用前瞻合理價</td></tr>
+<tr class="hl"><td>購買區間</td><td class="num">📌 2,034～2,592</td><td>＝卡片『購買區間』；現價在區間內</td></tr>
+</tbody></table>
+</details></article>
+</main></body></html>

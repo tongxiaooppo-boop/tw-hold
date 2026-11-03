@@ -21,11 +21,11 @@ def test_value_checks_門檻():
          "debt_ratio": 0.30, "current_ratio": 2.5, "ttm_fcf": 5e9, "ttm_ocf": 8e9,
          "f_score": 8.0, "pe_p30": 10.0}
     s = _states(cl.value_checks(r))
-    assert s["現價未過估值上緣"] == cl._OK        # 100 <= 150
-    assert s["現價落在便宜區（參考）"] == cl._OK   # 100 <= 120
-    assert s["ROE（TTM）≥ 10%"] == cl._OK
+    assert s["現價未過價值上緣"] == cl._OK        # 100 <= 150
+    assert s["現價低於價值買價（參考）"] == cl._OK   # 100 <= 120
+    assert s["近 4 季 ROE ≥ 10%"] == cl._OK
     assert s["負債比 ≤ 45%"] == cl._OK
-    assert s["TTM 自由現金流為正"] == cl._OK
+    assert s["近 4 季自由現金流為正"] == cl._OK
 
 
 def test_value_checks_金融業跳過財務安全():
@@ -36,7 +36,7 @@ def test_value_checks_金融業跳過財務安全():
          "ttm_ocf": np.nan, "f_score": 7.0, "pe_p30": 9.0}
     rows = cl.value_checks(r)
     s = _states(rows)
-    assert s["現價未過估值上緣"] == cl._NG        # 50 > 45
+    assert s["現價未過價值上緣"] == cl._NG        # 50 > 45
     # 金融業：負債比 / 流動比 / 現金流 一律「無資料（不適用）」而不是未達
     assert s["負債比 ≤ 45%"] == cl._NA
     assert "金融業不適用" in next(x["門檻"] for x in rows if x["項目"] == "負債比 ≤ 45%")
@@ -49,7 +49,7 @@ def test_deposit_checks_門檻與缺值():
          "roe": 0.25, "ann_vol": 0.14, "yield_pctile_5y": 0.7}
     s = _states(cl.deposit_checks(r))
     assert s["連續配息 ≥ 7 年"] == cl._OK
-    assert s["現價殖利率 ≥ 5.0%"] == cl._OK
+    assert s["現價現金殖利率 ≥ 5.0%"] == cl._OK
     assert s["近 5 年無實質減配"] == cl._OK
     assert s["自由現金流覆蓋股利"] == cl._OK
 
@@ -131,10 +131,10 @@ def test_swing_checks_基本流程():
     d = {"qf": qf, "rev": rev, "px": px, "per": per, "chips": chips}
     rows = cl.swing_checks(d)
     s = _states(rows)
-    assert s["月營收 YoY > 0"] == cl._OK
-    assert s["法人 20 日淨買超 > 0"] == cl._OK
-    assert "Minervini 趨勢模板" in s
-    assert any(r["項目"] == "PE 位於自身歷史低檔" for r in rows)
+    assert s["最新月營收年增 > 0"] == cl._OK
+    assert s["法人近 20 日淨買超 > 0"] == cl._OK
+    assert "趨勢模板 7 項（體檢）" in s
+    assert any(r["項目"] == "本益比歷史位置（自建）" for r in rows)   # P4：改自建
 
 
 # ── 融資融券（2026-10-03 起 bundle 帶 margin.parquet）──

@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from reference.regime import classify as regime_classify
+from screener import growth
 
 # CANSLIM 門檻（PRD §5.2.1）
 EPS_YOY_MIN = 0.25
@@ -34,7 +35,6 @@ STOP_BUFFER = 0.10         # §5.3 可買上限 = 停損位 ÷ (1 − 10%)
 # 一點雜訊就出場。模擬單（swing_stops）早有同一道門檻、進場前會放棄；候選池沒擋就會
 # 「清單推薦、模擬單卻不進」。兩邊共用這個常數。
 MIN_STOP_BUFFER_ATR_MULT = 1.0
-EPS_LOW_BASE_ABS = 1.0     # 去年同期單季 EPS 低於此值（元）→ YoY 比例視為基期過低、失真
 
 
 def _bare(s: pd.Series) -> pd.Series:
@@ -129,26 +129,22 @@ def canslim_fundamental(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     q = q.drop_duplicates(["ticker", "period_end"], keep="last")
     g = q.groupby("ticker", sort=False)
     q["eps_base_q"] = qp.panel_lag(q, "eps", 4)
-    # 去年同季 ≤0 時比例沒有意義（−2→−4 舊式算 +100%）；
-    # 虧轉盈本來就不會過（舊式也算負），所以只擋錯誤通過。
-    q["eps_yoy_q"] = (q["eps"] / q["eps_base_q"] - 1.0).where(q["eps_base_q"] > 0)
     q["ttm_eps_3y"] = qp.panel_lag(q, "ttm_eps", 12)
     q["gm_p1"] = qp.panel_lag(q, "gross_margin", 1)
     q["gm_p2"] = qp.panel_lag(q, "gross_margin", 2)
     latest = g.tail(1).set_index("ticker")
 
     out = pd.DataFrame(index=latest.index)
-    out["eps_yoy_q"] = latest["eps_yoy_q"]
+    growths = [growth.yoy_eps(e if pd.notna(e) else None, b if pd.notna(b) else None)
+               for e, b in zip(latest["eps"], latest["eps_base_q"])]
+    out["eps_yoy_q"] = [g.value if g.value is not None else np.nan for g in growths]
+    out["eps_yoy_label"] = [g.label for g in growths]
     out["eps_yoy_base"] = latest["eps_base_q"]
-    # 🔴 低基期：去年同期單季 EPS 接近 0 時，YoY 分母趨近零，比例會爆到幾百∕幾千 %，
-    # 數字本身沒算錯，但不代表可持續成長——只標註，不影響 c_eps_yoy 門檻判斷本身
-    # （2026-09-14 使用者反映候選池 YoY 看起來離譜，查出來是這個，例：3037 欣興
-    # 去年同季 EPS 0.02 元，今年 8.45 元，YoY 顯示 +42150%）。
-    out["eps_yoy_low_base"] = out["eps_yoy_base"].abs() < EPS_LOW_BASE_ABS
+    out["eps_yoy_low_base"] = [g.low_base for g in growths]
     out["roe"] = latest["roe"]
     out["f_score"] = latest["f_score"]
     out["gross_margin"] = latest["gross_margin"]
-    out["c_eps_yoy"] = latest["eps_yoy_q"] > EPS_YOY_MIN
+    out["c_eps_yoy"] = (out["eps_yoy_label"] == "pct") & (out["eps_yoy_q"] > EPS_YOY_MIN)
     out["c_eps_3y_growth"] = (latest["ttm_eps"] > latest["ttm_eps_3y"]) & (latest["ttm_eps"] > 0)
     out["c_roe"] = latest["roe"] > ROE_MIN
     gm = latest[["gross_margin", "gm_p1", "gm_p2"]]
@@ -225,22 +221,22 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
 
     if eps is not None and eps > 0.60:
         note = "（基期過低，數字供參考）" if eps_low_base else "（遠超 25% 門檻）"
-        support.append(f"季 EPS YoY {eps:+.0%}{note}")
+        support.append(f"季 EPS 年增 {eps:+.0%}{note}")
     if eps_low_base:
         oppose.append(f"去年同期單季 EPS 僅 {eps_base:.2f} 元"
-                      "（基期過低，上面那個 YoY 比例參考價值有限，不代表可持續成長）")
+                      "（基期過低，上面那個季 EPS 年增比例參考價值有限，不代表可持續成長）")
     if rev is not None and rev > 0.20:
-        support.append(f"月營收 YoY {rev:+.0%}（成長明確）")
+        support.append(f"最新月營收年增 {rev:+.0%}（成長明確）")
     elif rev is not None and rev < 0.05:
-        oppose.append(f"月營收 YoY 僅 {rev:+.0%}（勉強過門檻）")
+        oppose.append(f"最新月營收年增僅 {rev:+.0%}（勉強過門檻）")
     if rec.get("revenue_accel") is True:
-        support.append("月營收 YoY 較上月加速")
+        support.append("最新月營收年增較上月加速")
     elif rec.get("revenue_accel") is False:
-        oppose.append("月營收 YoY 較上月減速")
+        oppose.append("最新月營收年增較上月減速")
     if rec.get("inst_net20") and rec["inst_net20"] > 0:
-        support.append(f"法人 20 日淨買超 {rec['inst_net20']/1e3:,.0f} 張")
+        support.append(f"法人近 20 日淨買超 {rec['inst_net20']/1e3:,.0f} 張")
     if d50 is not None and 0 <= d50 <= 0.08:
-        support.append(f"距 50MA 僅 {d50:+.0%}（進場點貼近支撐）")
+        support.append(f"距 50MA 僅 {d50:+.0%}（進場點貼近 50 日線支撐）")
     elif d50 is not None and d50 > 0.20:
         oppose.append(f"距 50MA {d50:+.0%}（乖離大、追漲風險）")
     if d52 is not None and d52 < -0.15:
@@ -248,9 +244,9 @@ def _support_oppose(rec: dict) -> tuple[list[str], list[str]]:
     elif d52 is not None and d52 > -0.03:
         oppose.append(f"距 52 週高僅 {d52:+.0%}（追高風險）")
     if riskp is not None and riskp > 0.12:
-        oppose.append(f"到停損位 {riskp:+.0%}（停損位遠、單筆風險高）")
+        oppose.append(f"到進場停損（候選池） {riskp:+.0%}（停損位遠、單筆風險高）")
     if rec.get("close") and rec["close"] > 1000:
-        oppose.append(f"股價 {rec['close']:.0f} 元（高價股，零股以外難分批）")
+        oppose.append(f"現價 {rec['close']:.0f} 元（高價股，零股以外難分批）")
     return support, oppose
 
 
@@ -313,6 +309,7 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
             **{k: bool(f[k]) for k in
                ["c_eps_yoy", "c_eps_3y_growth", "c_roe", "c_gm_not_deteriorating", "c_fscore"]},
             "eps_yoy_q": float(f["eps_yoy_q"]) if pd.notna(f["eps_yoy_q"]) else None,
+            "eps_yoy_label": str(f["eps_yoy_label"]),
             "eps_yoy_base": float(f["eps_yoy_base"]) if pd.notna(f["eps_yoy_base"]) else None,
             "eps_yoy_low_base": bool(f["eps_yoy_low_base"]) if pd.notna(f["eps_yoy_low_base"]) else False,
             "roe": float(f["roe"]) if pd.notna(f["roe"]) else None,
@@ -347,15 +344,15 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
         rec["close"] = round(close, 2)
 
         rec["conditions"] = [
-            {"項": "季 EPS YoY > 25%",
+            {"項": "季 EPS 年增 > 25%",
              "狀態": "成立（基期過低，數字供參考）" if rec["eps_yoy_low_base"] else "成立"},
-            {"項": "近 3 年 TTM EPS 成長", "狀態": "成立"},
+            {"項": "近 3 年 已公布 4 季 EPS 成長", "狀態": "成立"},
             {"項": "ROE > 15%", "狀態": "成立"},
             {"項": "毛利率未連兩季惡化", "狀態": "成立"},
             {"項": "F-Score ≥ 6", "狀態": "成立"},
-            {"項": "月營收 YoY > 0", "狀態": "成立"},
+            {"項": "最新月營收年增 > 0", "狀態": "成立"},
             {"項": "法人 20 日淨買超 > 0", "狀態": "成立"},
-            {"項": "Minervini 趨勢模板", "狀態": f"{rec['trend_cnt']}/8"},
+            {"項": "趨勢模板 8 項（候選池）", "狀態": f"{rec['trend_cnt']}/8"},
         ]
         support, oppose = _support_oppose(rec)
         rec["support"] = support
@@ -369,15 +366,19 @@ def build_candidate_pool(qf: pd.DataFrame, prices_adj: pd.DataFrame,
 
 def _invalidation(rec: dict) -> list[dict]:
     """§5.2.3 失效條件檢查表——對候選標『目前狀態』（v3.1 不追蹤持倉）。"""
+    label = rec.get("eps_yoy_label")
+    eps_negative = ((rec["eps_yoy_q"] or 0) < 0 if label is None else
+                    label == "turn_loss" or (label == "pct" and (rec["eps_yoy_q"] or 0) < 0)
+                    or (label == "flat" and (rec.get("eps_yoy_base") or 0) > 0))
     return [
         {"條件": "收盤跌破 50MA", "目前": "已跌破" if rec["dist_50ma"] is not None
          and rec["dist_50ma"] < 0 else "未觸發"},
         {"條件": "趨勢模板 < 5/8", "目前": "已觸發" if rec["trend_cnt"] < 5 else "未觸發"},
-        {"條件": "月營收 YoY 轉負", "目前": "已轉負" if (rec["revenue_yoy"] or 0) < 0
-         else ("未觸發（YoY 仍加速）" if rec.get("revenue_accel") is True
-               else "未觸發（但 YoY 已較上月減速）" if rec.get("revenue_accel") is False
+        {"條件": "最新月營收年增轉負", "目前": "已轉負" if (rec["revenue_yoy"] or 0) < 0
+         else ("未觸發（月營收年增仍加速）" if rec.get("revenue_accel") is True
+               else "未觸發（但 月營收年增已較上月減速）" if rec.get("revenue_accel") is False
                else "未觸發")},
-        {"條件": "季 EPS YoY 轉負", "目前": "已轉負" if (rec["eps_yoy_q"] or 0) < 0
+        {"條件": "季 EPS 年增轉負", "目前": "已轉負" if eps_negative
          else "未觸發"},
     ]
 

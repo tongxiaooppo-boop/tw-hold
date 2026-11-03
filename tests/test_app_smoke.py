@@ -153,7 +153,7 @@ def test_card_b_html_單張():
            "industry": "其他", "buy_low": None, "buy_high": None}
     out = app._card_b_html(row, "deposit")
     assert "9911" in out and "櫻花" in out and "5.5%" in out
-    assert "thc-good" in out and "估值買價" in out
+    assert "thc-good" in out and "定存買價" in out
 
 
 def test_短線分頁_切過去不炸():
@@ -244,7 +244,7 @@ def test_複製給AI_比率換算成百分比且不吐python_repr():
              "conditions": [{"項": "ROE > 15%", "狀態": "成立"}],
              "support": ["季 EPS YoY +92%"], "oppose": []}]
     out = app._copy_for_ai("長波段候選池", {"trading_date": "2026-09-10"}, rows)
-    assert "月營收 YoY: 26.6%" in out and "距 50MA: 5.8%" in out
+    assert "最新月營收年增: 26.6%" in out and "距 50MA: 5.8%" in out
     assert "{'" not in out and "[{" not in out        # 沒有 Python repr
     assert "      - 項 ROE > 15%　狀態 成立" in out
     assert "c_eps_yoy" not in out                     # 跟條件表重複 → 不印

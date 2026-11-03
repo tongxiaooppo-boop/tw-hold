@@ -28,7 +28,7 @@ from reference.chips_guard import fill_dealer  # noqa: E402
 UPSTREAM = _REPO / "data" / "upstream"
 
 _ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet", "revenue.parquet",
-           "chips.parquet", "margin.parquet",
+           "chips.parquet", "margin.parquet", "company_basic.parquet",
            "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"]
 _FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"}
 
@@ -194,6 +194,20 @@ def per_history(code: str) -> pd.DataFrame:
                                     raw_close=_read("prices_raw_close.parquet", code, True,
                                                     ["date", "ticker", "close"]))
     return d.sort_values("date").reset_index(drop=True)
+
+
+def company_basic(code: str) -> dict | None:
+    """官方面額、普通股數、特別股數與資料日；缺檔、無該檔或讀取失敗回 None。"""
+    try:
+        d = _read("company_basic.parquet", code, False)
+        if d.empty:
+            return None
+        row = d.iloc[0]
+        return {**{key: float(row.get(key, float("nan")))
+                   for key in ("par_value", "issued_shares", "preferred_shares")},
+                "asof": pd.Timestamp(row.get("asof"))}
+    except Exception:
+        return None
 
 
 def financials(code: str) -> pd.DataFrame:

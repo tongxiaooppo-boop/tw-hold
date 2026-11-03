@@ -166,30 +166,30 @@ def value_checks(r) -> list[dict]:
 
     g = _G(rows, "估值")
     # 主門檻用「估值上緣」——這才是價值清單判 verdict「無安全邊際」的實際觸發線（§6.3）。
-    g("現價未過估值上緣", "現價 ≤ 估值上緣（normalized EPS × PE 均值/P70）",
+    g("現價未過價值上緣", "現價 ≤ 價值上緣（normalized EPS × 本益比均值/歷史 70% 位置的本益比）",
       f"現價 {_f(close)} / 上緣 {_f(ceiling)}（空間 {_pct(upside)}）",
       None if close is None or ceiling is None else close <= ceiling)
     # 便宜門檻是「深度價值進場價」（5 年均 EPS × PE 三成分位）——結構性成長股常年摸不到，
     # ❌ 是常態、不是警訊；放這裡當參考，不當主判準。
-    g("現價落在便宜區（參考）", "現價 ≤ 便宜門檻（= 5 年均 EPS × PE P30；成長股通常摸不到）",
+    g("現價低於價值買價（參考）", "現價 ≤ 價值買價（= 5 年均 EPS × 歷史 30% 位置的本益比；成長股通常摸不到）",
       f"門檻 {_f(cheap)}",
       None if close is None or cheap is None else close <= cheap)
     if peak:
-        g("景氣循環高峰旗標", "命中 → 現價 EPS 可能在循環高點，便宜門檻改用均值 EPS 才保守",
+        g("景氣循環高峰旗標", "命中 → 現價 EPS 可能在循環高點，價值買價改用均值 EPS 才保守",
           "命中", None, raw="⚠️ 命中")
     if eps_susp:
         g("EPS 基準存疑", "命中 → 近期 EPS 口徑異常，估值數字打折看", "命中", None, raw="⚠️ 命中")
 
     g = _G(rows, "獲利品質")
-    g("ROE（TTM）≥ 10%", "≥ 10%", _pct(roe), None if roe is None else roe >= 0.10)
+    g("近 4 季 ROE ≥ 10%", "≥ 10%", _pct(roe), None if roe is None else roe >= 0.10)
     g("毛利率 ≥ 30%", "≥ 30%（服務/金融業本就偏低，僅供參考）", _pct(gm),
       None if gm is None else gm >= 0.30)
     g("F-Score ≥ 6", "≥ 6（9 分制）", _f(fs, 0), None if fs is None else fs >= 6)
 
     g = _G(rows, "成長")
-    g("TTM EPS ≥ 8 元", "≥ 8（舊專案成長能力『良』級）", _f(ttm_eps),
+    g("已公布 4 季 EPS ≥ 8 元", "≥ 8（舊專案成長能力『良』級）", _f(ttm_eps),
       None if ttm_eps is None else ttm_eps >= 8)
-    g("營收 YoY ≥ 10%", "TTM 營收年增 ≥ 10%", _pct(ryoy),
+    g("近 4 季營收年增 ≥ 10%", "近 4 季營收年增 ≥ 10%", _pct(ryoy),
       None if ryoy is None else ryoy >= 0.10)
 
     g = _G(rows, "財務安全")
@@ -204,10 +204,10 @@ def value_checks(r) -> list[dict]:
     if fin:
         g("自由現金流 / 營運現金流為正", "金融業不適用", "—", None)
     else:
-        g("TTM 自由現金流為正", "> 0",
+        g("近 4 季自由現金流為正", "> 0",
           f"{_f((fcf or 0) / 1e8)} 億" if fcf is not None else "—",
           None if fcf is None else fcf > 0)
-        g("TTM 營運現金流為正", "> 0",
+        g("近 4 季營運現金流為正", "> 0",
           f"{_f((ocf or 0) / 1e8)} 億" if ocf is not None else "—",
           None if ocf is None else ocf > 0)
     return rows
@@ -233,13 +233,13 @@ def deposit_checks(r) -> list[dict]:
       None if dy is None else dy >= 7)
     g("近 5 年無實質減配", "近 3 年不得減配；更早的減配須已回復",
       "有減配" if cut else "無", None if cut is None else not cut)
-    g(f"現價殖利率 ≥ {floor * 100:.1f}%", f"≥ {floor * 100:.1f}%（硬底線 5%）", _pct(cy),
+    g(f"現價現金殖利率 ≥ {floor * 100:.1f}%", f"≥ {floor * 100:.1f}%（硬底線 5%）", _pct(cy),
       None if cy is None else cy >= floor)
-    g("殖利率處於 5 年相對高檔", "5 年分位 ≥ 50%（越高越便宜）", _pct(yld_pctile, 0),
+    g("現金殖利率處於 5 年相對高檔", "5 年分位 ≥ 50%（越高越便宜）", _pct(yld_pctile, 0),
       None if yld_pctile is None else yld_pctile >= 0.50)
 
     g = _G(rows, "配息品質")
-    g("配息率適中（≤ 90%）", "TTM 配息率 ≤ 90%", _pct(payout),
+    g("配息率適中（≤ 90%）", "近 4 季配息率 ≤ 90%", _pct(payout),
       None if payout is None else payout <= 0.90)
     g("近 5 年填息率 ≥ 60%", "≥ 60%", _pct(fill),
       None if fill is None else fill >= 0.60)
@@ -250,7 +250,7 @@ def deposit_checks(r) -> list[dict]:
     if fin:
         g("自由現金流覆蓋股利", "金融業不適用", "—", None)
     else:
-        g("自由現金流覆蓋股利", "TTM FCF ÷ 現金股利 ≥ 1.0", _f(fcf_cov),
+        g("自由現金流覆蓋股利", "近 4 季自由現金流 ÷ 現金股利 ≥ 1.0", _f(fcf_cov),
           None if fcf_cov is None else fcf_cov >= 1.0)
 
     g = _G(rows, "財務安全")
@@ -258,7 +258,7 @@ def deposit_checks(r) -> list[dict]:
         g("負債比 ≤ 45%", "金融業不適用（結構性高槓桿）", _pct(debt), None)
     else:
         g("負債比 ≤ 45%", "≤ 45%", _pct(debt), None if debt is None else debt <= 0.45)
-    g("ROE（TTM）≥ 8%", "≥ 8%（獲利撐得起配息）", _pct(roe),
+    g("近 4 季 ROE ≥ 8%", "≥ 8%（獲利撐得起配息）", _pct(roe),
       None if roe is None else roe >= 0.08)
 
     g = _G(rows, "波動")
@@ -317,16 +317,16 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
         cagr = None
         if len(r) >= 19 and r["revenue"].iloc[-19] > 0:
             cagr = (r["revenue"].iloc[-1] / r["revenue"].iloc[-19]) ** (1 / 1.5) - 1
-        g("月營收 YoY > 0", "> 0", _pct(yoy), None if pd.isna(yoy) else yoy > 0)
-        g("月營收 YoY ≥ 20%", "≥ 20%（『良』級）", _pct(yoy),
+        g("最新月營收年增 > 0", "> 0", _pct(yoy), None if pd.isna(yoy) else yoy > 0)
+        g("最新月營收年增 ≥ 20%", "≥ 20%（『良』級）", _pct(yoy),
           None if pd.isna(yoy) else yoy >= 0.20)
-        g("月營收 MoM ≥ 0", "≥ 0", _pct(mom), None if pd.isna(mom) else mom >= 0)
-        g("營收動能加速", "本月 YoY > 上月 YoY", f"{_pct(yoy)} vs {_pct(yoy_p)}",
+        g("月營收月增 ≥ 0", "≥ 0", _pct(mom), None if pd.isna(mom) else mom >= 0)
+        g("營收動能加速", "最新月營收年增 > 上月營收年增", f"{_pct(yoy)} vs {_pct(yoy_p)}",
           None if pd.isna(yoy) or pd.isna(yoy_p) else yoy > yoy_p)
         g("單月營收創高", "創近 6 / 12 個月新高",
           "創 12 月新高" if high12 else ("創 6 月新高" if high6 else "未創高"),
           bool(high6 or high12))
-        g("1.5 年營收 CAGR ≥ 8%", "≥ 8%（年化）", _pct(cagr),
+        g("1.5 年營收年複合成長 ≥ 8%", "≥ 8%（年化）", _pct(cagr),
           None if cagr is None else cagr >= 0.08)
     else:
         g("營收動能", "需 ≥ 13 個月營收", "資料不足", None)
@@ -345,9 +345,9 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
                         qq["gross_margin"].shift(1).iloc[-1],
                         qq["gross_margin"].shift(2).iloc[-1])
         gm_ok = None if any(pd.isna(x) for x in (gm, gm1, gm2)) else not (gm < gm1 < gm2)
-        g("季 EPS YoY > 25%", "> 25%（候選池 CANSLIM 門檻）", _pct(eps_yoy),
+        g("季 EPS 年增 > 25%", "> 25%（候選池 CANSLIM 門檻）", _pct(eps_yoy),
           None if eps_yoy is None else eps_yoy > 0.25)
-        g("近 3 年 TTM EPS 成長", "本期 TTM EPS > 3 年前，且 > 0",
+        g("近 3 年 已公布 4 季 EPS 成長", "本期 已公布 4 季 EPS > 3 年前，且 > 0",
           f"{_f(ttm_eps)} vs {_f(ttm_eps_3y)}",
           None if pd.isna(ttm_eps_3y) or ttm_eps is None
           else (ttm_eps > ttm_eps_3y and ttm_eps > 0))
@@ -369,32 +369,31 @@ def swing_checks(d: dict, active_etf: dict | None = None) -> list[dict]:
                  ma50 > ma150 > ma200, last_c > ma50, last_c >= lo52 * 1.30,
                  last_c >= hi52 * 0.75]
             cnt = sum(bool(x) for x in t)
-            g("Minervini 趨勢模板", "7 項通過 ≥ 6（不含相對強弱 RS）", f"{cnt}/7", cnt >= 6)
+            g("趨勢模板 7 項（體檢）", "7 項通過 ≥ 6（不含相對強弱 RS）", f"{cnt}/7", cnt >= 6)
         else:
-            g("Minervini 趨勢模板", "需 ≥ 200 個交易日", "資料不足", None)
+            g("趨勢模板 7 項（體檢）", "需 ≥ 200 個交易日", "資料不足", None)
 
     g = _G(rows, "籌碼")
     if chp is not None and not chp.empty:
         c = chp.sort_values("date")
         net20 = (c["foreign"] + c["trust"] + c["dealer"]).tail(20).sum()
-        g("法人 20 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）",
+        g("法人近 20 日淨買超 > 0", "> 0（外資＋投信＋自營，單位：張）",
           f"{_f(net20, 0)} 張", None if pd.isna(net20) else net20 > 0)
     _margin_rows(g, d.get("margin"), None if px is None or px.empty else px["date"])
     _active_etf_row(g, active_etf)
 
     g = _G(rows, "估值位置")
-    if per is not None and not per.empty:
-        pp = per.sort_values("date")
-        pe_valid = pd.to_numeric(pp["per"], errors="coerce")
-        pe_now = pe_valid[pe_valid > 0].iloc[-1] if (pe_valid > 0).any() else None
-        pb_now = pd.to_numeric(pp["pbr"], errors="coerce").iloc[-1]
-        pe_ptile, pb_ptile = _pctile(pp["per"], pe_now), _pctile(pp["pbr"], pb_now)
-        g("PE 位於自身歷史低檔", "5+ 年分位 ≤ 40%",
-          f"PE {_f(pe_now)}（分位 {_pct(pe_ptile, 0)}）",
-          None if pe_ptile is None else pe_ptile <= 0.40)
-        g("PB 位於自身歷史低檔", "5+ 年分位 ≤ 40%",
-          f"PB {_f(pb_now)}（分位 {_pct(pb_ptile, 0)}）",
-          None if pb_ptile is None else pb_ptile <= 0.40)
+    from screener.multiples_self import hist_position
+    asof = d.get("asof")
+    if asof is None:
+        asof = pd.Timestamp.now(tz="Asia/Taipei").tz_localize(None).normalize()
+    for metric, name, months, gate, dp in [
+        ("pe", "本益比", 60, "近 5 年分位 ≤ 40%", 1),
+        ("pb", "股價淨值比", None, "全歷史分位 ≤ 40%", 2),
+    ]:
+        pos = hist_position(d.get("mh"), metric, asof, months)
+        cur = f"{name} {_f(pos['now'], dp)} 倍（分位 {_pct(pos['pct'], 0)}）" if pos else "—"
+        g(f"{name}歷史位置（自建）", gate, cur, pos["pct"] <= 0.40 if pos else None)
 
     g = _G(rows, "風險揭露")
     if q is not None and not q.empty:

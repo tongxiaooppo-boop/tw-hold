@@ -47,6 +47,8 @@ PIPELINE = {
     "fundamentals/universe.parquet": "u1b",
     "prices_adj.parquet": "u1b",
     "prices_raw_close.parquet": "u1b",
+    "monthly_raw_close.parquet": "u1b",
+    "company_basic.parquet": "u1b",
     "revenue.parquet": "u1b",
     "index_0050.parquet": "u1b",
     "chips.parquet": "u1b",

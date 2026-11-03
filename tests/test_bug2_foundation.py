@@ -110,13 +110,9 @@ def test_canslim_缺季時去年同季比較為NaN():
 
 def test_val_card_近四季與三年EPS缺季回None():
     q = _q(14, "2023-03-31")
-    assert vc._ttm_eps(q) == sum(range(11, 15))
-    assert vc._avg3_eps(q) == sum(range(3, 15)) / 3
+    assert vc.eps_avg(q, 12) == sum(range(3, 15)) / 3
     gap = q.drop(index=12)
-    assert vc._ttm_eps(gap) is None
-    assert vc._avg3_eps(gap) is None
-    out = vc._q(pd.concat([q, q.iloc[-1:].assign(eps=99.)]))
-    assert len(out) == len(q) and out.iloc[-1]["eps"] == 99.
+    assert vc.eps_avg(gap, 12) is None
 
 
 def test_near_zero_eps_缺季不跨窗():
@@ -129,7 +125,7 @@ def test_near_zero_eps_缺季不跨窗():
     assert q["eps"].count() == 20
     assert near_zero_eps(1., q).level == "ok"
     q.loc[16:, "eps"] = 100.
-    assert near_zero_eps(1., q).level == "block"
+    assert near_zero_eps(1., q).level == "stop"
 
 
 def _inputs(q):
@@ -200,18 +196,15 @@ def test_事件檔損壞_EVENTS_OK為False_val_card可信度低(monkeypatch, tmp
     monkeypatch.setattr(ca, "EVENTS_OK", True)
     monkeypatch.setattr(ca, "EVENTS_ERROR", None)
     q = _q(24, "2020-03-31")
-    per = pd.DataFrame({"date": pd.date_range("2021-01-31", periods=60, freq="ME"), "per": 15.})
-    args = (q, pd.DataFrame(), pd.DataFrame(), per, {"type": "normal"})
+    args = (q, pd.DataFrame(), pd.DataFrame(), {"type": "normal"}, None, None, None, pd.Timestamp("2026-11-02"))
     before = vc.build_card(*args)
-    assert before["confidence"]["level"] != "低"
+    assert before["status"]["share_basis"]["level"] != "stop"
     assert ca._load_resolved() == {}
     assert not ca.EVENTS_OK and ca.EVENTS_ERROR
     assert capsys.readouterr().err.count("警告：股數事件表讀取失敗：") == 1
     after = vc.build_card(*args)
-    assert after["confidence"]["level"] == "低"
-    assert after["prices"] == before["prices"]
-    assert any(c["name"] == "股數事件表" and c["why"] == "股數事件表讀取失敗，股數還原可能失效"
-               for c in after["checks"])
+    assert after["status"]["share_basis"]["level"] == "stop"
+    assert after["tier"] == "D"
     path.write_text('{"events": {}}', encoding="utf-8")
     assert ca._load_resolved() == {} and ca.EVENTS_OK and ca.EVENTS_ERROR is None
 

@@ -62,7 +62,12 @@ def _read(name: str) -> pd.DataFrame:
 
 def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
                      how: str = "outer") -> pd.DataFrame:
-    """三表去重合併；歸母淨利與業主權益分開，權益只取資產負債表。"""
+    """三表去重合併；權益只取資產負債表。
+
+    歸母淨利缺值時：同季資產負債表沒有非控制權益（原始歸母權益缺、等於權益總額、或沒有該季列）
+    ＝合併淨利就是歸母淨利，用 net_income 頂替；歸母權益有值且 ≠ 權益總額時不頂替
+    （2015～2023 有 8 列：1808、3265、6620、6684、6691、7714）。
+    """
     keys = ["ticker", "period_end"]
 
     def prep(frame):
@@ -77,10 +82,17 @@ def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
     if "ni_parent" not in inc.columns:
         inc["ni_parent"] = np.nan
     equity = bal["equity_parent"] if "equity_parent" in bal.columns else pd.Series(np.nan, index=bal.index)
+    total = bal["equity"] if "equity" in bal.columns else pd.Series(np.nan, index=bal.index)
+    bal["_no_nci"] = equity.isna() | np.isclose(equity, total, rtol=1e-6, atol=0.0)
     bal["equity_parent"] = equity.fillna(bal["equity"] if "equity" in bal.columns else np.nan)
     q = inc.merge(bal, on=keys, how=how, suffixes=("", "_b"), validate="one_to_one")
     q = q.merge(cf, on=keys, how=how, suffixes=("", "_c"), validate="one_to_one")
     q = q.drop(columns=[c for c in q.columns if c.endswith(("_b", "_c"))])
+    income = q["net_income"] if "net_income" in q.columns else pd.Series(np.nan, index=q.index)
+    no_nci = q["_no_nci"].astype("boolean").fillna(True).astype(bool)   # 沒有資產負債表列＝視同沒有非控制權益
+    replace = q["ni_parent"].isna() & no_nci & np.isfinite(income)
+    q.loc[replace, "ni_parent"] = income[replace]
+    q = q.drop(columns="_no_nci")
     order = [c for c in order if c in q.columns and c != "ni_parent"]
     order += [c for c in q.columns if c not in order and c != "ni_parent"] + ["ni_parent"]
     return q[order].sort_values(keys).reset_index(drop=True)
