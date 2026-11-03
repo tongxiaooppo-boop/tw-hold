@@ -206,6 +206,11 @@ def _financial_set(universe: pd.DataFrame) -> set[str]:
     return set(universe.loc[universe["industry"].map(qp.industry_group) == "financial", "ticker"].map(_t))
 
 
+def _floor_hundred(k: int | None) -> int | None:
+    """畫面顯示用：≥100 無條件捨去到百位（801→800，「前 800 大」仍成立）；使用者 11/3 覺得 801 突兀。"""
+    return k // 100 * 100 if k is not None and k >= 100 else k
+
+
 def coverage_mktcap_k(universe: pd.DataFrame, covered: set[str]) -> int | None:
     """依市值排名計算從第一檔起連續涵蓋的檔數。"""
     if "mktcap_rank" not in universe:
@@ -397,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {"asof": asof.date().isoformat(), "rule_version": cl.RULE_VERSION, "valid_count": valid_count,
                "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
                "count": len(stocks), "stocks": stocks,
-               "coverage_mktcap_k": coverage_mktcap_k(universe, {s["ticker"] for s in stocks})}
+               "coverage_mktcap_k": _floor_hundred(coverage_mktcap_k(universe, {s["ticker"] for s in stocks}))}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
 

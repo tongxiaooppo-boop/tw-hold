@@ -104,7 +104,7 @@ def test_格式化():
 
 
 def test_收錄範圍():
-    assert vv.coverage_line({"count": 1098, "coverage_mktcap_k": 801}) == "估值涵蓋市值前 801 大（共 1098 檔）"
+    assert vv.coverage_line({"count": 1098, "coverage_mktcap_k": 800}) == "估值涵蓋市值前 800 大"
     assert vv.coverage_line({"count": 1098, "coverage_mktcap_k": 50}) == "估值收錄 1098 檔"
     assert vv.coverage_line({"count": 1098}) == "估值收錄 1098 檔"
     assert vv.coverage_line(None) == ""
@@ -125,9 +125,9 @@ def test_上修文字(rev, text):
 # ── P4a：卡片 ──────────────────────────────────────────
 
 def test_卡片_A層():
-    v = vv.card_view(A(), LABEL, {"count": 1098, "coverage_mktcap_k": 801})
+    v = vv.card_view(A(), LABEL, {"count": 1098, "coverage_mktcap_k": 800})
     p = v.price
-    assert v.full and v.coverage == "估值涵蓋市值前 801 大（共 1098 檔）"
+    assert v.full and v.coverage == "估值涵蓋市值前 800 大"
     assert p.head_sub == "9999 測試｜normal" and p.price == "38.4" and p.price_sub == "現價（10/30）"
     assert p.tri == (("便宜價", "36.9"), ("合理價", "46.1"), ("昂貴價", "55.3")) and p.tri_note is None
     assert p.pos == ("合理區", "mid") and p.base_text == "基準：近 4 季 EPS 3.84 元"

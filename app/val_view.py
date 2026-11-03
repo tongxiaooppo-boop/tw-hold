@@ -138,7 +138,7 @@ def coverage_line(meta: Optional[dict]) -> str:
     if n is None:
         return ""
     if k is not None and k >= COVERAGE_MIN_K:
-        return f"估值涵蓋市值前 {k:d} 大（共 {n:d} 檔）"
+        return f"估值涵蓋市值前 {k:d} 大"   # 不顯示總檔數（使用者 11/3）
     return f"估值收錄 {n:d} 檔"
 
 

@@ -244,6 +244,11 @@ def test_coverage_k_rank缺值略過_沒有欄位回None():
     assert bc.coverage_mktcap_k(_uni([1, 2]).drop(columns=["mktcap_rank"]), {"a"}) is None
 
 
+def test_coverage_顯示捨去到百位():
+    assert bc._floor_hundred(801) == 800 and bc._floor_hundred(1000) == 1000
+    assert bc._floor_hundred(99) == 99 and bc._floor_hundred(None) is None
+
+
 # ── 4 candidate_pool：季 EPS 年增改用 growth ───────────────────────
 
 ASOF = pd.Timestamp("2026-09-07")
