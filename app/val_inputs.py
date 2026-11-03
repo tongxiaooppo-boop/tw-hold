@@ -11,6 +11,7 @@ import json
 import pandas as pd
 
 DERIVED = Path(__file__).resolve().parent.parent / "data" / "derived"
+MOPS_DIR = Path(__file__).resolve().parent.parent / "data" / "revenue_mops"
 MH_FILE = "multiples_hist.parquet"
 REV_FILE = "eps_revision.parquet"
 IND_FILE = "industry_pe.json"
@@ -87,10 +88,44 @@ def card_inputs(code: str, asof: pd.Timestamp, cls: dict | None, derived: Path =
     px = bundle.read("prices_raw_close", code).copy()
     px["date"] = pd.to_datetime(px["date"])
     px = px.loc[px["date"] <= asof, ["date", "close"]].sort_values("date").reset_index(drop=True)
-    return dict(qf=q, rev=bundle.read("revenue", code), px=px, cls=cls,
+    return dict(qf=q, rev=merge_mops_revenue(bundle.read("revenue", code), code, asof), px=px, cls=cls,
                 mh=load_mh(code, derived), rev_hist=load_rev_hist(code, derived),
                 industry_pe=load_industry_pe(derived), asof=asof,
                 basic=bundle.company_basic(code) if hasattr(bundle, "company_basic") else None)
+
+
+def merge_mops_revenue(rev: pd.DataFrame, code: str, asof: pd.Timestamp,
+                       mops_dir: Path = MOPS_DIR) -> pd.DataFrame:
+    """bundle 月營收（官方 OpenAPI 快照，每月 10 日截止後才整市場換期）併入 MOPS 當晚收集
+    （data/revenue_mops/<月>.parquet）已公告的月份，讓早公布的個股前瞻窗口先動（2026-11-03 使用者要求）。
+    - bundle 已有的月份以 bundle 為準，MOPS 只補缺的月份。
+    - 只收 first_seen_at 的日期 ≤ asof 的列（乾跑用過去的 asof 時不偷看未來）。
+    - 目錄或檔案不存在、讀檔失敗 → 原樣回傳。格式同 bundle_data.revenue：[month(月初 Timestamp), revenue]。"""
+    files = sorted(Path(mops_dir).glob("*.parquet")) if Path(mops_dir).is_dir() else []
+    have = set(pd.to_datetime(rev["month"]).dt.to_period("M")) if len(rev) else set()
+    add = []
+    for f in files:
+        try:
+            d = pd.read_parquet(f, columns=["code", "period", "revenue", "first_seen_at"])
+        except Exception:
+            continue
+        d = d[d["code"].astype(str) == str(code)]
+        for r in d.itertuples():
+            m = pd.Period(str(r.period), "M")
+            seen = pd.Timestamp(r.first_seen_at) if pd.notna(r.first_seen_at) else None
+            if (m in have or seen is None or seen.normalize() > pd.Timestamp(asof)
+                    or not pd.notna(r.revenue) or r.revenue <= 0):
+                continue
+            add.append({"month": m, "revenue": float(r.revenue)})
+            have.add(m)
+    if not add:
+        return rev
+    is_ts = pd.api.types.is_datetime64_any_dtype(rev["month"]) or not len(rev)
+    for a in add:   # 沿用輸入的月份格式（app＝月初 Timestamp；乾跑 LocalBundle＝"YYYY-MM" 字串）
+        a["month"] = a["month"].start_time if is_ts else str(a["month"])
+    out = pd.concat([rev, pd.DataFrame(add)], ignore_index=True)
+    order = pd.to_datetime(out["month"].astype(str)).argsort(kind="stable")
+    return out.iloc[order].reset_index(drop=True)
 
 
 def _read_ticker(path, code, columns):

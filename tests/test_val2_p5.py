@@ -158,3 +158,16 @@ def test_help_valuation_exists():
     text = path.read_text(encoding="utf-8")
     assert len(text.splitlines()) <= 90
     assert all(word not in text for word in ("P20", "NC", "F4", "TTM", "YoY", ".py"))
+
+
+def test_merge_mops_revenue_補缺月_官方優先_不看未來(tmp_path):
+    rev = pd.DataFrame(dict(month=pd.to_datetime(["2026-08-01", "2026-09-01"]), revenue=[100.0, 110.0]))
+    pd.DataFrame(dict(code=["2402", "2402", "1101"], period=["2026-09", "2026-10", "2026-10"],
+                      revenue=[999.0, 120.0, 50.0],
+                      first_seen_at=pd.to_datetime(["2026-10-05 01:00", "2026-11-03 04:30", "2026-11-02 00:55"]))
+                 ).to_parquet(tmp_path / "2026-10.parquet")
+    out = vi.merge_mops_revenue(rev, "2402", pd.Timestamp("2026-11-03"), tmp_path)
+    assert out.revenue.tolist() == [100.0, 110.0, 120.0]       # 9 月以官方為準，10 月由 MOPS 補
+    assert out.month.iloc[-1] == pd.Timestamp("2026-10-01")
+    assert vi.merge_mops_revenue(rev, "2402", pd.Timestamp("2026-11-02"), tmp_path).equals(rev)  # 還沒看到
+    assert vi.merge_mops_revenue(rev, "2402", pd.Timestamp("2026-11-03"), tmp_path / "無").equals(rev)
