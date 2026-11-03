@@ -284,3 +284,17 @@ def test_checklist_pe分位_自建():
     assert pe["現值"] == "本益比 16.0 倍（分位 100%）" and pe["門檻"] == "近 5 年分位 ≤ 40%"
     assert pb["現值"] == "股價淨值比 2.00 倍（分位 100%）" and pb["門檻"] == "全歷史分位 ≤ 40%"
     assert not any(r["項目"].startswith(("PE 位於", "PB 位於")) for r in rows)
+
+
+def test_試算停用顯示白話原因():
+    """11/3：卡片放短句、展開區「為什麼沒試算」放白話說明；公式層與後段檢查都適用。"""
+    from test_val2_card import REV
+    q = Q()
+    q.loc[q.index[-1], "gross_profit"] = np.nan
+    c = card(q=q, rev=REV("2026-09"))
+    assert vv.stop_plain(c) == vv.STOP_PLAIN["毛利或"]
+    rows = dict(vv.detail_tables(c)[0].rows)
+    assert rows["為什麼沒試算"] == vv.STOP_PLAIN["毛利或"][1]
+    jump = card(rev=REV("2026-09", **{"2026-07": 1000.0, "2026-08": 1000.0, "2026-09": 1000.0}))
+    assert vv.stop_plain(jump) == vv.STOP_PLAIN["營收劇變"]
+    assert vv.stop_plain(card()) is None

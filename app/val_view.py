@@ -21,6 +21,34 @@ MORE_DETAIL = "詳見 📊 估值定位細節"
 NOT_FORECAST = "試算不是預測、不是目標價"
 POS = {"cheap": ("便宜區", "good"), "fair": ("合理區", "mid"), "dear": ("昂貴區", "bad")}
 BUY_STATE = {"normal": "一般", "fwd_up": "前瞻上調"}
+
+# 試算停用原因的白話（2026-11-03，sol 起草、Opus 審）：鍵＝detect 檢查名稱；「試算公式」再依原因字串的開頭分。
+# 值＝(卡片短句, 展開區說明)。展開區說明不放這檔的數字以外的術語。
+STOP_PLAIN = {
+    "橋接殘差": ("公式回算誤差大", "用同一套公式回算過去幾季，與實際每股盈餘差距超出容許範圍，所以不用它推下一季。多半是本業以外的損益（轉投資、匯兌等）占比高又忽賺忽賠，月營收看不到這部分。"),
+    "營收劇變": ("營收變化太大", "這季營收跟上季比的變化，和去年同期差太多，不能假設每筆營收還賺得一樣多（例如接到低毛利的大單）。"),
+    "近零EPS": ("試算獲利過低", "試算出來的每股盈餘遠低於近五年的中間水準，可能是實際轉弱，也可能是公式沒反映到，所以不拿來估值。"),
+    "月營收口徑": ("月營收與季報對不上", "近 4 季有兩季以上，月營收加總和季報營收差超過 5%，用月營收推每股盈餘不可靠。"),
+    "毛利或": ("成本費用資料不齊", "最新一季缺成本或費用資料，算不出每筆營收能留下多少獲利。"),
+    "業外有效季數不足": ("業外資料不足", "本業以外的收入與損失，可用的季度資料不夠，估不出下一季要加減多少。"),
+    "稅前抵銷比過小": ("近幾季盈虧互抵", "近幾季扣稅前有賺有賠、合計接近打平，用合計數估稅率會失真。"),
+    "淨利抵銷比過小": ("近幾季盈虧互抵", "近幾季扣稅後有賺有賠、合計接近打平，估不出有多少屬於這檔股票的股東。不代表最新一季沒賺錢。"),
+    "少數股權比不適用": ("子公司股東分走太多", "集團獲利中很大一塊屬於子公司的其他股東，或兩邊一賺一賠，無法用固定比例換算成這檔股票的每股盈餘。"),
+    "推不出股數": ("每股盈餘太接近零", "最新一季每股盈虧不到 0.05 元或資料缺漏，無法反推股數來算每股盈餘。"),
+    "非有限值": ("計算沒有有效結果", "計算過程出現無效數值，沒有得到可用的每股盈餘。"),
+}
+FINANCIAL_PLAIN = "金融業的營收與獲利算法不同，不用月營收試算；三價改用股價淨值比。"
+
+
+def stop_plain(card: dict) -> Optional[tuple]:
+    """試算停用 → (卡片短句, 展開區說明)；沒停用或對不到 → None（呼叫端退回原字串）。"""
+    items = ((card.get("status") or {}).get("estimate") or {}).get("items") or []
+    item = next((i for i in items if i.get("level") == "stop"), None)
+    if item is None:
+        return None
+    if item["name"] != "試算公式":
+        return STOP_PLAIN.get(item["name"])
+    return next((v for k, v in STOP_PLAIN.items() if k in (item.get("why") or "")), None)
 KIND_ZH = {"actual": "實際", "est": "試算"}
 REV_ROLL = "窗口更換，本月不比較"
 REV_REPORT = "改用財報，本月不比較"
@@ -235,7 +263,9 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
         tval = fmt_eps(ttm.get("eps"))
         if _valid(ttm.get("eps")):
             pins["近 4 季 EPS"] = tval
-        kv.append(("近 4 季 EPS", _window_sub(ttm, eps.get("est_disabled")), tval + " 元" if tval != "—" else tval))
+        plain = stop_plain(card)
+        disabled = plain[0] if plain else eps.get("est_disabled")
+        kv.append(("近 4 季 EPS", _window_sub(ttm, disabled), tval + " 元" if tval != "—" else tval))
         rev = revision_text(card.get("revision"))
         if _same_windows(ttm, fwd) and fwd.get("ok"):
             kv.append(("前瞻 4 季 EPS", f"新季營收未出（{rev}）", "＝近 4 季"))
@@ -243,7 +273,7 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
             pins["前瞻 4 季 EPS"] = fmt_eps(fwd["eps"])
             kv.append(("前瞻 4 季 EPS", f"{_window_sub(fwd, None)}（{rev}）", pins["前瞻 4 季 EPS"] + " 元"))
         else:
-            sub = "試算停用：" + _no_suffix(eps["est_disabled"]) if eps.get("est_disabled") else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
+            sub = "試算停用：" + _no_suffix(disabled) if disabled else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
             kv.append(("前瞻 4 季 EPS", sub, "—"))
         growth = []
         for r in card.get("growth", []):
@@ -300,6 +330,11 @@ def detail_tables(card: dict) -> list[VTable]:
         rows.append(("營業現金流 ÷ 淨利", fmt_pct(quality["cfo_ni"], False)))
     if quality.get("accrual") is not None:
         rows.append(("應計比率", fmt_pct(quality["accrual"], False)))
+    plain = stop_plain(card)
+    if plain:
+        rows.append(("為什麼沒試算", plain[1]))
+    elif card.get("type") == "financial":
+        rows.append(("為什麼沒試算", FINANCIAL_PLAIN))
     if card.get("notes"):
         rows.append(("備註", "；".join(card["notes"])))
     rows.append(("樣本", "存活者偏差；分類基準 " + (card.get("class_asof") or "未提供").split("T")[0] + "；版本 " + card.get("version", "")))
