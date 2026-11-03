@@ -1067,21 +1067,21 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 
 /* 估值卡：數值由 val_view 提供，這裡只排版。 */
 .val-price{font:600 2.7rem var(--thc-mono);color:var(--thc-ink);}
-.val-sub,.val-hint{font-size:.78rem;color:var(--thc-faint);}
+.val-sub,.val-hint,[data-testid="stMarkdownContainer"] p.val-sub{font-size:.78rem;color:var(--thc-faint);margin:.25rem 0 0;}
 .val-label{margin-top:1rem;font-weight:600;}
 .val-tri{display:flex;gap:.5rem;margin:.5rem 0;}
 .val-tri > div{flex:1;background:var(--thc-surface2);padding:.6rem .35rem;border-radius:.35rem;text-align:center;}
 .val-tri strong{display:block;font:600 1.2rem var(--thc-mono);margin-top:.3rem;}
-.val-pos{padding:.4rem .65rem;border-radius:.3rem;background:var(--thc-surface2);}
+.val-pos{display:inline-block;margin-top:.2rem;padding:.15rem .6rem;border-radius:999px;font-size:.85rem;background:var(--thc-surface2);}
 .val-pos.good{color:var(--thc-good,var(--thc-accent));}
 .val-pos.mid{color:var(--thc-soft);}
 .val-pos.bad{color:var(--thc-bad,var(--thc-ink));}
 .val-eps-row{display:flex;justify-content:space-between;gap:.7rem;padding:.7rem 0;border-bottom:1px solid var(--thc-line);}
-.val-eps-row strong{white-space:nowrap;font-family:var(--thc-mono);}
+.val-eps-row strong{white-space:nowrap;font-variant-numeric:tabular-nums;}
+.st-key-valcard_fin .thc-vt:not(.w3):not(.wide){max-width:none;}        /* EPS 卡裡的年增率表撐滿卡寬 */
 
-/* 估值速覽兩欄卡等高（2026-10-29）：欄撐滿列高、卡片撐滿欄高；手機堆疊時不影響 */
-.st-key-valcards [data-testid="stColumn"] [data-testid="stLayoutWrapper"]{flex:1 1 auto;}
-.st-key-valcards [class*="st-key-valcard_"]{height:100%;}
+/* 估值速覽兩欄卡：不強制等高（2026-11-03 桌面版右卡內容少，等高會留一大片白） */
+.st-key-valcards [data-testid="stHorizontalBlock"]{align-items:flex-start;}
 /* 推薦回顧的「◀ 日期 ▶」一列：Streamlit 的 st.columns 在窄螢幕（<640px）會疊成直的，
    手機上變三行。用 st.container(key=histnav_*) 產生的 class 鎖住這一列不換行（2026-10-16 使用者要求）。 */
 [class*="st-key-histnav_"] [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;gap:.4rem !important;
@@ -2209,23 +2209,17 @@ def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True
             st.markdown(f"**{v.eps.growth_label}**")
             _view_table(v.eps.growth_table)
     if full and v.full:
-        for title, make_tables in ((val_view.EXP_DETAIL, val_view.detail_tables),
-                                   (val_view.EXP_EXPLAIN, val_view.explain_tables),
-                                   (val_view.EXP_TRIAL, val_view.trial_tables)):
+        # 順序：試算細節 → 定位細節 → 怎麼算（2026-11-03 使用者指定；原「📖 估值怎麼看」長文已併進怎麼算的表格）
+        for title, make_tables in ((val_view.EXP_TRIAL, val_view.trial_tables),
+                                   (val_view.EXP_DETAIL, val_view.detail_tables),
+                                   (val_view.EXP_EXPLAIN, val_view.explain_tables)):
             with st.expander(title):
-                st.caption(val_view.legend_row())
+                if title != val_view.EXP_EXPLAIN:          # 怎麼算不放這檔數字，沒有 📌
+                    st.caption(val_view.legend_row())
                 for table in make_tables(card):
                     _view_table(table)
                 if title == val_view.EXP_TRIAL:
                     _risk_table(d, card)
-    if full:
-        try:
-            help_text = Path(__file__).with_name("help_valuation.md").read_text(encoding="utf-8")
-        except OSError:
-            help_text = None
-        if help_text:
-            with st.expander("📖 估值怎麼看"):
-                st.markdown(help_text)
     return card, inputs
 
 

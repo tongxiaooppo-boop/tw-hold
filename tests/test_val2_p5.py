@@ -152,12 +152,18 @@ def test_build_multiples_closes_union(tmp_path, capsys):
     assert "⚠️ 沒有 monthly_raw_close，原始收盤只從 prices_raw_close 起" in capsys.readouterr().out
 
 
-def test_help_valuation_exists():
-    path = Path(__file__).resolve().parents[1] / "app/help_valuation.md"
-    assert path.exists()
-    text = path.read_text(encoding="utf-8")
-    assert len(text.splitlines()) <= 90
-    assert all(word not in text for word in ("P20", "NC", "F4", "TTM", "YoY", ".py"))
+def test_怎麼算_併入原說明_分組表格_不用術語():
+    """2026-11-03：「📖 估值怎麼看」長文併進「📐 怎麼算」，改成分組表格。"""
+    from app import val_view as vv
+    assert not (Path(__file__).resolve().parents[1] / "app/help_valuation.md").exists()
+    for route in ("PE", "PB"):
+        tables = vv.explain_tables({"ok": True, "route": route})
+        titles = [t.title for t in tables]
+        assert titles[0] == "三價" and titles[-1] == "已知限制" and "購買區間" in titles
+        assert all(t.kind == "kv" and t.rows for t in tables)
+        text = " ".join(c for t in tables for r in t.rows for c in r)
+        assert all(word not in text for word in ("P20", "NC", "F4", "TTM", "YoY", ".py"))
+        assert ("本益比上限" in text) == (route == "PE")
 
 
 def test_merge_mops_revenue_補缺月_官方優先_不看未來(tmp_path):
