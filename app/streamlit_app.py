@@ -2245,7 +2245,8 @@ def _risk_table(d: dict, card: dict) -> None:
         ("跌破後重算：" + (f"{hd['since']} 起" if hd["since"] else "近 22 週") if hd["reset"]
          else "近 22 週") + f"最高 {_px(hd['hh'])} − 2×週ATR14"
         + {"above": "；週收盤在線上" + ("，但現價已在線下（看週收盤）" if hd["under_now"] else ""),
-           "new": f"；本週收盤剛跌破 {_px(hd['brk_line'])}",
+           # dict 會先算完三個字串：沒跌破過的 brk_line 是 None，不能直接 _px（11/3 6782 炸頁）
+           "new": "；本週收盤剛跌破 " + (_px(hd["brk_line"]) if hd["brk_line"] is not None else "—"),
            "na": "；重算後仍高於上週收盤，暫無"}[hd["state"]]
         + (f"（最近一次跌破 {hd['brk_date']}）" if hd.get("brk_date") and hd["reset"]
            and hd["state"] != "new" else ""))]
