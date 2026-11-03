@@ -253,7 +253,12 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
                 period = f"最新月（{r['period'][5:]} 月）"
             elif key == "last_q":
                 period += "（財報）" if r["kind"] == "actual" else f"（試算；營收已公布 {r['months_known']:d} 個月）"
-            growth.append((period, (r.get("rev") or {}).get("text", "—"), (r.get("eps") or {}).get("text", "—")))
+            elif key == "next_q":
+                period += "（營收已公布 3 個月）"
+            eps_text = (r.get("eps") or {}).get("text", "—")
+            if key == "next_q" and eps.get("est_disabled"):
+                eps_text = "試算停用"
+            growth.append((period, (r.get("rev") or {}).get("text", "—"), eps_text))
         eps_card = EpsCard(tuple(kv), "年增率（對去年同期）", VTable(None, "grid", ("期間", "營收", "EPS"), tuple(growth)))
     return CardView(full, coverage_line(meta), asof_line(card), price, eps_card, pins)
 

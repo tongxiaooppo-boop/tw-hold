@@ -583,6 +583,9 @@ def growth_rows(q: pd.DataFrame, monthly: pd.Series, ttm: ew.EpsWindow, fwd: ew.
        months_known＝該季已有營收的月數（actual＝3）；
        rev＝yoy_revenue(L 季已有月份營收合計, 去年同月份合計)（任一月缺 → 該月不計入兩邊）；
        eps＝yoy_eps(L.eps, 去年同季實際 EPS)。ttm 不 ok → 不放。
+    1b. key="next_q"（2026-11-03 A39）：L 是實際季、下一季 N 的 3 個月營收都已公布（例：試算停用、
+       財報還沒公布）→ 在 last_q 前放一列；period＝N.q；kind=None、months_known=3；
+       rev＝yoy_revenue(N 季營收合計, 去年同季合計)；eps=None（畫面印「試算停用」或「—」）。
     3. key="ttm"：period＝f"{第一季}～{最後一季}"；rev＝yoy_revenue(Σ近 4 季 rev, Σ一年前 4 季實際 revenue)；
        eps＝yoy_eps(ttm.eps, Σ一年前 4 季實際 EPS)；一年前任一季缺 → 該欄 yoy(…, None)（label "na"）。
     4. key="fwd"：只在 fwd 不是 None、ok、且季別 ≠ 近 4 季時放；rev=None；
@@ -612,13 +615,25 @@ def growth_rows(q: pd.DataFrame, monthly: pd.Series, ttm: ew.EpsWindow, fwd: ew.
         return out
     last = ttm.quarters[-1]
     p = pd.Period(last.q, "Q")
-    pairs = []
-    for m in pd.period_range(p.start_time, p.end_time, freq="M"):
-        cur, prev = monthly.get(m.start_time), monthly.get((m - 12).start_time)
-        if _finite(cur) and cur > 0 and _finite(prev) and prev > 0:
-            pairs.append((cur, prev))
-    cur = sum(v[0] for v in pairs) if pairs else None
-    prev = sum(v[1] for v in pairs) if pairs else None
+
+    def quarter_revenue(period):
+        """(本季已公布月份合計, 去年同月份合計, 本季已公布月數)；去年同月缺的月份兩邊都不計。"""
+        pairs, known = [], 0
+        for m in pd.period_range(period.start_time, period.end_time, freq="M"):
+            cur, prev = monthly.get(m.start_time), monthly.get((m - 12).start_time)
+            if _finite(cur) and cur > 0:
+                known += 1
+                if _finite(prev) and prev > 0:
+                    pairs.append((cur, prev))
+        if not pairs:
+            return None, None, known
+        return sum(v[0] for v in pairs), sum(v[1] for v in pairs), known
+
+    if last.kind == "actual":
+        ncur, nprev, nknown = quarter_revenue(p + 1)
+        if nknown == 3:
+            out.append(row("next_q", str(p + 1), months_known=3, rev=gr.yoy_revenue(ncur, nprev)))
+    cur, prev, _ = quarter_revenue(p)
     out.append(row("last_q", last.q, last.kind, last.months_known, gr.yoy_revenue(cur, prev),
                    gr.yoy_eps(last.eps, actual_value(p - 4, "eps"))))
     revs = [r.rev for r in ttm.quarters]

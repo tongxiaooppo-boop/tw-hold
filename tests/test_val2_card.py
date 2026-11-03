@@ -277,6 +277,17 @@ def test_試算停用_近4季退回已公布():
     assert c["eps"]["fwd"] is None and c["fwd_prices"] is None and c["tier"] == "A"
 
 
+def test_試算停用_新季營收齊仍列營收年增():
+    """A39（11/3 3163）：試算停用時近 4 季停在 2026Q2，但 Q3 三個月營收已公布 → 仍列 2026Q3 營收、EPS 留空。"""
+    c = card(rev=REV("2026-09", **{"2026-07": 1000.0, "2026-08": 1000.0, "2026-09": 1000.0}))
+    rows = c["growth"]
+    assert [r["key"] for r in rows] == ["month", "next_q", "last_q", "ttm"]
+    nq = rows[1]
+    assert (nq["period"], nq["kind"], nq["months_known"], nq["eps"]) == ("2026Q3", None, 3, None)
+    assert nq["rev"]["label"] == "pct" and nq["rev"]["value"] > 1
+    assert rows[2]["period"] == "2026Q2" and rows[2]["kind"] == "actual"
+
+
 def test_股數事件表讀不到為D(monkeypatch):
     monkeypatch.setattr(ca, "EVENTS_OK", False)
     c = card()
