@@ -13,6 +13,8 @@ from __future__ import annotations
 import sys
 import json
 import logging
+import re
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -29,8 +31,10 @@ UPSTREAM = _REPO / "data" / "upstream"
 
 _ASSETS = ["prices_adj.parquet", "prices_raw_close.parquet", "per.parquet", "revenue.parquet",
            "chips.parquet", "margin.parquet", "company_basic.parquet",
-           "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"]
-_FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet"}
+           "income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet",
+           "universe.parquet"]
+_FUND = {"income.parquet", "balance.parquet", "cashflow.parquet", "dividend.parquet",
+         "universe.parquet"}
 
 
 def _dest(name: str) -> Path:
@@ -233,3 +237,49 @@ def dividends(code: str) -> pd.DataFrame:
     from reference.corporate_actions import adjust_dividends
     d = adjust_dividends(d, ["CashEarningsDistribution", "CashStatutorySurplus"])
     return d.sort_values("year").reset_index(drop=True)
+
+
+def stock_names() -> dict[str, str]:
+    """{代號: 中文名}，來源是 bundle 的 universe.parquet（約 2000 檔）。
+    缺檔、讀壞、欄位不在 → 回空 dict（名稱查詢退化成「不可用」，不讓頁面掛掉）。"""
+    try:
+        d = pd.read_parquet(_dest("universe.parquet"), columns=["ticker", "stock_name"])
+    except Exception:
+        return {}
+    d = d.dropna(subset=["ticker", "stock_name"])
+    return {_t(t): str(n).strip() for t, n in zip(d["ticker"], d["stock_name"]) if str(n).strip()}
+
+
+_CODE_RE = re.compile(r"^[0-9]{4,6}[A-Za-z]?(\.(TW|TWO))?$", re.I)
+
+
+def normalize_query(s: str) -> str:
+    """全形數字／空白 → 半形（NFKC），去頭尾空白。"""
+    return unicodedata.normalize("NFKC", str(s)).strip()
+
+
+def is_code(s: str) -> bool:
+    """像股票代號（2330、00981A、2330.TW）就是代號，其餘當中文股名。"""
+    return bool(_CODE_RE.match(s))
+
+
+def _norm_name(s: str) -> str:
+    return str(s).strip().replace("臺", "台").replace(" ", "").replace("　", "").casefold()
+
+
+def match_names(query: str, names: dict[str, str], limit: int = 30) -> list[tuple[str, str]]:
+    """中文股名模糊比對，回 [(代號, 名稱)]：完全相符 → 開頭相符 → 包含，各組內依代號排序。
+    「臺／台」視為同字；空查詢回空 list。"""
+    q = _norm_name(query)
+    if not q:
+        return []
+    exact, head, part = [], [], []
+    for code, nm in names.items():
+        n = _norm_name(nm)
+        if n == q:
+            exact.append((code, nm))
+        elif n.startswith(q):
+            head.append((code, nm))
+        elif q in n:
+            part.append((code, nm))
+    return [x for grp in (exact, head, part) for x in sorted(grp)][:limit]

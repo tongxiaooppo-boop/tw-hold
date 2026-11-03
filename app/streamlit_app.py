@@ -2000,10 +2000,35 @@ def _stock_input(form_key: str, submit_label: str) -> str:
         c1.text_input("代號", key="_stock_code", placeholder="2330",
                       label_visibility="collapsed")
         c2.form_submit_button(submit_label, use_container_width=True)
-    code = st.session_state.get("_stock_code", "").strip()
-    if code:
-        st.session_state["_code_mirror"] = code
-    return code
+    typed = st.session_state.get("_stock_code", "").strip()
+    if typed:
+        st.session_state["_code_mirror"] = typed
+    return _resolve_stock_query(typed, form_key)
+
+
+def _resolve_stock_query(typed: str, key: str) -> str:
+    """輸入是代號就原樣用；否則當中文股名模糊比對（universe.parquet）。
+    唯一命中直接查；多筆命中給選單，沒選前回 ""（頁面停在輸入框）；零筆命中提示。"""
+    import bundle_data as bd
+    typed = bd.normalize_query(typed)
+    if not typed or bd.is_code(typed):
+        return typed
+    _ensure_bundle()
+    names = bd.stock_names()
+    if not names:
+        st.warning("名稱查詢暫時不可用（沒讀到股票名稱表），請改輸入代號。")
+        return ""
+    hits = bd.match_names(typed, names)
+    if not hits:
+        st.warning(f"找不到名稱含「{typed}」的股票，請改輸入代號或換個關鍵字。")
+        return ""
+    if len(hits) == 1:
+        st.caption(f"「{typed}」→ {hits[0][0]} {hits[0][1]}")
+        return hits[0][0]
+    opts = {f"{c} {n}": c for c, n in hits}
+    pick = st.selectbox(f"「{typed}」有 {len(hits)} 檔符合，請選一檔", list(opts), index=None,
+                        placeholder="選擇股票", key=f"_name_pick_{key}_{typed}")
+    return opts[pick] if pick else ""
 
 
 def _page_footer(other_nav: str, other_label: str) -> None:
