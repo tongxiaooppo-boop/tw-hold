@@ -1,7 +1,6 @@
 {
-  "_asof": "2026-11-04",
+  "_asof": "2026-11-05",
   "_pool": [
-    "2006",
     "3045",
     "6782",
     "9933"
@@ -13,24 +12,6 @@
     "9933"
   ],
   "_prev_tickers": {
-    "2006": {
-      "first_seen": "2026-09-17",
-      "streak_days": 29
-    },
-    "3045": {
-      "first_seen": "2026-10-15",
-      "streak_days": 12
-    },
-    "6782": {
-      "first_seen": "2026-10-12",
-      "streak_days": 15
-    },
-    "9933": {
-      "first_seen": "2026-10-02",
-      "streak_days": 20
-    }
-  },
-  "tickers": {
     "2006": {
       "first_seen": "2026-09-17",
       "streak_days": 30
@@ -46,6 +27,20 @@
     "9933": {
       "first_seen": "2026-10-02",
       "streak_days": 21
+    }
+  },
+  "tickers": {
+    "3045": {
+      "first_seen": "2026-10-15",
+      "streak_days": 14
+    },
+    "6782": {
+      "first_seen": "2026-10-12",
+      "streak_days": 17
+    },
+    "9933": {
+      "first_seen": "2026-10-02",
+      "streak_days": 22
     }
   }
 }
