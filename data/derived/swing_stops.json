@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "asof": "2026-11-05",
+    "asof": "2026-11-06",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
@@ -13,12 +13,12 @@
       "atr0": 11.8929,
       "run_high": 272.0,
       "trail_stop": 241.72,
-      "last_close": 265.5,
-      "last_update": "2026-11-05",
-      "status": "candidate",
+      "last_close": 274.5,
+      "last_update": "2026-11-06",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-06",
+      "exit_price": 241.72
     },
     "9933": {
       "name": "中鼎",
@@ -28,12 +28,12 @@
       "atr0": 1.5679,
       "run_high": 48.29999923706055,
       "trail_stop": 45.16,
-      "last_close": 45.4,
-      "last_update": "2026-11-05",
-      "status": "candidate",
+      "last_close": 44.4,
+      "last_update": "2026-11-06",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-06",
+      "exit_price": 45.16
     },
     "2006": {
       "name": "東和鋼鐵",
@@ -253,12 +253,12 @@
       "atr0": 2.4643,
       "run_high": 136.5,
       "trail_stop": 131.57,
-      "last_close": 132.5,
-      "last_update": "2026-11-05",
-      "status": "candidate",
+      "last_close": 133.0,
+      "last_update": "2026-11-06",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-06",
+      "exit_price": 131.57
     },
     "2027": {
       "name": "大成鋼",

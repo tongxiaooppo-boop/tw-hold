@@ -2,6 +2,38 @@
  "schema": 1,
  "asof": "2026-11-06",
  "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "scanned": 620,
+   "candidates": [
+    {
+     "t": "1476",
+     "nm": "儒鴻",
+     "px": 346.5,
+     "fs": "2026-11-06",
+     "st": 1
+    },
+    {
+     "t": "6446",
+     "nm": "藥華藥",
+     "px": 1270.0,
+     "fs": "2026-11-06",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  },
   "swing": {
    "origin": "live",
    "status": "ok",
