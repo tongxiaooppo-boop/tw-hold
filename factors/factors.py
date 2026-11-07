@@ -130,6 +130,19 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
         q[f"ttm_{c}"] = _ttm(q, c)
     # OCF 兩個來源（CashFlowsFromOperatingActivities / NetCashInflow…），擇有值的
     q["ttm_ocf"] = q["ttm_ocf"].fillna(q["ttm_ocf_net"])
+    # 官方快線的新季沒有現金流（等每季 XBRL）：該檔最新一季且緊鄰的上一季有值時沿用上一季，
+    # 不當成缺資料（否則 FCF 類因子全變 NaN、F 分數被縮放，過關名單會被打掉）。
+    # 歷史上真正的缺口不動。沿用過的列標 cash_carried。
+    _g = q.groupby("ticker", sort=False)
+    _adjacent = (q["period_end"] - _g["period_end"].shift(1)).dt.days.le(100)
+    _latest = q["period_end"].eq(_g["period_end"].transform("max"))
+    q["cash_carried"] = _latest & _adjacent & q["ttm_ocf"].isna() & _g["ttm_ocf"].shift(1).notna()
+    for c in ("ttm_ocf", "ttm_ocf_net", "ttm_capex", "ocf", "ocf_net", "icf", "capex"):
+        if c in q.columns:
+            q[c] = q[c].where(~q["cash_carried"], _g[c].shift(1))
+    if "cash" in q.columns:
+        _carry_bal = _latest & _adjacent & q["cash"].isna()
+        q["cash"] = q["cash"].where(~_carry_bal, _g["cash"].shift(1))
     q["ttm_fcf"] = q["ttm_ocf"] - q["ttm_capex"].abs()
 
     q["roe"] = _safe_div(q["ttm_net_income"], q["equity_parent"])
@@ -161,6 +174,9 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     q["f_ocf"] = _pt_item(q["ttm_ocf"] > 0, q["ttm_ocf"])
     q["f_droa"] = _pt_item(q["roa"] > roa_p, q["roa"], roa_p)
     q["f_accrual"] = _pt_item(q["ttm_ocf"] > q["ttm_net_income"], q["ttm_ocf"], q["ttm_net_income"])
+    # 現金流是上一季的，不能跟本季淨利比（窗口錯開），沿用上一季的判定。
+    q["f_accrual"] = q["f_accrual"].where(~q["cash_carried"],
+                                          q.groupby("ticker", sort=False)["f_accrual"].shift(1))
     q["f_leverage"] = _pt_item(q["debt_ratio"] < dr_p, q["debt_ratio"], dr_p)
     q["f_liquidity"] = _pt_item(q["current_ratio"] > cr_p, q["current_ratio"], cr_p)
     q["f_margin"] = _pt_item(q["gross_margin"] > gm_p, q["gross_margin"], gm_p)
