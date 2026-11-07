@@ -41,12 +41,15 @@ def _last_n_eps_positive(qf: pd.DataFrame, asof: pd.Timestamp, n: int = 4) -> pd
     return (pos == n) & (cnt == n)
 
 
-def _cyclical_penalty(qf: pd.DataFrame, asof: pd.Timestamp) -> pd.Series:
+def _cyclical_penalty(qf: pd.DataFrame, asof: pd.Timestamp,
+                      universe: set[str] | None = None) -> pd.Series:
     """近 12 季 rev_yoy 的標準差 + gross_margin 標準差 → 分位數 → 懲罰乘數
     （波動大 = 景氣循環 → 乘 0.7；波動小 → 乘 1.0）。"""
     v = (qf[qf["disclosure_date"] <= asof].sort_values(["ticker", "period_end"])
            .groupby("ticker", sort=False).tail(12))
     vol = v.groupby("ticker").agg(ry=("rev_yoy", "std"), gm=("gross_margin", "std"))
+    if universe is not None:   # 只在 universe 內排分位，其餘不算
+        vol = vol[vol.index.isin(universe)]
     z = vol.rank(pct=True).mean(axis=1)          # 0..1，越大越循環
     return (1.0 - 0.3 * z).reindex().rename("cyclical_penalty")
 
@@ -70,7 +73,8 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
                    vol: pd.DataFrame | None = None,
                    asof: pd.Timestamp | None = None,
                    industry: pd.Series | None = None,
-                   market_cap: pd.Series | None = None) -> pd.DataFrame:
+                   market_cap: pd.Series | None = None,
+                   rank_universe: set[str] | None = None) -> pd.DataFrame:
     """定存區篩選。
 
     prices: `[ticker, close]`（最新收盤）；vol: `[ticker, ann_vol]`（年化週報酬標準差）。
@@ -86,7 +90,7 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
 
     eps4 = _last_n_eps_positive(qf, asof)
     d["eps_4q_positive"] = eps4.reindex(d.index).fillna(False)
-    d["cyclical_penalty"] = _cyclical_penalty(qf, asof).reindex(d.index).fillna(1.0)
+    d["cyclical_penalty"] = _cyclical_penalty(qf, asof, rank_universe).reindex(d.index).fillna(1.0)
     ind = industry.reindex(d.index) if industry is not None else None
 
     if prices is not None:
@@ -134,6 +138,8 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
 
     # ── 存股安全分（過門檻的才排）──────────────────────────
     ok = d[d["passes"]].copy()
+    if rank_universe is not None:   # 同 screen_value：只跟買得到的比
+        ok = ok[ok.index.isin(rank_universe)]
     ok["safety_score"] = _rank_avg(ok, {
         "fcf_yield": +1, "ann_vol": -1, "roe": +1,
         "div_years": +1, "payout_ratio_ttm": -1,
@@ -146,9 +152,13 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
 
 def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
                  asof: pd.Timestamp | None = None,
-                 industry: pd.Series | None = None) -> pd.DataFrame:
+                 industry: pd.Series | None = None,
+                 rank_universe: set[str] | None = None) -> pd.DataFrame:
     """價值區篩選。品質門檻 Piotroski F-Score ≥ 6 + 剔除價值陷阱，
     再按 Magic Formula 精神 rank(品質) + rank(便宜)。
+
+    rank_universe: 只在這些代號內排百分位（線上傳市值前 500），範圍外過關股的
+    `value_score` 為 NaN。這樣補資料讓母體變大時，不會牽動買得到的股票的名次。
 
     industry: `ticker → 產業別`（來自 universe）——結構性高槓桿產業（金融）的
     `gross_margin`/`current_ratio` 本來就沒有（見 factors.py 的 `f_score_partial`），
@@ -206,6 +216,8 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
     d["passes"] = d["reject_reason"].isna()
 
     ok = d[d["passes"]].copy()
+    if rank_universe is not None:
+        ok = ok[ok.index.isin(rank_universe)]
     quality = _rank_avg(ok, {"f_score": +1, "roe": +1})
     cheap = _rank_avg(ok, {"norm_ey": +1, "fcf_yield": +1, "ev_ebit": -1,
                            "net_cash_to_mktcap": +1})

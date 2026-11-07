@@ -261,3 +261,24 @@ def test_cut5y_近3年減配仍算():
                         for y, v in yrs.items()])
     out = factors.dividend_factors(div).set_index("ticker")
     assert out.loc["CUT", "div_cut_5y"] == True
+
+
+def test_rank_universe_scores_ignore_outsiders():
+    """範圍外的過關股不影響範圍內名次，且自身沒有分數（價值、定存兩條線）。"""
+    tks = {"AAA": 2.0, "BBB": 3.0, "CCC": 4.0, "DDD": 5.0}
+    qf = factors.quarterly_factors(_panel(*[_synth_quarterly(t, eps=e) for t, e in tks.items()]))
+    asof = pd.Timestamp("2024-06-30")
+    inside = {"AAA", "BBB", "CCC"}
+    divf = factors.dividend_factors(pd.DataFrame(
+        [dict(ticker=t, year=y, cash_dividend=2.0, cash_earnings=2.0)
+         for t in tks for y in range(2017, 2025)]))
+    runs = [("value_score", screen.screen_value, {}),
+            ("safety_score", screen.screen_deposit, {"divf": divf})]
+    for score, fn, kw in runs:
+        got = fn(qf, asof=asof, rank_universe=inside, **kw).set_index("ticker")
+        sub = kw if not kw else {"divf": divf[divf["ticker"].isin(inside)]}
+        alone = fn(qf[qf["ticker"].isin(inside)], asof=asof, **sub).set_index("ticker")
+        assert got.loc["DDD", "passes"], score
+        assert np.isnan(got.loc["DDD", score])
+        pd.testing.assert_series_equal(got.loc[sorted(inside), score],
+                                       alone.loc[sorted(inside), score])
