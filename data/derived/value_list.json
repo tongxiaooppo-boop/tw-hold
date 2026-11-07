@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-11-06",
-    "rebuilt_at": "2026-11-07T08:05:41+00:00",
+    "rebuilt_at": "2026-11-07T08:15:15+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：623 檔",
@@ -349,9 +349,9 @@
       "pe_p30": 8.944,
       "pe_p70": 12.5,
       "pe_market": 10.27,
-      "peer_metric_median": 0.11,
-      "peer_rank": 30.0,
-      "peer_n": 113.0,
+      "peer_metric_median": 0.1106,
+      "peer_rank": 31.0,
+      "peer_n": 114.0,
       "buy_low": null,
       "buy_high": null,
       "buy_note": null,
