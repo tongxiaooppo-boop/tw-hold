@@ -282,3 +282,10 @@ def test_rank_universe_scores_ignore_outsiders():
         assert np.isnan(got.loc["DDD", score])
         pd.testing.assert_series_equal(got.loc[sorted(inside), score],
                                        alone.loc[sorted(inside), score])
+
+
+def test_金融業_ttm_fcf_維持缺值():
+    q = _panel(_synth_quarterly("FIN"), _synth_quarterly("GEN"))
+    qf = factors.quarterly_factors(q, fin_tickers={"FIN"}).groupby("ticker").tail(1).set_index("ticker")
+    assert np.isnan(qf.loc["FIN", "ttm_fcf"])
+    assert np.isfinite(qf.loc["GEN", "ttm_fcf"])

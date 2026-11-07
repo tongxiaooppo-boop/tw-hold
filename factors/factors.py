@@ -144,6 +144,9 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
         _carry_bal = _latest & _adjacent & q["cash"].isna()
         q["cash"] = q["cash"].where(~_carry_bal, _g["cash"].shift(1))
     q["ttm_fcf"] = q["ttm_ocf"] - q["ttm_capex"].abs()
+    # 金融業的營業現金流含存放款變動，FCF 沒有意義；維持缺值，不進 FCF 類門檻與排序。
+    if fin_tickers:
+        q.loc[q["ticker"].isin(fin_tickers), "ttm_fcf"] = np.nan
 
     q["roe"] = _safe_div(q["ttm_net_income"], q["equity_parent"])
     q["roa"] = _safe_div(q["ttm_net_income"], q["total_assets"])
