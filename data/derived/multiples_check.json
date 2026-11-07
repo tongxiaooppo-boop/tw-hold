@@ -1,5 +1,5 @@
 {
-  "asof": "2026-11-03",
+  "asof": "2026-11-07",
   "n_tickers": 1098,
   "n_ok": 1098,
   "n_failed": 0,
@@ -20,19 +20,9 @@
   "pe_vs_exchange": {
     "n_compared": 1017,
     "abs_median_p50": 0.00024609326934910136,
-    "abs_median_p90": 0.022213529626657853,
-    "abs_median_max": 0.43205412856311315,
+    "abs_median_p90": 0.02181677897449382,
+    "abs_median_max": 0.3128616415757114,
     "warn": [
-      {
-        "ticker": "6695",
-        "median_diff": -0.43205412856311315,
-        "n_months": 6
-      },
-      {
-        "ticker": "8033",
-        "median_diff": 0.42108396553742444,
-        "n_months": 6
-      },
       {
         "ticker": "8050",
         "median_diff": -0.3128616415757114,
@@ -46,6 +36,11 @@
       {
         "ticker": "6028",
         "median_diff": -0.2362286918608144,
+        "n_months": 6
+      },
+      {
+        "ticker": "6695",
+        "median_diff": -0.2163439177769878,
         "n_months": 6
       },
       {
@@ -84,6 +79,11 @@
         "n_months": 7
       },
       {
+        "ticker": "8033",
+        "median_diff": -0.09994279906490605,
+        "n_months": 6
+      },
+      {
         "ticker": "6909",
         "median_diff": -0.09992372234935165,
         "n_months": 11
@@ -109,11 +109,6 @@
         "n_months": 7
       },
       {
-        "ticker": "6994",
-        "median_diff": -0.08242250978773985,
-        "n_months": 14
-      },
-      {
         "ticker": "6873",
         "median_diff": -0.0804433476292844,
         "n_months": 15
@@ -122,6 +117,11 @@
         "ticker": "6725",
         "median_diff": -0.079696939329504,
         "n_months": 6
+      },
+      {
+        "ticker": "6994",
+        "median_diff": -0.07816274154589353,
+        "n_months": 13
       },
       {
         "ticker": "6658",
@@ -182,11 +182,6 @@
         "ticker": "2881",
         "median_diff": -0.05969867156280395,
         "n_months": 93
-      },
-      {
-        "ticker": "8045",
-        "median_diff": -0.0595408178546612,
-        "n_months": 10
       },
       {
         "ticker": "7722",
@@ -294,6 +289,11 @@
         "n_months": 59
       },
       {
+        "ticker": "8045",
+        "median_diff": -0.03835085392656573,
+        "n_months": 10
+      },
+      {
         "ticker": "4441",
         "median_diff": -0.038082457656674173,
         "n_months": 7
@@ -347,11 +347,6 @@
         "ticker": "7751",
         "median_diff": -0.03322930552013459,
         "n_months": 7
-      },
-      {
-        "ticker": "3543",
-        "median_diff": -0.03243395426245821,
-        "n_months": 17
       },
       {
         "ticker": "9945",
@@ -414,6 +409,11 @@
         "n_months": 46
       },
       {
+        "ticker": "4534",
+        "median_diff": -0.02743864586351019,
+        "n_months": 21
+      },
+      {
         "ticker": "4749",
         "median_diff": -0.027424733362228615,
         "n_months": 14
@@ -422,11 +422,6 @@
         "ticker": "3260",
         "median_diff": -0.027379899540659614,
         "n_months": 66
-      },
-      {
-        "ticker": "4534",
-        "median_diff": -0.027336326673003675,
-        "n_months": 24
       },
       {
         "ticker": "8112",
@@ -544,11 +539,6 @@
         "n_months": 57
       },
       {
-        "ticker": "6209",
-        "median_diff": -0.021312008193895893,
-        "n_months": 15
-      },
-      {
         "ticker": "4966",
         "median_diff": -0.021098269008069104,
         "n_months": 73
@@ -562,11 +552,6 @@
         "ticker": "6914",
         "median_diff": -0.02085275997547137,
         "n_months": 14
-      },
-      {
-        "ticker": "6667",
-        "median_diff": -0.020648563503749662,
-        "n_months": 55
       },
       {
         "ticker": "6472",
