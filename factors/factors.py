@@ -100,6 +100,8 @@ def quarterly_factors(q: pd.DataFrame, fin_tickers: set[str] | None = None,
     q = q.sort_values(["ticker", "period_end"], kind="stable").drop_duplicates(
         ["ticker", "period_end"], keep="last").reset_index(drop=True).copy()
     fin_tickers = fin_tickers or set()
+    # 現金流表是年初累計，先差分成單季，TTM 才能四季相加（2026-11-07 修：之前直接加累計值）。
+    q = qp.to_single_quarter_cashflow(q)
     # 單檔呼叫（個股頁、月營收 build）時，上游沒給的資產負債表欄整欄不存在 → 補 NaN，
     # 讓相關因子變 NaN 而不是整檔 KeyError（2026-10-29：1709、3094 等 7 檔缺 total_assets）
     for c in _STOCK_COLS:

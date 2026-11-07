@@ -40,7 +40,12 @@ def _synth_cashflow(ticker: str, n: int = 32, grow: float = 0.03):
         k = 1 + grow * (i // 4)
         rows.append(dict(ticker=ticker, period_end=pe, ocf=250 * k, ocf_net=250 * k,
                          capex=80.0, icf=-50.0))
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # 現金流表是年初累計，跟真實資料同口徑。
+    year = pd.to_datetime(df["period_end"]).dt.year
+    for c in ("ocf", "ocf_net", "capex", "icf"):
+        df[c] = df.groupby(year)[c].cumsum()
+    return df
 
 
 def _synth_dividend(ticker: str, years=range(2018, 2026), amt: float = 3.0):

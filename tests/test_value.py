@@ -33,7 +33,12 @@ def _synth_quarterly(ticker: str, n_years: int = 8, eps=2.0, growing=True,
             ocf=250.0 * k, ocf_net=250.0 * k, capex=80.0,
             capital_stock=1000.0,
         ))
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # 現金流表是年初累計，跟真實資料同口徑。
+    year = pd.to_datetime(df["period_end"]).dt.year
+    for c in ("ocf", "ocf_net", "capex"):
+        df[c] = df.groupby(year)[c].cumsum()
+    return df
 
 
 def _panel(*frames) -> pd.DataFrame:
@@ -289,3 +294,18 @@ def test_金融業_ttm_fcf_維持缺值():
     qf = factors.quarterly_factors(q, fin_tickers={"FIN"}).groupby("ticker").tail(1).set_index("ticker")
     assert np.isnan(qf.loc["FIN", "ttm_fcf"])
     assert np.isfinite(qf.loc["GEN", "ttm_fcf"])
+
+
+def test_ttm_現金流由年初累計差分不是直接相加():
+    """2026-11-07 修：累計值直接相加會讓 2330 FCF 從 1.14 兆變 2.62 兆。"""
+    ends = pd.to_datetime(["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31",
+                           "2026-03-31", "2026-06-30"])
+    base = _synth_quarterly("X").iloc[:6].copy()
+    base["period_end"] = ends
+    base["ocf"] = base["ocf_net"] = [10.0, 30.0, 60.0, 100.0, 20.0, 50.0]
+    base["capex"] = [-1.0, -3.0, -6.0, -10.0, -2.0, -5.0]
+    r = factors.quarterly_factors(_panel(base)).set_index("period_end").loc["2026-06-30"]
+    assert r["ttm_ocf"] == 120.0      # 全年 100 − 上半年 30 + 今年上半年 50
+    assert r["ttm_capex"] == -12.0    # −10 − (−3) + (−5)
+    assert r["ttm_fcf"] == 108.0      # ttm_fcf 用 capex 絕對值
+    assert r["ocf"] == 30.0           # 單季
