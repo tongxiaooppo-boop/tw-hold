@@ -62,6 +62,9 @@ def _right_pad(dates: pd.Series) -> pd.Timedelta:
 #: 日線 20 根約一個月（實務上只有年初的「今年至資料日期」會觸發）。
 MIN_POINTS_MONTHLY = 13
 MIN_POINTS_DAILY = 20
+#: 河流圖、殖利率是長期尺度：殖利率一年配息一次，估值區間也要看滿一輪，3 個月沒有意義。
+#: 約 240 個交易日；選「1年」時本來就夠，不會被放寬。
+MIN_POINTS_YEAR = 240
 
 
 def _min_start(dates: pd.Series, start, min_points: int) -> tuple[pd.Timestamp | None, bool]:
@@ -259,7 +262,7 @@ def pe_river(rf: dict, name: str, start=None) -> go.Figure:
         fig.add_trace(go.Scatter(x=frame["date"], y=frame["price"], name="收盤",
                                  line=dict(color="#2B333B", width=1.6)))
         if start is not None:
-            eff_start, _ = _min_start(frame["date"], start, MIN_POINTS_DAILY)
+            eff_start, _ = _min_start(frame["date"], start, MIN_POINTS_YEAR)
             fig.update_xaxes(range=[eff_start, frame["date"].max()])
     return _style(fig, title, 440)
 
@@ -302,7 +305,7 @@ def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
                                 line=dict(width=2, color="#5C7A72"))])
     fig.update_layout(yaxis=dict(ticksuffix="%"))
     if start is not None:
-        eff_start, _ = _min_start(d["date"], start, MIN_POINTS_DAILY)
+        eff_start, _ = _min_start(d["date"], start, MIN_POINTS_YEAR)
         fig.update_xaxes(range=[eff_start, pd.to_datetime(d["date"]).max()])
     return _style(fig, f"{name} 現金殖利率走勢（%）", 320)
 

@@ -198,3 +198,32 @@ def test_kline_3月不放寬():
     start = end - pd.Timedelta(days=92)
     fig = ch.kline(px, "測試", start, ch._MA_SHORT)
     assert list(fig.layout.xaxis.range)[0] == start
+
+
+def _x_days(fig) -> int:
+    lo, hi = fig.layout.xaxis.range
+    return (pd.Timestamp(hi) - pd.Timestamp(lo)).days
+
+
+def test_長期圖選3月仍至少顯示約一年():
+    px = _px(600).rename(columns={"close": "price"})
+    for column in ("p20", "p50", "p80"):
+        px[column] = 20.0
+    end = pd.Timestamp(px["date"].max())
+    start = end - pd.Timedelta(days=92)
+    assert _x_days(ch.pe_river(_river_frame(px), "測試", start=start)) >= 240
+    per = pd.DataFrame({"date": px["date"], "dividend_yield": 3.0})
+    assert _x_days(ch.yield_trend(per, "測試", start=start)) >= 240
+
+
+def test_長期圖資料不足一年就顯示全部():
+    per = pd.DataFrame({"date": pd.bdate_range("2026-01-01", periods=100), "dividend_yield": 3.0})
+    start = per["date"].max() - pd.Timedelta(days=30)
+    fig = ch.yield_trend(per, "測試", start=start)
+    assert pd.Timestamp(fig.layout.xaxis.range[0]) == per["date"].min()
+
+
+def test_K線選3月不受長期圖門檻影響():
+    px = _px(600)
+    start = pd.Timestamp(px["date"].max()) - pd.Timedelta(days=92)
+    assert _x_days(ch.kline(px, "測試", start)) < 120
