@@ -288,7 +288,10 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
             eps_text = (r.get("eps") or {}).get("text", "—")
             if key == "next_q" and eps.get("est_disabled"):
                 eps_text = "試算停用"
-            growth.append((period, (r.get("rev") or {}).get("text", "—"), eps_text))
+            rev_text = (r.get("rev") or {}).get("text", "—")
+            if key == "fwd" and not r.get("rev"):
+                rev_text = "見試算細節"   # 前瞻含未公布月份的推估營收，只放展開區（使用者 2026-11-08）
+            growth.append((period, rev_text, eps_text))
         eps_card = EpsCard(tuple(kv), "年增率（對去年同期）", VTable(None, "grid", ("期間", "營收", "EPS"), tuple(growth)))
     return CardView(full, coverage_line(meta), asof_line(card), price, eps_card, pins)
 
