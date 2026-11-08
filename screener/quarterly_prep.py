@@ -1,6 +1,6 @@
 """季報前處理：現金流單季化、TTM、產業名正規化（估值分類框架，2026-11-01 Opus 定介面）。
 
-依據：`D:\\g\\claude\\估值定義定案草案.md` §8.7（資料驗證結果）。
+依據：`D:\\g\\claude\\val_discuss\\估值定義定案草案.md` §8.7（資料驗證結果）。
 全部是純函式：不讀檔、不連網。讀檔在 `reference/loader.py::load_quarterly()`，
 組裝在之後的 `build_classification.py`。
 

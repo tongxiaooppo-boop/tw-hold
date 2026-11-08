@@ -1,6 +1,6 @@
 """產 `data/derived/stock_class.json`＋`data/derived/class_history.parquet`（估值分類，類型＋狀態）。
 
-依據：`D:\\g\\claude\\估值定義定案草案.md` §8.2；規格見 `screener/classify.py` 檔頭。
+依據：`D:\\g\\claude\\val_discuss\\估值定義定案草案.md` §8.2；規格見 `screener/classify.py` 檔頭。
 本檔只負責「接真實資料」，判斷全在 screener/ 的純函式裡。
 
 步驟：
