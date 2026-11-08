@@ -1,6 +1,8 @@
-# D09 任務書：集保股權分散表收集＋TSD 歷史匯入（版本 2026-11-08 v2：不接排程／閘門、從 2020 起匯）
+# 【tw-hold】D09 任務書：集保股權分散表收集＋TSD 歷史匯入（版本 2026-11-08 v2：不接排程／閘門、從 2020 起匯）
 
-## 要讀的檔案（只准讀這些）
+> **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。不是 tw-swing。** 下面所有相對路徑都以 `D:\g\claude\tw-hold` 為根；所有指令都先 `cd D:\g\claude\tw-hold` 再跑。`D:\g\claude\tw-swing\collab\to-codex.md` 是另一個專案的舊任務（D04b，已完成），不要讀、不要照做。回報寫到 `D:\g\claude\tw-hold\collab\from-codex.md`。
+
+## 要讀的檔案（只准讀這些，皆在 tw-hold）
 - `scripts/selfhost_tdcc.py`（全檔；**框架，照檔頭與各函式 docstring 填實作**）
 - `tests/test_selfhost_tdcc.py`（全檔；**規格，不准改**）
 - `scripts/selfhost_shares.py` 第 69–80 行（`_get`）、第 160–181 行（`merge_rows`）、第 233–244 行（`write`）、第 309–319 行（`_typed`）當樣板
