@@ -1,97 +1,95 @@
-﻿# D04 完成回報（2026-11-08）
+﻿# D09 完成回報（2026-11-08）
 
 ## 完成項
 
-1. `scripts/selfhost_shares.py`：填完全部框架函式，保留函式簽名、常數與 COLS；完成兩市場官方解析、重試與請求間隔、交易日曆、來源優先序合併、差異警告（附前 10 筆）、TSD 匯入、同日比對、asof 查詢及寫檔檢查。收集模式每 10 個交易日合併寫入，失敗日不寫、成功日保留；TSD 匯入僅補缺少主鍵。
-2. `scripts/selfhost_gate.py`：僅將 shares 納入 DATASETS、DAILY 與 ABS_MIN（TW 900／TWO 700）。
-3. `.github/workflows/selfhost_collect.yml`：下載與上傳清單加 shares.parquet，週快照清單加 shares，官方未還原日線步驟後加逐日發行股數步驟。
-
-既有測試未修改；未改下游市值／排名、未改 tw-swing、未操作 Release、未 push。
+- 已填實 `scripts/selfhost_tdcc.py` 全部 15 個未實作函式，並新增 `_prepare_tsd`、`_read_tsd_hist`、`_read_tsd_csv` 私有輔助函式。
+- 支援官方 CSV 抓取／清理、TSD 歷史匯入、來源優先合併、逐週比對、恆等式與 ISO 缺週檢查、寫檔驗證及四種 CLI 模式。大量資料合併、比較與恆等式檢查皆採向量化處理。
+- 官方覆蓋不同數值 TSD 時會警告並列出前 10 筆差異。匯入只補現有檔案缺少的主鍵。
+- 以 AST 比對確認既有函式簽名、常數與 docstring 未變；未改測試、其他 selfhost 腳本、workflow、tw-swing 或 TSD 資料。
+- 未接排程、閘門或下游；未上傳 Release、未 push。本次專案內測試暫存目錄已清除。
 
 ## Commit
 
-- 分支：main
-- hash：`cfa54abe416992cd05fe96db5a64f10fa4808163`
-- 訊息：`D04：官方逐日發行股數收集＋TSD 歷史匯入`
-- commit 僅含上述三個指定檔案。
+`daa1908f4ba03b64c6f3afc0ec566341eefd0d1c`（main）
+
+訊息：`D09：集保股權分散表收集＋TSD 歷史匯入`
+
+本次 commit 僅含 `scripts/selfhost_tdcc.py`；`data/selfhost/tdcc.parquet` 未 commit。
 
 ## PROOF_CMD
 
-測試環境設定 `PYTHONUTF8=1`；透過 `PYTEST_ADDOPTS=--basetemp=.d04-pytest-target`／`.d04-pytest-full` 將本輪 pytest 暫存放在專案內，結束後刪除。一般沙箱無法寫測試暫存與 shares.parquet，網路有 WinError 10013；提升權限後五條均完成，以下為最終結果。
+六條皆已執行，最終 exit code 皆為 0。測試設定 `PYTEST_ADDOPTS` 將暫存目錄放在本專案內，並設定 `PYTHONIOENCODING=utf-8` 保留中文輸出。一般沙箱曾出現寫入腳本與 pytest 暫存目錄的 PermissionError，改以核准的執行權限完成，沒有跳過實際資料驗證。
 
-### 1. 指定測試（exit 0）
+### 1. 專用測試
 
 ```text
-python -m pytest tests/test_selfhost_shares.py -q
+python -m pytest tests/test_selfhost_tdcc.py -q -p no:cacheprovider
 .............................                                            [100%]
-29 passed in 1.05s
+29 passed in 1.81s
 ```
 
-### 2. 完整測試（exit 0）
+### 2. 完整測試
 
 ```text
 python -m pytest -q -p no:cacheprovider
-............... [ 95%]
-............................................................             [100%]
-1419 passed, 9 skipped in 194.16s (0:03:14)
+........................................................................ [ 98%]
+.................                                                        [100%]
+1448 passed, 9 skipped in 204.65s (0:03:24)
 ```
 
-實際為 1419 passed／9 skipped，與任務書預估的 1424 passed／4 skipped 有差異；兩者總數皆 1428，無 failed。依讀檔限制，未另外讀其他測試或設定檔調查跳過原因。
+實際總數 1457 與預期相同，但比任務書的 `1453 passed, 4 skipped` 多 5 項 skipped、少 5 項 passed；沒有 failed 或 error。未修改測試或跳過條件；本次 `-q` 輸出未列出跳過原因。
 
-### 3. 六日期官方／TSD 比對（exit 0）
+### 3. TSD 封存／CSV／官方核對
 
 ```text
-python scripts/selfhost_shares.py --verify-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main --dates 2015-01-05,2016-08-25,2018-03-15,2021-02-26,2024-06-03,2026-11-06
-      date market  n_official  n_tsd  n_both  n_equal  ratio
-2015-01-05     TW         874    873     873      873    1.0
-2015-01-05    TWO         680    682     680      680    1.0
-2016-08-25     TW         898    896     896      896    1.0
-2016-08-25    TWO         716    717     716      716    1.0
-2018-03-15     TW         930    929     929      929    1.0
-2018-03-15    TWO         748    749     748      748    1.0
-2021-02-26     TW         961    959     959      959    1.0
-2021-02-26    TWO         786    786     786      786    1.0
-2024-06-03     TW        1025   1023    1023     1023    1.0
-2024-06-03    TWO         819    819     819      819    1.0
-2026-11-06     TW        1101   1099    1099     1099    1.0
-2026-11-06    TWO         892    892     892      892    1.0
-失敗日：[]
+python scripts/selfhost_tdcc.py --verify-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main
+      date   n_a   n_b  n_both  n_equal  ratio
+2026-09-04 55692 55692   55692    55692    1.0
+2026-09-11 55709 55709   55709    55709    1.0
+      date   n_a   n_b  n_both  n_equal  ratio
+2026-11-06 56083 56083   56083    56083    1.0
 ```
 
-### 4. TSD 歷史匯入（exit 0）
+### 4. 歷史匯入
 
 ```text
-python scripts/selfhost_shares.py --import-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main
-新增列數：5043467；總列數：5043467
+python scripts/selfhost_tdcc.py --import-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main
+匯入新增 17,571,370 列｜累積 351 週｜最早 2020-01-03 最晚 2026-11-06
 ```
 
-匯入後核對：
-```text
-rows= 5043467 range= 2015-01-05 00:00:00 2026-11-06 00:00:00
-market  src
-TW      tw-stock-data    1099
-TWO     tw-stock-data     892
-duplicate_keys= 0
-```
-
-### 5. 官方區間收集（exit 0）
+### 5. 官方最新週併入
 
 ```text
-python scripts/selfhost_shares.py --start 2026-09-01 --end 2026-10-05
-2026-09-29：1987 列
-2026-09-30：1985 列
-2026-10-01：1984 列
-2026-10-02：1985 列
-2026-10-05：1985 列
-抓了 23 天；失敗日：[]；overridden=0
+python scripts/selfhost_tdcc.py
+資料日期 2026-11-06｜3,299 檔｜新增 0 列｜overridden 0｜累積 351 週
 ```
 
-最終 shares.parquet 為 5,043,541 列，含 official 45,642 列（23 天）、tw-stock-data 4,997,899 列。2026-11-06 仍為 TW 1,099／TWO 892，src 全為 tw-stock-data。
+overridden 為 0，沒有需要列出的數值差異。
+
+### 6. tw-swing 快照核對
+
+```text
+python scripts/selfhost_tdcc.py --verify-twswing D:/g/claude/tw-swing/data/tdcc
+      date   n_a   n_b  n_both  n_equal  ratio
+2026-09-11 55709 52432   52432    52432    1.0
+2026-09-18 55726 52448   52448    52448    1.0
+2026-09-24 55743 52464   52464    52464    1.0
+2026-10-02 55760 52480   52480    52480    1.0
+2026-10-08 55879 52592   52592    52592    1.0
+2026-10-16 55998 52704   52704    52704    1.0
+2026-10-22 56015 52720   52720    52720    1.0
+2026-10-30 56032 52736   52736    52736    1.0
+```
+
+本機可比對的快照為上述 8 週，全部相符率 1.0。
+
+## 資料檔大小
+
+`data/selfhost/tdcc.parquet`：118,489,202 bytes（約 113.00 MiB）。
 
 ## 自行採用的小疑問
 
-- TPEx 真實 JSON 的成功狀態為小寫 `stat="ok"`；成功狀態以大小寫等價判定，缺少 stat 仍依 parse_tpex 的 docstring 及測試按日期、表格與欄名驗證。TWSE 維持要求 `stat="OK"`。六日期驗證已確認全部相符。
-- 股數只接受正整數（含 CSV 常見的整數小數寫法），非整數值視為無效，避免截斷股數。
+無。
 
 ## 需要 Opus 決定的事
 
