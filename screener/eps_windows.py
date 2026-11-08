@@ -34,6 +34,7 @@ live=True 時「已到期但缺」的判斷照樣做（到期日同上），只�
   gm_last = P.gross_profit / P.revenue；opex_last = (P.gross_profit − P.op_income) / P.revenue
   op      = revenue × (gm_last − opex_last)
   nonop   = median(近 8 個已公布季的 pretax − op_income)，有效 <4 季 → 不試算
+            （只管試算季；實際季的一次性業外照算，已知限制見 map/QUESTIONS.md #31）
   tax8    = 1 − Σnet_income / Σpretax（近 8 季）；抵銷比(pretax) < OFFSET_MIN → 不試算；
             Σpretax ≤ 0 或超出 [0, TAX_MAX] → TAX_DEFAULT 並 flag
   minority8 = 1 − Σni_parent / Σnet_income；抵銷比(net) < OFFSET_MIN、Σni_parent×Σnet < 0、
