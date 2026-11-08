@@ -1,4 +1,4 @@
-# D04 任務書：官方逐日發行股數收集＋TSD 歷史匯入（版本 2026-11-08 v1）
+# D04 任務書：官方逐日發行股數收集＋TSD 歷史匯入（版本 2026-11-08 v2：分支更正為 main）
 
 ## 要讀的檔案（只准讀這些）
 - `scripts/selfhost_shares.py`（全檔 151 行；**框架，照檔頭與各函式 docstring 填實作**）
@@ -58,7 +58,7 @@ python scripts/selfhost_shares.py --start 2026-09-01 --end 2026-10-05
 
 ## 回報格式（寫進 collab/from-codex.md，不貼程式碼）
 - 完成項（對應「要改的檔案」1～3）
-- commit hash（在 master commit，不 push；訊息「D04：官方逐日發行股數收集＋TSD 歷史匯入」）
+- commit hash（在 main commit，不 push；訊息「D04：官方逐日發行股數收集＋TSD 歷史匯入」）
 - PROOF_CMD 五條的最後幾行輸出（第 3 條貼整張 12 列表）
 - 自行採用的小疑問（沒有就寫「無」）
 - 需要 Opus 決定的事（沒有就寫「無」）
