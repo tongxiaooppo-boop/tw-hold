@@ -82,12 +82,12 @@ def test_import_tsd_只匯HIST_START起_csv勝_strip代號(tmp_path):
     hist, csvd = tmp_path / "data" / "tdcc_hist", tmp_path / "data" / "tdcc"
     hist.mkdir(parents=True)
     csvd.mkdir(parents=True)
-    _tsd_frame(_levels("2330", "2018-03-02")).to_parquet(hist / "2018.parquet")              # 年份 < 2019 不讀
-    _tsd_frame(_levels("2330  ", "2019-06-21") + _levels("2330  ", "2019-06-28")).to_parquet(hist / "2019.parquet")
+    _tsd_frame(_levels("2330", "2019-12-27")).to_parquet(hist / "2019.parquet")              # 年份 < 2020 不讀
+    _tsd_frame(_levels("2330  ", "2020-01-02") + _levels("2330  ", "2020-01-03")).to_parquet(hist / "2020.parquet")
     _tsd_frame(_levels("2330", "2026-09-11", bump=1)).to_parquet(hist / "2026.parquet")      # 跟 csv 同週不同值
     _tsd_frame(_levels("2330", "2026-09-11")).to_csv(csvd / "2026-09-11.csv", index=False)
     df = st.import_tsd(tmp_path)
-    assert sorted(df.date.dt.strftime("%Y-%m-%d").unique()) == ["2019-06-28", "2026-09-11"]
+    assert sorted(df.date.dt.strftime("%Y-%m-%d").unique()) == ["2020-01-03", "2026-09-11"]
     assert set(df.ticker) == {"2330"}
     assert (df.src == st.SRC_TSD).all()
     w = df[(df.date == "2026-09-11") & (df.level == 1)]
@@ -276,10 +276,3 @@ def test_main_import_tsd只補缺的主鍵(tmp_path, monkeypatch):
     nov = df[df.date == "2026-11-06"]
     assert (nov.src == st.SRC_OFFICIAL).all() and int(nov.loc[nov.level == 1, "holders"].iloc[0]) == 10
 
-
-def test_gate_納入tdcc資料集():
-    import selfhost_gate as sg
-    assert sg.DATASETS["tdcc"] == "tdcc.parquet"
-    assert "tdcc" not in sg.DAILY
-    errs, _ = sg.content_checks("tdcc", pd.concat([_week("2026-11-06", ["2330"], broken=True)]))
-    assert any(e.startswith("tdcc：") for e in errs)

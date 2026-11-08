@@ -5,7 +5,11 @@
 ## 為什麼存在
 官方開放資料**只給最新一週**，官方查詢頁也只留一年（集保「附件一 持股分級表」說明第 3 條：資料保存期間為一年）
 ⇒ **沒抓的週一年後永久失去**。目前 tw-swing `fundamentals.yml` 每週六存一份寬表（只有人數／比例、沒有各級股數），
-2026-11-07 曾因 rebase 衝突整包沒 commit。這裡做成 tw-hold 自建層的正式資料集（長表、含股數、進閘門與 Release）。
+2026-11-07 曾因 rebase 衝突整包沒 commit。
+
+## 狀態：備用程式，**不排程**（使用者 2026-11-08 定）
+hold／swing 目前用不到集保 → 平常每週下載 TSD 到本地就好；這支寫好、測過，等 TSD 消失或出 bug 再決定要不要接進
+`selfhost_collect.yml`／`selfhost_gate.py`（`gate_checks` 就是給那時候用的）。現在只在本機手動跑，產出 `data/selfhost/tdcc.parquet`（gitignore）。
 
 ## 資料源
 - 官方：`https://opendata.tdcc.com.tw/getOD.ashx?id=1-5`（CSV，UTF-8 帶 BOM，免金鑰，只有最新一週）。
@@ -14,10 +18,10 @@
   （週資料隔天才上架）——每週抓一次照樣每週都收到，只是落後一週。
 - 歷史：tw-stock-data（TSD）本機
   ① `data/tdcc_hist/<年>.parquet`（欄位 date, stock_id, level, people, shares, pct；使用者提供的第三方封存，
-     2019-06-28～2026-09-11 連續 370 週；2017–2018 只有 10 個離散週且 pct 全空、從未核對 → **不匯**，`HIST_START` 卡掉）
+     2019-06-28～2026-09-11 連續 370 週；2017–2018 只有 10 個離散週且 pct 全空、從未核對；使用者定**從 2020-01-03 起匯**，`HIST_START` 卡掉之前的）
   ② `data/tdcc/YYYY-MM-DD.csv`（同欄位，TSD 自己抓官方的週檔，2026-09-04 起）。
 - 2026-11-08 Opus 實測：①②在 09-04、09-11 重疊逐格 100% 相同；tw-swing 週快照 8 週與②人數／比例 100% 相同；
-  恆等式在 2019-06-28 起 370 週 **0 週違反**。
+  恆等式在 2019-06-28 起 370 週 **0 週違反**；2020 起匯入預期 17,571,370 列／351 週。
 
 ## 欄位（`COLS`）
 date（datetime64，日）、ticker（str；寫檔存 category 省記憶體）、level（int8，1–17）、holders（int32，人數）、
@@ -66,12 +70,12 @@ SRC_PRIORITY = {SRC_TSD: 0, SRC_OFFICIAL: 1}     # 數字大的蓋小的
 TICKER_PATTERN = r"\d{4}|00\d{2,3}[A-Z]?"
 LEVELS = tuple(range(1, 18))
 MIN_TICKERS = 2_000
-HIST_START = date(2019, 6, 28)
+HIST_START = date(2020, 1, 3)
 PCT_TOL = 0.005                                  # pct 比對容差（官方兩位小數）
 VERIFY_MIN = 0.999
 GATE_RATIO_MIN = 0.90                            # 最新週檔數 ≥ 前 8 週中位數的 90%
 GATE_IDENT_MAX = 0.01                            # 最新週恆等式違反比例上限
-# 2019-06-28～2026-09-11 實測缺的 ISO 週（TSD 封存本來就沒有；2023-W42 是 2023-10-20 那份被截斷、TSD 故意不收；
+# 2020-01-03～2026-09-11 實測缺的 ISO 週（TSD 封存本來就沒有；2023-W42 是 2023-10-20 那份被截斷、TSD 故意不收；
 # 2022-W44 成因不明——不要補成好聽的理由）。新缺口發生時，查明成因後才加進來。
 KNOWN_GAPS = frozenset({(2020, 25), (2022, 5), (2022, 44), (2023, 4), (2023, 42), (2025, 5), (2026, 8)})
 FIELD_MAP = {"資料日期": "date", "證券代號": "ticker", "持股分級": "level",
@@ -149,7 +153,7 @@ def week_gaps(dates) -> set[tuple[int, int]]:
 
 
 def gate_checks(live: pd.DataFrame) -> tuple[list[str], list[str]]:
-    """給 selfhost_gate.content_checks 用，回 (errors, warnings)。空表 → ([], [])。
+    """將來接 selfhost_gate.content_checks 用（目前未接），回 (errors, warnings)。空表 → ([], [])。
     errors：最新週 ticker 數 < MIN_TICKERS；最新週 ticker 數 < 前 8 週（不含最新週，至少 4 週才判）中位數 × GATE_RATIO_MIN；
             最新週 identity_bad > GATE_IDENT_MAX。
     warnings：`week_gaps(live.date) - KNOWN_GAPS` 非空（列出那些週）。
