@@ -28,11 +28,12 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASETS = {"raw_prices": "raw_prices.parquet", "inst": "inst.parquet", "margin": "margin.parquet",
-            "corp_actions": "corp_actions.parquet", "shares": "shares.parquet",
+            "corp_actions": "corp_actions.parquet",
+            # shares（D04 逐日股本）2026-11-08 退出排程，不再進閘門（Release 種子保留當備用）
             # 累積型旁表（補不回）：一樣要「不得變少、最新日不得倒退」
             "notrade": "notrade.parquet", "refmark": "refmark.parquet", "stophalt": "stophalt.parquet"}
-DAILY = {"raw_prices", "inst", "margin", "shares"}
-ABS_MIN = {"raw_prices": {"TW": 900, "TWO": 700}, "shares": {"TW": 900, "TWO": 700}}
+DAILY = {"raw_prices", "inst", "margin"}
+ABS_MIN = {"raw_prices": {"TW": 900, "TWO": 700}}
 RATIO_MIN = 0.90
 SHRINK_TOL = 0.001
 IDENT_DAYS = 20

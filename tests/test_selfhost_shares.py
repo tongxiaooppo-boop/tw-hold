@@ -274,8 +274,10 @@ def test_main_收集有失敗日exit1但成功的照寫(tmp_path, monkeypatch):
     assert pd.read_parquet(out)["date"].tolist() == [pd.Timestamp("2026-11-05")]
 
 
-def test_gate_納入shares資料集():
+def test_gate_不含shares資料集():
+    # 2026-11-08 D04 退出排程：shares 不得進閘門，否則 Release 有種子、workflow 不再下載 → --assets 判「下載失敗」擋全部上傳
     import selfhost_gate as g
-    assert g.DATASETS["shares"] == "shares.parquet"
-    assert "shares" in g.DAILY
-    assert g.ABS_MIN["shares"] == {"TW": 900, "TWO": 700}
+    assert "shares" not in g.DATASETS
+    assert "shares.parquet" not in g.DATASETS.values()
+    assert "shares" not in g.DAILY
+    assert "shares" not in g.ABS_MIN
