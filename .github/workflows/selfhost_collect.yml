@@ -75,7 +75,7 @@ jobs:
             # Release 上實際有哪些檔：有列出卻下載失敗 ＝ 錯（重試 3 次仍失敗就中止），不可當成「尚無舊版」
             # （否則閘門沒有基準可比、會放行一份只有 14 天的小檔去覆蓋整份歷史）
             gh release view selfhost-data --json assets --jq '.assets[].name' > data/selfhost/_assets.txt
-            for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
+            for f in raw_prices.parquet inst.parquet margin.parquet shares.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
               if grep -qx "$f" data/selfhost/_assets.txt; then
                 ok=0
                 for try in 1 2 3; do
@@ -98,6 +98,11 @@ jobs:
         if: steps.guard.outputs.run == 'true'
         continue-on-error: true
         run: python scripts/selfhost_raw_prices.py
+
+      - name: 官方逐日發行股數（上市 MI_QFIIS＋上櫃 dailyQuotes）
+        if: steps.guard.outputs.run == 'true'
+        continue-on-error: true
+        run: python scripts/selfhost_shares.py
 
       - name: 三大法人＋融資券
         if: steps.guard.outputs.run == 'true'
@@ -153,13 +158,13 @@ jobs:
       - name: 上傳 Release（僅閘門通過）
         if: (steps.gate.outcome == 'success') && steps.guard.outputs.run == 'true'
         run: |
-          for f in raw_prices.parquet inst.parquet margin.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
+          for f in raw_prices.parquet inst.parquet margin.parquet shares.parquet notrade.parquet refmark.parquet stophalt.parquet corp_actions.parquet ev_fm_reduction.parquet ev_fm_reduction_done.json ev_official_meta.jsonl forecast_twt48u.jsonl; do
             [ -f data/selfhost/$f ] && gh release upload selfhost-data data/selfhost/$f --clobber
           done
           # 當週最後交易日（guard 通過的排程班）另留一份帶日期的快照（壞版本不能是唯一的版本）；保留最近 4 份
           if [ "${{ github.event_name }}" = "schedule" ]; then
             D=$(date -u +%Y%m%d)
-            for f in raw_prices inst margin corp_actions; do
+            for f in raw_prices inst margin corp_actions shares; do
               [ -f data/selfhost/$f.parquet ] && cp data/selfhost/$f.parquet "data/selfhost/snap-$D-$f.parquet" \
                 && gh release upload selfhost-data "data/selfhost/snap-$D-$f.parquet" --clobber
             done
