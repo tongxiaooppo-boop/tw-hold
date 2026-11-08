@@ -7,7 +7,7 @@
 - `scripts/selfhost_gate.py` 第 28–40 行（`DATASETS`、`DAILY`、`ABS_MIN`）
 - `.github/workflows/selfhost_collect.yml` 第 70–112 行、第 153–170 行
 
-不准讀其他檔、不准上網查資料（下面 PROOF_CMD 第 3、4 條的兩個官方端點除外）、不准改 tw-swing。直接在本專案目錄（D:\g\claude\tw-hold，master）做，不要複製 repo。暫存檔、一次性腳本只放本專案內，結束前刪掉。
+不准讀其他檔、不准上網查資料（下面 PROOF_CMD 第 3、4 條的兩個官方端點除外）、不准改 tw-swing。直接在本專案目錄（D:\g\claude\tw-hold，main 分支）做，不要複製 repo。暫存檔、一次性腳本只放本專案內，結束前刪掉。
 
 ## 背景（一句話）
 市值用的股數現在只有 ap03 一天快照（且有 10% 檔數跟交易所當日發行股數不同）。交易所兩個端點可帶歷史日期回發行股數，tw-stock-data（TSD）本機已有 2015 起的同源歷史；本輪做「收集＋匯入＋驗證」，**下游（市值、排名）改用本輪不做**。
