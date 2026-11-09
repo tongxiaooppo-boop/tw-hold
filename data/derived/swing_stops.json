@@ -1,39 +1,21 @@
 {
   "_meta": {
-    "asof": "2026-11-06",
+    "asof": "2026-11-09",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
     "6782": {
       "name": "視陽",
-      "first_seen": "2026-11-04",
-      "entry_date": "2026-11-05",
-      "entry_price": 260.5,
-      "atr0": 11.8929,
-      "run_high": 272.0,
-      "trail_stop": 241.72,
-      "last_close": 274.5,
-      "last_update": "2026-11-06",
-      "status": "stopped_out",
-      "dropped_date": null,
-      "exit_date": "2026-11-06",
-      "exit_price": 241.72
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 245.51
     },
     "9933": {
       "name": "中鼎",
-      "first_seen": "2026-11-02",
-      "entry_date": "2026-11-03",
-      "entry_price": 45.7,
-      "atr0": 1.5679,
-      "run_high": 48.29999923706055,
-      "trail_stop": 45.16,
-      "last_close": 44.4,
-      "last_update": "2026-11-06",
-      "status": "stopped_out",
-      "dropped_date": null,
-      "exit_date": "2026-11-06",
-      "exit_price": 45.16
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 42.56
     },
     "2006": {
       "name": "東和鋼鐵",
@@ -247,18 +229,9 @@
     },
     "3045": {
       "name": "台灣大",
-      "first_seen": "2026-10-15",
-      "entry_date": "2026-10-16",
-      "entry_price": 131.5,
-      "atr0": 2.4643,
-      "run_high": 136.5,
-      "trail_stop": 131.57,
-      "last_close": 133.0,
-      "last_update": "2026-11-06",
-      "status": "stopped_out",
-      "dropped_date": null,
-      "exit_date": "2026-11-06",
-      "exit_price": 131.57
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 124.71
     },
     "2027": {
       "name": "大成鋼",
@@ -529,6 +502,12 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
+    },
+    "6446": {
+      "name": "藥華藥",
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 1252.3
     }
   }
 }

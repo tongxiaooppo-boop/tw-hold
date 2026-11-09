@@ -1,24 +1,29 @@
 {
-  "_asof": "2026-11-06",
-  "_pool": [],
-  "_prev_pool": [
+  "_asof": "2026-11-09",
+  "_pool": [
     "3045",
+    "6446",
     "6782",
     "9933"
   ],
-  "_prev_tickers": {
+  "_prev_pool": [],
+  "_prev_tickers": {},
+  "tickers": {
     "3045": {
-      "first_seen": "2026-10-15",
-      "streak_days": 14
+      "first_seen": "2026-11-09",
+      "streak_days": 1
+    },
+    "6446": {
+      "first_seen": "2026-11-09",
+      "streak_days": 1
     },
     "6782": {
-      "first_seen": "2026-10-12",
-      "streak_days": 17
+      "first_seen": "2026-11-09",
+      "streak_days": 1
     },
     "9933": {
-      "first_seen": "2026-10-02",
-      "streak_days": 22
+      "first_seen": "2026-11-09",
+      "streak_days": 1
     }
-  },
-  "tickers": {}
+  }
 }
