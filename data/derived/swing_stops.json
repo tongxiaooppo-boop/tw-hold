@@ -17,6 +17,18 @@
       "signal_date": "2026-11-09",
       "risk_stop_ref": 42.56
     },
+    "3045": {
+      "name": "台灣大",
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 124.71
+    },
+    "6446": {
+      "name": "藥華藥",
+      "status": "pending_entry",
+      "signal_date": "2026-11-09",
+      "risk_stop_ref": 1252.3
+    },
     "2006": {
       "name": "東和鋼鐵",
       "first_seen": "2026-10-30",
@@ -226,12 +238,6 @@
       "dropped_date": null,
       "exit_date": "2026-10-30",
       "exit_price": 46.86
-    },
-    "3045": {
-      "name": "台灣大",
-      "status": "pending_entry",
-      "signal_date": "2026-11-09",
-      "risk_stop_ref": 124.71
     },
     "2027": {
       "name": "大成鋼",
@@ -502,12 +508,6 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
-    },
-    "6446": {
-      "name": "藥華藥",
-      "status": "pending_entry",
-      "signal_date": "2026-11-09",
-      "risk_stop_ref": 1252.3
     }
   }
 }
