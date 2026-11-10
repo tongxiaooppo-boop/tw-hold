@@ -1,9 +1,9 @@
 {
-  "trading_date": "2026-11-09",
-  "rebuilt_at": "2026-11-10T16:27:20+00:00",
+  "trading_date": "2026-11-10",
+  "rebuilt_at": "2026-11-10T16:35:05+00:00",
   "bundle_schema": 1,
   "universe_filtered": true,
-  "note": "universe.parquet：617 檔",
+  "note": "universe.parquet：616 檔",
   "u1b_pending": false,
   "has_pe_bands": true,
   "has_fill_rate": true,

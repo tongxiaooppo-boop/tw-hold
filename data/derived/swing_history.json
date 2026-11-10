@@ -1,14 +1,16 @@
 {
-  "_asof": "2026-11-09",
+  "_asof": "2026-11-10",
   "_pool": [
+    "6782",
+    "9933"
+  ],
+  "_prev_pool": [
     "3045",
     "6446",
     "6782",
     "9933"
   ],
-  "_prev_pool": [],
-  "_prev_tickers": {},
-  "tickers": {
+  "_prev_tickers": {
     "3045": {
       "first_seen": "2026-11-09",
       "streak_days": 1
@@ -24,6 +26,16 @@
     "9933": {
       "first_seen": "2026-11-09",
       "streak_days": 1
+    }
+  },
+  "tickers": {
+    "6782": {
+      "first_seen": "2026-11-09",
+      "streak_days": 2
+    },
+    "9933": {
+      "first_seen": "2026-11-09",
+      "streak_days": 2
     }
   }
 }

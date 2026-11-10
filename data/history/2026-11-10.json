@@ -2,6 +2,55 @@
  "schema": 1,
  "asof": "2026-11-10",
  "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "scanned": 615,
+   "candidates": [
+    {
+     "t": "2610",
+     "nm": "華航",
+     "px": 22.8,
+     "fs": "2026-11-10",
+     "st": 1
+    },
+    {
+     "t": "6757",
+     "nm": "台灣虎航-創",
+     "px": 59.3,
+     "fs": "2026-11-10",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "candidates": [
+    {
+     "t": "6782",
+     "nm": "視陽",
+     "px": 288.0,
+     "stop": 256.64,
+     "fs": "2026-11-09",
+     "st": 2
+    },
+    {
+     "t": "9933",
+     "nm": "中鼎",
+     "px": 47.9,
+     "stop": 43.64,
+     "fs": "2026-11-09",
+     "st": 2
+    }
+   ],
+   "revisions": []
+  },
   "swing": {
    "origin": "live",
    "status": "ok",
