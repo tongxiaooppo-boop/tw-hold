@@ -1,13 +1,13 @@
 {
-  "asof": "2026-11-07",
+  "asof": "2026-11-12",
   "n_tickers": 1098,
   "n_ok": 1098,
   "n_failed": 0,
   "bvps_source": {
     "treasury": 77,
     "official": 0,
-    "capital": 1004,
-    "reverse": 13,
+    "capital": 1017,
+    "reverse": 0,
     "none": 0
   },
   "closes_first_month": {
@@ -18,9 +18,9 @@
   "failed": [],
   "no_price": [],
   "pe_vs_exchange": {
-    "n_compared": 1017,
-    "abs_median_p50": 0.00024609326934910136,
-    "abs_median_p90": 0.02181677897449382,
+    "n_compared": 1028,
+    "abs_median_p50": 0.00023884975606414116,
+    "abs_median_p90": 0.021250863261248865,
     "abs_median_max": 0.3128616415757114,
     "warn": [
       {
@@ -124,6 +124,11 @@
         "n_months": 13
       },
       {
+        "ticker": "2881",
+        "median_diff": -0.07238475851234027,
+        "n_months": 93
+      },
+      {
         "ticker": "6658",
         "median_diff": -0.07214670730483075,
         "n_months": 20
@@ -179,11 +184,6 @@
         "n_months": 7
       },
       {
-        "ticker": "2881",
-        "median_diff": -0.05969867156280395,
-        "n_months": 93
-      },
-      {
         "ticker": "7722",
         "median_diff": -0.05533374778096978,
         "n_months": 9
@@ -227,11 +227,6 @@
         "ticker": "6770",
         "median_diff": -0.04768387973185989,
         "n_months": 18
-      },
-      {
-        "ticker": "2887",
-        "median_diff": 0.04657692738214769,
-        "n_months": 58
       },
       {
         "ticker": "6190",
@@ -302,6 +297,11 @@
         "ticker": "8462",
         "median_diff": -0.03666345554485184,
         "n_months": 35
+      },
+      {
+        "ticker": "2887",
+        "median_diff": 0.0365844177482062,
+        "n_months": 58
       },
       {
         "ticker": "7765",
