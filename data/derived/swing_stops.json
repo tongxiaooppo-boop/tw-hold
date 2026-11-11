@@ -5,36 +5,6 @@
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
   "tracked": {
-    "6782": {
-      "name": "視陽",
-      "first_seen": "2026-11-09",
-      "entry_date": "2026-11-10",
-      "entry_price": 270.5,
-      "atr0": 15.6786,
-      "run_high": 292.0,
-      "trail_stop": 245.51,
-      "last_close": 288.0,
-      "last_update": "2026-11-10",
-      "status": "candidate",
-      "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
-    },
-    "9933": {
-      "name": "中鼎",
-      "first_seen": "2026-11-09",
-      "entry_date": "2026-11-10",
-      "entry_price": 46.5,
-      "atr0": 2.1321,
-      "run_high": 48.0,
-      "trail_stop": 42.56,
-      "last_close": 47.9,
-      "last_update": "2026-11-10",
-      "status": "candidate",
-      "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
-    },
     "3045": {
       "name": "台灣大",
       "first_seen": "2026-11-09",
@@ -65,17 +35,35 @@
       "exit_date": null,
       "exit_price": null
     },
-    "3045": {
-      "name": "台灣大",
-      "status": "pending_entry",
-      "signal_date": "2026-11-09",
-      "risk_stop_ref": 124.71
+    "6782": {
+      "name": "視陽",
+      "first_seen": "2026-11-09",
+      "entry_date": "2026-11-10",
+      "entry_price": 270.5,
+      "atr0": 15.6786,
+      "run_high": 292.0,
+      "trail_stop": 245.51,
+      "last_close": 288.0,
+      "last_update": "2026-11-10",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
-    "6446": {
-      "name": "藥華藥",
-      "status": "pending_entry",
-      "signal_date": "2026-11-09",
-      "risk_stop_ref": 1252.3
+    "9933": {
+      "name": "中鼎",
+      "first_seen": "2026-11-09",
+      "entry_date": "2026-11-10",
+      "entry_price": 46.5,
+      "atr0": 2.1321,
+      "run_high": 48.0,
+      "trail_stop": 42.56,
+      "last_close": 47.9,
+      "last_update": "2026-11-10",
+      "status": "candidate",
+      "dropped_date": null,
+      "exit_date": null,
+      "exit_price": null
     },
     "2006": {
       "name": "東和鋼鐵",
