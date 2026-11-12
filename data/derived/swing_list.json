@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "trading_date": "2026-11-11",
-    "rebuilt_at": "2026-11-12T16:49:53+00:00",
+    "trading_date": "2026-11-12",
+    "rebuilt_at": "2026-11-12T16:57:31+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
-    "note": "universe.parquet：619 檔",
+    "note": "universe.parquet：621 檔",
     "u1b_pending": false,
     "has_pe_bands": true,
     "has_fill_rate": true,
@@ -32,16 +32,16 @@
       "revenue_yoy": 1.0201773602212874,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 3420274.0,
+      "inst_net20": 4805264.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.07392808301826093,
-      "dist_52w_high": -0.1577287066246057,
-      "dist_200ma": 0.4205363504235575,
-      "risk_stop": 1243.1,
-      "risk_pct_at_close": 0.07392808301826093,
-      "max_buy": 1381.22,
-      "close": 1335.0,
+      "dist_50ma": 0.10151710781149115,
+      "dist_52w_high": -0.13880126182965302,
+      "dist_200ma": 0.4455415174732662,
+      "risk_stop": 1239.2,
+      "risk_pct_at_close": 0.10151710781149115,
+      "max_buy": 1376.89,
+      "close": 1365.0,
       "conditions": [
         {
           "項": "季 EPS 年增 > 25%",
@@ -80,12 +80,10 @@
         "季 EPS 年增 +97%（遠超 25% 門檻）",
         "最新月營收年增 +102%（成長明確）",
         "最新月營收年增較上月加速",
-        "法人近 20 日淨買超 3,420 張",
-        "距 50MA 僅 +7%（進場點貼近 50 日線支撐）",
-        "距 52 週高 -16%（尚有空間）"
+        "法人近 20 日淨買超 4,805 張"
       ],
       "oppose": [
-        "現價 1335 元（高價股，零股以外難分批）"
+        "現價 1365 元（高價股，零股以外難分批）"
       ],
       "invalidation": [
         {
@@ -107,9 +105,9 @@
       ],
       "name": "藥華藥",
       "industry": "生技醫療業",
-      "market_cap": 563950239060.0,
+      "market_cap": 576623278140.0,
       "first_seen": "2026-11-11",
-      "streak_days": 1
+      "streak_days": 2
     },
     {
       "ticker": "6782",
@@ -127,16 +125,16 @@
       "revenue_yoy": 0.5996060426989105,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 745355.0,
+      "inst_net20": 765737.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.14187550525464832,
-      "dist_52w_high": -0.01909722222222221,
-      "dist_200ma": 0.3865956564850168,
-      "risk_stop": 250.21,
-      "risk_pct_at_close": 0.12903225314654154,
-      "max_buy": 278.02,
-      "close": 282.5,
+      "dist_50ma": 0.12450122929345842,
+      "dist_52w_high": -0.03125,
+      "dist_200ma": 0.36567764481577436,
+      "risk_stop": 248.11,
+      "risk_pct_at_close": 0.12450122929345842,
+      "max_buy": 275.68,
+      "close": 279.0,
       "conditions": [
         {
           "項": "季 EPS 年增 > 25%",
@@ -174,11 +172,10 @@
       "support": [
         "最新月營收年增 +60%（成長明確）",
         "最新月營收年增較上月加速",
-        "法人近 20 日淨買超 745 張"
+        "法人近 20 日淨買超 766 張"
       ],
       "oppose": [
-        "距 52 週高僅 -2%（追高風險）",
-        "到進場停損（候選池） +13%（停損位遠、單筆風險高）"
+        "到進場停損（候選池） +12%（停損位遠、單筆風險高）"
       ],
       "invalidation": [
         {
@@ -200,9 +197,9 @@
       ],
       "name": "視陽",
       "industry": "生技醫療業",
-      "market_cap": 17797500000.0,
+      "market_cap": 17577000000.0,
       "first_seen": "2026-11-09",
-      "streak_days": 3
+      "streak_days": 4
     },
     {
       "ticker": "9933",
@@ -220,16 +217,16 @@
       "revenue_yoy": 0.5385686015212479,
       "c_rev_yoy": true,
       "revenue_accel": true,
-      "inst_net20": 41272511.0,
+      "inst_net20": 43828639.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.1997743029245267,
-      "dist_52w_high": 0.0,
-      "dist_200ma": 0.3711902954399131,
-      "risk_stop": 46.97,
-      "risk_pct_at_close": 0.09641120747862586,
-      "max_buy": 52.19,
-      "close": 51.5,
+      "dist_50ma": 0.15491879324062396,
+      "dist_52w_high": -0.033009723552222425,
+      "dist_200ma": 0.32260790075623413,
+      "risk_stop": 44.92,
+      "risk_pct_at_close": 0.10860233714328493,
+      "max_buy": 49.91,
+      "close": 49.8,
       "conditions": [
         {
           "項": "季 EPS 年增 > 25%",
@@ -268,11 +265,10 @@
         "季 EPS 年增 +166%（基期過低，數字供參考）",
         "最新月營收年增 +54%（成長明確）",
         "最新月營收年增較上月加速",
-        "法人近 20 日淨買超 41,273 張"
+        "法人近 20 日淨買超 43,829 張"
       ],
       "oppose": [
-        "去年同期單季 EPS 僅 0.83 元（基期過低，上面那個季 EPS 年增比例參考價值有限，不代表可持續成長）",
-        "距 52 週高僅 +0%（追高風險）"
+        "去年同期單季 EPS 僅 0.83 元（基期過低，上面那個季 EPS 年增比例參考價值有限，不代表可持續成長）"
       ],
       "invalidation": [
         {
@@ -294,9 +290,9 @@
       ],
       "name": "中鼎",
       "industry": "其他",
-      "market_cap": 49543603477.0,
+      "market_cap": 47908182822.443306,
       "first_seen": "2026-11-09",
-      "streak_days": 3
+      "streak_days": 4
     }
   ],
   "changes": {

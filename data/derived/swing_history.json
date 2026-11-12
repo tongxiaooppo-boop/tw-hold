@@ -1,25 +1,16 @@
 {
-  "_asof": "2026-11-11",
+  "_asof": "2026-11-12",
   "_pool": [
     "6446",
     "6782",
     "9933"
   ],
   "_prev_pool": [
+    "6446",
     "6782",
     "9933"
   ],
   "_prev_tickers": {
-    "6782": {
-      "first_seen": "2026-11-09",
-      "streak_days": 2
-    },
-    "9933": {
-      "first_seen": "2026-11-09",
-      "streak_days": 2
-    }
-  },
-  "tickers": {
     "6446": {
       "first_seen": "2026-11-11",
       "streak_days": 1
@@ -31,6 +22,20 @@
     "9933": {
       "first_seen": "2026-11-09",
       "streak_days": 3
+    }
+  },
+  "tickers": {
+    "6446": {
+      "first_seen": "2026-11-11",
+      "streak_days": 2
+    },
+    "6782": {
+      "first_seen": "2026-11-09",
+      "streak_days": 4
+    },
+    "9933": {
+      "first_seen": "2026-11-09",
+      "streak_days": 4
     }
   }
 }
