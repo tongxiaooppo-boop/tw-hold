@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-11-11",
-    "rebuilt_at": "2026-11-11T23:34:04+00:00",
+    "rebuilt_at": "2026-11-12T16:49:53+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：619 檔",
@@ -300,9 +300,7 @@
     }
   ],
   "changes": {
-    "added": [
-      "6446"
-    ],
+    "added": [],
     "removed": []
   }
 }
