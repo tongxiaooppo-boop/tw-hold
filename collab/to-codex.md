@@ -1,57 +1,129 @@
-# 【tw-hold】D09 任務書：集保股權分散表收集＋TSD 歷史匯入（版本 2026-11-08 v2：不接排程／閘門、從 2020 起匯）
+# 【tw-hold】Cloudflare 鬧鐘任務書：準時觸發 GitHub workflow＋期交所夜盤查詢日修正（版本 2026-11-14 v1）
 
-> **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。不是 tw-swing。** 下面所有相對路徑都以 `D:\g\claude\tw-hold` 為根；所有指令都先 `cd D:\g\claude\tw-hold` 再跑。`D:\g\claude\tw-swing\collab\to-codex.md` 是另一個專案的舊任務（D04b，已完成），不要讀、不要照做。回報寫到 `D:\g\claude\tw-hold\collab\from-codex.md`。
+> **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。不是 tw-swing。** 下面相對路徑都以 `D:\g\claude\tw-hold` 為根；指令都先 `cd D:\g\claude\tw-hold` 再跑。回報寫到 `D:\g\claude\tw-hold\collab\from-codex.md`（覆蓋舊檔）。
+> 檔案一律 **UTF-8 無 BOM**，不要用 PowerShell 寫檔。不要上網查資料、不要 `npm install`、不要部署、不要 `wrangler login`、不要設任何 secret。
 
-## 要讀的檔案（只准讀這些，皆在 tw-hold）
-- `scripts/selfhost_tdcc.py`（全檔；**框架，照檔頭與各函式 docstring 填實作**）
-- `tests/test_selfhost_tdcc.py`（全檔；**規格，不准改**）
-- `scripts/selfhost_shares.py` 第 69–80 行（`_get`）、第 160–181 行（`merge_rows`）、第 233–244 行（`write`）、第 309–319 行（`_typed`）當樣板
+## 背景（一段就好）
+GitHub 的 `schedule` 在這兩個 repo 實測晚 5～9 小時，但 `workflow_dispatch` 不會延遲。做法：Cloudflare Worker 只當鬧鐘，到點呼叫 GitHub API dispatch 指定 workflow。GitHub 原本的 cron **一行都不改**（留作備援，workflow 都是冪等的）。
 
-不准讀其他檔、不准上網查資料（PROOF_CMD 第 3 條的官方端點除外）、不准改 tw-swing 與 TSD 目錄。直接在本專案目錄（D:\g\claude\tw-hold，main 分支）做，不要複製 repo。暫存檔、一次性腳本只放本專案內，結束前刪掉。
+## 要讀的檔案（只准讀這些）
+- `scripts/fetch_tx_futures.py`（全檔，約 200 行內）
+- `tests/test_fetch_tx_futures.py`（全檔，照它的 monkeypatch 寫法）
+- `scripts/fetch_foreign_futures.py` 第 85～110 行（只參考「結束日超過最新資料日會回錯誤頁」的註解與退讓寫法）
 
-## 背景（一句話）
-集保官方只給最新一週、一年後就查不到，沒收的週永久失去；本輪寫好收集程式（逐週長表），並把 TSD 2020-01-03 起的 351 週歷史匯入本機。**這是備用程式：不接排程、不接閘門、不上 Release、下游不接**（平常每週下載 TSD 到本地就好，TSD 出事才啟用）。
+## 任務一：新增 `cloudflare/`（4 個檔，純 ES module，零相依）
 
-## 要改的檔案
-1. `scripts/selfhost_tdcc.py`：把每個 `raise NotImplementedError` 換成實作。**不改函式簽名、常數名與值、`COLS`、docstring 寫的行為**；可加 `_` 開頭的私有輔助函式（`main` 的 docstring 指定要有 `_read_tsd_hist`、`_read_tsd_csv`）。
-2. 不新增其他檔；**不改 `selfhost_gate.py`、`.github/workflows/`**。
+### 1. `cloudflare/schedule.js`（介面寫死，不准改名稱與簽名）
+```js
+export const REPO = "tongxiaooppo-boop/tw-hold";
+export const REF = "main";
+// 時間一律台北時間 "HH:MM"；weekdays 用 JS getUTCDay 編號（0=週日…6=週六），null=不限；days＝每月幾號，null=不限
+export const SCHEDULE = [
+  { workflow: "global_macro.yml",      times: ["05:17", "06:17", "07:13"],          weekdays: [2,3,4,5,6], days: null },
+  { workflow: "chip_flow_evening.yml", times: ["15:23", "16:43"],                   weekdays: [1,2,3,4,5], days: null },
+  { workflow: "openapi_daily.yml",     times: ["16:07", "18:07", "20:07", "23:07"], weekdays: [1,2,3,4,5], days: null },
+  { workflow: "openapi_daily.yml",     times: ["04:07"],                            weekdays: [2,3,4,5,6], days: null },
+  { workflow: "heartbeat.yml",         times: ["08:23"],                            weekdays: [1,2,3,4,5], days: null },
+  { workflow: "revenue_watch.yml",     times: ["18:47", "21:43", "23:23"],          weekdays: null, days: range(1, 17) },
+  { workflow: "revenue_watch.yml",     times: ["07:47"],                            weekdays: null, days: range(2, 18) },
+];
+// range(a,b) 自己寫成小函式（含頭含尾），或直接列陣列，二選一
 
-## 實作重點（docstring 已寫，這裡只列容易錯的）
-- 官方 CSV 帶 BOM、CRLF，股數有千分位逗號要先去掉；代號要 strip（TSD 封存是定寬 6 碼，含空白）。
-- TSD 封存 parquet 的 `date`、`stock_id` 是 category，先轉 str 再處理。
-- 資料量：匯入約 1,757 萬列 → 不要逐列 Python 迴圈；`merge_rows`、`compare`、`identity_bad` 一律用向量化寫法（concat＋sort＋drop_duplicates、merge、groupby／pivot）。
-- `compare` 比對時，兩邊任一為空的欄位不參與相等判斷（tw-swing 快照 1–15 級沒有股數、17 級沒有 pct）。
-- `--import-tsd`：TSD 不得蓋掉任何現有列（只補缺的主鍵）。
-- `write` 的檢查失敗要 raise，不能靜默修正。
+// 把 UTC 的 Date 轉成台北（固定 +8，台灣沒有夏令時間）：
+export function taipeiParts(date) { /* 回 { hhmm: "HH:MM", weekday: 0-6, day: 1-31 }，用 date.getTime()+8h 後取 getUTC* */ }
+
+// 該時刻（只看到分鐘）要 dispatch 的 workflow 檔名，依 SCHEDULE 順序、去重
+export function dueWorkflows(date) { /* string[] */ }
+
+// SCHEDULE 裡出現過的所有分鐘值，去重、由小到大（台北與 UTC 分鐘相同，因為時差是整小時）
+export function cronMinutes() { /* number[] */ }
+```
+
+### 2. `cloudflare/worker.js`
+```js
+import { REPO, REF, dueWorkflows } from "./schedule.js";
+
+export async function dispatch(workflow, token, fetchImpl = fetch) { /* 回 { workflow, status, ok } */ }
+
+export default {
+  async scheduled(event, env, ctx) { /* ... */ },
+};
+```
+- `scheduled`：`const when = new Date(event.scheduledTime)`（用排定時間，不用 `Date.now()`）→ `dueWorkflows(when)`；空陣列就直接結束（不呼叫 fetch）。每個依序 `await dispatch(w, env.GH_TOKEN)`。
+- `dispatch`：`POST https://api.github.com/repos/${REPO}/actions/workflows/${workflow}/dispatches`，headers：`Authorization: Bearer <token>`、`Accept: application/vnd.github+json`、`X-GitHub-Api-Version: 2022-11-28`、`User-Agent: tw-hold-alarm`、`Content-Type: application/json`；body `JSON.stringify({ ref: REF })`。成功＝status 204。失敗（非 204 或 throw）**重試 1 次**；兩次都失敗 `console.error` 印 workflow、status、回應前 200 字，不 throw（讓同一輪其他 workflow 照跑）。成功 `console.log`。
+- **不寫 `fetch` handler**（不開放網址觸發）。token 只從 `env.GH_TOKEN` 讀，任何地方都不准印出 token。
+
+### 3. `cloudflare/wrangler.toml`
+```toml
+name = "tw-hold-alarm"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["7,13,17,23,43,47 * * * *"]
+```
+
+### 4. `cloudflare/schedule.test.mjs`（用 `node --test`，不准裝套件）
+測試名稱與預期值照抄（UTC 時刻 → 預期回傳）：
+| 測試名 | UTC 輸入 | 台北 | 預期 `dueWorkflows` |
+|---|---|---|---|
+| global_macro_週二0517 | 2026-11-16T21:17:00Z | 11/17(二) 05:17 | `["global_macro.yml"]` |
+| global_macro_週一0517不跑 | 2026-11-15T21:17:00Z | 11/16(一) 05:17 | `[]` |
+| openapi_週六0407 | 2026-11-13T20:07:00Z | 11/14(六) 04:07 | `["openapi_daily.yml"]` |
+| openapi_週一0407不跑 | 2026-11-15T20:07:00Z | 11/16(一) 04:07 | `[]` |
+| openapi_週一1607 | 2026-11-16T08:07:00Z | 11/16(一) 16:07 | `["openapi_daily.yml"]` |
+| openapi_週六1607不跑 | 2026-11-14T08:07:00Z | 11/14(六) 16:07 | `[]` |
+| heartbeat_週一0823 | 2026-11-16T00:23:00Z | 11/16(一) 08:23 | `["heartbeat.yml"]` |
+| chip_週一1523 | 2026-11-16T07:23:00Z | 11/16(一) 15:23 | `["chip_flow_evening.yml"]` |
+| revenue_17號1847 | 2026-11-17T10:47:00Z | 11/17 18:47 | `["revenue_watch.yml"]` |
+| revenue_18號1847不跑 | 2026-11-18T10:47:00Z | 11/18 18:47 | `[]` |
+| revenue_18號0747 | 2026-11-17T23:47:00Z | 11/18 07:47 | `["revenue_watch.yml"]` |
+| revenue_19號0747不跑 | 2026-11-18T23:47:00Z | 11/19 07:47 | `[]` |
+| revenue_1號0747不跑 | 2026-11-30T23:47:00Z | 12/1 07:47 | `[]` |
+| 非表定分鐘 | 2026-11-16T08:13:00Z | 11/16(一) 16:13 | `[]` |
+| 秒數不影響 | 2026-11-16T08:07:42Z | 11/16(一) 16:07:42 | `["openapi_daily.yml"]` |
+
+另外三個測試：
+- `cron分鐘與wrangler一致`：讀 `wrangler.toml`，取 `crons` 第一條的分鐘欄位，拆成數字排序後 **deepEqual** `cronMinutes()`；並確認只有 1 條 cron。
+- `避開整點半點`：`cronMinutes()` 每個值都不在 57–59、0–3、27–33。
+- `worker_命中時dispatch`：mock `globalThis.fetch` 回 `{status:204, text:async()=>""}`，呼叫 `worker.default.scheduled({scheduledTime: Date.parse("2026-11-16T08:07:00Z")}, {GH_TOKEN:"t"}, {})` → fetch 被呼叫 1 次，URL 結尾 `/actions/workflows/openapi_daily.yml/dispatches`、method POST、body `{"ref":"main"}`、Authorization `Bearer t`。
+- `worker_不命中不呼叫`：同上但 `2026-11-16T08:13:00Z` → fetch 0 次。
+- `dispatch_失敗重試一次`：fetch 第一次回 500、第二次 204 → 呼叫 2 次、回 `ok: true`。
+
+### 5. `cloudflare/README.md`（中文，短）
+內容只要：用途一段；時間表（直接說「見 schedule.js」）；部署步驟（`npx wrangler login` → `cd cloudflare` → `npx wrangler deploy` → `npx wrangler secret put GH_TOKEN`；或網頁版 Workers 貼上兩支 js 並在 Settings→Triggers 加 cron、Settings→Variables 加 secret）；改時間表要同步改 `wrangler.toml` 的分鐘（測試會擋）；查 log：`npx wrangler tail`；停用＝Dashboard 刪掉 cron trigger（GitHub cron 仍在當備援）。
+
+## 任務二：`scripts/fetch_tx_futures.py` 夜盤查詢結束日
+問題：`fetch_csv_records` 的 `queryEndDate` 只到台北今天，但期交所把週五夜盤記在**下一交易日**（11/14 實測：查到 11/14 沒有週五夜盤，查到 11/16 才出現 `2026/11/16 盤後`）。週末首頁因此缺週五夜盤。
+修法（框架定死）：
+- 結束日依序試 `today + 7天`、`today + 3天`、`today`（加常數 `END_AHEAD_DAYS = (7, 3, 0)`），每個結束日照現行「最多 2 次」下載＋`parse_csv`；**第一個 `parse_csv` 回非空就回傳**。三個都空或都失敗 → 印現有那行 `::warning::` 並回 `[]`（退回 OpenAPI 的行為不變）。
+- 理由（寫成註解）：結束日超過最新資料日時，TAIFEX 有的端點會回錯誤頁（見 fetch_foreign_futures.py 註解），錯誤頁 `parse_csv` 會回 `[]`，所以往回退。
+- 不改 `parse_csv`、`_to_record`、其他函式與常數。
+- 新增測試（加在 `tests/test_fetch_tx_futures.py`，照現有 monkeypatch urlopen 寫法，從 request body 解析 `queryEndDate`）：
+  - `test_csv結束日先試未來七天`：第一次請求的 queryEndDate＝今天＋7 天（用 monkeypatch 固定「今天」或在測試內用同一公式算）。
+  - `test_未來日回錯誤頁退到今天`：+7、+3 回 HTML 錯誤頁（`<html>error</html>`）、今天回合法 CSV → 回非空，且共試到 today。
+  - `test_三個結束日都空回空陣列`：全部回錯誤頁 → 回 `[]`。
 
 ## 不准做
-- 不改測試檔、不改其他 selfhost 腳本、不改 tw-swing、不動 Release（不准 `gh release upload`）、不 push。
-- 不用任何新資料源；不改 `SRC_PRIORITY`、`VERIFY_MIN`、`KNOWN_GAPS`、`HIST_START`、`MIN_TICKERS`。
-- 規格看起來有矛盾（含測試寫錯）→ 停下寫進 from-codex.md「需要 Opus 決定的事」（格式：問題一句＋2–3 選項＋你的建議），不要自己改框架或測試。意義明確的小疑問自行採用並在回報註明。
+- 不改 `.github/workflows/` 任何檔、不改任何 cron。
+- 不改 `cloudflare/` 與 `scripts/fetch_tx_futures.py`、`tests/test_fetch_tx_futures.py` 以外的檔（`collab/from-codex.md` 除外）。
+- 不建 `package.json`、`node_modules`；不部署。暫存檔放 `D:\g\claude\tw-hold` 內並在結束前刪掉。
+- 介面（上面寫死的 export 名稱、簽名、SCHEDULE 內容、cron 字串）有問題就停下寫進回報，不要自己改。小疑問自行採用並在回報註明。
 
-## PROOF_CMD（照跑、照貼最後幾行）
+## PROOF_CMD（全部要過）
 ```
-python -m pytest tests/test_selfhost_tdcc.py -q -p no:cacheprovider
-python -m pytest -q -p no:cacheprovider
-python scripts/selfhost_tdcc.py --verify-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main
-python scripts/selfhost_tdcc.py --import-tsd D:/g/claude/databook/tw-stock-data-main-1107/tw-stock-data-main
-python scripts/selfhost_tdcc.py
-python scripts/selfhost_tdcc.py --verify-twswing D:/g/claude/tw-swing/data/tdcc
+cd D:\g\claude\tw-hold
+node --test cloudflare/
+PYTHONIOENCODING=utf-8 python -m pytest tests/test_fetch_tx_futures.py -q
+PYTHONIOENCODING=utf-8 python -m pytest -q
 ```
-預期：
-1. `29 passed`。
-2. `1453 passed, 4 skipped`、0 failed（基準 1424＋新 29）。
-3. (a) 表 2 列：2026-09-04、2026-09-11，`ratio` 都是 1.0（Opus 已手算逐格 100% 相同）；(b) 官方最新週（應為 2026-11-06，若官方已換成 11-13 會印「TSD 沒有，略過」）`ratio` ≥ 0.999。exit 0。
-4. 印「匯入新增 17,571,370 列｜累積 351 週｜最早 2020-01-03 最晚 2026-11-06」（Opus 用同樣規則手算：封存 2020-01-03 起 17,124,134 列＋csv 09-18～11-06 八週 447,236 列）。
-5. 官方 2026-11-06 那週蓋掉 TSD 同週，**overridden 應為 0**；印「累積 351 週」（若官方已換成 11-13 則為 352 週）。不是 0 就貼前 10 筆差異（date、ticker、level、兩邊值），不要改程式去壓。exit 0。
-6. 表約 9 列（2026-09-11～11-06，依 tw-swing 本機快照數），每列 `ratio` 1.0。exit 0。
+預期：`node --test` 顯示 20 個測試 pass、0 fail；`test_fetch_tx_futures.py` 全過（原有＋新 3 個）；全套 pytest 0 failed。
 
-若沙箱讀不到 TSD／tw-swing 目錄或不能連網，第 3～6 條跳過，在回報寫明「哪條、錯誤原文」，Opus 會自己跑。
-
-## 回報格式（寫進 collab/from-codex.md，不貼程式碼）
-- 完成項（對應「要改的檔案」1）
-- commit hash（在 main commit，不 push；訊息「D09：集保股權分散表收集＋TSD 歷史匯入」；**`data/selfhost/tdcc.parquet` 不要 commit**）
-- PROOF_CMD 六條的最後幾行輸出（第 3、6 條貼整張表）
-- `data/selfhost/tdcc.parquet` 檔案大小
-- 自行採用的小疑問（沒有就寫「無」）
-- 需要 Opus 決定的事（沒有就寫「無」）
+## 完成後
+- 一個 commit：`feat: Cloudflare 鬧鐘準時 dispatch workflow＋夜盤查詢結束日往後`（用 repo 既有的 git 設定，不要改 user.email；**不要 push**）。
+- 回報 `collab/from-codex.md` 欄位（不貼程式碼）：
+  - 完成項（逐條對應任務一 1–5、任務二）
+  - commit hash
+  - PROOF_CMD 三行各自的實際輸出最後一行
+  - 自行採用的小疑問
+  - 需要 Opus 決定的事（沒有寫「無」）
