@@ -1,6 +1,11 @@
 name = "tw-hold-alarm"
 main = "worker.js"
 compatibility_date = "2026-11-01"
+workers_dev = false    # 沒有 fetch handler，不開公開網址
+preview_urls = false
+
+[observability]
+enabled = true         # Workers 日誌：每次 dispatch 成功／失敗都查得到
 
 [triggers]
 crons = ["7,13,17,23,43,47 * * * *"]
