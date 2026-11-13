@@ -38,3 +38,6 @@ data/.refdata_pulled.json
 # 已取消的方案 A 存檔（未進版控）
 _archive_plan_a_cancelled/
 data/derived/revenue_watch.limit.json
+
+# Cloudflare wrangler 本機暫存
+.wrangler/
