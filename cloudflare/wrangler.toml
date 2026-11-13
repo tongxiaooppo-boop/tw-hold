@@ -1,0 +1,6 @@
+name = "tw-hold-alarm"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["7,13,17,23,43,47 * * * *"]

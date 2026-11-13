@@ -53,6 +53,8 @@ import pandas as pd
 URL = "https://openapi.taifex.com.tw/v1/DailyMarketReportFut"
 CSV_URL = "https://www.taifex.com.tw/cht/3/futDataDown"
 BACKFILL_DAYS = 10
+# 夜盤歸屬下一交易日（週五夜盤記在下週一），查詢結束日要往未來試；依序 +7、+3、+0 天。
+END_AHEAD_DAYS = (7, 3, 0)
 OUT = Path(__file__).resolve().parents[1] / "data" / "reference" / "tx_futures.parquet"
 META_OUT = OUT.with_name("tx_futures_meta.json")
 
@@ -115,23 +117,33 @@ def parse_csv(text: str) -> list[dict]:
 
 
 def fetch_csv_records(days: int = BACKFILL_DAYS) -> list[dict]:
-    """網站 CSV 抓近 `days` 天（含今天）；任何失敗回 []，由呼叫端退回 OpenAPI。"""
+    """網站 CSV 抓近 `days` 天（含今天）；任何失敗回 []，由呼叫端退回 OpenAPI。
+
+    結束日依序試 today+7、+3、+0：期交所把週五夜盤記在下一交易日，結束日只到今天會缺。
+    但結束日超過最新資料日時，TAIFEX 有的端點會回錯誤頁（見 fetch_foreign_futures.py 註解），
+    錯誤頁 parse_csv 會回 []，所以往回退，第一個非空的就用。
+    """
     from urllib.parse import urlencode
-    end = pd.Timestamp.now(tz="Asia/Taipei").normalize()
-    start = end - pd.Timedelta(days=days)
-    body = urlencode({"down_type": "1", "commodity_id": "TX", "commodity_id2": "",
-                      "queryStartDate": f"{start:%Y/%m/%d}", "queryEndDate": f"{end:%Y/%m/%d}"}).encode()
-    # UA 比照 fetch_foreign_futures（同網站、CI 上抓得到）；自訂 UA 在 runner 上曾逾時（2026-10-16）。
+    today = pd.Timestamp.now(tz="Asia/Taipei").normalize()
+    start = today - pd.Timedelta(days=days)
     err = None
-    for _ in range(2):
-        try:
-            req = urllib.request.Request(CSV_URL, data=body, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                raw = resp.read()
-            return parse_csv(raw.decode("big5", errors="replace"))
-        except Exception as e:  # noqa: BLE001
-            err = e
-    print(f"::warning::期交所 CSV 下載失敗（{type(err).__name__}），改用 OpenAPI 備援")
+    for ahead in END_AHEAD_DAYS:
+        end = today + pd.Timedelta(days=ahead)
+        body = urlencode({"down_type": "1", "commodity_id": "TX", "commodity_id2": "",
+                          "queryStartDate": f"{start:%Y/%m/%d}", "queryEndDate": f"{end:%Y/%m/%d}"}).encode()
+        # UA 比照 fetch_foreign_futures（同網站、CI 上抓得到）；自訂 UA 在 runner 上曾逾時（2026-10-16）。
+        for _ in range(2):
+            try:
+                req = urllib.request.Request(CSV_URL, data=body, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=45) as resp:
+                    raw = resp.read()
+                recs = parse_csv(raw.decode("big5", errors="replace"))
+                if recs:
+                    return recs
+                break  # 解析成空（多半是錯誤頁），不必重試同一結束日，換下一個
+            except Exception as e:  # noqa: BLE001
+                err = e
+    print(f"::warning::期交所 CSV 下載失敗（{type(err).__name__ if err else '無資料'}），改用 OpenAPI 備援")
     return []
 
 

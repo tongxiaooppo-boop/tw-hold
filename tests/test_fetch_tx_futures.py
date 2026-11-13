@@ -124,3 +124,54 @@ def test_結算價0視為無():
     """最後交易日期交所結算價欄填 0（2026-10-21 10 月合約）。"""
     from scripts.fetch_tx_futures import _settle
     assert _settle(0.0) is None and _settle(None) is None and _settle(46341.0) == 46341.0
+
+
+class _BytesResp:
+    def __init__(self, data: bytes):
+        self._d = data
+
+    def read(self):
+        return self._d
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _end_dates_run(monkeypatch, ok_ahead):
+    """ok_ahead：哪些 today+N 天回合法 CSV，其餘回錯誤頁；回傳 (結果, 依序請求的 queryEndDate)。"""
+    import pandas as pd
+    from urllib.parse import parse_qs
+    import scripts.fetch_tx_futures as mod
+    today = pd.Timestamp.now(tz="Asia/Taipei").normalize()
+    ok_ends = {f"{today + pd.Timedelta(days=n):%Y/%m/%d}" for n in ok_ahead}
+    seen = []
+
+    def fake(req, *a, **k):
+        end = parse_qs(req.data.decode())["queryEndDate"][0]
+        seen.append(end)
+        return _BytesResp(_CSV.encode("big5") if end in ok_ends else b"<html>error</html>")
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake)
+    return mod.fetch_csv_records(), seen, today
+
+
+def test_csv結束日先試未來七天(monkeypatch):
+    recs, seen, today = _end_dates_run(monkeypatch, ok_ahead=(7,))
+    assert recs and seen[0] == f"{today + __import__('pandas').Timedelta(days=7):%Y/%m/%d}"
+
+
+def test_未來日回錯誤頁退到今天(monkeypatch):
+    import pandas as pd
+    recs, seen, today = _end_dates_run(monkeypatch, ok_ahead=(0,))
+    assert recs
+    assert seen[-1] == f"{today:%Y/%m/%d}"
+    assert f"{today + pd.Timedelta(days=7):%Y/%m/%d}" in seen and f"{today + pd.Timedelta(days=3):%Y/%m/%d}" in seen
+
+
+def test_三個結束日都空回空陣列(monkeypatch):
+    recs, seen, _ = _end_dates_run(monkeypatch, ok_ahead=())
+    assert recs == []
+    assert len(set(seen)) == 3
