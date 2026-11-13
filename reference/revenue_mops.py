@@ -44,8 +44,8 @@ RUNS_LOG = MOPS_DIR / "runs.csv"
 BASE = "https://mopsov.twse.com.tw/nas/t21"
 MARKETS = {"TWSE": "sii", "TPEX": "otc"}
 
-# 公布期：10 號截止，遇假日順延，留到 14 號（與 revenue_watch.yml 的 cron 日期一致）
-WINDOW_LAST_DAY = 14
+# 公布期：10 號截止，遇假日順延；金控／保險常 15 號後才進彙總頁（2026-10 富邦金等 6 家），留到 17 號（與 revenue_watch.yml 的 cron 日期一致）
+WINDOW_LAST_DAY = 17
 
 # 千元 → 元，與 bundle revenue.parquet 同單位
 UNIT_MULTIPLIER = 1_000
