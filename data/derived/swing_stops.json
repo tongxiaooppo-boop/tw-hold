@@ -535,6 +535,12 @@
       "dropped_date": "2026-10-02",
       "exit_date": "2026-10-05",
       "exit_price": 136.36
+    },
+    "2850": {
+      "name": "新產",
+      "status": "pending_entry",
+      "signal_date": "2026-11-13",
+      "risk_stop_ref": 161.52
     }
   }
 }

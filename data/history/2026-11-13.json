@@ -54,10 +54,10 @@
    "n": 4,
    "candidates": [
     {
-     "t": "2535",
-     "nm": "達欣工",
-     "px": 92.4,
-     "stop": 89.85,
+     "t": "2850",
+     "nm": "新產",
+     "px": 166.0,
+     "stop": 161.52,
      "fs": "2026-11-13",
      "st": 1
     },
@@ -86,7 +86,13 @@
      "st": 5
     }
    ],
-   "revisions": []
+   "revisions": [
+    {
+     "digest": "838fa6182be2e032",
+     "origin": "live",
+     "status": "ok"
+    }
+   ]
   },
   "swing": {
    "origin": "live",

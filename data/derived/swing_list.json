@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-11-13",
-    "rebuilt_at": "2026-11-13T23:34:02+00:00",
+    "rebuilt_at": "2026-11-14T13:09:48+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：617 檔",
@@ -17,31 +17,31 @@
   "holdings": [],
   "candidates_pool": [
     {
-      "ticker": "2535",
+      "ticker": "2850",
       "c_eps_yoy": true,
       "c_eps_3y_growth": true,
       "c_roe": true,
       "c_gm_not_deteriorating": true,
       "c_fscore": true,
-      "eps_yoy_q": 1.1910828025477707,
+      "eps_yoy_q": 2.118032786885246,
       "eps_yoy_label": "pct",
-      "eps_yoy_base": 1.57,
+      "eps_yoy_base": 3.05,
       "eps_yoy_low_base": false,
-      "roe": 0.24371843100079768,
-      "f_score": 7.0,
-      "revenue_yoy": 0.6423038581980987,
+      "roe": 0.2760203976659424,
+      "f_score": 6.0,
+      "revenue_yoy": 0.23304679340641687,
       "c_rev_yoy": true,
-      "revenue_accel": true,
-      "inst_net20": 823313.0,
+      "revenue_accel": false,
+      "inst_net20": 133288.0,
       "c_inst": true,
       "trend_cnt": 8,
-      "dist_50ma": 0.02842643132980749,
-      "dist_52w_high": -0.04446737909066134,
-      "dist_200ma": 0.14253342956842152,
-      "risk_stop": 89.85,
-      "risk_pct_at_close": 0.02842643132980749,
-      "max_buy": 99.83,
-      "close": 92.4,
+      "dist_50ma": 0.027736503219415454,
+      "dist_52w_high": -0.040462427745664775,
+      "dist_200ma": 0.2020658234576007,
+      "risk_stop": 161.52,
+      "risk_pct_at_close": 0.027736503219415454,
+      "max_buy": 179.47,
+      "close": 166.0,
       "conditions": [
         {
           "項": "季 EPS 年增 > 25%",
@@ -77,14 +77,13 @@
         }
       ],
       "support": [
-        "季 EPS 年增 +119%（遠超 25% 門檻）",
-        "最新月營收年增 +64%（成長明確）",
-        "最新月營收年增較上月加速",
-        "法人近 20 日淨買超 823 張",
+        "季 EPS 年增 +212%（遠超 25% 門檻）",
+        "最新月營收年增 +23%（成長明確）",
+        "法人近 20 日淨買超 133 張",
         "距 50MA 僅 +3%（進場點貼近 50 日線支撐）"
       ],
       "oppose": [
-        "（未發現反對證據——這代表檢查不足，不代表完美）"
+        "最新月營收年增較上月減速"
       ],
       "invalidation": [
         {
@@ -97,16 +96,16 @@
         },
         {
           "條件": "最新月營收年增轉負",
-          "目前": "未觸發（月營收年增仍加速）"
+          "目前": "未觸發（但 月營收年增已較上月減速）"
         },
         {
           "條件": "季 EPS 年增轉負",
           "目前": "未觸發"
         }
       ],
-      "name": "達欣工",
-      "industry": "建材營造",
-      "market_cap": 25021362963.998802,
+      "name": "新產",
+      "industry": "金融保險",
+      "market_cap": 52449907800.0,
       "first_seen": "2026-11-13",
       "streak_days": 1
     },
@@ -392,7 +391,11 @@
     }
   ],
   "changes": {
-    "added": [],
-    "removed": []
+    "added": [
+      "2850"
+    ],
+    "removed": [
+      "2535"
+    ]
   }
 }
