@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -58,6 +58,32 @@ def current_rebalance(asof: date) -> date:
     cands = [date(y, m, d) for y in (asof.year - 1, asof.year)
              for m, d in REBALANCE_MD if date(y, m, d) <= asof]
     return max(cands)
+
+
+#: 暫緩換股：檔內列出的換股日（每行一個 ISO 日期，# 開頭為註解）先不換，沿用上一期成分。
+#: 用途：官方財報還沒補齊（例 2026Q3 金控缺），等人工確認後刪掉該行再 rebuild 才重算。
+HOLD_FILE = Path(__file__).resolve().parent / "rebalance_hold.txt"
+
+
+def _held_periods(path: Path | None = None) -> set[date]:
+    p = path or HOLD_FILE
+    if not p.exists():
+        return set()
+    out = set()
+    for line in p.read_text(encoding="utf-8").splitlines():
+        s = line.split("#", 1)[0].strip()
+        if s:
+            out.add(date.fromisoformat(s))
+    return out
+
+
+def effective_rebalance(asof: date, held: set[date] | None = None) -> date:
+    """實際生效的換股日：current_rebalance，但被暫緩的換股日往前退到上一期。"""
+    held = _held_periods() if held is None else held
+    period = current_rebalance(asof)
+    while period in held:
+        period = current_rebalance(period - timedelta(days=1))
+    return period
 
 
 def select_composition(df: pd.DataFrame, score: str, has_industry: bool) -> list[str]:
@@ -269,7 +295,7 @@ def _write(name: str, payload: dict) -> None:
 def _build(name: str, df: pd.DataFrame, score: str, cols: list[str],
            meta: dict, has_industry: bool, asof: date) -> dict:
     prev = _load_prev(name)
-    period = current_rebalance(asof).isoformat()
+    period = effective_rebalance(asof).isoformat()
     prev_period = prev.get("_meta", {}).get("period")
     prev_tks = [h["ticker"] for h in prev.get("holdings", [])]
 
@@ -400,7 +426,8 @@ def main() -> int:
     (DERIVED / "_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"  → data/derived/_meta.json　trading_date {meta['trading_date']}"
-          f"　本期換股日 {current_rebalance(asof).isoformat()}")
+          f"　本期換股日 {effective_rebalance(asof).isoformat()}"
+          + ("（暫緩中：rebalance_hold.txt）" if effective_rebalance(asof) != current_rebalance(asof) else ""))
     return 0
 
 

@@ -142,6 +142,19 @@ def test_current_rebalance_對齊季換股日():
     assert bl.current_rebalance(date(2026, 5, 15)) == date(2026, 5, 15)
 
 
+def test_effective_rebalance_暫緩檔沿用上一期(tmp_path):
+    from datetime import date
+    import build_lists as bl
+    f = tmp_path / "hold.txt"
+    f.write_text("# 2026Q3 財報未齊\n2026-11-14  # 行尾註解\n", encoding="utf-8")
+    held = bl._held_periods(f)
+    assert held == {date(2026, 11, 14)}
+    assert bl.effective_rebalance(date(2026, 11, 16), held) == date(2026, 8, 14)
+    assert bl.effective_rebalance(date(2026, 11, 16), set()) == date(2026, 11, 14)
+    assert bl.effective_rebalance(date(2026, 10, 1), held) == date(2026, 8, 14)
+    assert bl._held_periods(tmp_path / "none.txt") == set()
+
+
 def test_select_composition_產業上限():
     import pandas as pd
     import build_lists as bl
