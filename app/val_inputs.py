@@ -107,23 +107,17 @@ def merge_mops_revenue(rev: pd.DataFrame, code: str, asof: pd.Timestamp,
     - bundle 已有的月份以 bundle 為準，MOPS 只補缺的月份。
     - 只收 first_seen_at 的日期 ≤ asof 的列（乾跑用過去的 asof 時不偷看未來）。
     - 目錄或檔案不存在、讀檔失敗 → 原樣回傳。格式同 bundle_data.revenue：[month(月初 Timestamp), revenue]。"""
-    files = sorted(Path(mops_dir).glob("*.parquet")) if Path(mops_dir).is_dir() else []
+    from reference.revenue_merge import mops_months
+    mm = mops_months(Path(mops_dir), asof)
+    mm = mm[mm["ticker"] == str(code)]
     have = set(pd.to_datetime(rev["month"]).dt.to_period("M")) if len(rev) else set()
     add = []
-    for f in files:
-        try:
-            d = pd.read_parquet(f, columns=["code", "period", "revenue", "first_seen_at"])
-        except Exception:
+    for r in mm.itertuples():
+        m = pd.Period(str(r.month), "M")
+        if m in have:
             continue
-        d = d[d["code"].astype(str) == str(code)]
-        for r in d.itertuples():
-            m = pd.Period(str(r.period), "M")
-            seen = pd.Timestamp(r.first_seen_at) if pd.notna(r.first_seen_at) else None
-            if (m in have or seen is None or seen.normalize() > pd.Timestamp(asof)
-                    or not pd.notna(r.revenue) or r.revenue <= 0):
-                continue
-            add.append({"month": m, "revenue": float(r.revenue)})
-            have.add(m)
+        add.append({"month": m, "revenue": float(r.revenue)})
+        have.add(m)
     if not add:
         return rev
     is_ts = pd.api.types.is_datetime64_any_dtype(rev["month"]) or not len(rev)

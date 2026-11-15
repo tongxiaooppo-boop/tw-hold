@@ -149,9 +149,17 @@ def revenue(code: str) -> pd.DataFrame:
     d = d[[mcol, "revenue"]].rename(columns={mcol: "month"})
     d["month"] = pd.to_datetime(d["month"].astype(str), errors="coerce")
     d["revenue"] = pd.to_numeric(d["revenue"], errors="coerce")
-    return (d.dropna(subset=["month", "revenue"])
+    out = (d.dropna(subset=["month", "revenue"])
              .drop_duplicates("month", keep="last")
              .sort_values("month").reset_index(drop=True))
+    try:   # MOPS 當晚補缺月（長表優先；失敗不影響）
+        from reference.revenue_merge import MOPS_DIR_DEFAULT
+        from app.val_inputs import merge_mops_revenue
+        asof = pd.Timestamp.now(tz="Asia/Taipei").tz_localize(None).normalize()
+        out = merge_mops_revenue(out, _t(code), asof, MOPS_DIR_DEFAULT)
+    except Exception as exc:
+        logging.warning("MOPS 月營收補缺月失敗（%s）", type(exc).__name__)
+    return out
 
 
 def chips(code: str, lookback_days: int = 400) -> pd.DataFrame:

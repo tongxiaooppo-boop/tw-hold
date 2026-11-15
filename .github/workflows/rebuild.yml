@@ -55,6 +55,9 @@ jobs:
         env:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
+      - name: 月營收補 MOPS 缺月
+        continue-on-error: true
+        run: python scripts/merge_mops_into_revenue.py
 
       # 私有參考資料（PCF 快照、總經序列）存私有 repo Release（見 reference/refdata.py），不進公開 repo 的 git。
       # 還原失敗不擋三清單（continue-on-error），但之後的推送會跳過（殘缺目錄重打包會蓋掉 Release 上的歷史），
@@ -351,6 +354,9 @@ jobs:
         env:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python fetch_bundle.py
+      - name: 月營收補 MOPS 缺月
+        continue-on-error: true
+        run: python scripts/merge_mops_into_revenue.py
 
       - name: 估值倍數（multiples_hist／eps_revision／industry_pe）
         if: steps.due.outputs.run == 'true'
