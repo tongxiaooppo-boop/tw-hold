@@ -1,7 +1,7 @@
 {
   "_meta": {
     "trading_date": "2026-11-16",
-    "rebuilt_at": "2026-11-16T15:22:12+00:00",
+    "rebuilt_at": "2026-11-16T18:35:08+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
     "note": "universe.parquet：619 檔",
@@ -497,10 +497,6 @@
     ],
     "likely_out": [
       {
-        "ticker": "9917",
-        "reason": "已觸發硬門檻"
-      },
-      {
         "ticker": "2539",
         "reason": "已觸發硬門檻"
       },
@@ -511,6 +507,10 @@
       {
         "ticker": "8464",
         "reason": "分數掉出前 15"
+      },
+      {
+        "ticker": "9917",
+        "reason": "已觸發硬門檻"
       },
       {
         "ticker": "1232",

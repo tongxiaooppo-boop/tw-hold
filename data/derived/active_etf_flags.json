@@ -3,10 +3,10 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-11-16",
   "market_date": "2026-11-16",
-  "fetched_at": "2026-11-16T15:22:45+00:00",
+  "fetched_at": "2026-11-16T18:36:10+00:00",
   "total_etfs": 6,
-  "synced_etfs": 5,
-  "stale_etfs": 1,
+  "synced_etfs": 6,
+  "stale_etfs": 0,
   "max_span_days": 1,
   "multi_day_etfs": [],
   "funds": {
@@ -86,41 +86,19 @@
     "premium_skipped": false
    },
    "00406A": {
-    "synced": false,
-    "date": "2026-11-13",
-    "moved_n": 0,
-    "lagging": true,
-    "own": {
-     "prev_date": "2026-11-12",
-     "date": "2026-11-13",
-     "span_days": 1,
-     "moved_n": 2,
-     "buys": [
-      "6446"
-     ],
-     "sells": [
-      "2360"
-     ],
-     "names": {
-      "2360": "致茂電子",
-      "6446": "藥華醫藥"
-     },
-     "qty": {
-      "2360": -626000,
-      "6446": 223000
-     },
-     "exit_notes": {
-      "2360": "出清"
-     }
-    },
-    "aum": 156112698306.0,
-    "aum_prev": 152022278490.0,
-    "navps": 7.74020617845292,
-    "navps_prev": 7.5893269408282,
+    "synced": true,
+    "date": "2026-11-16",
+    "prev_date": "2026-11-13",
+    "span_days": 1,
+    "moved_n": 7,
+    "aum": 145539742537.0,
+    "aum_prev": 156112698306.0,
+    "navps": 7.102596367967654,
+    "navps_prev": 7.74020617845292,
     "close": 7.1,
     "close_date": "2026-11-16",
-    "premium_pct": null,
-    "premium_skipped": true
+    "premium_pct": -0.03655519521514208,
+    "premium_skipped": false
    }
   },
   "schema_ok": true
@@ -280,6 +258,26 @@
    },
    "exit_notes": {}
   },
+  "3711": {
+   "name": "日月光投控",
+   "industry": null,
+   "net_shares": 398000,
+   "net_amount": 218899927,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00982A": 6000,
+    "00406A": 392000
+   },
+   "exit_notes": {}
+  },
   "6213": {
    "name": "聯茂",
    "industry": null,
@@ -319,6 +317,120 @@
    "exit_notes": {
     "00992A": "出清"
    }
+  },
+  "1303": {
+   "name": "南亞塑膠工業",
+   "industry": null,
+   "net_shares": 771000,
+   "net_amount": 211254000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 771000
+   },
+   "exit_notes": {}
+  },
+  "2884": {
+   "name": "玉山金融控股",
+   "industry": null,
+   "net_shares": 8036000,
+   "net_amount": 388138800,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 8036000
+   },
+   "exit_notes": {}
+  },
+  "2885": {
+   "name": "元大金融控股",
+   "industry": null,
+   "net_shares": 2135000,
+   "net_amount": 146674500,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 2135000
+   },
+   "exit_notes": {}
+  },
+  "3665": {
+   "name": "貿聯控股",
+   "industry": null,
+   "net_shares": 102800,
+   "net_amount": 151116000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 102800
+   },
+   "exit_notes": {}
+  },
+  "4770": {
+   "name": "上品綜合工業股份有限公司",
+   "industry": null,
+   "net_shares": 270000,
+   "net_amount": 79650000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 270000
+   },
+   "exit_notes": {}
+  },
+  "6446": {
+   "name": "藥華醫藥",
+   "industry": null,
+   "net_shares": 113000,
+   "net_amount": 146335000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 113000
+   },
+   "exit_notes": {}
   }
  }
 }
