@@ -71,6 +71,7 @@ def test_圖表色兩種底色都看得到():
     for name, c in stockcharts.CHART_COLORS.items():
         for bg in ("#FFFFFF", "#1A2129"):
             assert _contrast(c, bg) >= 3.0, (name, bg)
+    assert stockcharts._LAYOUT["colorway"], "沒指定色的線要走 CHART_COLORS 輪替色"
     src = open("app/stockcharts.py", encoding="utf-8").read()
     a = src.index("CHART_COLORS = {")
     b = src.index("}", a)

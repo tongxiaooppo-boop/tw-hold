@@ -18,7 +18,10 @@ CHART_COLORS = {
     "ink_line": "#7D8A96",   # 中性線（收盤、三大累計）
     "warn": "#B07A5E",       # 暖褐（年增、負債比）
     "accent": "#5E9488",     # 靜謐綠（流動比、殖利率）
+    # 沒指定顏色的線（均線、河流圖各帶、法人別）用的輪替色——plotly 預設色在深底太暗（2026-11-16 Opus）
+    "s_blue": "#4A86C5", "s_orange": "#C9863A", "s_pink": "#C2669A", "s_purple": "#8C79C9",
 }
+_COLORWAY = [CHART_COLORS[k] for k in ("s_blue", "s_orange", "s_pink", "s_purple", "accent", "ink_line")]
 
 #: 均線集合——依顯示區間切換（短區間看短均線，長區間看長均線）。
 _MA_SHORT = [("MA5", 5), ("MA20", 20), ("季線", 60)]
@@ -45,6 +48,7 @@ DIVIDEND_YEARS_LOOKBACK = 13
 #: 放上方會跟標題重疊、手機放右邊會吃掉半個繪圖區。
 _LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    colorway=_COLORWAY,
     legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0),
     margin=dict(t=48, b=76, l=10, r=10),
     # 手機上單指拖曳會被 plotly 吃掉當平移／縮放，害頁面滑不動——關掉拖曳，
