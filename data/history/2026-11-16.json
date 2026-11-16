@@ -1,0 +1,56 @@
+{
+ "schema": 1,
+ "asof": "2026-11-16",
+ "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 1,
+   "scanned": 618,
+   "candidates": [
+    {
+     "t": "6890",
+     "nm": "來億-KY",
+     "px": 165.0,
+     "fs": "2026-11-16",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "candidates": [
+    {
+     "t": "6782",
+     "nm": "視陽",
+     "px": 273.0,
+     "stop": 249.35,
+     "fs": "2026-11-09",
+     "st": 6
+    },
+    {
+     "t": "9933",
+     "nm": "中鼎",
+     "px": 51.5,
+     "stop": 46.61,
+     "fs": "2026-11-09",
+     "st": 6
+    }
+   ],
+   "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}
