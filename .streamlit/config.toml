@@ -1,10 +1,19 @@
-# tw-hold — 固定淺色主題「北歐靜謐」（使用者裁決 2026-09-11，取代 2026-09-08 的深色版）。
-# 這裡定的是「地基色」；字體、卡片、圖表細節在 app/streamlit_app.py 的 _inject_css()
-# 與 app/stockcharts.py 裡對齊同一組色票（見那邊的 --thc-* 變數）。
+# tw-hold — 淺色 A「北歐靜謐・加深版」／深色 C「深色看盤」雙主題（2026-11-16）。
+# 使用者在右上「⋮ → Settings」切換。色票的唯一色源仍是 app/streamlit_app.py `_CSS` 的
+# :root（淺）與 :root[data-thc="dark"]（深）；這裡只定 Streamlit 原生元件的地基色。
 [theme]
-base = "light"
-primaryColor = "#5C7A72"                 # 靜謐綠 accent
-backgroundColor = "#EEF1F4"              # 主畫布
-secondaryBackgroundColor = "#FFFFFF"     # 卡片 / 側欄 / 程式碼區 / 表格底
-textColor = "#2B333B"
 font = "sans serif"
+
+[theme.light]
+base = "light"
+primaryColor = "#4F6E66"
+backgroundColor = "#EEF1F4"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#2B333B"
+
+[theme.dark]
+base = "dark"
+primaryColor = "#4FA3A5"
+backgroundColor = "#11161C"
+secondaryBackgroundColor = "#1A2129"
+textColor = "#E8ECF1"

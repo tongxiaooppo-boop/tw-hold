@@ -799,22 +799,37 @@ _CSS = """
 :root{
   --thc-bg:#EEF1F4;
   --thc-surface:#FFFFFF; --thc-surface2:#F5F7F9; --thc-line:#E4E8EC;
-  --thc-ink:#2B333B; --thc-soft:#5E6B76; --thc-faint:#8A97A3;
-  --thc-accent:#5C7A72;
+  --thc-ink:#2B333B; --thc-soft:#4E5A64; --thc-faint:#5E6A75;
+  --thc-accent:#4F6E66; --thc-accent-rgb:79,110,102;
   /* 判斷類卡片暈染——good=通過/推薦、warn=存疑/風險、neutral=一般 */
-  --thc-good:#5C7A72; --thc-good-bg:#DEE9E6;
-  --thc-warn:#8A6A5F; --thc-warn-bg:#F1E3DF;
-  --thc-neutral:#5E7686; --thc-neutral-bg:#DEE7EC;
-  --thc-flag:#8A6A5F;
+  --thc-good:#4F6E66; --thc-good-bg:#DEE9E6;
+  --thc-warn:#7A5A4F; --thc-warn-bg:#F1E3DF;
+  --thc-neutral:#526A7A; --thc-neutral-bg:#DEE7EC;
+  --thc-flag:#7A5A4F;
   --thc-bad:#B5453B;
   /* 漲跌色（台股慣例，紅漲綠跌）——只給真正的價格漲跌用，不要拿來標判斷結果 */
-  --thc-up:#C4574A; --thc-down:#4A7D74;
-  /* 同一個紅、給需要半透明的地方（雷達徽章）——別再寫死 rgba(196,87,74,…) */
-  --thc-up-rgb:196,87,74;
+  --thc-up:#B8463A; --thc-down:#3B6E65;
+  /* 同一個紅、給需要半透明的地方（雷達徽章）——別再寫死 rgba */
+  --thc-up-rgb:184,70,58;
   --thc-sans:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --thc-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
+:root[data-thc="dark"]{
+  --thc-bg:#11161C;
+  --thc-surface:#1A2129; --thc-surface2:#202832; --thc-line:#2A333D;
+  --thc-ink:#E8ECF1; --thc-soft:#B2BCC7; --thc-faint:#8F9BA8;
+  --thc-accent:#4FA3A5; --thc-accent-rgb:79,163,165;
+  --thc-good:#4FA3A5; --thc-good-bg:#173236;
+  --thc-warn:#D49A4A; --thc-warn-bg:#3A2C18;
+  --thc-neutral:#7FA3BA; --thc-neutral-bg:#1C2A35;
+  --thc-flag:#D49A4A;
+  --thc-bad:#F07A6E;
+  --thc-up:#FF6B5E; --thc-down:#3CC48A;
+  --thc-up-rgb:255,107,94;
+}
 .stApp{background:var(--thc-bg);}
+/* 主題偵測腳本的容器（_THEME_JS）：腳本掛上就跑完，容器藏起來，不佔 flex gap */
+[data-testid="stElementContainer"]:has(.thc-theme-js){display:none;}
 /* Streamlit 的 Material 圖示是「靠 ligature 把文字變成圖」的 <span>，字體被蓋掉就會
    顯示成 keyboard_arrow_right 這種原始文字。預設 testid 是 stIconMaterial，但
    DynamicIcon 允許呼叫端覆寫（stAlertDynamicIcon / stToastDynamicIcon /
@@ -855,8 +870,8 @@ div[data-testid="stRadioGroup"] [data-testid="stRadioOption"]
 .thc-big.up{color:var(--thc-good);}
 .thc-cap{font-size:.78rem;color:var(--thc-faint);padding-bottom:.18rem;}
 .thc-bar{margin:.6rem 0 .25rem;height:7px;border-radius:99px;background:var(--thc-line);position:relative;}
-.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:rgba(92,122,114,.28);
-  border:1px solid rgba(92,122,114,.5);border-radius:99px;}
+.thc-bar .z{position:absolute;top:0;bottom:0;left:0;background:rgba(var(--thc-accent-rgb),.28);
+  border:1px solid rgba(var(--thc-accent-rgb),.5);border-radius:99px;}
 .thc-bar .n{position:absolute;top:-4px;width:3px;height:15px;background:var(--thc-ink);
   border-radius:2px;box-shadow:0 0 0 1.5px var(--thc-bg);}
 .thc-barcap{font-size:.72rem;color:var(--thc-soft);font-family:var(--thc-mono);
@@ -1097,6 +1112,37 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .hist-day span{display:block;font-size:.74rem;color:var(--thc-soft);}
 </style>
 """
+
+
+# ── 淺／深色偵測（使用者在 Streamlit「⋮ → Settings」切主題，不重跑頁面就要換色）──
+# 不在 Python 判斷：st.context.theme 官方註明首載與切換時會錯。改由瀏覽器端讀 .stApp 的
+# 字色（Streamlit 主題的 text color；背景色是我們自己的 --thc-bg 蓋的，讀它會自己咬自己）亮度：
+# 字色亮＝深色主題。整個 app 只注入一次（window.__thcTheme 守門），MutationObserver 盯
+# .stApp 與 <head>（Streamlit 切主題會換 <style>），再加每秒保底輪詢。
+_THEME_JS = r"""<span class="thc-theme-js"></span>
+<script>
+(function(){
+  if(window.__thcTheme) return; window.__thcTheme = true;
+  function lum(c){var m=(c||"").match(/[\d.]+/g); if(!m||3>m.length) return null;
+    return (0.2126*+m[0]+0.7152*+m[1]+0.0722*+m[2])/255;}
+  function apply(){
+    var app=document.querySelector(".stApp"); if(!app) return;
+    var l=lum(getComputedStyle(app).color); if(l===null) return;
+    var v=l>0.5?"dark":"light", r=document.documentElement;
+    if(r.dataset.thc!==v) r.dataset.thc=v;
+  }
+  apply();
+  var mo=new MutationObserver(apply);
+  mo.observe(document.head,{childList:true,subtree:true,characterData:true});
+  mo.observe(document.documentElement,{attributes:true,attributeFilter:["class","style"]});
+  var t=setInterval(function(){
+    var app=document.querySelector(".stApp");
+    if(app && !window.__thcObs){window.__thcObs=true;
+      mo.observe(app,{attributes:true,attributeFilter:["class","style"]});}
+    apply();
+  },1000);
+})();
+</script>"""
 
 
 def _nav_badge_css(nav: str) -> str:
@@ -4089,6 +4135,7 @@ def main() -> None:
     # radio 還沒建，但 key 綁 session_state——使用者點過的那一頁在 rerun 一開始就已經
     # 寫回去了，所以這裡就能知道等一下會選中哪一頁，徽章 CSS 才併得進同一次注入。
     _inject_css(st.session_state.get("_nav") or NAV[0])
+    st.html(_THEME_JS, unsafe_allow_javascript=True)
     hc1, hc2 = st.columns([5, 2])
     hc1.title(f"📡 {APP_NAME}")
     hc2.markdown(f'<div class="thc-header-badge">{_freshness_badge_html()}</div>',

@@ -11,6 +11,15 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+#: 圖表色（淺／深兩種底色都看得到，不在圖表裡依主題分支；2026-11-16）。
+CHART_COLORS = {
+    "up": "#D2574A",         # 台股慣例：紅漲
+    "down": "#3E9A86",       # 綠跌
+    "ink_line": "#7D8A96",   # 中性線（收盤、三大累計）
+    "warn": "#B07A5E",       # 暖褐（年增、負債比）
+    "accent": "#5E9488",     # 靜謐綠（流動比、殖利率）
+}
+
 #: 均線集合——依顯示區間切換（短區間看短均線，長區間看長均線）。
 _MA_SHORT = [("MA5", 5), ("MA20", 20), ("季線", 60)]
 _MA_LONG = [("MA20", 20), ("季線", 60), ("年線", 240)]
@@ -32,12 +41,10 @@ QUARTERS_LOOKBACK = 24
 #: 改回 13 年，這是修正一個真的退步，不是設計選擇。
 DIVIDEND_YEARS_LOOKBACK = 13
 
-#: 固定淺色（app 主題「北歐靜謐」，2026-09-11 改）。圖例橫排放在**圖下方**——
+#: 淺／深雙主題共用：不指定 template／字色，交給 Streamlit 主題決定字色與格線（2026-11-16）。圖例橫排放在**圖下方**——
 #: 放上方會跟標題重疊、手機放右邊會吃掉半個繪圖區。
 _LAYOUT = dict(
-    template="plotly_white",
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#2B333B"),
     legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0),
     margin=dict(t=48, b=76, l=10, r=10),
     # 手機上單指拖曳會被 plotly 吃掉當平移／縮放，害頁面滑不動——關掉拖曳，
@@ -106,8 +113,8 @@ def kline(px: pd.DataFrame, name: str, start=None, ma: list | None = None) -> go
         x=x, open=d["open"].astype(float).tolist(), high=d["high"].astype(float).tolist(),
         low=d["low"].astype(float).tolist(), close=close.tolist(),
         name="還原K線",
-        increasing=dict(line=dict(color="#C4574A")),      # 台股慣例：紅漲綠跌
-        decreasing=dict(line=dict(color="#4A7D74"))))
+        increasing=dict(line=dict(color=CHART_COLORS["up"])),      # 台股慣例：紅漲綠跌
+        decreasing=dict(line=dict(color=CHART_COLORS["down"]))))
     ma = ma or (_MA_SHORT if start is not None else _MA_LONG)
     for i, (label, w) in enumerate(ma):
         if len(d) >= w:
@@ -141,11 +148,11 @@ def monthly_revenue(rev: pd.DataFrame, name: str, start=None) -> go.Figure:
         go.Bar(x=d["month"], y=d["revenue"] / 1e8, name="月營收（億）",
                marker_line_width=0),
         go.Scatter(x=d["month"], y=d["yoy"] * 100, name="月營收年增 %", yaxis="y2",
-                   line=dict(width=2, color="#8A6A5F")),
+                   line=dict(width=2, color=CHART_COLORS["warn"])),
     ])
     fig.update_layout(
         yaxis2=dict(overlaying="y", side="right", showgrid=False, ticksuffix="%",
-                    zeroline=True, zerolinecolor="rgba(138,106,95,.35)"))
+                    zeroline=True, zerolinecolor="rgba(176,122,94,.35)"))
     title = f"{name} 月營收與年增率"
     if start is not None:
         eff_start, widened = _min_start(d["month"], start, MIN_POINTS_MONTHLY)   # 夾到資料起點＋至少 13 根
@@ -166,11 +173,11 @@ def institutional_net(chips: pd.DataFrame, name: str, start=None) -> go.Figure:
         go.Bar(x=d["date"], y=d["trust"], name="投信", marker_line_width=0),
         go.Bar(x=d["date"], y=d["dealer"], name="自營", marker_line_width=0),
         go.Scatter(x=d["date"], y=d["cum20"], name="三大合計20日累計", yaxis="y2",
-                   line=dict(width=2, color="#2B333B")),
+                   line=dict(width=2, color=CHART_COLORS["ink_line"])),
     ])
     fig.update_layout(barmode="relative",
                       yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                                  zeroline=True, zerolinecolor="rgba(43,51,59,.25)"))
+                                  zeroline=True, zerolinecolor="rgba(125,138,150,.45)"))
     if start is not None:
         eff_start, _ = _min_start(d["date"], start, MIN_POINTS_DAILY)
         fig.update_xaxes(range=[eff_start, d["date"].max() + _right_pad(d["date"])])
@@ -234,7 +241,7 @@ def dividends_chart(div: pd.DataFrame, name: str) -> go.Figure:
     # 段跟段之間才看得出「今年配了幾次、各配多少」。按實際配息日排序讓疊放依時序。
     if "pay_date" in d.columns:
         d = d.sort_values(["year", "pay_date"])
-    edge = dict(marker_line_color="rgba(43,51,59,.35)", marker_line_width=1)
+    edge = dict(marker_line_color="rgba(125,138,150,.5)", marker_line_width=1)
     fig = go.Figure([
         go.Bar(x=d["year"], y=d["CashEarningsDistribution"], name="現金股利", **edge),
         go.Bar(x=d["year"], y=d["StockEarningsDistribution"], name="股票股利", **edge),
@@ -260,7 +267,7 @@ def pe_river(rf: dict, name: str, start=None) -> go.Figure:
                                          legendgroup="river", legendgrouptitle_text=rf["legend"],
                                          line=dict(width=1)))
         fig.add_trace(go.Scatter(x=frame["date"], y=frame["price"], name="收盤",
-                                 line=dict(color="#2B333B", width=1.6)))
+                                 line=dict(color=CHART_COLORS["ink_line"], width=1.6)))
         if start is not None:
             eff_start, _ = _min_start(frame["date"], start, MIN_POINTS_YEAR)
             fig.update_xaxes(range=[eff_start, frame["date"].max()])
@@ -286,9 +293,9 @@ def balance_health(qf: pd.DataFrame, name: str,
     d = qf.tail(quarters)
     fig = go.Figure([
         go.Scatter(x=d["period_end"], y=d["debt_ratio"] * 100, name="負債比 %",
-                   line=dict(width=2, color="#8A6A5F")),
+                   line=dict(width=2, color=CHART_COLORS["warn"])),
         go.Scatter(x=d["period_end"], y=d["current_ratio"], name="流動比（倍）", yaxis="y2",
-                   line=dict(width=1.6, color="#5C7A72")),
+                   line=dict(width=1.6, color=CHART_COLORS["accent"])),
     ])
     fig.update_layout(yaxis=dict(ticksuffix="%"),
                       yaxis2=dict(overlaying="y", side="right", showgrid=False))
@@ -302,7 +309,7 @@ def yield_trend(per: pd.DataFrame, name: str, start=None) -> go.Figure:
     if d.empty:
         return _style(go.Figure(), f"{name} 現金殖利率走勢（無資料）", 320)
     fig = go.Figure([go.Scatter(x=d["date"], y=d["dividend_yield"], name="現金殖利率",
-                                line=dict(width=2, color="#5C7A72"))])
+                                line=dict(width=2, color=CHART_COLORS["accent"]))])
     fig.update_layout(yaxis=dict(ticksuffix="%"))
     if start is not None:
         eff_start, _ = _min_start(d["date"], start, MIN_POINTS_YEAR)
