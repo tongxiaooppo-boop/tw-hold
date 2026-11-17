@@ -209,6 +209,10 @@ def _fill_gaps_from_hourly(df: pd.DataFrame, symbols=_ASIA_SYMBOLS, now_utc: dat
     earliest = today_tpe - timedelta(days=_HOURLY_FILL_LOOKBACK_DAYS)
     new_rows, estimated = [], []
     for sym in symbols:
+        if not (df["symbol"] == sym).any():
+            # 日線整檔沒抓到（2026-11-17 實測 ^N225 批次下載偶爾「possibly delisted」）時不補：
+            # 補了會變成只有幾列推估值的序列，卡片拿去算均線比整檔缺更誤導，交給原本的缺資料處理。
+            continue
         try:
             hourly = fetch_hourly(sym, _HOURLY_FILL_LOOKBACK_DAYS)
         except Exception as e:  # noqa: BLE001

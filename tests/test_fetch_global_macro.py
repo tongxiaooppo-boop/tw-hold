@@ -165,6 +165,14 @@ def test_hourly_fill_根數不足不補():
     assert est == [] and len(out) == 1
 
 
+def test_hourly_fill_日線整檔沒抓到不補():
+    df = _df([("^HSI", "2026-11-13", 23000.0)])                 # ^N225 日線整檔缺
+    fake = lambda sym, days: _hourly("2026-11-16", 7, 59700.0)
+    out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
+    assert "^N225" not in set(out["symbol"])
+    assert [e["symbol"] for e in est] == ["^HSI"]
+
+
 def test_hourly_fill_小時線失敗不中斷():
     df = _df([("^N225", "2026-11-13", 50000.0)])
     fake = lambda sym, days: pd.Series(dtype="float64")
