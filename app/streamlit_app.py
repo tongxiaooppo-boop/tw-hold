@@ -26,7 +26,7 @@ for _p in (str(REPO), str(REPO / "app")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from app import val_inputs, val_view
+from app import refresh_window, val_inputs, val_view
 from screener import river, val_card
 
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
@@ -3692,6 +3692,7 @@ def _macro_refresh_button() -> None:
     fine-grained PAT（範圍鎖 tw-hold 這個 repo 就好，不要給 contents write，
     這裡只需要觸發 workflow，不寫檔）。沒設就不顯示按鈕（本地開發環境本來就
     沒有，不用因為缺這個擋掉整頁）。
+    2026-11-17 起只在台北 08:00–10:00 開放，其他時間按鈕停用並說明原因。
     """
     try:
         token = st.secrets.get("GH_DISPATCH_PAT")
@@ -3704,6 +3705,12 @@ def _macro_refresh_button() -> None:
     st.caption("發現上面卡片有 ⚠️ 過期標記時可以按這個——觸發雲端重跑，通常幾分鐘後"
                "資料就會更新，但這頁本身**不會自動跳新**，要手動重新整理瀏覽器再看一次。"
                "（私有參考資料每 30 分鐘才會從雲端重拉；按下後這頁會立刻重拉一次，但雲端重跑還沒跑完前拿到的仍是舊的。）")
+
+    if not refresh_window.is_open():
+        st.button("🔄 立即重新整理資料（台北 08:00–10:00 開放）",
+                  disabled=True, key="macro_refresh_btn")
+        st.caption(refresh_window.closed_note())
+        return
 
     gate = _refresh_gate()
     now = time.time()

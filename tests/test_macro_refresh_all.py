@@ -79,6 +79,56 @@ def test_no_concurrency_group_holds_more_than_two_of_the_refresh_workflows():
     assert max(groups.values()) <= 2, groups
 
 
+def _fix_now(monkeypatch, ts):
+    import importlib
+
+    import pandas as pd
+    rw = importlib.import_module("app.refresh_window")
+    fixed = pd.Timestamp(ts, tz="Asia/Taipei")
+    monkeypatch.setattr(rw, "now_taipei", lambda: fixed)
+    return rw
+
+
+def test_refresh_window_邊界():
+    import importlib
+
+    import pandas as pd
+    rw = importlib.import_module("app.refresh_window")
+    tp = lambda s: pd.Timestamp(s, tz="Asia/Taipei")  # noqa: E731
+    assert rw.is_open(tp("2026-11-17 07:59")) is False
+    assert rw.is_open(tp("2026-11-17 08:00")) is True
+    assert rw.is_open(tp("2026-11-17 09:59")) is True
+    assert rw.is_open(tp("2026-11-17 10:00")) is False
+    assert rw.is_open(pd.Timestamp("2026-11-17 09:00")) is True                 # tz-naive 視為台北
+    assert rw.is_open(pd.Timestamp("2026-11-17 01:00", tz="UTC")) is True       # 台北 09:00
+    assert rw.is_open(pd.Timestamp("2026-11-17 03:00", tz="UTC")) is False      # 台北 11:00
+
+
+def test_refresh_button_時段外停用(monkeypatch):
+    import urllib.request
+
+    pytest = __import__("pytest")
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+    urls = []
+
+    def fake_urlopen(req, timeout=0):
+        urls.append(req.full_url if hasattr(req, "full_url") else req)
+        raise OSError("時段外不該打網路")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    _fix_now(monkeypatch, "2026-11-17 14:00")
+    app._refresh_gate()["until"] = 0.0
+
+    at = AppTest.from_file(str(ROOT / "app" / "streamlit_app.py"), default_timeout=60)
+    at.secrets["GH_DISPATCH_PAT"] = "t"
+    at.run()
+    assert not at.exception
+    btn = [b for b in at.button if b.key == "macro_refresh_btn"]
+    assert btn and btn[0].disabled is True
+    assert "08:00–10:00" in btn[0].label
+    assert not [u for u in urls if "/dispatches" in u]
+
+
 def test_button_end_to_end_with_fake_github_api(monkeypatch):
     """用 AppTest 真的按一次按鈕（GitHub API 用假的）：沒有 PAT 不顯示；有 PAT 按下去五條都觸發、畫面講得出來。"""
     import io
@@ -112,6 +162,7 @@ def test_button_end_to_end_with_fake_github_api(monkeypatch):
         raise OSError("不該打到的網址：" + url)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    _fix_now(monkeypatch, "2026-11-17 09:00")                  # 按鈕只在台北 08:00–10:00 開放
     app._refresh_gate()["until"] = 0.0                         # 冷卻是行程級、會跨測試殘留
 
     at = AppTest.from_file(str(ROOT / "app" / "streamlit_app.py"), default_timeout=60)
