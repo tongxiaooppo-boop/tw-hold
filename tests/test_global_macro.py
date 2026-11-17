@@ -89,3 +89,18 @@ def test_load_snapshot_meta讀整批新鮮度(monkeypatch, tmp_path):
 def test_load_snapshot_meta檔案不存在回空dict(monkeypatch, tmp_path):
     monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", tmp_path / "nope.json")
     assert global_macro.load_snapshot_meta() == {}
+
+
+def test_load_estimated_map(monkeypatch, tmp_path):
+    import json
+    meta = tmp_path / "global_macro_meta.json"
+    monkeypatch.setattr(global_macro, "GLOBAL_MACRO_META", meta)
+    assert global_macro.load_estimated_map() == {}
+    meta.write_text(json.dumps({"estimated": [
+        {"symbol": "^N225", "date": "2026-11-16", "close": 1.0},
+        {"symbol": "^N225", "date": "2026-11-12", "close": 2.0}]}), encoding="utf-8")
+    assert global_macro.load_estimated_map() == {"^N225": ["2026-11-12", "2026-11-16"]}
+    meta.write_text("{}", encoding="utf-8")
+    assert global_macro.load_estimated_map() == {}
+    meta.write_text("壞掉", encoding="utf-8")
+    assert global_macro.load_estimated_map() == {}

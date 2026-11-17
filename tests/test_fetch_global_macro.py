@@ -1,9 +1,12 @@
 """scripts.fetch_global_macro 的純邏輯部分（過期偵測 + 重試合併），不打網路。"""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pandas as pd
 
-from scripts.fetch_global_macro import _business_days_since, _check_staleness, _retry_stale
+from scripts.fetch_global_macro import (
+    _business_days_since, _check_staleness, _fill_gaps_from_hourly, _retry_stale)
 
 
 def _df(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
@@ -120,3 +123,50 @@ def test_即時報價_失敗或非正值就略過(monkeypatch):
             self.fast_info = {"lastPrice": 0.0 if sym == "ZERO" else 212.21, "previousClose": 219.26}
     monkeypatch.setattr(mod.yf, "Ticker", _T)
     assert mod.fetch_quotes(["NVDA", "BAD", "ZERO"]) == {"NVDA": {"price": 212.21, "prev_close": 219.26}}
+
+
+# ---- 小時線補日線缺口（2026-11-17）----
+_NOW = datetime(2026, 11, 17, 21, 17, tzinfo=timezone.utc)   # 台北 11-18 05:17，今天＝11-18
+
+
+def _hourly(day: str, n: int, last: float, tz="Asia/Tokyo") -> pd.Series:
+    idx = pd.date_range(f"{day} 09:00", periods=n, freq="1h", tz=tz)
+    return pd.Series([last - 10.0 * (n - 1 - i) for i in range(n)], index=idx)
+
+
+def test_hourly_fill_補平日缺口():
+    df = _df([("^N225", "2026-11-13", 50000.0), ("^N225", "2026-11-17", 60000.0)])
+    fake = lambda sym, days: _hourly("2026-11-16", 7, 59700.0) if sym == "^N225" else pd.Series(dtype="float64")
+    out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
+    assert len(out) == 3
+    row = out[out["date"] == pd.Timestamp("2026-11-16")].iloc[0]
+    assert row["symbol"] == "^N225" and row["close"] == 59700.0
+    assert est == [{"symbol": "^N225", "date": "2026-11-16", "close": 59700.0}]
+    assert list(out.columns) == list(df.columns) and (out.dtypes == df.dtypes).all()
+
+
+def test_hourly_fill_不補今天週末與已有():
+    df = _df([("^N225", "2026-11-13", 50000.0)])
+
+    def fake(sym, days):
+        if sym != "^N225":
+            return pd.Series(dtype="float64")
+        return pd.concat([_hourly("2026-11-18", 7, 1.0),   # 台北今天
+                          _hourly("2026-11-14", 7, 2.0),   # 週六
+                          _hourly("2026-11-13", 7, 3.0)])  # df 已有
+    out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
+    assert est == [] and len(out) == 1
+
+
+def test_hourly_fill_根數不足不補():
+    df = _df([("^N225", "2026-11-13", 50000.0)])
+    fake = lambda sym, days: _hourly("2026-11-16", 2, 59700.0)
+    out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
+    assert est == [] and len(out) == 1
+
+
+def test_hourly_fill_小時線失敗不中斷():
+    df = _df([("^N225", "2026-11-13", 50000.0)])
+    fake = lambda sym, days: pd.Series(dtype="float64")
+    out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
+    assert est == [] and out.equals(df)

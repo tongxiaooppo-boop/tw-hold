@@ -183,6 +183,57 @@ def _retry_stale(df: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     merged = _drop_intraday_asia(merged)          # 重試抓的短天期序列一樣可能帶盤中價
     return merged.sort_values(["symbol", "date"]).reset_index(drop=True)
 
+#: 2026-11-16 Yahoo 日線三檔亞洲指數 Close 全是 NaN（被 dropna 丟掉、最新日停在前一個交易日），
+#: 同一天小時線卻完整（最後一根收盤與官方只差約 0.06%）。日線缺平日時用小時線最後一根補，
+#: 並記進 meta 的 estimated，畫面標「推估」。
+_HOURLY_FILL_LOOKBACK_DAYS = 10
+_HOURLY_FILL_MIN_BARS = 3
+
+
+def _fetch_hourly(symbol: str, days: int) -> pd.Series:
+    """yf.Ticker(symbol).history(period=f"{days}d", interval="1h")["Close"].dropna()。
+    index 保留 Yahoo 給的交易所時區。任何例外都回空 Series（印一行 ⚠️），不中斷。"""
+    try:
+        h = yf.Ticker(symbol).history(period=f"{days}d", interval="1h")
+        return h["Close"].dropna()
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠️ {symbol} 小時線抓取失敗：{e}")
+        return pd.Series(dtype="float64")
+
+
+def _fill_gaps_from_hourly(df: pd.DataFrame, symbols=_ASIA_SYMBOLS, now_utc: datetime | None = None,
+                           fetch_hourly=None) -> tuple[pd.DataFrame, list[dict]]:
+    """日線缺的平日用小時線最後一根補。回 (新 df, 補了哪些 [{"symbol","date":"YYYY-MM-DD","close"}])。"""
+    fetch_hourly = fetch_hourly or _fetch_hourly
+    today_tpe = ((now_utc or datetime.now(timezone.utc)) + timedelta(hours=8)).date()
+    earliest = today_tpe - timedelta(days=_HOURLY_FILL_LOOKBACK_DAYS)
+    new_rows, estimated = [], []
+    for sym in symbols:
+        try:
+            hourly = fetch_hourly(sym, _HOURLY_FILL_LOOKBACK_DAYS)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ {sym} 小時線抓取失敗：{e}")
+            continue
+        if hourly is None or len(hourly) == 0:
+            continue
+        hourly = hourly.dropna().sort_index()
+        have = set(df.loc[df["symbol"] == sym, "date"].dt.date)
+        local_dates = pd.Series(hourly.index.date, index=hourly.index)
+        for d, grp in hourly.groupby(local_dates):
+            if (len(grp) < _HOURLY_FILL_MIN_BARS or d.weekday() >= 5 or d >= today_tpe
+                    or d < earliest or d in have):
+                continue
+            close = float(grp.iloc[-1])
+            new_rows.append({"symbol": sym, "date": pd.Timestamp(d), "close": close})
+            estimated.append({"symbol": sym, "date": d.strftime("%Y-%m-%d"), "close": close})
+    if not new_rows:
+        return df, []
+    add = pd.DataFrame(new_rows).astype(df.dtypes.to_dict())
+    out = pd.concat([df, add], ignore_index=True)
+    out = out.sort_values(["symbol", "date"]).reset_index(drop=True)
+    estimated.sort(key=lambda r: (r["symbol"], r["date"]))
+    return out, estimated
+
 
 def _business_days_since(d, today) -> int:
     """`d`（date）到 `today`（date）之間的營業日數，只扣週末，不管國定假日——
@@ -203,6 +254,11 @@ def main() -> None:
         print(f"偵測到 {len(stale)} 檔部分過期，單獨重試：{[s['symbol'] for s in stale]}")
         df = _retry_stale(df, [s["symbol"] for s in stale])
         stale = _check_staleness(df)  # 重試後才是最終結果，寫進 meta／告警的是這份
+
+    df, estimated = _fill_gaps_from_hourly(df)
+    if estimated:
+        print(f"小時線補 {len(estimated)} 列：" +
+              "、".join(f"{e['symbol']} {e['date'][5:]}" for e in estimated))
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(OUT, index=False)
@@ -229,6 +285,7 @@ def main() -> None:
         "snapshot_lag_days": snapshot_lag_days,
         "stale": stale,
         "quotes": quotes,
+        "estimated": estimated,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     if snapshot_lag_days > 2:
         print(f"::warning::整批快照落後 {snapshot_lag_days} 個營業日"

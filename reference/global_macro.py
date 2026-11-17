@@ -46,6 +46,21 @@ def load_stale_map() -> dict[str, dict]:
             for s in meta.get("stale", [])}
 
 
+def load_estimated_map() -> dict[str, list[str]]:
+    """meta 的 "estimated"（日線缺、用小時線推估的收盤）轉成 {symbol: ["YYYY-MM-DD", ...]}。
+    meta 不存在、壞掉、沒這個鍵都回 {}。"""
+    if not GLOBAL_MACRO_META.exists():
+        return {}
+    try:
+        meta = json.loads(GLOBAL_MACRO_META.read_text(encoding="utf-8"))
+        out: dict[str, list[str]] = {}
+        for e in meta.get("estimated", []):
+            out.setdefault(e["symbol"], []).append(e["date"])
+        return {k: sorted(v) for k, v in out.items()}
+    except Exception:
+        return {}
+
+
 def load_snapshot_meta() -> dict:
     """整批快照的絕對新鮮度——`reference_date`／`fetched_at`／`snapshot_lag_days`。
 

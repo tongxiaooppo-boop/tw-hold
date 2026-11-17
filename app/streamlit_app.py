@@ -3271,13 +3271,16 @@ def _asof_tag(asof, cls: str) -> str:
 
 def _mc_card(ticker: str, market: str, card: dict, chg: dict | None = None,
              windows: tuple[str, ...] = ("ma60", "ma200"), stale: dict | None = None,
-             asof=None) -> str:
+             asof=None, estimated: list[str] | None = None) -> str:
     # 卡片左側細條：顯示的窗口全一致就用那個顏色，分歧就用中性色（不硬湊一個結論）
     states = {card[w]["state"] for w in windows if card.get(w)}
     sev = _MC_VERDICT[next(iter(states))][1] if len(states) == 1 else "neutral"
     ma_rows = "".join(_mc_row(_MC_LABEL[w], card.get(w)) for w in windows)
     stale_line = (f'<div class="mc-stale">⚠️ 資料落後 {stale["lag_days"]} 天'
                   f'（最新只到 {stale["latest"]}）</div>' if stale else _asof_tag(asof, "mc-asof"))
+    if estimated:
+        _est = "、".join(str(d)[5:10] for d in estimated)
+        stale_line += f'<div class="mc-asof">ℹ️ {_est} 收盤是用小時線推估（Yahoo 日線缺）</div>'
     return (
         f'<div class="mc-card {sev}"><div class="stripe"></div><div class="mc-body">'
         f'<div class="mc-head"><span class="mc-market">{market}</span>'
@@ -3805,6 +3808,7 @@ def _macro_compass_page() -> None:
         _asof[f"{ticker}"] = close.dropna().index[-1]
 
     stale_map = global_macro.load_stale_map()
+    est_map = global_macro.load_estimated_map()
     snap_meta = global_macro.load_snapshot_meta()
 
     intl_idx_data, intl_idx_missing = {}, []
@@ -3921,7 +3925,7 @@ def _macro_compass_page() -> None:
     st.subheader("國際指數")
     if intl_idx_data:
         cards = [_mc_card(s, d["name"], d["card"], d["chg"], windows=("ma200",), stale=stale_map.get(s),
-                          asof=_asof.get(f"idx:{s}"))
+                          asof=_asof.get(f"idx:{s}"), estimated=est_map.get(s))
                  for s, d in intl_idx_data.items()]
         st.markdown(f'<div class="mc-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
     _fetched = _snapshot_fetched_line(snap_meta)

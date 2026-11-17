@@ -116,3 +116,10 @@ def test_美股個股卡_標抓取時間不標資料日():
     assert "212.21" in h and "-7.05" in h and "vs 前收 219.26" in h
     assert "抓取於 10-23 08:54（台北）" in h and "資料日" not in h
     assert "報價不完整" in sa._us_quote_card("NVDA", "NVIDIA", {"price": 0}, None)
+
+
+def test_mc_card_推估標示():
+    import streamlit_app as sa
+    h = sa._mc_card("^N225", "日經225", {}, None, windows=("ma200",), estimated=["2026-11-16"])
+    assert "11-16" in h and "小時線推估" in h
+    assert "小時線推估" not in sa._mc_card("^N225", "日經225", {}, None, windows=("ma200",))
