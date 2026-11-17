@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "asof": "2026-11-17",
+ "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "scanned": 622,
+   "candidates": [
+    {
+     "t": "1477",
+     "nm": "聚陽",
+     "px": 226.5,
+     "fs": "2026-11-17",
+     "st": 1
+    },
+    {
+     "t": "2618",
+     "nm": "長榮航",
+     "px": 48.1,
+     "fs": "2026-11-17",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}

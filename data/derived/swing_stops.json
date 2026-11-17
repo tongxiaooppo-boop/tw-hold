@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "asof": "2026-11-16",
+    "asof": "2026-11-17",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
@@ -13,12 +13,12 @@
       "atr0": 2.1786,
       "run_high": 94.0,
       "trail_stop": 89.85,
-      "last_close": 90.5,
-      "last_update": "2026-11-16",
-      "status": "candidate",
+      "last_close": 89.9,
+      "last_update": "2026-11-17",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-17",
+      "exit_price": 89.85
     },
     "2850": {
       "name": "新產",
@@ -28,12 +28,12 @@
       "atr0": 4.4286,
       "run_high": 169.5,
       "trail_stop": 161.52,
-      "last_close": 164.5,
-      "last_update": "2026-11-16",
-      "status": "candidate",
+      "last_close": 163.0,
+      "last_update": "2026-11-17",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-17",
+      "exit_price": 161.52
     },
     "6446": {
       "name": "藥華藥",
@@ -43,8 +43,8 @@
       "atr0": 83.9286,
       "run_high": 1405.0,
       "trail_stop": 1239.2,
-      "last_close": 1295.0,
-      "last_update": "2026-11-16",
+      "last_close": 1280.0,
+      "last_update": "2026-11-17",
       "status": "dropped_from_pool",
       "dropped_date": "2026-11-16",
       "exit_date": null,
@@ -58,8 +58,8 @@
       "atr0": 3.3214,
       "run_high": 132.0,
       "trail_stop": 125.36,
-      "last_close": 129.0,
-      "last_update": "2026-11-16",
+      "last_close": 127.5,
+      "last_update": "2026-11-17",
       "status": "dropped_from_pool",
       "dropped_date": "2026-11-11",
       "exit_date": null,
@@ -73,12 +73,12 @@
       "atr0": 15.6786,
       "run_high": 296.0,
       "trail_stop": 264.64,
-      "last_close": 273.0,
-      "last_update": "2026-11-16",
-      "status": "candidate",
+      "last_close": 267.5,
+      "last_update": "2026-11-17",
+      "status": "stopped_out",
       "dropped_date": null,
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-17",
+      "exit_price": 264.64
     },
     "9933": {
       "name": "中鼎",
@@ -86,12 +86,12 @@
       "entry_date": "2026-11-10",
       "entry_price": 46.5,
       "atr0": 2.1321,
-      "run_high": 52.599998474121094,
-      "trail_stop": 48.34,
-      "last_close": 51.5,
-      "last_update": "2026-11-16",
-      "status": "candidate",
-      "dropped_date": null,
+      "run_high": 56.599998474121094,
+      "trail_stop": 52.34,
+      "last_close": 56.6,
+      "last_update": "2026-11-17",
+      "status": "dropped_from_pool",
+      "dropped_date": "2026-11-17",
       "exit_date": null,
       "exit_price": null
     },

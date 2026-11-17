@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "updated_at": "2026-11-17T01:38:03+00:00",
+    "updated_at": "2026-11-17T15:22:15+00:00",
     "cost": 0.00585,
     "note": "長波段模擬單（輕量版）——真實市場價格逐日累積的已實現結果，不是回測。進場口徑＝訊號日次一交易日開盤成交（同 swing_stops.py 的進場代理）。"
   },
@@ -661,17 +661,44 @@
       "exit_date": "2026-11-11",
       "exit_price": 1252.3,
       "ret_pct": -0.089236
+    },
+    {
+      "ticker": "2535",
+      "name": "達欣工",
+      "entry_date": "2026-11-13",
+      "entry_price": 92.9,
+      "exit_date": "2026-11-17",
+      "exit_price": 89.85,
+      "ret_pct": -0.032831
+    },
+    {
+      "ticker": "2850",
+      "name": "新產",
+      "entry_date": "2026-11-13",
+      "entry_price": 166.0,
+      "exit_date": "2026-11-17",
+      "exit_price": 161.52,
+      "ret_pct": -0.026988
+    },
+    {
+      "ticker": "6782",
+      "name": "視陽",
+      "entry_date": "2026-11-09",
+      "entry_price": 270.5,
+      "exit_date": "2026-11-17",
+      "exit_price": 264.64,
+      "ret_pct": -0.021664
     }
   ],
   "stats": {
-    "n": 73,
-    "win_rate": 0.3561643835616438,
-    "avg_ret_gross": 0.0027563972602739732,
-    "expectancy_net": -0.003093602739726025,
+    "n": 76,
+    "win_rate": 0.34210526315789475,
+    "avg_ret_gross": 0.001575447368421053,
+    "expectancy_net": -0.004274552631578945,
     "n_min": 10,
     "vs_backtest": {
       "backtest_win_rate": 0.43,
-      "gap_pp": -7.383561643835618,
+      "gap_pp": -8.789473684210524,
       "diverging": false
     },
     "by_month": [
@@ -689,9 +716,9 @@
       },
       {
         "ym": "2026-11",
-        "n": 10,
-        "win_rate": 0.3,
-        "avg_ret_net": -0.029223
+        "n": 13,
+        "win_rate": 0.23076923076923078,
+        "avg_ret_net": -0.030097153846153843
       }
     ]
   }
