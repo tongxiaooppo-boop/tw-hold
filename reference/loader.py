@@ -140,7 +140,10 @@ def load_dividends() -> pd.DataFrame:
     out = grouped[sum_cols].sum(min_count=1)
     dates = ["pay_date", "announce_date", "ex_date"]
     out = out.join(grouped[dates].max())
-    cols = ["cash_earnings", "stock_earnings", *dates]
+    # 該年「有配現金」的筆數：季配／半年配的最新年度還沒配完時，dividend_factors 靠它排除
+    _cash_row = d[[c for c in ["cash_earnings", "cash_surplus"] if c in d.columns]].fillna(0).sum(axis=1) > 0
+    out["n_payments"] = _cash_row.groupby([d["ticker"], d["year"]]).sum().astype("int64")
+    cols = ["cash_earnings", "stock_earnings", *dates, "n_payments"]
     if "cash_surplus" in d.columns:
         cols.append("cash_surplus")
     out = out[cols].reset_index().sort_values(["ticker", "year"]).reset_index(drop=True)

@@ -309,3 +309,17 @@ def test_ttm_現金流由年初累計差分不是直接相加():
     assert r["ttm_capex"] == -12.0    # −10 − (−3) + (−5)
     assert r["ttm_fcf"] == 108.0      # ttm_fcf 用 capex 絕對值
     assert r["ocf"] == 30.0           # 單季
+
+
+def test_定存_最新年度季配沒配完不算減配():
+    # 2330 型：2025 配 4 季合計 22，2026 只配 1 季 7 → 排除 2026，不判減配、近一次股利用 2025
+    rows = [dict(ticker="QTR", year=y, cash_dividend=c, cash_earnings=c, n_payments=n)
+            for y, c, n in [(2021, 11, 4), (2022, 11, 4), (2023, 12, 4), (2024, 17, 4),
+                            (2025, 22, 4), (2026, 7, 1)]]
+    # 對照：最新年度筆數相同、金額真的掉 → 照樣判減配
+    rows += [dict(ticker="CUT", year=y, cash_dividend=c, cash_earnings=c, n_payments=1)
+             for y, c in [(2021, 5), (2022, 5), (2023, 5), (2024, 5), (2025, 5), (2026, 3)]]
+    r = factors.dividend_factors(pd.DataFrame(rows)).set_index("ticker")
+    assert r.loc["QTR", "div_cut_5y"] == False
+    assert r.loc["QTR", "last_cash_dividend"] == 22
+    assert r.loc["CUT", "div_cut_5y"] == True

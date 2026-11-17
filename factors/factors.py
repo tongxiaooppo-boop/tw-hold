@@ -249,9 +249,19 @@ def dividend_factors(div: pd.DataFrame, ann_eps: pd.DataFrame | None = None) -> 
              earnings_div_ratio, payout_ratio_ttm]`。
     """
     div = div.sort_values(["ticker", "year"]).copy()
+    max_year = div["year"].max() if len(div) else None
+    if "announce_date" in div.columns and div["announce_date"].notna().any():
+        # 上游有年度打錯的列（4306 year=3822、公告 2019）：以最新公告年為上限
+        cap = pd.to_datetime(div["announce_date"]).max().year
+        max_year = div.loc[div["year"] <= cap, "year"].max()
     rows = []
     for tk, g in div.groupby("ticker", sort=False):
-        g = g[g["year"] <= g["year"].max()]
+        # 最新年度（全表最新的那一年）配息筆數比前一年少＝季配／半年配還沒配完，
+        # 不拿來比減配、也不當「近一次股利」（2026-11-17：2330 只配 1 季被判減配）。
+        if ("n_payments" in g.columns and len(g) >= 2
+                and g["year"].iloc[-1] == max_year
+                and g["n_payments"].iloc[-1] < g["n_payments"].iloc[-2]):
+            g = g.iloc[:-1]
         cash = g.set_index("year")["cash_dividend"]
         # 連續配息年數：從最新年往回數「連續 > 0」
         yrs = 0
