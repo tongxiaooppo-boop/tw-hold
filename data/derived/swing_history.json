@@ -1,19 +1,7 @@
 {
-  "_asof": "2026-11-17",
+  "_asof": "2026-11-18",
   "_pool": [],
-  "_prev_pool": [
-    "6782",
-    "9933"
-  ],
-  "_prev_tickers": {
-    "6782": {
-      "first_seen": "2026-11-09",
-      "streak_days": 6
-    },
-    "9933": {
-      "first_seen": "2026-11-09",
-      "streak_days": 6
-    }
-  },
+  "_prev_pool": [],
+  "_prev_tickers": {},
   "tickers": {}
 }
