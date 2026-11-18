@@ -11,7 +11,9 @@ export async function dispatch(workflow, token, fetchImpl = fetch) {
       "User-Agent": "tw-hold-alarm",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ref: REF }),
+    // source=alarm：workflow 的 gate 靠它分辨「Cloudflare 自動班」與手動／Streamlit 按鈕（手動一律跑）。
+    // ⚠️ 五條 workflow 都要先宣告 inputs.source 並 push，才能部署這版，否則 GitHub 回 422、整班漏掉。
+    body: JSON.stringify({ ref: REF, inputs: { source: "alarm" } }),
   };
   let status = 0;
   let detail = "";

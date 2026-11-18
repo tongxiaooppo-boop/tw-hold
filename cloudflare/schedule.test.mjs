@@ -54,7 +54,7 @@ test("worker_命中時dispatch", async () => {
   assert.equal(calls.length, 1);
   assert.ok(calls[0][0].endsWith("/actions/workflows/openapi_daily.yml/dispatches"));
   assert.equal(calls[0][1].method, "POST");
-  assert.equal(calls[0][1].body, JSON.stringify({ ref: "main" }));
+  assert.equal(calls[0][1].body, JSON.stringify({ ref: "main", inputs: { source: "alarm" } }));
   assert.equal(calls[0][1].headers.Authorization, "Bearer t");
 });
 
