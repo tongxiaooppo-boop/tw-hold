@@ -6,6 +6,11 @@ GitHub 的 `schedule` 實測會晚 5～9 小時，`workflow_dispatch` 不會。�
 
 見 `schedule.js`。
 
+## 與 workflow 的 gate 搭配（2026-11-18）
+
+- dispatch 一律帶 `inputs: {source: "alarm"}`；五條 workflow 的 `workflow_dispatch.inputs.source` 必須宣告（預設 `manual`），否則 GitHub 回 422、整班漏掉。新增 workflow 到時間表時要先在該 workflow 宣告 `source`、push，再部署 Worker。
+- 各 workflow 第一個 job `gate`（`scripts/run_gate.py`，規則在 `reference/run_gate.py`）決定這班要不要真的跑：資料已新鮮或 Cloudflare 剛成功就跳過；手動與 Streamlit 按鈕（沒帶 source）一律跑；gate 出錯一律跑。
+
 ## 部署
 
 1. `npx wrangler login`
