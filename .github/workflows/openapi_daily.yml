@@ -11,6 +11,11 @@ name: 官方 OpenAPI 每日收集
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        type: string
+        default: "manual"
+        required: false
   schedule:
     - cron: "2 8 * * 1-5"
     - cron: "2 10 * * 1-5"
@@ -26,7 +31,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 開跑前新鮮度閘門（reference/run_gate.py）：資料已是最新／Cloudflare 班剛成功就跳過本班。
+  # fail-open：gate 自己出錯一律照跑。
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 新鮮度閘門
+        id: g
+        env:
+          GATE_SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/run_gate.py --workflow openapi_daily
+
   collect:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

@@ -29,12 +29,42 @@ on:
   schedule:
     - cron: "28 0 * * 1-5"     # 平日 UTC 00:28 = 台北 08:28，開盤（09:00）前約 30 分（避開整點／半點）
   workflow_dispatch:
+    inputs:
+      source:
+        type: string
+        default: "manual"
+        required: false
 
 permissions:
   contents: read
 
 jobs:
+  # 開跑前新鮮度閘門（reference/run_gate.py）：資料已是最新／Cloudflare 班剛成功就跳過本班。
+  # fail-open：gate 自己出錯一律照跑。
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 新鮮度閘門
+        id: g
+        env:
+          GATE_SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/run_gate.py --workflow heartbeat
+
   heartbeat:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

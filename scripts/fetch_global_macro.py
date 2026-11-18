@@ -250,8 +250,46 @@ def _business_days_since(d, today) -> int:
     return n
 
 
+def _carry_forward(df: pd.DataFrame, old: pd.DataFrame | None,
+                   symbols: list[str]) -> tuple[pd.DataFrame, list[str]]:
+    """整檔漏抓的 symbol 用上一版（執行前的 OUT）補回歷史；新抓的列優先。
+
+    回 (新 df, carried)：carried＝補完後仍完全沒有新列、只靠舊資料的 symbol。
+    old 沒有該檔就維持缺（不報錯）。"""
+    if old is None or old.empty or not symbols:
+        return df, []
+    old_rows = old[old["symbol"].isin(symbols)]
+    if old_rows.empty:
+        return df, []
+    have_new = set(df["symbol"])
+    carried = sorted(s for s in symbols if s not in have_new and s in set(old_rows["symbol"]))
+    old_rows = old_rows[["symbol", "date", "close"]].copy()
+    old_rows["date"] = pd.to_datetime(old_rows["date"])
+    merged = pd.concat([old_rows, df], ignore_index=True)        # 新抓的排後面 → keep="last" 新值贏
+    merged = merged.drop_duplicates(subset=["symbol", "date"], keep="last")
+    return merged.sort_values(["symbol", "date"]).reset_index(drop=True), carried
+
+
+def _read_old() -> pd.DataFrame | None:
+    try:
+        return pd.read_parquet(OUT) if OUT.exists() else None
+    except Exception as e:  # noqa: BLE001
+        print(f"  ⚠️ 讀不到上一版 {OUT.name}：{e}")
+        return None
+
+
 def main() -> None:
+    old = _read_old()                       # 要在寫入 OUT 之前讀
     df = fetch()
+
+    missing0 = sorted(set(ALL_SYMBOLS) - set(df["symbol"]))
+    carried: list[str] = []
+    if missing0:
+        print(f"整檔沒抓到，單檔重抓：{missing0}")
+        df = _retry_stale(df, missing0)
+        df, carried = _carry_forward(df, old, missing0)
+        if carried:
+            print(f"::warning::沿用上一版：{carried}")
 
     stale = _check_staleness(df)
     if stale:
@@ -290,6 +328,7 @@ def main() -> None:
         "stale": stale,
         "quotes": quotes,
         "estimated": estimated,
+        "carried_forward": carried,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     if snapshot_lag_days > 2:
         print(f"::warning::整批快照落後 {snapshot_lag_days} 個營業日"

@@ -10,6 +10,11 @@ name: 籌碼流向（傍晚）
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        type: string
+        default: "manual"
+        required: false
   schedule:
     - cron: "28 10 * * 1-5"
 
@@ -21,7 +26,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 開跑前新鮮度閘門（reference/run_gate.py）：資料已是最新／Cloudflare 班剛成功就跳過本班。
+  # fail-open：gate 自己出錯一律照跑。
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run: ${{ steps.g.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas pyarrow
+      - name: 還原私有參考資料（ref，不帶 --strict；失敗就讓 gate fail-open）
+        continue-on-error: true
+        env:
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/refdata_sync.py pull --only ref
+      - name: 新鮮度閘門
+        id: g
+        env:
+          GATE_SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          DATA_REPO_PAT: ${{ secrets.DATA_REPO_PAT }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: python scripts/run_gate.py --workflow chip_flow_evening
+
   fetch:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from scripts.fetch_global_macro import (
-    _business_days_since, _check_staleness, _fill_gaps_from_hourly, _retry_stale)
+    _business_days_since, _carry_forward, _check_staleness, _fill_gaps_from_hourly,
+    _retry_stale)
 
 
 def _df(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
@@ -178,3 +179,36 @@ def test_hourly_fill_小時線失敗不中斷():
     fake = lambda sym, days: pd.Series(dtype="float64")
     out, est = _fill_gaps_from_hourly(df, now_utc=_NOW, fetch_hourly=fake)
     assert est == [] and out.equals(df)
+
+
+# ---- 整檔漏抓沿用上一版（2026-11-18）----
+def _tnx(n: int, start="2026-06-01", base=4.0) -> pd.DataFrame:
+    d = pd.bdate_range(start, periods=n)
+    return pd.DataFrame({"symbol": "^TNX", "date": d, "close": [base + i * 0.01 for i in range(n)]})
+
+
+def test_carry_forward_整檔漏抓重抓也空_沿用舊資料():
+    old = _tnx(100)
+    df = _df([("^DJI", "2026-09-14", 1.0)])
+    out, carried = _carry_forward(df, old, ["^TNX"])
+    assert len(out[out["symbol"] == "^TNX"]) == 100
+    assert carried == ["^TNX"]
+
+
+def test_carry_forward_重抓有10天_併舊歷史不算沿用():
+    old = _tnx(100)
+    # 重抓的 10 列 = 2 列與 old 重疊（新值）+ 8 列新日期
+    ov = old.tail(2).copy()
+    ov["close"] = 9.99
+    fresh = _tnx(8, start=str(old["date"].max().date() + pd.Timedelta(days=1)), base=5.0)
+    df = pd.concat([ov, fresh], ignore_index=True)
+    out, carried = _carry_forward(df, old, ["^TNX"])
+    t = out[out["symbol"] == "^TNX"]
+    assert len(t) == 108 and carried == []
+    assert (t[t["date"].isin(ov["date"])]["close"] == 9.99).all()
+
+
+def test_carry_forward_沒有舊檔_維持缺():
+    df = _df([("^DJI", "2026-09-14", 1.0)])
+    out, carried = _carry_forward(df, None, ["^TNX"])
+    assert "^TNX" not in set(out["symbol"]) and carried == []
