@@ -170,7 +170,8 @@ jobs:
   # 不管是哪一步炸的都會响，跟 rebuild.yml::notify-failure 同一個模式。
   notify-failure:
     needs: [gate, fetch]
-    if: needs.gate.result == 'failure' || needs.fetch.result == 'failure'
+    # always()：沒有狀態函式時 GitHub 會隱含 success()，前置 job 失敗時整個 if 直接不成立、通知永遠不發
+    if: always() && (needs.gate.result == 'failure' || needs.fetch.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: 送出失敗通知
