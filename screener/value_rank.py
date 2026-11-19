@@ -8,6 +8,7 @@ import pandas as pd
 GROWTH_REV = 0.30      # 近 4 季營收 ÷ 前 4 季營收 − 1 ≥ 30% → 高成長
 SPIKE_EPS = 2.0        # 近 4 季 EPS ÷ 前 3 年平均年 EPS > 2 → EPS 暴增
 TOP_N = 20
+DECEL_PTS = 0.20   # 高成長組：近12月年增 − 近3月年增 ≥ 20 個百分點 → 降溫
 GROUPS = ("一般", "循環", "高成長")
 
 
@@ -75,3 +76,44 @@ def rank(rows: list[dict]) -> dict[str, list[dict]]:
     for g in out:
         out[g] = sorted(out[g], key=lambda r: (r["gap"], str(r.get("ticker"))))[:TOP_N]
     return out
+
+
+def rev_yoy(m: pd.DataFrame) -> tuple[float | None, float | None, str | None]:
+    """月營收長表（month 'YYYY-MM'、revenue）→ (近3月年增, 近12月年增, 最新月)；缺月或分母 ≤ 0 → 該值 None。"""
+    if m is None or len(m) == 0 or "month" not in m.columns or "revenue" not in m.columns:
+        return None, None, None
+    by: dict[pd.Period, float] = {}
+    for mo, rv in zip(m["month"], m["revenue"]):
+        if not _finite(rv):
+            continue
+        try:
+            by[pd.Period(str(mo), "M")] = float(rv)
+        except Exception:  # noqa: BLE001
+            continue
+    if not by:
+        return None, None, None
+    last = max(by)
+
+    def _yoy(n: int) -> float | None:
+        cur = [last - i for i in range(n)]
+        prev = [p - 12 for p in cur]
+        if not all(p in by for p in cur + prev):
+            return None
+        d = sum(by[p] for p in prev)
+        if d <= 0:
+            return None
+        return sum(by[p] for p in cur) / d - 1
+
+    return _yoy(3), _yoy(12), str(last)
+
+
+def rev_flag(group: str, y3: float | None, y12: float | None) -> str:
+    """月營收警示文字；無警示 → ""。只提醒、不影響排名。"""
+    if y3 is None:
+        return ""
+    if y3 < 0:
+        x = "不到 1%" if abs(y3) * 100 < 0.5 else f" {abs(y3) * 100:.0f}%"
+        return f"近三月營收比去年少{x}，過去獲利可能撐不住"
+    if group == "高成長" and y12 is not None and y12 - y3 >= DECEL_PTS - 1e-9:
+        return f"營收仍在增加，但成長放慢（近12月年增 {y12:.0%} → 近三月 {y3:.0%}），合理價要再確認"
+    return ""

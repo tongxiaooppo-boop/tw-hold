@@ -83,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             eps_x = vr.eps_ratio(kw["qf"])
             rev_g = vr.revenue_growth(kw["qf"])
             group, why = vr.category(typ, eps_x, rev_g)
+            y3, y12, rev_m = vr.rev_yoy(kw["rev"])
             rows.append(dict(
                 ticker=code, name=u.get("stock_name"), industry=u.get("industry"), type=typ,
                 display_type=card.get("display_type"), route=card.get("route"), tier=card.get("tier"),
@@ -91,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
                 eps_last_q=qs[-1]["q"] if qs else None,
                 eps_ttm=_num((eps.get("ttm") or {}).get("eps")),
                 eps_x=eps_x, rev_g=rev_g, group=group, why=why,
+                rev3m_yoy=y3, rev12m_yoy=y12, rev_month=rev_m, rev_flag=vr.rev_flag(group, y3, y12),
             ))
         except Exception as exc:  # noqa: BLE001
             errors += 1
@@ -117,7 +119,8 @@ def main(argv: list[str] | None = None) -> int:
         "carded_n": carded_n,
         "below_fair_n": below,
         "errors": errors,
-        "thresholds": {"growth_rev": vr.GROWTH_REV, "spike_eps": vr.SPIKE_EPS, "top_n": vr.TOP_N},
+        "thresholds": {"growth_rev": vr.GROWTH_REV, "spike_eps": vr.SPIKE_EPS, "top_n": vr.TOP_N,
+                       "decel_pts": vr.DECEL_PTS},
         "groups": vr.rank(rows),
     }
     out = OUT.with_name("value_rank.limit.json") if args.limit else OUT

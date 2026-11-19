@@ -2589,11 +2589,17 @@ def _value_rank_section(data: dict | None) -> None:
             "股價": r.get("price"), "便宜價（元）": r.get("cheap"), "合理價（元）": r.get("fair"),
             "距合理價（%）": round((r["gap"] or 0) * 100, 1) if r.get("gap") is not None else None,
             "估價方法": route_zh.get(r.get("route"), r.get("route")),
+            "近3月營收年增（%）": (round(r["rev3m_yoy"] * 100, 1) if r.get("rev3m_yoy") is not None else None),
+            "營收警示": r.get("rev_flag") or "",
             "EPS 到哪一季": r.get("eps_last_q"), "原因": r.get("why") or "", "備註": r.get("lag") or "",
         } for r in rows])
         st.dataframe(df, hide_index=True, use_container_width=True)
     st.caption("循環＝分類為景氣循環，或近 4 季 EPS 超過前 3 年平均 2 倍、營收沒同步暴增；"
                "高成長＝近 4 季營收年增 30% 以上。合理價依各股歷史倍數，不是買賣建議。")
+    from collections import Counter
+    _mc = Counter(r.get("rev_month") for g in groups.values() for r in (g or []) if r.get("rev_month")).most_common(1)
+    st.caption("營收警示只提醒、不影響排名：近三月營收比去年少＝衰退；高成長股近三月年增比近 12 月少 20 個百分點以上＝成長放慢。"
+               + (f"月營收到 {_mc[0][0]} 。" if _mc else ""))
 
 
 def _stock_page() -> None:
