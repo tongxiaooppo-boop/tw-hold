@@ -1,0 +1,39 @@
+{
+ "schema": 1,
+ "asof": "2026-11-19",
+ "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 1,
+   "scanned": 625,
+   "candidates": [
+    {
+     "t": "2540",
+     "nm": "愛山林",
+     "px": 48.75,
+     "fs": "2026-11-19",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}
