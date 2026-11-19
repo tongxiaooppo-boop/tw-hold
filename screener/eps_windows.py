@@ -15,6 +15,7 @@
 可見性（live=False）
 - 財報季已公布 ⇔ eps、revenue 皆有限值，且 asof ≥ reference.corporate_actions.report_deadline(period_end)
   （Q1 5/15、Q2 8/14、Q3 11/14、Q4 隔年 3/31）。
+- 金融股（financial=True）已公布季只看 eps（銀行營收整欄空、保險 IFRS 17 後營收空）。
 - 月份 m 營收可見 ⇔ 值有限且 > 0，且 asof ≥ (m 的次月) 10 日。
 - 「應公布未公布」：asof ≥ 次月 10 日但值缺 → 該季不可試算（status="not_estimable"）。
 live=True 時「已到期但缺」的判斷照樣做（到期日同上），只是「有值就可見」不必等到期。
@@ -136,10 +137,11 @@ def month_visible(month: pd.Timestamp, asof: pd.Timestamp) -> bool:
     return pd.Timestamp(asof) >= deadline
 
 
-def reported_window(q: pd.DataFrame, asof: pd.Timestamp, live: bool = False) -> EpsWindow:
+def reported_window(q: pd.DataFrame, asof: pd.Timestamp, live: bool = False,
+                    financial: bool = False) -> EpsWindow:
     """已公布 4 季：P−3..P，全 actual。少於 4 季或有缺季 → ok=False、status="no_data"。
     所有股票（含金融）都要給（T-9）。"""
-    actual = _actuals(q, asof, live)
+    actual = _actuals(q, asof, live, financial)
     if not actual:
         return _unavailable("no_data", "沒有已公布財報")
     return _assemble(actual, max(actual))
@@ -148,7 +150,7 @@ def reported_window(q: pd.DataFrame, asof: pd.Timestamp, live: bool = False) -> 
 def ttm_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
                live: bool = False, financial: bool = False) -> EpsWindow:
     """近 4 季（見模組說明）。financial=True → 等於 reported_window。"""
-    actual = _actuals(q, asof, live)
+    actual = _actuals(q, asof, live, financial)
     if not actual:
         return _unavailable("no_data", "沒有已公布財報")
     p = max(actual)
@@ -180,7 +182,7 @@ def fwd_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
     months = _months(monthly, asof, live)
     if _known(end + 1, months) == 0:
         return base
-    actual = _actuals(q, asof, live)
+    actual = _actuals(q, asof, live, financial)
     estimates = {
         pd.Period(row.q, freq="Q"): (row, detail)
         for row in base.quarters if row.kind == "est"
@@ -198,7 +200,7 @@ def fwd_window(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
 def windows(q: pd.DataFrame, monthly: pd.Series, asof: pd.Timestamp,
             live: bool = False, financial: bool = False) -> dict[str, EpsWindow]:
     """一次算三個：{"reported", "ttm", "fwd"}。前瞻與近 4 季共用的試算季必須是同一個 EstDetail。"""
-    reported = reported_window(q, asof, live=live)
+    reported = reported_window(q, asof, live=live, financial=financial)
     ttm = ttm_window(q, monthly, asof, live=live, financial=financial)
     fwd = fwd_window(q, monthly, asof, base=ttm, live=live, financial=financial)
     return {"reported": reported, "ttm": ttm, "fwd": fwd}
@@ -218,7 +220,7 @@ def _finite(value) -> bool:
     return value is not None and bool(pd.notna(value)) and math.isfinite(float(value))
 
 
-def _actuals(q: pd.DataFrame, asof: pd.Timestamp, live: bool) -> dict:
+def _actuals(q: pd.DataFrame, asof: pd.Timestamp, live: bool, financial: bool = False) -> dict:
     if q.empty:
         return {}
     rows = {}
@@ -228,7 +230,7 @@ def _actuals(q: pd.DataFrame, asof: pd.Timestamp, live: bool) -> dict:
         if pd.notna(pe):
             rows[pe.to_period("Q")] = row
     return {p: r for p, r in rows.items()
-            if _finite(r.get("eps")) and _finite(r.get("revenue"))
+            if _finite(r.get("eps")) and (financial or _finite(r.get("revenue")))
             and (live or quarter_visible(p.end_time.normalize(), asof))}
 
 

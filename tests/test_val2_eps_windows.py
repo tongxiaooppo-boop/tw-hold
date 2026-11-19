@@ -174,3 +174,47 @@ def test_重複季取最後一筆且不排序也可():
     r = ew.reported_window(q2, pd.Timestamp("2026-10-15"))
     assert r.ok and [x.q for x in r.quarters] == ["2025Q3", "2025Q4", "2026Q1", "2026Q2"]
     assert math.isclose(r.quarters[-1].eps, 1.5)
+
+
+# ── 金融股：營收空仍算已公布季 ──
+def _nan_rev(last="2026Q3", quarters=None):
+    q = make_q(last)
+    mask = q["period_end"].map(lambda t: quarters is None or str(pd.Timestamp(t).to_period("Q")) in quarters)
+    q.loc[mask, "revenue"] = float("nan")
+    return q
+
+
+_ASOF_FIN = pd.Timestamp("2026-11-19")
+
+
+def test_金融營收全空_reported有4季():
+    w = ew.reported_window(_nan_rev(), asof=_ASOF_FIN, live=True, financial=True)
+    assert w.ok and qs(w)[-1] == ("2026Q3", "actual") and len(w.quarters) == 4
+    assert math.isclose(w.eps, 0.96 * 4, rel_tol=1e-9)
+
+
+def test_非金融營收全空_維持no_data():
+    w = ew.reported_window(_nan_rev(), asof=_ASOF_FIN, live=True, financial=False)
+    assert not w.ok and w.status == "no_data"
+
+
+def test_金融營收全空_ttm等於reported():
+    q = _nan_rev()
+    m = make_monthly("2026-10")
+    r = ew.reported_window(q, asof=_ASOF_FIN, live=True, financial=True)
+    t = ew.ttm_window(q, m, _ASOF_FIN, live=True, financial=True)
+    assert qs(t) == qs(r) and t.eps == r.eps and t.n_est == 0
+
+
+def test_金融營收全空_fwd不試算():
+    q = _nan_rev()
+    f = ew.fwd_window(q, make_monthly("2026-10"), _ASOF_FIN, live=True, financial=True)
+    assert f.ok and all(r.kind == "actual" for r in f.quarters)
+
+
+def test_保險近3季營收空():
+    q = _nan_rev(quarters={"2026Q1", "2026Q2", "2026Q3"})
+    fin = ew.reported_window(q, asof=_ASOF_FIN, live=True, financial=True)
+    non = ew.reported_window(q, asof=_ASOF_FIN, live=True, financial=False)
+    assert qs(fin)[-1][0] == "2026Q3"
+    assert qs(non)[-1][0] == "2025Q4"

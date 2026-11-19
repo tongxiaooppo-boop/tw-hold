@@ -194,13 +194,13 @@ def fwd_note(card: dict, cls: dict | None) -> str | None:
     return FWD_NOTES["hist"]
 
 
-def nonop_rows(q: pd.DataFrame) -> list[dict]:
+def nonop_rows(q: pd.DataFrame, financial: bool = False) -> list[dict]:
     """P4_spec §1：最近 eps_windows.NONOP_QUARTERS 個有實際財報的季（舊→新），每列
     {"q": "2026Q2", "nonop": pretax_income−op_income, "pretax": pretax_income, "share": nonop÷|pretax|}；
     非有限 → None（share 另在 pretax 為 0 時 None）。q 少於 1 季 → []。"""
     rows = []
     actual = _quarters(q)
-    actual = actual[actual["eps"].notna() & actual["revenue"].notna()]
+    actual = actual[actual["eps"].notna() & (financial | actual["revenue"].notna())]
     for r in actual.tail(ew.NONOP_QUARTERS).to_dict("records"):
         pretax = _number(r["pretax_income"])
         nonop = _number(r["pretax_income"] - r["op_income"])
@@ -237,7 +237,8 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
     revision = (ms.revision_streak(rev_hist) if rev_hist is not None and not rev_hist.empty
                 else dict(last_pct=None, streak=0, direction=None))
     revision["last_event"] = rev_hist.sort_values("month").iloc[-1]["event"] if rev_hist is not None and not rev_hist.empty else None
-    actual = q[q["eps"].notna() & q["revenue"].notna()].tail(ew.NONOP_QUARTERS)
+    financial = cls is not None and (cls.get("industry_group") == "financial" or cls.get("type") == "financial")
+    actual = q[q["eps"].notna() & (financial | q["revenue"].notna())].tail(ew.NONOP_QUARTERS)
     result = dict(ok=cls is not None, tier="D", route=None, reason=None, price=price, px_date=px_date,
                   ticker=cls_data.get("ticker"), type=cls_data.get("type"),
                   display_type=cls_data.get("display_type"), state=cls_data.get("state") or [],
@@ -246,7 +247,7 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
                   eps=dict(reported=None, ttm=None, fwd=None, est_disabled=None), growth=[], prices=None,
                   position="na", fwd_prices=None, buy_range=None, revision=revision, b_tier=None,
                   c_tier=None, roe=None, eps_3y_avg=None, price_note=None, quality=quality(q), status=dt.summarize([]),
-                  notes=[], version=CARD_VERSION, nonop_hist=nonop_rows(q) if len(q) >= 4 else [],
+                  notes=[], version=CARD_VERSION, nonop_hist=nonop_rows(q, financial) if len(q) >= 4 else [],
                   nonop_median=ew.nonop_median(actual.to_dict("records")) if len(q) >= 4 else None, fwd_note=None)
     if cls is None:
         result["reason"] = "這檔不在分類母體（上市櫃且財報 ≥12 季），不做估值"
@@ -257,7 +258,6 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
         result["price_note"] = price_note(result)
         return result
     typ = cls.get("type")
-    financial = cls.get("industry_group") == "financial" or typ == "financial"
     construction = "construction" in ((cls.get("metrics") or {}).get("special_triggers") or [])
     windows = ew.windows(q, monthly, asof, live=True, financial=financial)
     checks = dt.data_checks(q, monthly, windows, cls, asof, financial=financial, construction=construction)
