@@ -299,6 +299,14 @@ OUTSIDE_OK: tuple[tuple[str, str, str, str], ...] = (
     ("app/streamlit_app.py", "購買區間", "沒有購買區間", "⑦ 讀 card.buy_range，同一欄位"),
     ("app/streamlit_app.py", "購買區間", "現價不在購買區間", "⑦ 讀 buy_range.where，同一欄位"),
     ("app/streamlit_app.py", "合理價", "跟估值、合理價", "可買上限說明：明講跟估值卡合理價無關"),
+    # 合理價以下排行（2026-11-19，使用者同意）：value_rank.json 的 cheap／fair 直接取自 val_card.build_card 的 prices，同一欄位
+    ("app/streamlit_app.py", "合理價", "合理價以下排行", "排行榜標題；fair＝估值卡 prices.fair"),
+    ("app/streamlit_app.py", "合理價", "股價在合理價（含）以下", "排行榜說明；fair＝估值卡 prices.fair"),
+    ("app/streamlit_app.py", "便宜價", "便宜價（元）", "排行榜欄名；cheap＝估值卡 prices.cheap"),
+    ("app/streamlit_app.py", "合理價", "合理價（元）", "排行榜欄名；fair＝估值卡 prices.fair"),
+    ("app/streamlit_app.py", "合理價", "距合理價（%）", "排行榜欄名；price÷估值卡 prices.fair−1"),
+    ("app/streamlit_app.py", "近 4 季 EPS", "近 4 季 EPS 超過前 3 年平均", "排行榜分組定義說明，不是顯示 EPS 數字"),
+    ("app/streamlit_app.py", "合理價", "合理價依各股歷史倍數", "排行榜說明；fair＝估值卡 prices.fair"),
 )
 
 

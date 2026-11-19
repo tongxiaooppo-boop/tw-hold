@@ -2586,7 +2586,7 @@ def _value_rank_section(data: dict | None) -> None:
             continue
         df = pd.DataFrame([{
             "代號": r.get("ticker"), "名稱": r.get("name"), "產業": r.get("industry"),
-            "股價": r.get("price"), "便宜價": r.get("cheap"), "合理價": r.get("fair"),
+            "股價": r.get("price"), "便宜價（元）": r.get("cheap"), "合理價（元）": r.get("fair"),
             "距合理價（%）": round((r["gap"] or 0) * 100, 1) if r.get("gap") is not None else None,
             "估價方法": route_zh.get(r.get("route"), r.get("route")),
             "EPS 到哪一季": r.get("eps_last_q"), "原因": r.get("why") or "", "備註": r.get("lag") or "",
