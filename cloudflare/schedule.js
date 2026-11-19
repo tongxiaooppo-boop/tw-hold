@@ -9,12 +9,12 @@ function range(a, b) {
 
 // 時間一律台北時間 "HH:MM"；weekdays 用 JS getUTCDay 編號（0=週日…6=週六），null=不限；days＝每月幾號，null=不限
 export const SCHEDULE = [
-  { workflow: "global_macro.yml",      times: ["05:17", "06:17", "07:13"],          weekdays: [2,3,4,5,6], days: null },
+  { workflow: "global_macro.yml",      times: ["05:17", "07:13"],  /* 06:17 2026-11-20 暫停 */ weekdays: [2,3,4,5,6], days: null },
   { workflow: "chip_flow_evening.yml", times: ["15:23", "16:43"],                   weekdays: [1,2,3,4,5], days: null },
   { workflow: "openapi_daily.yml",     times: ["16:07", "18:07", "20:07", "23:07"], weekdays: [1,2,3,4,5], days: null },
   { workflow: "openapi_daily.yml",     times: ["04:07"],                            weekdays: [2,3,4,5,6], days: null },
   { workflow: "heartbeat.yml",         times: ["08:23"],                            weekdays: [1,2,3,4,5], days: null },
-  { workflow: "revenue_watch.yml",     times: ["18:47", "21:43", "23:23"],          weekdays: null, days: range(1, 17) },
+  { workflow: "revenue_watch.yml",     times: ["18:47", "23:23"],  /* 21:43 2026-11-20 暫停 */ weekdays: null, days: range(1, 17) },
   { workflow: "revenue_watch.yml",     times: ["07:47"],                            weekdays: null, days: range(2, 18) },
 ];
 

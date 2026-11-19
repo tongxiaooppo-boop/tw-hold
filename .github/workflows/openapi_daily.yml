@@ -17,10 +17,10 @@ on:
         default: "manual"
         required: false
   schedule:
-    - cron: "2 8 * * 1-5"
-    - cron: "2 10 * * 1-5"
-    - cron: "2 12 * * 1-5"
-    - cron: "2 15 * * 1-5"
+    # 2026-11-20 暫停（Cloudflare 鬧鐘接手，觀察中） - cron: "2 8 * * 1-5"
+    # 2026-11-20 暫停（Cloudflare 鬧鐘接手，觀察中） - cron: "2 10 * * 1-5"
+    # 2026-11-20 暫停（Cloudflare 鬧鐘接手，觀察中） - cron: "2 12 * * 1-5"
+    # 2026-11-20 暫停（Cloudflare 鬧鐘接手，觀察中） - cron: "2 15 * * 1-5"
     - cron: "2 20 * * 1-5"
 
 permissions:
