@@ -2578,22 +2578,33 @@ def _value_rank_section(data: dict | None) -> None:
                f"各類取離合理價最遠的前 20 檔。")
     groups = data.get("groups") or {}
     route_zh = {"PE": "本益比", "PB": "淨值比"}
+    # HTML 表（_vtable）而非 st.dataframe：代號要連到個股查詢（_tk_link，同頁切換），且手機不截欄（2026-11-19）
+    head = ["代號", "股價", "便宜價（元）", "合理價（元）", "距合理價（%）", "近3月營收年增（%）",
+            "營收警示", "產業", "估價方法", "EPS 到哪一季", "原因", "備註"]
+
+    def _p(v):
+        return "—" if v is None else _px(float(v))
+
+    def _pct(v):
+        return "—" if v is None else f"{float(v) * 100:+.1f}"
+
+    def _row(r: dict) -> list:
+        name = _RawHtml(_tk_link(r.get("ticker") or "") + " " + _esc(r.get("name") or ""))
+        y3 = r.get("rev3m_yoy")
+        mob = " · ".join(x for x in ((f"近3月營收 {_pct(y3)}%" if y3 is not None else ""),
+                                     r.get("rev_flag") or "", r.get("lag") or "") if x)
+        return [(name, mob), _p(r.get("price")), _p(r.get("cheap")), _p(r.get("fair")),
+                _pct(r.get("gap")), _pct(r.get("rev3m_yoy")), r.get("rev_flag") or "",
+                r.get("industry") or "", route_zh.get(r.get("route"), r.get("route") or ""),
+                r.get("eps_last_q") or "", r.get("why") or "", r.get("lag") or ""]
+
     for g in ("一般", "循環", "高成長"):
         st.subheader(g)
         rows = groups.get(g) or []
         if not rows:
             st.write("從缺")
             continue
-        df = pd.DataFrame([{
-            "代號": r.get("ticker"), "名稱": r.get("name"), "產業": r.get("industry"),
-            "股價": r.get("price"), "便宜價（元）": r.get("cheap"), "合理價（元）": r.get("fair"),
-            "距合理價（%）": round((r["gap"] or 0) * 100, 1) if r.get("gap") is not None else None,
-            "估價方法": route_zh.get(r.get("route"), r.get("route")),
-            "近3月營收年增（%）": (round(r["rev3m_yoy"] * 100, 1) if r.get("rev3m_yoy") is not None else None),
-            "營收警示": r.get("rev_flag") or "",
-            "EPS 到哪一季": r.get("eps_last_q"), "原因": r.get("why") or "", "備註": r.get("lag") or "",
-        } for r in rows])
-        st.dataframe(df, hide_index=True, use_container_width=True)
+        _vtable(head, [_row(r) for r in rows], num={1, 3, 4}, src={2, 5, 6, 7, 8, 9, 10, 11})   # 手機只留 代號｜股價｜合理價｜距合理價
     st.caption("循環＝分類為景氣循環，或近 4 季 EPS 超過前 3 年平均 2 倍、營收沒同步暴增；"
                "高成長＝近 4 季營收年增 30% 以上。合理價依各股歷史倍數，不是買賣建議。")
     from collections import Counter
