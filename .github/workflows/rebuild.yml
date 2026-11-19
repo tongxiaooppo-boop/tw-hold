@@ -150,6 +150,13 @@ jobs:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
         run: python build_revenue_watch.py        # → data/derived/revenue_watch.json
 
+      # 合理價以下排行（價值分頁）：市值前500建卡、三類各取前20。掛了不擋其他產出。
+      - name: 合理價以下排行
+        continue-on-error: true
+        env:
+          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+        run: python build_value_rank.py           # → data/derived/value_rank.json
+
       - name: 短線掃描失敗告警（scanned 過少等）
         if: steps.short_scan.outcome == 'failure'
         env:

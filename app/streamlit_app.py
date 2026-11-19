@@ -2567,6 +2567,35 @@ def _revenue_page(data: dict | None) -> None:
         _rev_view_hold(rows)
 
 
+def _value_rank_section(data: dict | None) -> None:
+    """價值分頁底部「合理價以下排行」（data/derived/value_rank.json，build_value_rank.py 產）。"""
+    st.markdown("---")
+    st.header("合理價以下排行")
+    if not data:
+        st.info("排行還沒產生（每天盤後重算）")
+        return
+    st.caption(f"{data.get('asof') or '—'} 收盤，市值前 500 中有 {data.get('below_fair_n', '—')} 檔股價在合理價（含）以下；"
+               f"各類取離合理價最遠的前 20 檔。")
+    groups = data.get("groups") or {}
+    route_zh = {"PE": "本益比", "PB": "淨值比"}
+    for g in ("一般", "循環", "高成長"):
+        st.subheader(g)
+        rows = groups.get(g) or []
+        if not rows:
+            st.write("從缺")
+            continue
+        df = pd.DataFrame([{
+            "代號": r.get("ticker"), "名稱": r.get("name"), "產業": r.get("industry"),
+            "股價": r.get("price"), "便宜價": r.get("cheap"), "合理價": r.get("fair"),
+            "距合理價（%）": round((r["gap"] or 0) * 100, 1) if r.get("gap") is not None else None,
+            "估價方法": route_zh.get(r.get("route"), r.get("route")),
+            "EPS 到哪一季": r.get("eps_last_q"), "原因": r.get("why") or "", "備註": r.get("lag") or "",
+        } for r in rows])
+        st.dataframe(df, hide_index=True, use_container_width=True)
+    st.caption("循環＝分類為景氣循環，或近 4 季 EPS 超過前 3 年平均 2 倍、營收沒同步暴增；"
+               "高成長＝近 4 季營收年增 30% 以上。合理價依各股歷史倍數，不是買賣建議。")
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     st.header("個股查詢", anchor="top")
@@ -4157,6 +4186,7 @@ def main() -> None:
 
     if nav == "價值":
         _card_list("value", "價值清單", _load("value_list.json"))
+        _value_rank_section(_load("value_rank.json"))
     elif nav == "定存":
         _card_list("deposit", "定存清單", _load("deposit_list.json"))
     elif nav == "長波段":
