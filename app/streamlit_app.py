@@ -931,6 +931,7 @@ div[data-testid="stMarkdownContainer"] table th{
 .thc-vt .note{display:block;font-size:.75rem;color:var(--thc-faint);margin-top:.1rem;}
 .thc-vt .src{color:var(--thc-soft);font-size:.8rem;}
 .thc-vt .m-only{display:none;}
+.thc-vt .thc-tk{white-space:nowrap;}     /* 代號不拆字（窄欄時曾被擠成一字一行） */
 .thc-vt.wide{max-width:none;}            /* 項目｜內容表（估值定位細節、怎麼算）：拉滿、第一欄貼字寬 */
 .thc-vt.wide td:first-child{white-space:nowrap;width:1%;font-weight:600;color:var(--thc-soft);}
 .thc-vt:not(.w3):not(.wide){max-width:640px;}      /* 小表（敏感度／各年 PE／業外）桌面不拉滿 */
@@ -2115,7 +2116,9 @@ def _vtable(head: list[str], rows: list[list], num: set[int], src: set[int] = fr
         return x if isinstance(x, _RawHtml) else _esc(x)
 
     def _cell(v, i, tag):
-        cls = ' class="n"' if i in num else (' class="src"' if i in src else "")
+        # 數字欄也可以是來源欄（手機收掉）：兩個 class 都要給。2026-11-20 成長排行 num∩src 只給 n → 手機多出 3 欄、代號被擠成一字一行
+        cls = " ".join(c for c, on in (("n", i in num), ("src", i in src)) if on)
+        cls = f' class="{cls}"' if cls else ""
         if isinstance(v, tuple):
             main, note = v
             body = _e(main) + (f'<span class="note m-only">{_esc(note)}</span>' if note else "")
