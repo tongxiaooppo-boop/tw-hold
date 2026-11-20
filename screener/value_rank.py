@@ -195,3 +195,34 @@ def rev_text(r: dict) -> str:
     if tags:
         s += "・" + "・".join(tags)
     return s
+
+
+# ── 月營收成長排行（2026-11-20 決策；任務書 collab/to-sonnet-growth-rank.md）──────────
+# 只排目標月（asof 上一個月）已公布者，沒公布的天然不在榜、公布後下次重算補回。
+# MoM 不刪人，只標記（研究：research/rev_growth_rank_2026-11/，被刪者下月 YoY 跟留下的差不到 2 個百分點）。
+MOM_WARN = -0.03            # 單月 MoM < −3% → 標「月減」；農曆新年窗碰到的月份不標
+GROWTH_TOP_N = 30
+GROWTH_PROVISIONAL = 0.90   # 已公布 < 90% 母體 → 暫排
+EXCLUDE_INDUSTRY = ("建材營造",)
+
+
+def rev_mom(m: pd.DataFrame, month: str | None) -> float | None:
+    """月營收長表（欄 month、revenue；month 可為 'YYYY-MM' 字串或 Timestamp）＋目標月 'YYYY-MM'
+    → 目標月 ÷ 上月 − 1。目標月或上月缺、上月 ≤ 0、month None、表空 → None。"""
+    raise NotImplementedError
+
+
+def mom_warn(mom: float | None, month: str | None) -> bool:
+    """mom < MOM_WARN 且 month 不碰農曆新年窗（screener.lny.month_touches_lny）→ True；mom 或 month None → False。"""
+    raise NotImplementedError
+
+
+def growth_rank(rows: list[dict], month: str) -> dict:
+    """月營收成長排行。rows＝build_value_rank 的列（需 rev_month、rev_m_yoy、rev_low_base、industry、ticker）。
+    回傳 {"month", "published", "total", "provisional", "excluded_construction", "top_n", "rows"}：
+      published＝rev_month == month 的列數；total＝len(rows)；provisional＝published < GROWTH_PROVISIONAL × total
+      excluded_construction＝已公布列中 industry ∈ EXCLUDE_INDUSTRY 的列數
+      rows＝已公布、rev_m_yoy 非 None 且 > 0、rev_low_base 為假、industry ∉ EXCLUDE_INDUSTRY，
+            依 rev_m_yoy 由大到小（同值依 ticker 由小到大），取前 GROWTH_TOP_N；每列是原 dict 的淺複製並加 "rank"（1 起）。
+    不改動傳入的 rows。"""
+    raise NotImplementedError
