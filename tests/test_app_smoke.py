@@ -366,3 +366,19 @@ def test_月營收代號連到個股查詢():
     assert not at.exception
     html = "".join(m.value for m in at.markdown)
     assert 'href="?code=' in html and "&lt;a" not in html
+
+
+def test_估值排行獨立分頁():
+    """2026-11-20：合理價以下排行從價值頁拆出，夾在定存與個股查詢之間。"""
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    vis = list(app.NAV)
+    i = vis.index("估值排行")
+    assert vis[i - 1] == "定存" and vis[i + 1] in ("月營收", "個股查詢")
+    at = _run()
+    at.radio(key="_nav").set_value("估值排行").run()
+    assert not at.exception
+    assert any("合理價以下排行" in h.value for h in at.header)
+    at.radio(key="_nav").set_value("價值").run()
+    assert not any("合理價以下排行" in h.value for h in at.header)

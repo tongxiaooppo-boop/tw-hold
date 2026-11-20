@@ -2568,8 +2568,8 @@ def _revenue_page(data: dict | None) -> None:
 
 
 def _value_rank_section(data: dict | None) -> None:
-    """價值分頁底部「合理價以下排行」（data/derived/value_rank.json，build_value_rank.py 產）。"""
-    st.markdown("---")
+    """「估值排行」分頁：合理價以下排行（data/derived/value_rank.json，build_value_rank.py 產）。
+    2026-11-20 起獨立分頁（原掛在價值分頁底部）。"""
     st.header("合理價以下排行")
     if not data:
         st.info("排行還沒產生（每天盤後重算）")
@@ -4108,7 +4108,7 @@ def _macro_compass_page() -> None:
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
 # 2026-11-02 使用者：估值（含月營收的估值價差排序）有疑慮，月營收入口先關；程式保留，改 True 即恢復
 REVENUE_PAGE_ON = False
-NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
+NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "估值排行", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
        if REVENUE_PAGE_ON or n != "月營收"]
 
 
@@ -4203,9 +4203,10 @@ def main() -> None:
 
     if nav == "價值":
         _card_list("value", "價值清單", _load("value_list.json"))
-        _value_rank_section(_load("value_rank.json"))
     elif nav == "定存":
         _card_list("deposit", "定存清單", _load("deposit_list.json"))
+    elif nav == "估值排行":      # 2026-11-20 使用者：從價值頁底部拆成獨立分頁，放定存與個股查詢中間
+        _value_rank_section(_load("value_rank.json"))
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
         _history_section(["long"], "long")
