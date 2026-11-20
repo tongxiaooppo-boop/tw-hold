@@ -382,3 +382,14 @@ def test_估值排行獨立分頁():
     assert any("合理價以下排行" in h.value for h in at.header)
     at.radio(key="_nav").set_value("價值").run()
     assert not any("合理價以下排行" in h.value for h in at.header)
+
+
+def test_value_rank_section_舊JSON無新欄():
+    """value_rank.json 沒有 rev_progress、列沒有 rev_* 欄 → 估值排行頁不炸。"""
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    old = {"asof": "2026-11-19", "below_fair_n": 1, "groups": {"一般": [
+        {"ticker": "2330", "name": "台積電", "price": 100.0, "cheap": 80.0, "fair": 120.0,
+         "gap": -0.16, "rev3m_yoy": 0.1, "rev_month": "2026-10", "rev_flag": "", "lag": ""}]}}
+    app._value_rank_section(old)

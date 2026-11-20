@@ -2,7 +2,7 @@ name: 月營收當晚公告
 
 # OpenAPI 月營收 10 號後才整批換期（2026-10 實測 10/13 才出現 9 月）。公布期（每月 1～17 號；金控等晚報常在 15 號後）每晚：
 # ① 抓 MOPS 彙總頁，記每家第一次出現的時間 → data/revenue_mops/（漏抓補不回來）
-# ② 重算「月營收」分頁 → data/derived/revenue_watch.json
+# ② 重算估值排行（含月營收欄）→ data/derived/value_rank.json（2026-11-20 起）
 # 2026-10-29 從 tw-swing 搬來（tw-swing 那份已刪，避免兩邊重複打 MOPS）。
 on:
   schedule:
@@ -76,19 +76,19 @@ jobs:
       - name: 月營收補 MOPS 缺月
         continue-on-error: true
         run: python scripts/merge_mops_into_revenue.py
-      - name: 重算月營收分頁
+      - name: 重算估值排行（含當晚月營收）
         id: build
         continue-on-error: true
         env:
           TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
-        run: python build_revenue_watch.py
+        run: python build_value_rank.py
       - name: commit 回 repo
         if: always()
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
           # 分開 add：任一路徑不存在（公布期外沒有 data/revenue_mops）會讓整行 add 失敗、另一個也沒加到（10/29 踩到）
-          for f in data/revenue_mops data/derived/revenue_watch.json; do
+          for f in data/revenue_mops data/derived/value_rank.json; do
             if [ -e "$f" ]; then git add "$f"; fi
           done
           if git diff --cached --quiet; then echo "無變更"; exit 0; fi
@@ -99,7 +99,7 @@ jobs:
             sleep $(( (RANDOM % 5) + i * 3 ))
             if ! git pull --rebase origin main; then
               # 同上：逐路徑處理，不存在的路徑不能讓另一個也沒解掉
-              for f in data/revenue_mops data/derived/revenue_watch.json; do
+              for f in data/revenue_mops data/derived/value_rank.json; do
                 git checkout --theirs -- "$f" 2>/dev/null || true
                 if [ -e "$f" ]; then git add -A "$f"; fi
               done

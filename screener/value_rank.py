@@ -117,3 +117,81 @@ def rev_flag(group: str, y3: float | None, y12: float | None) -> str:
     if group == "高成長" and y12 is not None and y12 - y3 >= DECEL_PTS - 1e-9:
         return f"營收仍在增加，但成長放慢（近12月年增 {y12:.0%} → 近三月 {y3:.0%}），合理價要再確認"
     return ""
+
+
+REC_MIN_HIST = 36      # 創新高至少要有這麼多個月的更早歷史，否則不稱創新高
+
+
+def rev_month_info(m: pd.DataFrame, month: str | None) -> dict:
+    """月營收長表（欄 month、revenue）＋最新月 'YYYY-MM' → 單月年增、連續年增月數、創新高、低基期。
+    month 為 None 或表空 → 全預設值。rev_record 另需目標月之前至少 REC_MIN_HIST 個月資料。"""
+    from screener import revenue_watch as rw
+    empty = {"rev_m_yoy": None, "rev_streak": 0, "rev_record": False, "rev_low_base": False}
+    if (month is None or m is None or len(m) == 0
+            or "month" not in m.columns or "revenue" not in m.columns):
+        return dict(empty)
+    try:
+        period = pd.Period(str(month), "M")
+    except Exception:  # noqa: BLE001
+        return dict(empty)
+    h = m[["month", "revenue"]].copy()
+    h["revenue"] = pd.to_numeric(h["revenue"], errors="coerce")
+    h["month"] = h["month"].map(lambda x: _to_month_ts(x))
+    h = h.dropna(subset=["month", "revenue"])
+    h = h[h["revenue"].map(_finite)]
+    if h.empty:
+        return dict(empty)
+    h = h.drop_duplicates(subset="month", keep="last").reset_index(drop=True)
+    by = {pd.Period(ts, freq="M"): float(v) for ts, v in zip(h["month"], h["revenue"])}
+    cur, prev = by.get(period), by.get(period - 12)
+    yoy = low = None
+    low = False
+    if cur is not None and prev is not None and prev > 0:
+        yoy = cur / prev - 1
+        low = prev < rw.LOW_BASE_REV
+    streak = rw.yoy_streak(h, period)
+    earlier = int((h["month"] < period.to_timestamp()).sum())
+    record = bool(earlier >= REC_MIN_HIST and rw.record_high(h, period))
+    return {"rev_m_yoy": yoy, "rev_streak": streak, "rev_record": record, "rev_low_base": bool(low)}
+
+
+def _to_month_ts(x):
+    try:
+        return pd.Period(pd.Timestamp(x) if not isinstance(x, str) else x, "M").to_timestamp()
+    except Exception:  # noqa: BLE001
+        return pd.NaT
+
+
+def rev_progress(rows: list[dict], asof: str) -> dict:
+    """目標月＝asof 所在月的上一個月；published＝rev_month 等於目標月的列數，total＝rows 數。"""
+    month = str(pd.Period(pd.Timestamp(asof), "M") - 1)
+    pub = sum(1 for r in rows if r.get("rev_month") == month)
+    return {"month": month, "published": pub, "total": len(rows)}
+
+
+def _pct(v: float) -> str:
+    return "±0%" if abs(v) < 0.005 else f"{v * 100:+.0f}%"
+
+
+def rev_text(r: dict) -> str:
+    """排行表「月營收（年增）」欄文字。"""
+    rm = r.get("rev_month")
+    if not rm:
+        return "—"
+    s = f"{int(str(rm)[5:7])}月 "
+    if r.get("rev_low_base"):
+        s += "低基期"
+    elif r.get("rev_m_yoy") is None:
+        s += "—"
+    else:
+        s += _pct(r["rev_m_yoy"])
+    if r.get("rev3m_yoy") is not None:
+        s += "｜近3月 " + _pct(r["rev3m_yoy"])
+    tags = []
+    if r.get("rev_record"):
+        tags.append("創新高")
+    if (r.get("rev_streak") or 0) >= 3:
+        tags.append(f"連 {r['rev_streak']} 月成長")
+    if tags:
+        s += "・" + "・".join(tags)
+    return s

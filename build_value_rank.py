@@ -1,4 +1,4 @@
-"""產 `data/derived/value_rank.json`（價值分頁「合理價以下排行」）。任務書 2026-11-19 v1。
+"""產 `data/derived/value_rank.json`（估值排行分頁「合理價以下排行」）。任務書 2026-11-19 v1。
 
 市值前 500 每檔建估值卡，依 營收年增／EPS 暴增／分類 分「一般、循環、高成長」，
 各取股價 ≤ 合理價、離合理價最遠的前 20 檔。
@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 eps_ttm=_num((eps.get("ttm") or {}).get("eps")),
                 eps_x=eps_x, rev_g=rev_g, group=group, why=why,
                 rev3m_yoy=y3, rev12m_yoy=y12, rev_month=rev_m, rev_flag=vr.rev_flag(group, y3, y12),
+                **vr.rev_month_info(kw["rev"], rev_m),
             ))
         except Exception as exc:  # noqa: BLE001
             errors += 1
@@ -121,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         "errors": errors,
         "thresholds": {"growth_rev": vr.GROWTH_REV, "spike_eps": vr.SPIKE_EPS, "top_n": vr.TOP_N,
                        "decel_pts": vr.DECEL_PTS},
+        "rev_progress": vr.rev_progress(rows, asof_s),
         "groups": vr.rank(rows),
     }
     out = OUT.with_name("value_rank.limit.json") if args.limit else OUT

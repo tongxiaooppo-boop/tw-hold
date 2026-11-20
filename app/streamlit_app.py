@@ -2569,17 +2569,28 @@ def _revenue_page(data: dict | None) -> None:
 
 def _value_rank_section(data: dict | None) -> None:
     """「估值排行」分頁：合理價以下排行（data/derived/value_rank.json，build_value_rank.py 產）。
+    月營收併入欄位（2026-11-20）：只當資訊，不影響排名。
     2026-11-20 起獨立分頁（原掛在價值分頁底部）。"""
+    from screener import value_rank as vr
     st.header("合理價以下排行")
     if not data:
         st.info("排行還沒產生（每天盤後重算）")
         return
     st.caption(f"{data.get('asof') or '—'} 收盤，市值前 500 中有 {data.get('below_fair_n', '—')} 檔股價在合理價（含）以下；"
                f"各類取離合理價最遠的前 20 檔。")
+    st.caption("月營收欄只供參考，不影響排名與分組；「原因」欄的營收成長是近4季合計，跟月營收欄口徑不同。")
+    rp = data.get("rev_progress") or {}
+    try:
+        _tot, _pub = int(rp.get("total") or 0), int(rp.get("published") or 0)
+        if _tot > 0 and _pub < 0.98 * _tot:
+            st.caption(f"{int(str(rp.get('month'))[5:7])}月營收公布中：市值前500已建卡 {_tot} 檔中 {_pub} 檔已公布；"
+                       f"其餘列顯示的是最近一期（看月營收欄開頭的月份）。")
+    except (TypeError, ValueError):
+        pass
     groups = data.get("groups") or {}
     route_zh = {"PE": "本益比", "PB": "淨值比"}
     # HTML 表（_vtable）而非 st.dataframe：代號要連到個股查詢（_tk_link，同頁切換），且手機不截欄（2026-11-19）
-    head = ["代號", "股價", "便宜價（元）", "合理價（元）", "距合理價（%）", "近3月營收年增（%）",
+    head = ["代號", "股價", "便宜價（元）", "合理價（元）", "距合理價（%）", "月營收（年增）",
             "營收警示", "產業", "估價方法", "EPS 到哪一季", "原因", "備註"]
 
     def _p(v):
@@ -2590,11 +2601,11 @@ def _value_rank_section(data: dict | None) -> None:
 
     def _row(r: dict) -> list:
         name = _RawHtml(_tk_link(r.get("ticker") or "") + " " + _esc(r.get("name") or ""))
-        y3 = r.get("rev3m_yoy")
-        mob = " · ".join(x for x in ((f"近3月營收 {_pct(y3)}%" if y3 is not None else ""),
+        rt = vr.rev_text(r)
+        mob = " · ".join(x for x in ((rt if rt != "—" else ""),
                                      r.get("rev_flag") or "", r.get("lag") or "") if x)
         return [(name, mob), _p(r.get("price")), _p(r.get("cheap")), _p(r.get("fair")),
-                _pct(r.get("gap")), _pct(r.get("rev3m_yoy")), r.get("rev_flag") or "",
+                _pct(r.get("gap")), rt, r.get("rev_flag") or "",
                 r.get("industry") or "", route_zh.get(r.get("route"), r.get("route") or ""),
                 r.get("eps_last_q") or "", r.get("why") or "", r.get("lag") or ""]
 

@@ -142,13 +142,14 @@ jobs:
         continue-on-error: true
         run: python build_short_scan.py           # → data/derived/short_scan.json（scanned < 90% × universe 會失敗且不覆寫）
 
+      # 2026-11-20 停：月營收併入估值排行（build_value_rank.py），分頁程式保留
       # 月營收分頁（公布期外也每天重算：現價、均線、估值價差會變）。掛了不擋三清單。
-      - name: 月營收分頁
-        continue-on-error: true
-        env:
-          # ensure_assets() 要下載 per.parquet 等個股頁資產；沒帶 → PER 全空、估值價差整欄沒值（2026-10-29 踩到）
-          TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
-        run: python build_revenue_watch.py        # → data/derived/revenue_watch.json
+      # - name: 月營收分頁
+      #   continue-on-error: true
+      #   env:
+      #     # ensure_assets() 要下載 per.parquet 等個股頁資產；沒帶 → PER 全空、估值價差整欄沒值（2026-10-29 踩到）
+      #     TWSWING_BUNDLE_PAT: ${{ secrets.TWSWING_BUNDLE_PAT }}
+      #   run: python build_revenue_watch.py        # → data/derived/revenue_watch.json
 
       # 合理價以下排行（價值分頁）：市值前500建卡、三類各取前20。掛了不擋其他產出。
       - name: 合理價以下排行
