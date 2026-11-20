@@ -307,6 +307,7 @@ OUTSIDE_OK: tuple[tuple[str, str, str, str], ...] = (
     ("app/streamlit_app.py", "合理價", "距合理價（%）", "排行榜欄名；price÷估值卡 prices.fair−1"),
     ("app/streamlit_app.py", "近 4 季 EPS", "近 4 季 EPS 超過前 3 年平均", "排行榜分組定義說明，不是顯示 EPS 數字"),
     ("app/streamlit_app.py", "合理價", "合理價依各股歷史倍數", "排行榜說明；fair＝估值卡 prices.fair"),
+    ("app/streamlit_app.py", "合理價", "合理價只供參考，本表不看估值", "月營收成長排行說明；合理價欄＝估值卡 prices.fair"),
     ("screener/value_rank.py", "合理價", "合理價要再確認", "排行營收警示文字；fair＝估值卡 prices.fair"),
 )
 

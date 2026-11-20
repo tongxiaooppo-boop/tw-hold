@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             rev_g = vr.revenue_growth(kw["qf"])
             group, why = vr.category(typ, eps_x, rev_g)
             y3, y12, rev_m = vr.rev_yoy(kw["rev"])
+            mom = vr.rev_mom(kw["rev"], rev_m)
             rows.append(dict(
                 ticker=code, name=u.get("stock_name"), industry=u.get("industry"), type=typ,
                 display_type=card.get("display_type"), route=card.get("route"), tier=card.get("tier"),
@@ -93,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
                 eps_ttm=_num((eps.get("ttm") or {}).get("eps")),
                 eps_x=eps_x, rev_g=rev_g, group=group, why=why,
                 rev3m_yoy=y3, rev12m_yoy=y12, rev_month=rev_m, rev_flag=vr.rev_flag(group, y3, y12),
+                rev_mom=mom, mom_warn=vr.mom_warn(mom, rev_m),
                 **vr.rev_month_info(kw["rev"], rev_m),
             ))
         except Exception as exc:  # noqa: BLE001
@@ -113,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
 
     below = sum(1 for r in rows if r["price"] is not None and r["fair"] is not None
                 and r["price"] <= r["fair"])
+    rp = vr.rev_progress(rows, asof_s)
     doc = {
         "asof": asof_s,
         "built_at": now.replace(microsecond=0).isoformat(),
@@ -121,8 +124,10 @@ def main(argv: list[str] | None = None) -> int:
         "below_fair_n": below,
         "errors": errors,
         "thresholds": {"growth_rev": vr.GROWTH_REV, "spike_eps": vr.SPIKE_EPS, "top_n": vr.TOP_N,
-                       "decel_pts": vr.DECEL_PTS},
-        "rev_progress": vr.rev_progress(rows, asof_s),
+                       "decel_pts": vr.DECEL_PTS,
+                       "mom_warn": vr.MOM_WARN, "growth_top_n": vr.GROWTH_TOP_N},
+        "rev_progress": rp,
+        "growth": vr.growth_rank(rows, rp["month"]),
         "groups": vr.rank(rows),
     }
     out = OUT.with_name("value_rank.limit.json") if args.limit else OUT

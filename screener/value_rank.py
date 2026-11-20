@@ -209,12 +209,37 @@ EXCLUDE_INDUSTRY = ("建材營造",)
 def rev_mom(m: pd.DataFrame, month: str | None) -> float | None:
     """月營收長表（欄 month、revenue；month 可為 'YYYY-MM' 字串或 Timestamp）＋目標月 'YYYY-MM'
     → 目標月 ÷ 上月 − 1。目標月或上月缺、上月 ≤ 0、month None、表空 → None。"""
-    raise NotImplementedError
+    if (month is None or m is None or len(m) == 0
+            or "month" not in m.columns or "revenue" not in m.columns):
+        return None
+    try:
+        period = pd.Period(str(month), "M")
+    except Exception:  # noqa: BLE001
+        return None
+    by: dict[pd.Period, float] = {}
+    for mo, rv in zip(m["month"], m["revenue"]):
+        ts = _to_month_ts(mo)
+        if pd.isna(ts):
+            continue
+        try:
+            f = float(rv)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(f):
+            continue
+        by[pd.Period(ts, freq="M")] = f
+    cur, prev = by.get(period), by.get(period - 1)
+    if cur is None or prev is None or prev <= 0:
+        return None
+    return cur / prev - 1
 
 
 def mom_warn(mom: float | None, month: str | None) -> bool:
     """mom < MOM_WARN 且 month 不碰農曆新年窗（screener.lny.month_touches_lny）→ True；mom 或 month None → False。"""
-    raise NotImplementedError
+    from screener import lny
+    if mom is None or month is None or not _finite(mom):
+        return False
+    return bool(float(mom) < MOM_WARN and not lny.month_touches_lny(month))
 
 
 def growth_rank(rows: list[dict], month: str) -> dict:
@@ -225,4 +250,17 @@ def growth_rank(rows: list[dict], month: str) -> dict:
       rows＝已公布、rev_m_yoy 非 None 且 > 0、rev_low_base 為假、industry ∉ EXCLUDE_INDUSTRY，
             依 rev_m_yoy 由大到小（同值依 ticker 由小到大），取前 GROWTH_TOP_N；每列是原 dict 的淺複製並加 "rank"（1 起）。
     不改動傳入的 rows。"""
-    raise NotImplementedError
+    pub = [r for r in rows if r.get("rev_month") == month]
+    excl = sum(1 for r in pub if r.get("industry") in EXCLUDE_INDUSTRY)
+    ok = [r for r in pub
+          if _finite(r.get("rev_m_yoy")) and float(r["rev_m_yoy"]) > 0
+          and not r.get("rev_low_base") and r.get("industry") not in EXCLUDE_INDUSTRY]
+    ok.sort(key=lambda r: (-float(r["rev_m_yoy"]), str(r.get("ticker"))))
+    out = []
+    for i, r in enumerate(ok[:GROWTH_TOP_N], 1):
+        d = dict(r)
+        d["rank"] = i
+        out.append(d)
+    return {"month": month, "published": len(pub), "total": len(rows),
+            "provisional": len(pub) < GROWTH_PROVISIONAL * len(rows),
+            "excluded_construction": excl, "top_n": GROWTH_TOP_N, "rows": out}

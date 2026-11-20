@@ -393,3 +393,20 @@ def test_value_rank_section_舊JSON無新欄():
         {"ticker": "2330", "name": "台積電", "price": 100.0, "cheap": 80.0, "fair": 120.0,
          "gap": -0.16, "rev3m_yoy": 0.1, "rev_month": "2026-10", "rev_flag": "", "lag": ""}]}}
     app._value_rank_section(old)
+
+
+def test_growth_rank_section_無growth鍵():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    app._growth_rank_section({"asof": "2026-11-19"})
+    app._growth_rank_section(None)
+
+
+def test_growth_rank_section_有資料():
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    app._growth_rank_section({"growth": {"month": "2026-10", "published": 1, "total": 1,
+        "provisional": True, "excluded_construction": 0, "rows": [
+            {"ticker": "2330", "name": "台積電", "rev_m_yoy": 0.3, "rev_mom": -0.05, "mom_warn": True}]}})

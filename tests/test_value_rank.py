@@ -206,3 +206,79 @@ def test_rev_month_info_目標月缺():
     m = _mrev(n=24, end="2026-09")
     d = vr.rev_month_info(m, "2026-10")
     assert d["rev_m_yoy"] is None and d["rev_streak"] == 0 and d["rev_record"] is False
+
+
+# ── 月營收成長排行（2026-11-20）──────────────────────────────────────────
+def _mm(d: dict) -> pd.DataFrame:
+    return pd.DataFrame({"month": list(d), "revenue": list(d.values())})
+
+
+def test_rev_mom_基本():
+    m = pd.DataFrame({"month": ["2026-09", "2026-10"], "revenue": [100.0, 90.0]})
+    assert abs(vr.rev_mom(m, "2026-10") - (-0.10)) < 1e-9
+
+
+def test_rev_mom_上月缺():
+    m = pd.DataFrame({"month": ["2026-10"], "revenue": [90.0]})
+    assert vr.rev_mom(m, "2026-10") is None
+
+
+def test_rev_mom_上月非正():
+    m = pd.DataFrame({"month": ["2026-09", "2026-10"], "revenue": [0.0, 90.0]})
+    assert vr.rev_mom(m, "2026-10") is None
+
+
+def test_rev_mom_month_None():
+    m = pd.DataFrame({"month": ["2026-09", "2026-10"], "revenue": [100.0, 90.0]})
+    assert vr.rev_mom(m, None) is None
+
+
+def test_mom_warn_門檻():
+    assert vr.mom_warn(-0.031, "2026-10") is True
+    assert vr.mom_warn(-0.03, "2026-10") is False
+    assert vr.mom_warn(None, "2026-10") is False
+
+
+def test_mom_warn_春節月不標():
+    assert vr.mom_warn(-0.5, "2026-02") is False
+    assert vr.mom_warn(-0.5, "2026-01") is True
+    assert vr.mom_warn(-0.5, "2025-01") is False
+
+
+def _g(t, yoy, month="2026-10", **kw):
+    return {"ticker": t, "rev_month": month, "rev_m_yoy": yoy, "rev_low_base": False,
+            "industry": "半導體", **kw}
+
+
+def test_growth_rank_篩選與排序():
+    rows = [_g("A", 0.5), _g("B", 0.8), _g("C", 0.8), _g("D", -0.1),
+            _g("E", 0.9, rev_low_base=True), _g("F", 2.0, industry="建材營造"),
+            _g("G", 3.0, month="2026-09")]
+    g = vr.growth_rank(rows, "2026-10")
+    assert [r["ticker"] for r in g["rows"]] == ["B", "C", "A"]
+    assert [r["rank"] for r in g["rows"]] == [1, 2, 3]
+    assert g["published"] == 6 and g["total"] == 7 and g["excluded_construction"] == 1
+
+
+def test_growth_rank_取前30():
+    rows = [_g(f"{i:04d}", 0.1 + i / 1000) for i in range(35)]
+    assert len(vr.growth_rank(rows, "2026-10")["rows"]) == 30
+
+
+def test_growth_rank_暫排():
+    rows = [_g(f"{i}", 0.5) for i in range(8)] + [_g("x", 0.5, month="2026-09")] * 2
+    assert vr.growth_rank(rows, "2026-10")["provisional"] is True
+    rows[8] = _g("y", 0.5)
+    assert vr.growth_rank(rows, "2026-10")["provisional"] is False
+
+
+def test_growth_rank_不改輸入():
+    rows = [_g("A", 0.5)]
+    vr.growth_rank(rows, "2026-10")
+    assert "rank" not in rows[0]
+
+
+def test_growth_rank_yoy_None略過():
+    rows = [_g("A", None), _g("B", 0.5)]
+    g = vr.growth_rank(rows, "2026-10")
+    assert [r["ticker"] for r in g["rows"]] == ["B"] and g["published"] == 2

@@ -2624,6 +2624,53 @@ def _value_rank_section(data: dict | None) -> None:
                + (f"月營收到 {_mc[0][0]} 。" if _mc else ""))
 
 
+def _growth_rank_section(data: dict | None) -> None:
+    """估值排行頁第二張表：月營收成長排行（data/derived/value_rank.json 的 growth，不看估值）。
+    2026-11-20 任務書 collab/to-sonnet-growth-rank.md。舊 JSON 沒有 growth 鍵 → 提示、不炸。"""
+    st.header("月營收成長排行")
+    g = (data or {}).get("growth")
+    if not g:
+        st.info("月營收成長排行還沒產生（下次重算後出現）")
+        return
+    try:
+        _mon = int(str(g.get("month"))[5:7])
+    except (TypeError, ValueError):
+        _mon = "—"
+    st.caption(f"{_mon}月營收，市值前500已公布 {g.get('published', '—')}/{g.get('total', '—')} 檔；"
+               f"依單月營收年增排序，不看估值。已排除建材營造 {g.get('excluded_construction', 0)} 檔、"
+               f"去年同月營收不到 1 億、年增 ≤ 0。")
+    if g.get("provisional"):
+        st.caption("公布中（暫排）：還沒公布的公司公布後會自動補進來，名次會變動。")
+    rows = g.get("rows") or []
+    if not rows:
+        st.write("從缺")
+        return
+
+    def _p(v):
+        return "—" if v is None else _px(float(v))
+
+    def _pct(v):
+        return "—" if v is None else f"{float(v) * 100:+.1f}"
+
+    def _row(r: dict) -> list:
+        name = _RawHtml(_tk_link(r.get("ticker") or "") + " " + _esc(r.get("name") or ""))
+        warn = "⚠️ 月減" if r.get("mom_warn") else ""
+        tags = []
+        if r.get("rev_record"):
+            tags.append("創新高")
+        if (r.get("rev_streak") or 0) >= 3:
+            tags.append(f"連 {r['rev_streak']} 月")
+        return [r.get("rank") if r.get("rank") is not None else "—", (name, warn),
+                _pct(r.get("rev_m_yoy")), _pct(r.get("rev_mom")), warn, _pct(r.get("rev3m_yoy")),
+                "・".join(tags), _p(r.get("price")), _p(r.get("fair")), r.get("industry") or ""]
+
+    head = ["名次", "代號", "單月年增（%）", "月增（%）", "月減", "近3月年增（%）",
+            "連續成長／創新高", "股價", "合理價（元）", "產業"]
+    _vtable(head, [_row(r) for r in rows], num={0, 2, 3, 5, 7, 8}, src={4, 5, 6, 7, 8, 9})   # 手機只留 名次｜代號｜單月年增｜月增
+    st.caption("月減＝單月營收比上月少 3% 以上，只提醒、不影響名次；農曆新年前 3 天到後 6 天碰到的月份不標"
+               "（春節工作天少，月減是季節）。合理價只供參考，本表不看估值。")
+
+
 def _stock_page() -> None:
     import stockcharts as ch
     st.header("個股查詢", anchor="top")
@@ -4217,7 +4264,9 @@ def main() -> None:
     elif nav == "定存":
         _card_list("deposit", "定存清單", _load("deposit_list.json"))
     elif nav == "估值排行":      # 2026-11-20 使用者：從價值頁底部拆成獨立分頁，放定存與個股查詢中間
-        _value_rank_section(_load("value_rank.json"))
+        _vr_data = _load("value_rank.json")
+        _value_rank_section(_vr_data)
+        _growth_rank_section(_vr_data)
     elif nav == "長波段":
         _swing_page(_load("swing_list.json"))
         _history_section(["long"], "long")
