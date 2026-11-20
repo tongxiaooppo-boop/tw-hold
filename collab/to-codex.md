@@ -1,129 +1,33 @@
-# 【tw-hold】Cloudflare 鬧鐘任務書：準時觸發 GitHub workflow＋期交所夜盤查詢日修正（版本 2026-11-14 v1）
+# 【tw-hold】營收成長榜 第 2 輪：只問分歧處（版本 2026-11-20 r2）
 
-> **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。不是 tw-swing。** 下面相對路徑都以 `D:\g\claude\tw-hold` 為根；指令都先 `cd D:\g\claude\tw-hold` 再跑。回報寫到 `D:\g\claude\tw-hold\collab\from-codex.md`（覆蓋舊檔）。
-> 檔案一律 **UTF-8 無 BOM**，不要用 PowerShell 寫檔。不要上網查資料、不要 `npm install`、不要部署、不要 `wrangler login`、不要設任何 secret。
+> **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。** 指令先 `cd D:\g\claude\tw-hold`。回報覆蓋寫到 `D:\g\claude\tw-hold\collab\from-codex.md`。
+> 只准改 `research/rev_growth_rank_2026-11/` 底下的檔案（可改你上一輪的 `backtest.py`）。不改正式程式、不 commit、不上網。UTF-8 無 BOM，不用 PowerShell 寫檔。
 
-## 背景（一段就好）
-GitHub 的 `schedule` 在這兩個 repo 實測晚 5～9 小時，但 `workflow_dispatch` 不會延遲。做法：Cloudflare Worker 只當鬧鐘，到點呼叫 GitHub API dispatch 指定 workflow。GitHub 原本的 cron **一行都不改**（留作備援，workflow 都是冪等的）。
+## 已定（不再討論）
+放法 (a) 估值排行頁另一張「月營收成長排行」、不看估值；單月 YoY 排序；YoY>0；去年同月 ≥1 億；排除建材營造（不補位）；最多 30 檔；未公布不沿用舊月。
 
-## 要讀的檔案（只准讀這些）
-- `scripts/fetch_tx_futures.py`（全檔，約 200 行內）
-- `tests/test_fetch_tx_futures.py`（全檔，照它的 monkeypatch 寫法）
-- `scripts/fetch_foreign_futures.py` 第 85～110 行（只參考「結束日超過最新資料日會回錯誤頁」的註解與退讓寫法）
-
-## 任務一：新增 `cloudflare/`（4 個檔，純 ES module，零相依）
-
-### 1. `cloudflare/schedule.js`（介面寫死，不准改名稱與簽名）
-```js
-export const REPO = "tongxiaooppo-boop/tw-hold";
-export const REF = "main";
-// 時間一律台北時間 "HH:MM"；weekdays 用 JS getUTCDay 編號（0=週日…6=週六），null=不限；days＝每月幾號，null=不限
-export const SCHEDULE = [
-  { workflow: "global_macro.yml",      times: ["05:17", "06:17", "07:13"],          weekdays: [2,3,4,5,6], days: null },
-  { workflow: "chip_flow_evening.yml", times: ["15:23", "16:43"],                   weekdays: [1,2,3,4,5], days: null },
-  { workflow: "openapi_daily.yml",     times: ["16:07", "18:07", "20:07", "23:07"], weekdays: [1,2,3,4,5], days: null },
-  { workflow: "openapi_daily.yml",     times: ["04:07"],                            weekdays: [2,3,4,5,6], days: null },
-  { workflow: "heartbeat.yml",         times: ["08:23"],                            weekdays: [1,2,3,4,5], days: null },
-  { workflow: "revenue_watch.yml",     times: ["18:47", "21:43", "23:23"],          weekdays: null, days: range(1, 17) },
-  { workflow: "revenue_watch.yml",     times: ["07:47"],                            weekdays: null, days: range(2, 18) },
-];
-// range(a,b) 自己寫成小函式（含頭含尾），或直接列陣列，二選一
-
-// 把 UTC 的 Date 轉成台北（固定 +8，台灣沒有夏令時間）：
-export function taipeiParts(date) { /* 回 { hhmm: "HH:MM", weekday: 0-6, day: 1-31 }，用 date.getTime()+8h 後取 getUTC* */ }
-
-// 該時刻（只看到分鐘）要 dispatch 的 workflow 檔名，依 SCHEDULE 順序、去重
-export function dueWorkflows(date) { /* string[] */ }
-
-// SCHEDULE 裡出現過的所有分鐘值，去重、由小到大（台北與 UTC 分鐘相同，因為時差是整小時）
-export function cronMinutes() { /* number[] */ }
-```
-
-### 2. `cloudflare/worker.js`
-```js
-import { REPO, REF, dueWorkflows } from "./schedule.js";
-
-export async function dispatch(workflow, token, fetchImpl = fetch) { /* 回 { workflow, status, ok } */ }
-
-export default {
-  async scheduled(event, env, ctx) { /* ... */ },
-};
-```
-- `scheduled`：`const when = new Date(event.scheduledTime)`（用排定時間，不用 `Date.now()`）→ `dueWorkflows(when)`；空陣列就直接結束（不呼叫 fetch）。每個依序 `await dispatch(w, env.GH_TOKEN)`。
-- `dispatch`：`POST https://api.github.com/repos/${REPO}/actions/workflows/${workflow}/dispatches`，headers：`Authorization: Bearer <token>`、`Accept: application/vnd.github+json`、`X-GitHub-Api-Version: 2022-11-28`、`User-Agent: tw-hold-alarm`、`Content-Type: application/json`；body `JSON.stringify({ ref: REF })`。成功＝status 204。失敗（非 204 或 throw）**重試 1 次**；兩次都失敗 `console.error` 印 workflow、status、回應前 200 字，不 throw（讓同一輪其他 workflow 照跑）。成功 `console.log`。
-- **不寫 `fetch` handler**（不開放網址觸發）。token 只從 `env.GH_TOKEN` 讀，任何地方都不准印出 token。
-
-### 3. `cloudflare/wrangler.toml`
-```toml
-name = "tw-hold-alarm"
-main = "worker.js"
-compatibility_date = "2026-11-01"
-
-[triggers]
-crons = ["7,13,17,23,43,47 * * * *"]
-```
-
-### 4. `cloudflare/schedule.test.mjs`（用 `node --test`，不准裝套件）
-測試名稱與預期值照抄（UTC 時刻 → 預期回傳）：
-| 測試名 | UTC 輸入 | 台北 | 預期 `dueWorkflows` |
+## 上一輪結果（你的 summary，排除建設股）
+| 定義 | 前30月對月重疊 | 前30被剔 | 母體被剔 |
 |---|---|---|---|
-| global_macro_週二0517 | 2026-11-16T21:17:00Z | 11/17(二) 05:17 | `["global_macro.yml"]` |
-| global_macro_週一0517不跑 | 2026-11-15T21:17:00Z | 11/16(一) 05:17 | `[]` |
-| openapi_週六0407 | 2026-11-13T20:07:00Z | 11/14(六) 04:07 | `["openapi_daily.yml"]` |
-| openapi_週一0407不跑 | 2026-11-15T20:07:00Z | 11/16(一) 04:07 | `[]` |
-| openapi_週一1607 | 2026-11-16T08:07:00Z | 11/16(一) 16:07 | `["openapi_daily.yml"]` |
-| openapi_週六1607不跑 | 2026-11-14T08:07:00Z | 11/14(六) 16:07 | `[]` |
-| heartbeat_週一0823 | 2026-11-16T00:23:00Z | 11/16(一) 08:23 | `["heartbeat.yml"]` |
-| chip_週一1523 | 2026-11-16T07:23:00Z | 11/16(一) 15:23 | `["chip_flow_evening.yml"]` |
-| revenue_17號1847 | 2026-11-17T10:47:00Z | 11/17 18:47 | `["revenue_watch.yml"]` |
-| revenue_18號1847不跑 | 2026-11-18T10:47:00Z | 11/18 18:47 | `[]` |
-| revenue_18號0747 | 2026-11-17T23:47:00Z | 11/18 07:47 | `["revenue_watch.yml"]` |
-| revenue_19號0747不跑 | 2026-11-18T23:47:00Z | 11/19 07:47 | `[]` |
-| revenue_1號0747不跑 | 2026-11-30T23:47:00Z | 12/1 07:47 | `[]` |
-| 非表定分鐘 | 2026-11-16T08:13:00Z | 11/16(一) 16:13 | `[]` |
-| 秒數不影響 | 2026-11-16T08:07:42Z | 11/16(一) 16:07:42 | `["openapi_daily.yml"]` |
+| 純YoY | 17.0 | 0% | 0% |
+| M1 MoM>0 | 9.8 | 31% | 47% |
+| M2 >自身3年同月均值 | 8.3 | 35% | 53% |
+| M3 >自身3年同月中位 | 8.7 | 34% | 51% |
 
-另外三個測試：
-- `cron分鐘與wrangler一致`：讀 `wrangler.toml`，取 `crons` 第一條的分鐘欄位，拆成數字排序後 **deepEqual** `cronMinutes()`；並確認只有 1 條 cron。
-- `避開整點半點`：`cronMinutes()` 每個值都不在 57–59、0–3、27–33。
-- `worker_命中時dispatch`：mock `globalThis.fetch` 回 `{status:204, text:async()=>""}`，呼叫 `worker.default.scheduled({scheduledTime: Date.parse("2026-11-16T08:07:00Z")}, {GH_TOKEN:"t"}, {})` → fetch 被呼叫 1 次，URL 結尾 `/actions/workflows/openapi_daily.yml/dispatches`、method POST、body `{"ref":"main"}`、Authorization `Bearer t`。
-- `worker_不命中不呼叫`：同上但 `2026-11-16T08:13:00Z` → fetch 0 次。
-- `dispatch_失敗重試一次`：fetch 第一次回 500、第二次 204 → 呼叫 2 次、回 `ok: true`。
+另一位獨立評審（Sonnet）提案 **M4：MoM ≤ 當月市場 MoM 中位數 −10 個百分點才剔除**（市場＝當月母體中已有 MoM 者），它小量試算前 30 每月只剔 2.5～7.6 檔、2/3/10 月剔 5.2/5.6/4.4 檔。
 
-### 5. `cloudflare/README.md`（中文，短）
-內容只要：用途一段；時間表（直接說「見 schedule.js」）；部署步驟（`npx wrangler login` → `cd cloudflare` → `npx wrangler deploy` → `npx wrangler secret put GH_TOKEN`；或網頁版 Workers 貼上兩支 js 並在 Settings→Triggers 加 cron、Settings→Variables 加 secret）；改時間表要同步改 `wrangler.toml` 的分鐘（測試會擋）；查 log：`npx wrangler tail`；停用＝Dashboard 刪掉 cron trigger（GitHub cron 仍在當備援）。
+## 第 2 輪只問 3 件
+1. **刪減強度**：所有 MoM 條件都讓榜單月對月重疊從 17 掉到 8～10、前 30 砍掉三分之一。使用者原意是「MoM 做刪減」（刪掉轉弱的），不是「換掉半張榜」。請在同一個 backtest 框架加 M4，並掃寬度：市場中位 −0/−10/−20/−30 個百分點；也掃 M3 加寬版：自身同月中位 −10/−20 個百分點。每個變體報：前 30 被剔比例、月對月重疊、各曆月被剔範圍（最小～最大，看季節是否扣乾淨）。
+   - 補一個對照：被剔掉的那些公司，**下個月**單月 YoY 是否明顯低於留下的（中位數比較）。這是「刪的是不是真的轉弱」的唯一證據，不算報酬。
+2. **推薦一個定義＋寬度**，一句結論＋證據數字。
+3. **題 4 重做**：上一輪用的 `revenue.parquet` 的 `announced` 是整批抓取日（例：2026-10 全標 11/17、2019～2025 全標 2026-05-19），作廢。改用 `data/revenue_mops/2026-10.parquet`（只讀 `ticker, revenue, revenue_prev_month, revenue_last_year, first_seen_at`；只有 2026-10 一個月），用 first_seen_at 模擬 11/5、11/7、11/10 截止時已公布者的前 30 跟最終前 30 的重疊數，並比已公布 vs 未公布者的市值中位數（市值用 `data/upstream/fundamentals/universe.parquet` 的 `market_cap`，母體用其 `in_mktcap500`）。M4 的市場中位數在月初樣本少時會不穩，請順便報 11/5、11/7 時已公布者的 MoM 中位數 vs 最終中位數。
 
-## 任務二：`scripts/fetch_tx_futures.py` 夜盤查詢結束日
-問題：`fetch_csv_records` 的 `queryEndDate` 只到台北今天，但期交所把週五夜盤記在**下一交易日**（11/14 實測：查到 11/14 沒有週五夜盤，查到 11/16 才出現 `2026/11/16 盤後`）。週末首頁因此缺週五夜盤。
-修法（框架定死）：
-- 結束日依序試 `today + 7天`、`today + 3天`、`today`（加常數 `END_AHEAD_DAYS = (7, 3, 0)`），每個結束日照現行「最多 2 次」下載＋`parse_csv`；**第一個 `parse_csv` 回非空就回傳**。三個都空或都失敗 → 印現有那行 `::warning::` 並回 `[]`（退回 OpenAPI 的行為不變）。
-- 理由（寫成註解）：結束日超過最新資料日時，TAIFEX 有的端點會回錯誤頁（見 fetch_foreign_futures.py 註解），錯誤頁 `parse_csv` 會回 `[]`，所以往回退。
-- 不改 `parse_csv`、`_to_record`、其他函式與常數。
-- 新增測試（加在 `tests/test_fetch_tx_futures.py`，照現有 monkeypatch urlopen 寫法，從 request body 解析 `queryEndDate`）：
-  - `test_csv結束日先試未來七天`：第一次請求的 queryEndDate＝今天＋7 天（用 monkeypatch 固定「今天」或在測試內用同一公式算）。
-  - `test_未來日回錯誤頁退到今天`：+7、+3 回 HTML 錯誤頁（`<html>error</html>`）、今天回合法 CSV → 回非空，且共試到 today。
-  - `test_三個結束日都空回空陣列`：全部回錯誤頁 → 回 `[]`。
-
-## 不准做
-- 不改 `.github/workflows/` 任何檔、不改任何 cron。
-- 不改 `cloudflare/` 與 `scripts/fetch_tx_futures.py`、`tests/test_fetch_tx_futures.py` 以外的檔（`collab/from-codex.md` 除外）。
-- 不建 `package.json`、`node_modules`；不部署。暫存檔放 `D:\g\claude\tw-hold` 內並在結束前刪掉。
-- 介面（上面寫死的 export 名稱、簽名、SCHEDULE 內容、cron 字串）有問題就停下寫進回報，不要自己改。小疑問自行採用並在回報註明。
-
-## PROOF_CMD（全部要過）
+## PROOF_CMD
 ```
-cd D:\g\claude\tw-hold
-node --test cloudflare/
-PYTHONIOENCODING=utf-8 python -m pytest tests/test_fetch_tx_futures.py -q
-PYTHONIOENCODING=utf-8 python -m pytest -q
+cd D:\g\claude\tw-hold && python research/rev_growth_rank_2026-11/backtest.py && python -c "import pandas as pd; print(pd.read_csv('research/rev_growth_rank_2026-11/out/summary_r2.csv').to_string())"
 ```
-預期：`node --test` 顯示 20 個測試 pass、0 fail；`test_fetch_tx_futures.py` 全過（原有＋新 3 個）；全套 pytest 0 failed。
+預期：無錯誤；summary_r2.csv 含 M1、M3、M3−10、M3−20、M4−0、M4−10、M4−20、M4−30 各自的被剔比例、重疊、曆月被剔範圍、被剔者 vs 留下者下月 YoY 中位數；另有題 4 的 11/5、11/7、11/10 三列。
 
-## 完成後
-- 一個 commit：`feat: Cloudflare 鬧鐘準時 dispatch workflow＋夜盤查詢結束日往後`（用 repo 既有的 git 設定，不要改 user.email；**不要 push**）。
-- 回報 `collab/from-codex.md` 欄位（不貼程式碼）：
-  - 完成項（逐條對應任務一 1–5、任務二）
-  - commit hash
-  - PROOF_CMD 三行各自的實際輸出最後一行
-  - 自行採用的小疑問
-  - 需要 Opus 決定的事（沒有寫「無」）
+## 回報格式（≤ 1000 字，不貼程式碼）
+每題：**結論**一句／**證據**（數字）／**信心**高中低／**理由** ≤ 200 字。
+最後：**跟 Sonnet M4 的分歧**（沒有寫「無」）、**需要使用者決定的事**（沒有寫「無」）、**PROOF_CMD 實際輸出**（只貼表）。
