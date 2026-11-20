@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "asof": "2026-11-19",
+    "asof": "2026-11-20",
     "trail_atr_mult": 2.0,
     "note": "移動停損觀察表，不是持倉追蹤、不是買賣建議——見 app 頁尾說明。進場口徑＝訊號日次一交易日開盤（跟回測 next_open 一致）。"
   },
@@ -58,12 +58,12 @@
       "atr0": 3.3214,
       "run_high": 132.0,
       "trail_stop": 125.36,
-      "last_close": 127.5,
-      "last_update": "2026-11-19",
-      "status": "dropped_from_pool",
+      "last_close": 123.0,
+      "last_update": "2026-11-20",
+      "status": "stopped_out",
       "dropped_date": "2026-11-11",
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-20",
+      "exit_price": 125.36
     },
     "6782": {
       "name": "視陽",
@@ -88,12 +88,12 @@
       "atr0": 2.1321,
       "run_high": 59.29999923706055,
       "trail_stop": 55.04,
-      "last_close": 56.6,
-      "last_update": "2026-11-19",
-      "status": "dropped_from_pool",
+      "last_close": 51.5,
+      "last_update": "2026-11-20",
+      "status": "stopped_out",
       "dropped_date": "2026-11-17",
-      "exit_date": null,
-      "exit_price": null
+      "exit_date": "2026-11-20",
+      "exit_price": 55.04
     },
     "2006": {
       "name": "東和鋼鐵",

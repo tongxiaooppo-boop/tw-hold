@@ -1,10 +1,10 @@
 {
   "_meta": {
-    "trading_date": "2026-11-19",
-    "rebuilt_at": "2026-11-20T02:03:15+00:00",
+    "trading_date": "2026-11-20",
+    "rebuilt_at": "2026-11-20T15:22:46+00:00",
     "bundle_schema": 1,
     "universe_filtered": true,
-    "note": "universe.parquet：626 檔",
+    "note": "universe.parquet：630 檔",
     "u1b_pending": false,
     "has_pe_bands": true,
     "has_fill_rate": true,
