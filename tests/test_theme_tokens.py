@@ -43,7 +43,7 @@ def test_兩套色票變數名相同():
     light, dark = _blocks(_load_css())
     lv, dv = _vars(light.group(1)), _vars(dark.group(1))
     assert set(dv) <= set(lv)
-    assert {k for k in lv if k not in ("--thc-sans", "--thc-mono")} == set(dv)
+    assert {k for k in lv if k not in ("--thc-sans", "--thc-mono", "--thc-serif")} == set(dv)
 
 
 def test_文字對比度達標():

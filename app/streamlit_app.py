@@ -789,40 +789,42 @@ def _ago_human(iso: str | None) -> str:
     return f"{int(sec // 86400)} 天前"
 
 
-# ── 版型 B：判斷卡（使用者裁決 2026-09-08；配色「北歐靜謐」方案 C，2026-09-11）──
+# ── 版型 B：判斷卡（使用者裁決 2026-09-08；配色 2026-11-21 改「玫瑰莓」（淺色 A4 暖杏底）：主色偏粉莓紅、帶上漲感但不用正紅；
+#    大字用思源宋體、小字（<0.85rem）留黑體／等寬，見 _SMALL_SANS）──
 # 卡片依「判斷類別」暈染色（好／警示／中性），不是漲跌色；漲跌色只留給真的漲跌
 # （目前只有個股 K 線，見 stockcharts.py 的 --thc-up/--thc-down 對應色）。
 # 這裡的變數是唯一色源——要微調配色只改這個 :root 區塊，其餘規則一律吃 var()。
 _CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&family=Noto+Serif+TC:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@500;600;700&family=Noto+Serif+TC:wght@500;600;700&display=swap');
 :root{
-  --thc-bg:#EEF1F4;
-  --thc-surface:#FFFFFF; --thc-surface2:#F5F7F9; --thc-line:#E4E8EC;
-  --thc-ink:#2B333B; --thc-soft:#4E5A64; --thc-faint:#5E6A75;
-  --thc-accent:#4F6E66; --thc-accent-rgb:79,110,102;
+  --thc-bg:#F7F1EC;
+  --thc-surface:#FFFFFF; --thc-surface2:#FBF7F3; --thc-line:#EBE3DC;
+  --thc-ink:#2E2926; --thc-soft:#5F5650; --thc-faint:#6A6058;
+  --thc-accent:#B4405E; --thc-accent-rgb:180,64,94;
   /* 判斷類卡片暈染——good=通過/推薦、warn=存疑/風險、neutral=一般 */
-  --thc-good:#4F6E66; --thc-good-bg:#DEE9E6;
-  --thc-warn:#7A5A4F; --thc-warn-bg:#F1E3DF;
-  --thc-neutral:#526A7A; --thc-neutral-bg:#DEE7EC;
-  --thc-flag:#7A5A4F;
+  --thc-good:#B4405E; --thc-good-bg:#FAE6E9;
+  --thc-warn:#83621B; --thc-warn-bg:#F3EAD2;
+  --thc-neutral:#52657A; --thc-neutral-bg:#E2E8EE;
+  --thc-flag:#83621B;
   --thc-bad:#B5453B;
   /* 漲跌色（台股慣例，紅漲綠跌）——只給真正的價格漲跌用，不要拿來標判斷結果 */
   --thc-up:#B8463A; --thc-down:#3B6E65;
   /* 同一個紅、給需要半透明的地方（雷達徽章）——別再寫死 rgba */
   --thc-up-rgb:184,70,58;
   --thc-sans:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --thc-serif:"Noto Serif TC","Songti TC","PMingLiU",serif;
   --thc-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
 :root[data-thc="dark"]{
-  --thc-bg:#11161C;
-  --thc-surface:#1A2129; --thc-surface2:#202832; --thc-line:#2A333D;
-  --thc-ink:#E8ECF1; --thc-soft:#B2BCC7; --thc-faint:#8F9BA8;
-  --thc-accent:#4FA3A5; --thc-accent-rgb:79,163,165;
-  --thc-good:#4FA3A5; --thc-good-bg:#173236;
-  --thc-warn:#D49A4A; --thc-warn-bg:#3A2C18;
-  --thc-neutral:#7FA3BA; --thc-neutral-bg:#1C2A35;
-  --thc-flag:#D49A4A;
+  --thc-bg:#141215;
+  --thc-surface:#1F1B20; --thc-surface2:#262127; --thc-line:#352E36;
+  --thc-ink:#EEE8EC; --thc-soft:#BBAFB8; --thc-faint:#9A8F98;
+  --thc-accent:#E77A98; --thc-accent-rgb:231,122,152;
+  --thc-good:#E77A98; --thc-good-bg:#3A1E28;
+  --thc-warn:#D9B04F; --thc-warn-bg:#352C14;
+  --thc-neutral:#8FA9C0; --thc-neutral-bg:#1D2630;
+  --thc-flag:#D9B04F;
   --thc-bad:#F07A6E;
   --thc-up:#FF6B5E; --thc-down:#3CC48A;
   --thc-up-rgb:255,107,94;
@@ -836,7 +838,21 @@ _CSS = """
    stFileChipIcon*）——都含 "Icon"，用包含式比對一次蓋掉（2026-09-11）。
    app 自己的 <span> 沒有 data-testid，不受影響。 */
 .stApp, .stApp p, .stApp li, .stApp label,
-.stApp span:not([data-testid*="Icon"]){font-family:var(--thc-sans);}
+.stApp span:not([data-testid*="Icon"]),
+.stApp h1, .stApp h2, .stApp h3, .stApp h4{font-family:var(--thc-serif);}
+/* 小字留黑體（使用者 2026-11-21：大字非黑體、小字除外）——font-size <0.85rem 且沒自訂字體的 class。
+   用 .stApp :is(...) 拉高權重，才壓得過上面 .stApp span:not(...) 的宋體規則；新增小字 class 要加進來。 */
+.stApp :is(.thc-pill, .thc-flag, .thc-cap, .thc-note, .thc-chip, .thc-details summary, .sw-cols ul,
+  div[data-testid="stMarkdownContainer"] table, .thc-vt th, .thc-vt .note, .thc-vt .src, .thc-vt,
+  .thc-cl-gate, .ae-hold-table, .ae-hold-table thead th, .mc-stale, .gz-stale, .ir-table th, .ir-tag,
+  .val-sub, .val-hint, .hist-day span, [data-testid="stCaptionContainer"], small),
+.stApp :is(.thc-pill, .thc-flag, .thc-cap, .thc-note, .thc-chip, .thc-details summary, .sw-cols ul,
+  div[data-testid="stMarkdownContainer"] table, .thc-vt th, .thc-vt .note, .thc-vt .src, .thc-vt,
+  .thc-cl-gate, .ae-hold-table, .ae-hold-table thead th, .mc-stale, .gz-stale, .ir-table th, .ir-tag,
+  .val-sub, .val-hint, .hist-day span, [data-testid="stCaptionContainer"], small) *{font-family:var(--thc-sans);}
+/* 等寬數字：各 class 自己寫了 --thc-mono，但權重輸給上面的宋體／黑體規則，這裡再宣告一次（由 _CSS 內 mono 規則整理）。 */
+.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong){font-family:var(--thc-mono);}
+.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong) span{font-family:inherit;}
 /* 分頁選單（st.radio）前面原生的圓圈勾選標——藏掉，只留文字，雷達徽章疊在文字後面就好。
    結構是 <label data-testid="stRadioOption"><input type=radio hidden><div><div>[圓圈][文字]</div></div></label>；
    圓圈那個 div 沒有 testid，用「跟 stMarkdownContainer 同一排的第一個 div」抓它，不用猜 class 名稱。 */
