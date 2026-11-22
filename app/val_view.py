@@ -292,12 +292,14 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
             years_table = VTable(title, "strip", heads,
                                  (tuple(fmt_eps(r["eps"]) for r in ey["years"]) + (fmt_eps(ey["avg"]),),) + events)
             if events or ey.get("after"):
-                years_note = "已按現在股數換算" + (f"；之後：{ey['after']}" if ey.get("after") else "")
+                years_note = "舊年度已按現在股數換算（只換算配股、減資、分割）" + (
+                    f"；之後：{ey['after']}，已計入" if ey.get("after") else "")
             if ey.get("avg_raw") is not None:
                 years_table_raw = VTable(title, "strip", heads,
                                          (tuple(fmt_eps(r.get("eps_raw")) for r in ey["years"])
                                           + (fmt_eps(ey["avg_raw"]),),) + events)
-                years_note_raw = "當年公布值（跟財經網站相同）" + ("；有配股或減資的年度前後不能直接比" if events or ey.get("after") else "")
+                years_note_raw = "當年公布值（同財經網站）" + ("，配股前後不能直接比" if events or ey.get("after") else "") + (
+                    f"；之後：{ey['after']}" if ey.get("after") else "")
         growth = []
         for r in card.get("growth", []):
             key = r["key"]
@@ -389,6 +391,10 @@ def explain_tables(card: dict) -> list[VTable]:
         ("前瞻 4 季 EPS", "新季有月營收後往後多看一季，最多含 2 季試算；沒有就與近 4 季相同。"),
         ("試算", "月營收（未公布的月先估）× 最新季營業利益率 ＋ 近 8 季業外中位數，扣稅與少數股權，÷ 股數。"),
         ("前瞻三價", "前瞻 4 季 EPS × 自身前瞻本益比。新季沒營收、試算停用、歷史不夠、循環股不給。"),
+        ("近 5 年 EPS", "每年 4/1 起換成去年＋往前 4 年。「還原」把舊年度按現在股數換算，只換算不用付錢的股數變動"
+                       "（配股、彌補虧損減資、分割）；「實際」是當年公布值。"),
+        ("年度下的事件", "上行是事件、下行是股數變化。現金減資會標「不還原」；現金增資、可轉債轉換、員工認股"
+                       "這類有付錢的增股，依會計準則不還原，也不標示。"),
     ]
     buy = [
         ("一般", "便宜價～合理價。「可買」只代表現價在區間內。"),

@@ -550,19 +550,23 @@ def _pct(x: float) -> str:
     return f"{x * 100:.1f}".rstrip("0").rstrip(".") + "%"
 
 
-def event_label(e: dict) -> str | None:
-    """股數事件的短標（使用者 11/21：標註除權等事件）。只收 adjust_eps 會用到的（有 m）：
-    配股（ex_both／ex_rights，m>1）→ "配股7%"；減資（m<1）→ "減資20%"；分割／面額變更 → "1拆4"。
-    現金減資等 m=None 的不列（還原 EPS 也沒用它，兩邊一致）。"""
+def event_label(e: dict) -> tuple[str, str] | None:
+    """股數事件 →（名稱, 股數變化）兩段短標（使用者 11/22：事件要清楚、手機看）。
+    配股（ex_both／ex_rights，m>1）→ ("配股", "+7%")；彌補虧損減資（m<1）→ ("減資", "−20%")；
+    分割／面額變更 → ("分割", "1拆4")；cap_reduction 且 m=None（官方原因非彌補虧損，幾乎都是退還股款）
+    → ("現金減資", "不還原")——股數有變但依 IAS 33 不追溯（research/share_events_2026-11/survey.md）。
+    現金增資、可轉債轉換、員工認股等有對價增股不在事件表、也不追溯 → 不標（📐 怎麼算有說明）。"""
     m = ca._m(e)
-    if m is None or not (m > 0) or abs(np.log(float(m))) <= 1e-9:
+    if m is None:
+        return ("現金減資", "不還原") if e.get("type") == "cap_reduction" else None
+    if not (m > 0) or abs(np.log(float(m))) <= 1e-9:
         return None
     m = float(m)
     if e.get("type") in ("split", "par_change"):
-        return f"1拆{m:g}"
+        return ("分割", f"1拆{m:g}")
     if m < 1:
-        return "減資" + _pct(1 - m)
-    return "配股" + _pct(m - 1)
+        return ("減資", "−" + _pct(1 - m))
+    return ("配股", "+" + _pct(m - 1))
 
 
 def eps_years(q: pd.DataFrame, asof: pd.Timestamp, ticker: str | None = None, n: int = EPS_YEARS) -> dict | None:
@@ -570,8 +574,8 @@ def eps_years(q: pd.DataFrame, asof: pd.Timestamp, ticker: str | None = None, n:
     avg＝有值年度的平均，n_used＝有值年數（0 → 整個回 None）。EPS 用 q 的口徑（loader 已還原到最新股數）。
     只顯示，不拿來算任何價格。回傳 {years: [{year, eps, eps_raw, event}], avg, avg_raw, n_used, first, last, after}；
     eps_raw／avg_raw＝同樣規則用 q["eps_raw"]（當年公布值，未還原；沒有這欄 → 全 None）；
-    event＝該年股數事件短標（多筆換行接——全市場 21～26 年單格最多 2 筆，手機不擠；無 → None）；after＝last 年之後到 asof 的事件
-    （"26/08 配股7%" 形式，多筆用「、」接，無 → None）——這些事件也已還原進上面每一年。"""
+    event＝該年股數事件，每筆兩行「名稱／股數變化」，多筆再換行接（無 → None）；after＝last 年之後到 asof 的事件
+    （"26/08 配股+7%"、"26/09 現金減資（不還原）"，多筆用「、」接，無 → None）。"""
     q = _quarters(q)
     last = eps_last_year(asof)
     years = list(range(last - n + 1, last + 1))
@@ -592,10 +596,11 @@ def eps_years(q: pd.DataFrame, asof: pd.Timestamp, ticker: str | None = None, n:
         label, ts = event_label(e), pd.Timestamp(e["date"])
         if label is None or ts > pd.Timestamp(asof):
             continue
+        name, change = label
         if years[0] <= ts.year <= last:
-            by_year.setdefault(ts.year, []).append(label)
+            by_year.setdefault(ts.year, []).append(name + "\n" + change)
         elif ts.year > last:
-            after.append(f"{ts:%y/%m} {label}")
+            after.append(f"{ts:%y/%m} {name}" + ("（不還原）" if change == "不還原" else change))
     for r in rows:
         r["event"] = "\n".join(by_year[r["year"]]) if r["year"] in by_year else None
     got_raw = [r["eps_raw"] for r in rows if r["eps_raw"] is not None]

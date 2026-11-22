@@ -1,0 +1,29 @@
+{
+  "tickers": 2050,
+  "jumps": 2889,
+  "matched": 238,
+  "unmatched": 2651,
+  "unmatched_tickers": 1215,
+  "eligible_rows": 44464,
+  "skipped_rows": 1951,
+  "date_min": "2021-03-31",
+  "date_max": "2026-09-30",
+  "matched_type_combinations": {
+    "ex_both": 119,
+    "cap_reduction": 85,
+    "ex_rights": 33,
+    "par_change": 1
+  },
+  "unmatched_positive": 2383,
+  "unmatched_positive_tickers": 1134,
+  "unmatched_negative": 268,
+  "unmatched_negative_tickers": 229,
+  "next_quarter_any": {
+    "rows": 761,
+    "tickers": 469
+  },
+  "next_quarter_factor_within_10pct": {
+    "rows": 679,
+    "tickers": 412
+  }
+}

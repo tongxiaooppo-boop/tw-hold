@@ -78,9 +78,10 @@ def test_舊卡沒有這欄不出錯():
 # ── 事件標註＋還原／實際切換（使用者 2026-11-21）──────────────────
 
 @pytest.mark.parametrize("e, label", [
-    (dict(type="ex_both", m=1.07), "配股7%"), (dict(type="ex_rights", m=1.034), "配股3.4%"),
-    (dict(type="cap_reduction", m=0.8), "減資20%"), (dict(type="par_change", m=4), "1拆4"),
-    (dict(type="split", m=7), "1拆7"), (dict(type="cap_reduction", m=None, pf=0.99), None)])
+    (dict(type="ex_both", m=1.07), ("配股", "+7%")), (dict(type="ex_rights", m=1.034), ("配股", "+3.4%")),
+    (dict(type="cap_reduction", m=0.8), ("減資", "−20%")), (dict(type="par_change", m=4), ("分割", "1拆4")),
+    (dict(type="split", m=7), ("分割", "1拆7")), (dict(type="cap_reduction", m=None, pf=0.99), ("現金減資", "不還原")),
+    (dict(type="ex_both", m=None), None)])
 def test_事件短標(e, label):
     assert vc.event_label(dict(e, date="2024-08-01")) == label
 
@@ -97,8 +98,8 @@ def test_事件落在年度與之後(monkeypatch):
         dict(date="2026-08-04", type="ex_both", m=1.07), dict(date="2027-01-01", type="ex_both", m=1.1),
         dict(date="2015-01-01", type="ex_both", m=1.2)])
     r = vc.eps_years(_q(2019, 2026), pd.Timestamp("2026-11-22"), "9999")
-    assert [y["event"] for y in r["years"]] == [None, "配股5%\n減資10%", None, None, None]
-    assert r["after"] == "26/08 配股7%"   # asof 之後的 2027 事件不列、窗口前的 2015 不列
+    assert [y["event"] for y in r["years"]] == [None, "配股\n+5%\n減資\n−10%", None, None, None]
+    assert r["after"] == "26/08 配股+7%"   # asof 之後的 2027 事件不列、窗口前的 2015 不列
 
 
 def test_實際值與平均():
@@ -114,10 +115,17 @@ def test_畫面_切換兩張表與註記(monkeypatch):
     v = vv.card_view(_card(vc.eps_years(_with_raw(_q(2019, 2026)), pd.Timestamp("2026-11-22"), "9999")),
                      "9999 測試", None)
     adj, raw = v.eps.years_table, v.eps.years_table_raw
-    assert adj.headers == raw.headers and adj.rows[1] == raw.rows[1] == ("", "", "", "配股10%", "", "")
+    assert adj.headers == raw.headers and adj.rows[1] == raw.rows[1] == ("", "", "", "配股\n+10%", "", "")
     assert raw.rows[0][-1] == vv.fmt_eps(22.0) and adj.rows[0][-1] == vv.fmt_eps(20.0)
-    assert v.eps.years_note == "已按現在股數換算；之後：26/08 配股7%"
-    assert v.eps.years_note_raw.startswith("當年公布值")
+    assert v.eps.years_note == "舊年度已按現在股數換算（只換算配股、減資、分割）；之後：26/08 配股+7%，已計入"
+    assert v.eps.years_note_raw == "當年公布值（同財經網站），配股前後不能直接比；之後：26/08 配股+7%"
+
+
+def test_現金減資標不還原且在之後清單(monkeypatch):
+    monkeypatch.setitem(vc.ca.SPLITS, "9999", [dict(date="2023-10-01", type="cap_reduction", m=None, pf=0.9),
+                                               dict(date="2026-09-01", type="cap_reduction", m=None, pf=0.9)])
+    r = vc.eps_years(_q(2019, 2026), pd.Timestamp("2026-11-22"), "9999")
+    assert r["years"][2]["event"] == "現金減資\n不還原" and r["after"] == "26/09 現金減資（不還原）"
 
 
 def test_沒有事件就沒有第二列與註記():
