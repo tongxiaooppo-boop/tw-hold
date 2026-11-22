@@ -25,3 +25,12 @@
 - 依 IAS 33 這些不追溯還原，估值卡已說明「不還原也不標示」。
 - 現有免費資料只有上櫃除權表帶現增股數（2021 起 290 筆／215 檔）；上市除權表沒有現增欄；可轉債轉換、員工認股、私募要 MOPS（robots 禁爬，不抓）。只標上櫃會上市櫃不一致，反而誤導。
 - 結論：**不建台帳、不標示**。日後若有官方 OpenAPI 同時涵蓋上市櫃再評估。
+
+## 三方會談定案（Opus＋訂閱 sol＋DeepSeek Flash，兩輪，2026-11-22；原始答案 `collab/gpt/share_r1_*`、`share_r2_*`）
+
+1. 預收股本：`capital_stock` 原口徑不動；tw-swing `official_xbrl.py` 另存新欄 `advance_capital`（`tifrs-bsci-<業別>:AdvanceReceiptsForShareCapital`）。tw-hold 下游統一扣：`share_basis.shares_today_basis`（:173）、`screen._market_cap`（:66）與 :102 的 `shares`（FCF 覆蓋率）、`detect.py` 股數對不上（:218）。缺值不當 0（缺就不扣）。
+2. 歷史：用 `D:\g\claude\p6_study\xbrl_facts\facts_*.parquet`（2013～2026Q2）回補 `advance_capital`，按 ticker＋季末配對。
+3. 近零錯值：只看過去——本季股本 < 前 4 季中位數的 10% → 當缺值（回測不穿越、最新季也能判）。
+4. 待註銷股本：不扣（與一般庫藏股一致）。
+5. 現增紅利成分：先照 B——估值卡「📐 怎麼算／年度下的事件」加一句「原股東折價現增的紅利成分未追溯（影響通常 1～6%）」；之後找上市來源（TWSE 除權表無現增欄、MOPS 禁爬），找到再上市櫃一起做。上櫃 458 筆因子中位數 1.020、P90 1.059、最大 1.137（上限估計）。
+6. ① 還原 EPS 分界：不改（兩方同意；sol 提醒 6592 2024Q2 疑點仍在）。
