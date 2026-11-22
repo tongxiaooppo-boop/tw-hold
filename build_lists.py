@@ -532,8 +532,9 @@ def main() -> int:
     (DERIVED / "_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"  → data/derived/_meta.json　trading_date {meta['trading_date']}"
-          f"　本期換股日 {effective_rebalance(asof).isoformat()}"
-          + ("（暫緩中：rebalance_hold.txt）" if effective_rebalance(asof) != current_rebalance(asof) else ""))
+          f"　本期換股日 {status['period'].isoformat()}"
+          + ("（金控未到齊，延後中）" if status["waiting"]
+             else "（暫緩中：rebalance_hold.txt）" if status["period"] != current_rebalance(asof) else ""))
     return 0
 
 

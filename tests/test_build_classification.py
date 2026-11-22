@@ -198,7 +198,7 @@ def _uni(tickers):
 def test_gate_coverage_ok_and_newer_than_snapshot():
     tk = [f"{1000 + i}" for i in range(100)]
     q = _quarterly(tk, n=4, start="2025-12-31")            # 最新季 2026-09-30，100% 涵蓋
-    ok, why, latest = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    ok, why, latest = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-12-01")
     assert ok and latest == pd.Timestamp("2026-09-30")
 
 
@@ -234,9 +234,9 @@ def test_gate_ticker_suffix_normalized():
 def test_gate_waits_until_rebalance_day():
     tk = [f"{1000 + i}" for i in range(10)]
     q = _quarterly(tk, n=4, start="2025-12-31")            # 最新季 2026-09-30，100% 涵蓋，換股日 11/14
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-13")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-30")
     assert not ok and "未到換股日" in why
-    ok, _, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    ok, _, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-12-01")
     assert ok
 
 
@@ -244,7 +244,7 @@ def test_gate_after_rebalance_but_low_coverage_says_so():
     tk = [f"{1000 + i}" for i in range(100)]
     q = pd.concat([_quarterly(tk, n=3, start="2025-12-31"), _quarterly(tk[:80], n=1, start="2026-09-30")],
                   ignore_index=True)
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-20")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-12-05")
     assert not ok and "不分型" in why
 
 
@@ -260,7 +260,7 @@ def test_gate_分母是上一季有效股票不是整份universe():
     tk = [f"{1000 + i}" for i in range(100)]
     no_fin = [f"{5000 + i}" for i in range(100)]          # 在 universe 但從來沒有季報
     q = _quarterly(tk, n=4, start="2025-12-31")
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk + no_fin), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk + no_fin), pd.Timestamp("2026-06-30"), today="2026-12-01")
     assert ok and "100/100" in why
 
 
@@ -269,7 +269,7 @@ def test_gate_必要欄位空值不算涵蓋():
     q = _quarterly(tk, n=4, start="2025-12-31")
     latest = q["period_end"] == pd.Timestamp("2026-09-30")
     q.loc[latest & q["ticker"].isin(tk[:10]), "eps"] = np.nan        # 10 檔只有空列
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-12-01")
     assert not ok and "90/100" in why and "不分型" in why
 
 
@@ -277,7 +277,7 @@ def test_gate_結構性缺欄的股票不拉低涵蓋率():
     tk = [f"{1000 + i}" for i in range(100)]
     q = _quarterly(tk, n=4, start="2025-12-31")
     q.loc[q["ticker"].isin(tk[:10]), "ni_parent"] = np.nan          # 10 檔每季都沒有歸母淨利
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-11-14")
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), pd.Timestamp("2026-06-30"), today="2026-12-01")
     assert ok and "100.0%（90/90）" in why
 
 
@@ -285,11 +285,11 @@ def test_gate_同季補資料才重建():
     tk = [f"{1000 + i}" for i in range(100)]
     q = _quarterly(tk, n=4, start="2025-12-31")
     snap = pd.Timestamp("2026-09-30")
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20", current_fresh=96)
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-12-05", current_fresh=96)
     assert ok and "同季補資料 96→100" in why
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20", current_fresh=100)
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-12-05", current_fresh=100)
     assert not ok and "沒有新補的財報" in why
-    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-11-20")   # 舊快照沒有 valid_count
+    ok, why, _ = bc.new_quarter_ready(q, _uni(tk), snap, today="2026-12-05")   # 舊快照沒有 valid_count
     assert not ok and "已是最新季" in why
 
 
