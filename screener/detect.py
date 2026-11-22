@@ -180,7 +180,7 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, basic: dict |
        q 沒有任何 period_end ≥ Qe 且 eps 有限的列（事件後的財報還沒進來）→ stop，
        why＝"現金減資後、新財報出來前，EPS 與股價的股數基準不一致，不給價"；否則 ok。
     3. 「股數對不上」：最新一季（period_end 最大且 |eps| ≥ 0.05、ni_parent 有限）隱含股數 S＝ni_parent ÷ eps；
-       股本股數 C＝capital_stock ÷ 面額 − 特別股；dev＝|S ÷ C − 1|；
+       股本股數 C＝淨股本（股本−預收股本）÷ 面額 − 特別股；dev＝|S ÷ C − 1|；
        dev > SHARES_WARN → warn（why：f"隱含股數與股本差 {dev:.0%}，可能是分割／配股調整時點"），否則 ok（value=dev）；
        推不出 S 或 C 非有限 >0 → unchecked，why＝"推不出隱含股數或缺股本"。
     4. 「面額與特別股」：面額有限且正、資料日距估值日不超過 30 天才可用；
@@ -215,7 +215,7 @@ def share_checks(ticker: str, q: pd.DataFrame, asof: pd.Timestamp, basic: dict |
     if not candidates.empty:
         r = candidates.iloc[-1]
         shares = r["ni_parent"] / r["eps"]
-        capital = r.get("capital_stock")
+        capital = r.get("capital_net", r.get("capital_stock"))   # 淨股本；NaN 不退回
         c = capital / par - pref if _finite(capital) and _finite(par) and par > 0 else None
         if _finite(shares) and shares > 0 and _finite(c) and c > 0:
             dev = abs(shares / c - 1)

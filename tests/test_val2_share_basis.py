@@ -49,3 +49,16 @@ def test_事件表讀不到要報錯(monkeypatch):
     monkeypatch.setattr(ca, "EVENTS_OK", False)
     with pytest.raises(sb.EventsUnavailable):
         sb.share_factor_after("2330", T("2020-01-01"))
+
+
+def test_common_shares_uses_capital_net(fake_events):
+    latest = pd.Series({"period_end": T("2024-09-30"), "capital_stock": 148.25e8,
+                        "capital_net": 58.62e8, "equity_parent": 1e9})
+    q = pd.DataFrame([latest])
+    shares, src = sb.common_shares("9999", latest, q, None)
+    assert src == "capital" and math.isclose(shares, 58.62e8 / 10.0)
+    # capital_net 是 NaN 時不准退回 capital_stock
+    latest2 = latest.copy()
+    latest2["capital_net"] = float("nan")
+    shares2, _ = sb.common_shares("9999", latest2, pd.DataFrame([latest2]), None)
+    assert shares2 is None

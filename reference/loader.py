@@ -60,6 +60,32 @@ def _read(name: str) -> pd.DataFrame:
     return pd.read_parquet(p)
 
 
+NEAR_ZERO_RATIO = 0.10   # 本季 < 前 4 季中位數 × 此值 → 當缺值
+
+
+def capital_net(q: pd.DataFrame) -> pd.Series:
+    """普通股股本口徑＝capital_stock − advance_capital。
+    - advance_capital 欄不存在、NaN、< 0、或 ≥ capital_stock → 不扣（用 capital_stock 原值）。
+    - 近零錯值：同 ticker 依 period_end 排序，前 4 季（不含本季、min_periods=4）的 net 中位數 × NEAR_ZERO_RATIO
+      大於本季 net → 本季設 NaN。只看過去，不准用下一季。
+    回傳與 q 同 index。capital_stock 欄不存在 → 全 NaN。"""
+    if "capital_stock" not in q.columns:
+        return pd.Series(np.nan, index=q.index, dtype="float64")
+    cap = pd.to_numeric(q["capital_stock"], errors="coerce").astype("float64")
+    if "advance_capital" in q.columns:
+        adv = pd.to_numeric(q["advance_capital"], errors="coerce").astype("float64")
+        ok = adv.notna() & (adv >= 0) & (adv < cap)
+        net = cap.where(~ok, cap - adv)
+    else:
+        net = cap.copy()
+    order = pd.DataFrame({"t": q["ticker"].astype(str), "p": pd.to_datetime(q["period_end"]),
+                          "v": net}).sort_values(["t", "p"], kind="stable")
+    past_med = (order.groupby("t")["v"]
+                .transform(lambda s: s.shift(1).rolling(4, min_periods=4).median()))
+    bad = (past_med * NEAR_ZERO_RATIO > order["v"]).reindex(q.index).fillna(False)
+    return net.where(~bad)
+
+
 def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
                      how: str = "outer") -> pd.DataFrame:
     """三表去重合併；權益只取資產負債表。
@@ -93,6 +119,7 @@ def merge_statements(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame,
     replace = q["ni_parent"].isna() & no_nci & np.isfinite(income)
     q.loc[replace, "ni_parent"] = income[replace]
     q = q.drop(columns="_no_nci")
+    q["capital_net"] = capital_net(q)
     order = [c for c in order if c in q.columns and c != "ni_parent"]
     order += [c for c in q.columns if c not in order and c != "ni_parent"] + ["ni_parent"]
     return q[order].sort_values(keys).reset_index(drop=True)

@@ -99,7 +99,7 @@ def exchange_outstanding_ratio(ticker, q_rows, exch, upto) -> float | None:
         par = par_value_at(ticker, end, common_par_today(basic))
         pref = basic.get('preferred_shares')
         pref = pref if _positive(pref) else 0.0
-        cap = row.get('capital_stock')
+        cap = row.get('capital_net', row.get('capital_stock'))   # 淨股本（扣預收股本）；NaN 不退回
         cap_shares = cap / par - pref if _positive(cap) and _positive(par) else None
         equity = common_equity(ticker, row, basic)
         bv = float((sample.close / sample.pbr).median())
@@ -118,7 +118,8 @@ def common_shares(ticker: str, latest, quarters: pd.DataFrame,
     in the event table (11/3 r3 check: 42 of 45 such stocks matched the exchange via capital).
     """
     basic = basic or {}
-    base = shares_today_basis(ticker, latest.get('capital_stock'), latest['period_end'],
+    base = shares_today_basis(ticker, latest.get('capital_net', latest.get('capital_stock')),
+                              latest['period_end'],
                               common_par_today(basic), basic.get('preferred_shares'))
     src = 'capital'
     if not _positive(base) and live:

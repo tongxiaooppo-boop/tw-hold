@@ -63,6 +63,11 @@ def _rank_avg(df: pd.DataFrame, cols: dict[str, int]) -> pd.Series:
     return pd.concat(parts, axis=1).mean(axis=1) if parts else pd.Series(np.nan, index=df.index)
 
 
+def _cap_basis(d: pd.DataFrame) -> pd.Series:
+    """股數用的股本口徑：有 capital_net（股本−預收股本）就用它，NaN 不退回 capital_stock。"""
+    return d["capital_net"] if "capital_net" in d.columns else d.get("capital_stock", np.nan)
+
+
 def _market_cap(row_capital_stock: pd.Series, close: pd.Series) -> pd.Series:
     """市值 = 收盤 × 在外流通股數；股數 = 股本 ÷ 10（面額）。"""
     return close * (row_capital_stock / 10.0)
@@ -96,10 +101,10 @@ def screen_deposit(qf: pd.DataFrame, divf: pd.DataFrame,
     if prices is not None:
         px = prices.set_index("ticker")["close"]
         d["close"] = px.reindex(d.index)
-        d["market_cap"] = _market_cap(d.get("capital_stock", np.nan), d["close"])
+        d["market_cap"] = _market_cap(_cap_basis(d), d["close"])
         if market_cap is not None:
             d["market_cap"] = market_cap.reindex(d.index).fillna(d["market_cap"])
-        shares = d.get("capital_stock", np.nan) / 10.0
+        shares = _cap_basis(d) / 10.0
         d["fcf_cover"] = d["ttm_fcf"] / (d["last_cash_dividend"] * shares)
         d["fcf_yield"] = d["ttm_fcf"] / d["market_cap"]
     else:
@@ -188,7 +193,7 @@ def screen_value(qf: pd.DataFrame, prices: pd.DataFrame | None = None,
     if prices is not None:
         px = prices.set_index("ticker")["close"]
         d["close"] = px.reindex(d.index)
-        d["market_cap"] = d["close"] * (d.get("capital_stock", np.nan) / 10.0)
+        d["market_cap"] = d["close"] * (_cap_basis(d) / 10.0)
         d["norm_pe"] = d["close"] / d["normalized_eps"]
         d["norm_ey"] = d["normalized_eps"] / d["close"]          # normalized 盈餘殖利率
         d["fcf_yield"] = d["ttm_fcf"] / d["market_cap"]

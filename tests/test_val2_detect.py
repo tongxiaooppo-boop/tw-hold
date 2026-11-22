@@ -188,3 +188,14 @@ def test_資料_金融沒營收欄不算缺季():
     gap["equity_parent"] = 1000.0
     out = {c.name: c for c in dt.data_checks(gap, m, _windows(gap, m, financial=True), None, ASOF, financial=True)}
     assert out["財報缺季"].level == "stop"
+
+
+def test_share_mismatch_uses_capital_net():
+    q = Q()
+    q["capital_stock"] = 2500.0   # 含預收股本
+    q["capital_net"] = 1000.0     # 淨股本才對得上隱含股數
+    c = {c.name: c for c in dt.share_checks("9999", q, ASOF)}["股數對不上"]
+    assert c.level == "ok" and c.value == pytest.approx(0.0)
+    q["capital_net"] = np.nan     # NaN 不退回 capital_stock
+    c2 = {c.name: c for c in dt.share_checks("9999", q, ASOF)}["股數對不上"]
+    assert c2.level == "unchecked"

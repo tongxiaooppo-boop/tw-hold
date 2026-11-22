@@ -297,12 +297,13 @@ def _universe_financials() -> tuple[set[str], dict[str, float], pd.Series, pd.Se
 def _top500_by_mktcap(qf: pd.DataFrame, prices: pd.DataFrame | None) -> set[str] | None:
     """退化估法：universe.parquet 不在時，用「capital_stock × 最新收盤」估市值前 500；
     缺收盤就不篩（回 None）。"""
-    if prices is None or "capital_stock" not in qf.columns:
+    cap_col = "capital_net" if "capital_net" in qf.columns else "capital_stock"   # 淨股本（扣預收股本）
+    if prices is None or cap_col not in qf.columns:
         return None
     latest = (qf.sort_values("period_end").groupby("ticker")
-                .tail(1)[["ticker", "capital_stock"]])
+                .tail(1)[["ticker", cap_col]])
     mc = latest.merge(prices, on="ticker")
-    mc["market_cap"] = mc["close"] * mc["capital_stock"] / 10.0
+    mc["market_cap"] = mc["close"] * mc[cap_col] / 10.0
     return set(mc.dropna(subset=["market_cap"]).nlargest(500, "market_cap")["ticker"])
 
 
