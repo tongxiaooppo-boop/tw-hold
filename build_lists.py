@@ -35,7 +35,18 @@ except Exception:
 
 N = 15                                        # 成分檔數（使用者裁決 2026-09-08）
 INDUSTRY_CAP = 0.40                            # 單一產業上限（PRD §6.1 / §7.4）
-REBALANCE_MD = [(3, 31), (5, 15), (8, 14), (11, 14)]   # 換股日（PRD §6.1）
+#: 換股日（2026-12-01 起，使用者 2026-11-22 拍板）：季報換股日挪到**金控**法定期限＋1 天
+#: （金控 Q1/Q2/Q3 期限 5/31、8/31、11/30；一般股 5/15、8/14、11/14 早已到齊），全市場同一天換。
+#: 年報 3/31 不變（金控年報期限 3/16 比一般股早，3/31 時早已到齊）。
+REBALANCE_MD = [(3, 31), (6, 1), (9, 1), (12, 1)]
+#: 舊換股日（asof < SCHEDULE_SWITCH 一律用這組，讓 2026-11-14 期維持凍結到 12/1）。
+REBALANCE_MD_OLD = [(3, 31), (5, 15), (8, 14), (11, 14)]
+SCHEDULE_SWITCH = date(2026, 12, 1)
+#: 金控 13 家（產業別只有「金融保險業」，分不出金控，所以寫死）。新設／合併金控要手動改這裡。
+HOLDCO = ("2880", "2881", "2882", "2883", "2884", "2885", "2886", "2887",
+          "2889", "2890", "2891", "2892", "5880")
+#: 換股日後金控新季財報還沒到齊 → 最多等幾天；滿了照換，缺的金控標「沿用舊季」。
+HOLDCO_WAIT_DAYS = 14
 
 #: 每個清單在 holdings / candidates 裡揭露的欄位（存在才帶）。
 VALUE_COLS = ["name", "close", "market_cap", "verdict", "value_score", "f_score", "roe", "norm_pe",
@@ -54,10 +65,46 @@ DEPOSIT_COLS = ["name", "close", "market_cap", "verdict", "safety_score", "cur_y
 
 
 def current_rebalance(asof: date) -> date:
-    """asof 當下所屬期間的換股日（<= asof 的最近一個 REBALANCE_MD）。"""
-    cands = [date(y, m, d) for y in (asof.year - 1, asof.year)
-             for m, d in REBALANCE_MD if date(y, m, d) <= asof]
-    return max(cands)
+    """asof 當下所屬期間的換股日（<= asof 的最近一個換股日）。
+
+    asof < SCHEDULE_SWITCH → 只看 REBALANCE_MD_OLD；asof ≥ SCHEDULE_SWITCH → 只看 REBALANCE_MD
+    中 ≥ SCHEDULE_SWITCH 的日期，沒有就退回舊表（實際上 asof ≥ 12/1 一定有 2026-12-01）。
+    例：2026-11-22→2026-11-14、2026-12-01→2026-12-01、2027-03-30→2026-12-01、2027-05-20→2027-03-31、
+    2027-08-31→2027-06-01。"""
+    raise NotImplementedError
+
+
+def target_quarter_end(rb: date) -> date:
+    """換股日要用的財報季末。新表：3/31→前一年 12/31、6/1→3/31、9/1→6/30、12/1→9/30；
+    舊表：5/15→3/31、8/14→6/30、11/14→9/30（3/31 同新表）。不在兩表的日期 → ValueError。"""
+    raise NotImplementedError
+
+
+def holdco_missing(holdco_latest: dict[str, str | None], rb: date) -> list[str]:
+    """換股日 rb 時，新季財報還沒到的金控（排序後的代號清單）。
+
+    holdco_latest：{金控代號: 該檔最新一季「eps 或 net_income 有值」的季末 ISO 日期，或 None}
+    （由 build_factors.screen_all 的 context["holdco_latest"] 提供；只含 HOLDCO 內的代號）。
+    判定：tq = target_quarter_end(rb)，prev = tq 的上一季季末；
+    - 最新季 ≥ tq → 已到；
+    - 最新季 == prev → 缺（列入）；
+    - 最新季 < prev 或 None → 不算（已下市／合併、或本來就沒資料，例 2888 新光金），不擋換股。"""
+    raise NotImplementedError
+
+
+def rebalance_status(asof: date, held: set[date] | None = None,
+                     holdco_latest: dict[str, str | None] | None = None) -> dict:
+    """實際生效的換股日＋金控等待狀態。回傳 {"period": date, "waiting": [代號], "stale": [代號]}。
+
+    從 period = current_rebalance(asof) 開始，迴圈：
+    1. period 在 held（rebalance_hold.txt）→ period = current_rebalance(period − 1 天)，繼續；
+    2. holdco_latest 不是 None 且 period ≥ SCHEDULE_SWITCH：miss = holdco_missing(holdco_latest, period)；
+       - miss 非空且 asof < period + HOLDCO_WAIT_DAYS 天 → waiting = miss，period 往前退一期，繼續
+         （退回的那一期不再檢查金控，直接停在那裡——它當時已經換過了）；
+       - miss 非空且 asof ≥ period + HOLDCO_WAIT_DAYS 天 → stale = miss，停；
+    3. 其他 → 停。
+    holdco_latest 為 None（測試／舊 context）＝不做金控檢查。waiting／stale 預設空清單。"""
+    raise NotImplementedError
 
 
 #: 暫緩換股：檔內列出的換股日（每行一個 ISO 日期，# 開頭為註解）先不換，沿用上一期成分。
@@ -77,13 +124,11 @@ def _held_periods(path: Path | None = None) -> set[date]:
     return out
 
 
-def effective_rebalance(asof: date, held: set[date] | None = None) -> date:
-    """實際生效的換股日：current_rebalance，但被暫緩的換股日往前退到上一期。"""
+def effective_rebalance(asof: date, held: set[date] | None = None,
+                        holdco_latest: dict[str, str | None] | None = None) -> date:
+    """實際生效的換股日（rebalance_status 的 period）。held 為 None → 讀 HOLD_FILE。"""
     held = _held_periods() if held is None else held
-    period = current_rebalance(asof)
-    while period in held:
-        period = current_rebalance(period - timedelta(days=1))
-    return period
+    return rebalance_status(asof, held, holdco_latest)["period"]
 
 
 def select_composition(df: pd.DataFrame, score: str, has_industry: bool) -> list[str]:
