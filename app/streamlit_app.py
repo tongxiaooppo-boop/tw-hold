@@ -2235,6 +2235,8 @@ def _view_table(table) -> None:
         st.markdown(f"**{table.title}**")
     if table.kind == "kv":
         _kv_table(table.rows, table.headers[1])
+    elif table.kind == "strip":   # 一列數字（近 5 年 EPS）：全部欄位當數字對齊
+        _vtable(table.headers, table.rows, set(range(len(table.headers))))
     elif table.kind == "derive":
         rows = [[(step, source), value, source] for step, value, source in table.rows]
         _vtable(table.headers, rows, {1}, {2}, hl=set(table.hl))
@@ -2296,6 +2298,8 @@ def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True
         with ceps.container(border=True, key="valcard_fin"):
             for title, sub, value in v.eps.kv:
                 st.markdown(f'<div class="val-eps-row"><div><b>{_esc(title)}</b><div class="val-sub">{_esc(sub)}</div></div><strong>{_esc(value)}</strong></div>', unsafe_allow_html=True)
+            if v.eps.years_table is not None:
+                _view_table(v.eps.years_table)
             st.markdown(f"**{v.eps.growth_label}**")
             _view_table(v.eps.growth_table)
     if full and v.full:

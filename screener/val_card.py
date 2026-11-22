@@ -38,7 +38,8 @@ A-PE
 - kind＝PE_KIND[type]；cap＝pe_cap(type, mh, q, asof)
 - 基準 EPS：cyclical 或 peak_block(cls) → min(近 4 季, eps_avg(q, 12)) 名稱 BASE_LOW（eps_avg 為 None 或 ≤0
   → 近 4 季、名稱 BASE_TTM，notes 加 NOTE_AVG_NA）；其餘 → 近 4 季，BASE_TTM。cyclical 或 peak 另給 eps_3y_avg＝eps_avg(q, 12)
-  （畫面三價旁並列「3 年平均 Y；近 4 季 Z」；使用者 11/2：不列 5 年平均）。
+  （畫面三價旁並列「3 年平均 Y；近 4 季 Z」；使用者 11/2：基準旁不列 5 年平均。
+  11/21 另在 EPS 卡加「近 5 年 EPS」小表＋平均，只顯示、不當基準，見 eps_years()）。
 - prices＝three_prices(基準, stats)；raw P20 ≥ cap → cheap／fair／dear 皆 None、position="na"、notes 加 NOTE_CAP_FLAT、
   buy_range None。
 - fwd_prices（只在：非 cyclical、非 peak、前瞻可用、前瞻季≠近 4 季季別、前瞻 EPS ≥ EPS_MIN、
@@ -61,6 +62,7 @@ position：A 層 multiples.classify_position 同規則（price < cheap → cheap
   eps_3y_avg(float|None), price_note(str|None：沒有三價時放在三價位置的短句，見 price_note()), quality{cfo_ni, accrual}, status(summarize 結果), notes(list[str]), version
   P4 新增：nonop_hist(list，nonop_rows)、nonop_median(float|None，eps_windows.nonop_median)、fwd_note(str|None，fwd_note())、
   revision["last_event"]（rev_hist 最後一列 event，無 → None）、buy_range 多 where／gap（buy_where()）
+  2026-11-21 新增：eps_years（dict|None，見 eps_years()：近 5 個完整年度 EPS 與平均，只顯示、不進任何價格計算）
 prices／fwd_prices dict：{cheap, fair, dear, base, base_name, metric("pe"|"pe_fwd"|"pb"), mults(tuple 截斷後),
   raw_mults(tuple), capped(bool), cap(float|None), n_valid, n_loss, window("YYYY-MM～YYYY-MM")}
 """
@@ -127,6 +129,7 @@ def _end_mean(q, col):
     return float(np.mean(values)) if values else None
 
 CARD_VERSION = "card-v4-val2"
+EPS_YEARS = 5   # 估值卡「近 5 年 EPS」年數（使用者 2026-11-21）
 Q_COLS = ["revenue", "gross_profit", "op_income", "pretax_income", "net_income", "ni_parent", "eps",
           "capital_stock", "equity_parent", "total_assets", "ocf"]
 TIERS = ("A", "B", "C", "D")
@@ -248,7 +251,8 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
                   position="na", fwd_prices=None, buy_range=None, revision=revision, b_tier=None,
                   c_tier=None, roe=None, eps_3y_avg=None, price_note=None, quality=quality(q), status=dt.summarize([]),
                   notes=[], version=CARD_VERSION, nonop_hist=nonop_rows(q, financial) if len(q) >= 4 else [],
-                  nonop_median=ew.nonop_median(actual.to_dict("records")) if len(q) >= 4 else None, fwd_note=None)
+                  nonop_median=ew.nonop_median(actual.to_dict("records")) if len(q) >= 4 else None, fwd_note=None,
+                  eps_years=eps_years(q, asof))
     if cls is None:
         result["reason"] = "這檔不在分類母體（上市櫃且財報 ≥12 季），不做估值"
         result["price_note"] = price_note(result)
@@ -532,6 +536,32 @@ def bvps_live(q: pd.DataFrame, ticker: str = "", basic: dict | None = None, *, e
     equity = sb.common_equity(ticker, latest, basic)
     return equity / shares if shares is not None and equity is not None else None
 
+
+
+def eps_last_year(asof: pd.Timestamp) -> int:
+    """最後一個「年報已到期」的年度：每年 3/31 年報截止，4/1 起才算進去年（使用者 2026-11-21）。
+    例：2027-03-31 → 2025；2027-04-01 → 2026。"""
+    asof = pd.Timestamp(asof)
+    return asof.year - 1 if (asof.month, asof.day) >= (4, 1) else asof.year - 2
+
+
+def eps_years(q: pd.DataFrame, asof: pd.Timestamp, n: int = EPS_YEARS) -> dict | None:
+    """近 n 個完整年度 EPS（由舊到新）與平均。年度 EPS＝該年 4 季 EPS 都有限時的合計，否則 None；
+    avg＝有值年度的平均，n_used＝有值年數（0 → 整個回 None）。EPS 用 q 的口徑（loader 已還原到最新股數）。
+    只顯示，不拿來算任何價格。回傳 {years: [{year, eps}], avg, n_used, first, last}。"""
+    q = _quarters(q)
+    last = eps_last_year(asof)
+    years = list(range(last - n + 1, last + 1))
+    periods = q["period_end"].dt.to_period("Q")
+    rows = []
+    for year in years:
+        values = q.loc[periods.dt.year == year, "eps"]
+        ok = len(values) == 4 and bool(np.isfinite(values).all())
+        rows.append(dict(year=year, eps=float(values.sum()) if ok else None))
+    got = [r["eps"] for r in rows if r["eps"] is not None]
+    if not got:
+        return None
+    return dict(years=rows, avg=float(np.mean(got)), n_used=len(got), first=years[0], last=last)
 
 
 def eps_avg(q: pd.DataFrame, n: int) -> float | None:
