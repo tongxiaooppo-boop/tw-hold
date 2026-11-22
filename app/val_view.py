@@ -146,6 +146,9 @@ class EpsCard:
     growth_label: str                          # "年增率（對去年同期）"
     growth_table: VTable                       # grid：期間｜營收｜EPS
     years_table: VTable | None = None          # strip：年份後兩碼…｜平均，一列 EPS（2026-11-21；card["eps_years"] 沒有 → None）
+    years_note: str | None = None              # 表下小字：已按現在股數換算（＋之後的股數事件）
+    years_table_raw: VTable | None = None      # 同上但用當年公布值（「實際」切換；沒有 eps_raw → None）
+    years_note_raw: str | None = None
 
 
 @dataclass(frozen=True)
@@ -276,14 +279,25 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
         else:
             sub = "試算停用：" + _no_suffix(disabled) if disabled else "財報延遲" if fwd.get("status") == "report_late" else fwd.get("reason") or "新季營收未出"
             kv.append(("前瞻 4 季 EPS", sub, "—"))
-        years_table = None
+        years_table = years_note = years_table_raw = years_note_raw = None
         ey = card.get("eps_years")   # 舊卡沒有這欄 → 不顯示（app 部署可能比資料快）
         if ey and ey.get("years"):
             # 使用者 11/21：年份只留後兩碼、不要一堆字；平均只出現在最後一格（不另列 kv）
             avg_head = "平均" if ey["n_used"] == len(ey["years"]) else f"{ey['n_used']:d} 年平均"
-            years_table = VTable(f"近 {len(ey['years']):d} 年 EPS（元）", "strip",
-                                 tuple(str(r["year"])[-2:] for r in ey["years"]) + (avg_head,),
-                                 (tuple(fmt_eps(r["eps"]) for r in ey["years"]) + (fmt_eps(ey["avg"]),),))
+            heads = tuple(str(r["year"])[-2:] for r in ey["years"]) + (avg_head,)
+            events = ()
+            if any(r.get("event") for r in ey["years"]):   # 第二列：該年股數事件（配股／減資／分割）
+                events = (tuple(r.get("event") or "" for r in ey["years"]) + ("",),)
+            title = f"近 {len(ey['years']):d} 年 EPS（元）"
+            years_table = VTable(title, "strip", heads,
+                                 (tuple(fmt_eps(r["eps"]) for r in ey["years"]) + (fmt_eps(ey["avg"]),),) + events)
+            if events or ey.get("after"):
+                years_note = "已按現在股數換算" + (f"；之後：{ey['after']}" if ey.get("after") else "")
+            if ey.get("avg_raw") is not None:
+                years_table_raw = VTable(title, "strip", heads,
+                                         (tuple(fmt_eps(r.get("eps_raw")) for r in ey["years"])
+                                          + (fmt_eps(ey["avg_raw"]),),) + events)
+                years_note_raw = "當年公布值（跟財經網站相同）" + ("；有配股或減資的年度前後不能直接比" if events or ey.get("after") else "")
         growth = []
         for r in card.get("growth", []):
             key = r["key"]
@@ -302,7 +316,7 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
                 rev_text = "見試算細節"   # 前瞻含未公布月份的推估營收，只放展開區（使用者 2026-11-08）
             growth.append((period, rev_text, eps_text))
         eps_card = EpsCard(tuple(kv), "年增率（對去年同期）", VTable(None, "grid", ("期間", "營收", "EPS"), tuple(growth)),
-                           years_table)
+                           years_table, years_note, years_table_raw, years_note_raw)
     return CardView(full, coverage_line(meta), asof_line(card), price, eps_card, pins)
 
 

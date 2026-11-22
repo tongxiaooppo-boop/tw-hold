@@ -2299,7 +2299,15 @@ def _valuation_block(d: dict, label: str = "", code: str = "", full: bool = True
             for title, sub, value in v.eps.kv:
                 st.markdown(f'<div class="val-eps-row"><div><b>{_esc(title)}</b><div class="val-sub">{_esc(sub)}</div></div><strong>{_esc(value)}</strong></div>', unsafe_allow_html=True)
             if v.eps.years_table is not None:
-                _view_table(v.eps.years_table)
+                table, note = v.eps.years_table, v.eps.years_note
+                if v.eps.years_table_raw is not None:   # 還原／實際切換（使用者 2026-11-21）
+                    basis = st.segmented_control("EPS 口徑", ["還原", "實際"], default="還原",
+                                                 key="_eps_years_basis", label_visibility="collapsed") or "還原"
+                    if basis == "實際":
+                        table, note = v.eps.years_table_raw, v.eps.years_note_raw
+                _view_table(table)
+                if note:
+                    st.markdown(f'<p class="val-sub">{_esc(note)}</p>', unsafe_allow_html=True)
             st.markdown(f"**{v.eps.growth_label}**")
             _view_table(v.eps.growth_table)
     if full and v.full:

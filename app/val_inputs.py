@@ -42,10 +42,13 @@ def ensure_multiples(derived: Path = DERIVED, now: float | None = None, fetch=No
 def quarterly(inc: pd.DataFrame, bal: pd.DataFrame, cf: pd.DataFrame) -> pd.DataFrame:
     """單檔三表 → build_card 的 qf：loader.merge_statements(inc, bal, cf)（how 預設 outer，與 load_quarterly 相同）
     → disclosure_date＝period_end＋1 天（live）→ corporate_actions.adjust_eps。不用 factors.quarterly_factors。
+    還原前先把原始 EPS 存成 eps_raw（估值卡「近 5 年 EPS」的「實際」切換用；adjust_eps 只改 eps）。
     三表任一空 → 照 merge_statements 的行為（inc 空回空表）。"""
     from reference import loader, corporate_actions
     q = loader.merge_statements(inc, bal, cf)
     q["disclosure_date"] = q["period_end"] + pd.Timedelta(days=1)
+    if "eps" in q.columns:
+        q["eps_raw"] = q["eps"]
     return corporate_actions.adjust_eps(q)
 
 

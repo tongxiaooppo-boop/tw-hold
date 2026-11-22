@@ -73,3 +73,66 @@ def test_舊卡沒有這欄不出錯():
     del card["eps_years"]
     v = vv.card_view(card, "1234 測試", None)
     assert v.eps.years_table is None and all("平均 EPS" not in k[0] for k in v.eps.kv)
+
+
+# ── 事件標註＋還原／實際切換（使用者 2026-11-21）──────────────────
+
+@pytest.mark.parametrize("e, label", [
+    (dict(type="ex_both", m=1.07), "配股7%"), (dict(type="ex_rights", m=1.034), "配股3.4%"),
+    (dict(type="cap_reduction", m=0.8), "減資20%"), (dict(type="par_change", m=4), "1拆4"),
+    (dict(type="split", m=7), "1拆7"), (dict(type="cap_reduction", m=None, pf=0.99), None)])
+def test_事件短標(e, label):
+    assert vc.event_label(dict(e, date="2024-08-01")) == label
+
+
+def _with_raw(q, factor=1.1):
+    q = q.copy()
+    q["eps_raw"] = q["eps"] * factor
+    return q
+
+
+def test_事件落在年度與之後(monkeypatch):
+    monkeypatch.setitem(vc.ca.SPLITS, "9999", [
+        dict(date="2022-08-01", type="ex_both", m=1.05), dict(date="2022-09-01", type="cap_reduction", m=0.9),
+        dict(date="2026-08-04", type="ex_both", m=1.07), dict(date="2027-01-01", type="ex_both", m=1.1),
+        dict(date="2015-01-01", type="ex_both", m=1.2)])
+    r = vc.eps_years(_q(2019, 2026), pd.Timestamp("2026-11-22"), "9999")
+    assert [y["event"] for y in r["years"]] == [None, "配股5%\n減資10%", None, None, None]
+    assert r["after"] == "26/08 配股7%"   # asof 之後的 2027 事件不列、窗口前的 2015 不列
+
+
+def test_實際值與平均():
+    r = vc.eps_years(_with_raw(_q(2019, 2026)), pd.Timestamp("2026-11-22"))
+    assert [y["eps_raw"] for y in r["years"]] == pytest.approx([13.2, 17.6, 22.0, 26.4, 30.8])
+    assert r["avg_raw"] == pytest.approx(22.0)
+    assert vc.eps_years(_q(2019, 2026), pd.Timestamp("2026-11-22"))["avg_raw"] is None   # 沒 eps_raw 欄
+
+
+def test_畫面_切換兩張表與註記(monkeypatch):
+    monkeypatch.setitem(vc.ca.SPLITS, "9999", [dict(date="2024-08-01", type="ex_both", m=1.1),
+                                               dict(date="2026-08-04", type="ex_both", m=1.07)])
+    v = vv.card_view(_card(vc.eps_years(_with_raw(_q(2019, 2026)), pd.Timestamp("2026-11-22"), "9999")),
+                     "9999 測試", None)
+    adj, raw = v.eps.years_table, v.eps.years_table_raw
+    assert adj.headers == raw.headers and adj.rows[1] == raw.rows[1] == ("", "", "", "配股10%", "", "")
+    assert raw.rows[0][-1] == vv.fmt_eps(22.0) and adj.rows[0][-1] == vv.fmt_eps(20.0)
+    assert v.eps.years_note == "已按現在股數換算；之後：26/08 配股7%"
+    assert v.eps.years_note_raw.startswith("當年公布值")
+
+
+def test_沒有事件就沒有第二列與註記():
+    v = vv.card_view(_card(vc.eps_years(_with_raw(_q(2019, 2026)), pd.Timestamp("2026-11-22"), "0000")),
+                     "0000 測試", None)
+    assert len(v.eps.years_table.rows) == 1 and v.eps.years_note is None
+
+
+def test_沒有原始值不給實際表():
+    v = vv.card_view(_card(vc.eps_years(_q(2019, 2026), pd.Timestamp("2026-11-22"))), "1234 測試", None)
+    assert v.eps.years_table_raw is None
+
+
+def test_val_inputs保留原始EPS():
+    import inspect
+    from app import val_inputs
+    src = inspect.getsource(val_inputs.quarterly)
+    assert 'q["eps_raw"] = q["eps"]' in src and src.index("eps_raw") < src.index("adjust_eps(q)")

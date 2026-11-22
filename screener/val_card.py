@@ -73,6 +73,7 @@ from dataclasses import asdict
 import numpy as np
 import pandas as pd
 
+from reference import corporate_actions as ca
 from reference import share_basis as sb
 from screener import detect as dt
 from screener import eps_windows as ew
@@ -252,7 +253,7 @@ def build_card(qf: pd.DataFrame | None, rev: pd.DataFrame | None, px: pd.DataFra
                   c_tier=None, roe=None, eps_3y_avg=None, price_note=None, quality=quality(q), status=dt.summarize([]),
                   notes=[], version=CARD_VERSION, nonop_hist=nonop_rows(q, financial) if len(q) >= 4 else [],
                   nonop_median=ew.nonop_median(actual.to_dict("records")) if len(q) >= 4 else None, fwd_note=None,
-                  eps_years=eps_years(q, asof))
+                  eps_years=eps_years(q, asof, cls_data.get("ticker")))
     if cls is None:
         result["reason"] = "這檔不在分類母體（上市櫃且財報 ≥12 季），不做估值"
         result["price_note"] = price_note(result)
@@ -545,10 +546,32 @@ def eps_last_year(asof: pd.Timestamp) -> int:
     return asof.year - 1 if (asof.month, asof.day) >= (4, 1) else asof.year - 2
 
 
-def eps_years(q: pd.DataFrame, asof: pd.Timestamp, n: int = EPS_YEARS) -> dict | None:
+def _pct(x: float) -> str:
+    return f"{x * 100:.1f}".rstrip("0").rstrip(".") + "%"
+
+
+def event_label(e: dict) -> str | None:
+    """股數事件的短標（使用者 11/21：標註除權等事件）。只收 adjust_eps 會用到的（有 m）：
+    配股（ex_both／ex_rights，m>1）→ "配股7%"；減資（m<1）→ "減資20%"；分割／面額變更 → "1拆4"。
+    現金減資等 m=None 的不列（還原 EPS 也沒用它，兩邊一致）。"""
+    m = ca._m(e)
+    if m is None or not (m > 0) or abs(np.log(float(m))) <= 1e-9:
+        return None
+    m = float(m)
+    if e.get("type") in ("split", "par_change"):
+        return f"1拆{m:g}"
+    if m < 1:
+        return "減資" + _pct(1 - m)
+    return "配股" + _pct(m - 1)
+
+
+def eps_years(q: pd.DataFrame, asof: pd.Timestamp, ticker: str | None = None, n: int = EPS_YEARS) -> dict | None:
     """近 n 個完整年度 EPS（由舊到新）與平均。年度 EPS＝該年 4 季 EPS 都有限時的合計，否則 None；
     avg＝有值年度的平均，n_used＝有值年數（0 → 整個回 None）。EPS 用 q 的口徑（loader 已還原到最新股數）。
-    只顯示，不拿來算任何價格。回傳 {years: [{year, eps}], avg, n_used, first, last}。"""
+    只顯示，不拿來算任何價格。回傳 {years: [{year, eps, eps_raw, event}], avg, avg_raw, n_used, first, last, after}；
+    eps_raw／avg_raw＝同樣規則用 q["eps_raw"]（當年公布值，未還原；沒有這欄 → 全 None）；
+    event＝該年股數事件短標（多筆換行接——全市場 21～26 年單格最多 2 筆，手機不擠；無 → None）；after＝last 年之後到 asof 的事件
+    （"26/08 配股7%" 形式，多筆用「、」接，無 → None）——這些事件也已還原進上面每一年。"""
     q = _quarters(q)
     last = eps_last_year(asof)
     years = list(range(last - n + 1, last + 1))
@@ -557,11 +580,27 @@ def eps_years(q: pd.DataFrame, asof: pd.Timestamp, n: int = EPS_YEARS) -> dict |
     for year in years:
         values = q.loc[periods.dt.year == year, "eps"]
         ok = len(values) == 4 and bool(np.isfinite(values).all())
-        rows.append(dict(year=year, eps=float(values.sum()) if ok else None))
+        raw = pd.to_numeric(q.loc[periods.dt.year == year, "eps_raw"], errors="coerce") if "eps_raw" in q else None
+        raw_ok = raw is not None and len(raw) == 4 and bool(np.isfinite(raw).all())
+        rows.append(dict(year=year, eps=float(values.sum()) if ok else None,
+                         eps_raw=float(raw.sum()) if raw_ok else None, event=None))
     got = [r["eps"] for r in rows if r["eps"] is not None]
     if not got:
         return None
-    return dict(years=rows, avg=float(np.mean(got)), n_used=len(got), first=years[0], last=last)
+    by_year, after = {}, []
+    for e in sorted(ca.SPLITS.get(str(ticker or "").split(".")[0], []), key=lambda e: e["date"]):
+        label, ts = event_label(e), pd.Timestamp(e["date"])
+        if label is None or ts > pd.Timestamp(asof):
+            continue
+        if years[0] <= ts.year <= last:
+            by_year.setdefault(ts.year, []).append(label)
+        elif ts.year > last:
+            after.append(f"{ts:%y/%m} {label}")
+    for r in rows:
+        r["event"] = "\n".join(by_year[r["year"]]) if r["year"] in by_year else None
+    got_raw = [r["eps_raw"] for r in rows if r["eps_raw"] is not None]
+    return dict(years=rows, avg=float(np.mean(got)), avg_raw=float(np.mean(got_raw)) if got_raw else None,
+                n_used=len(got), first=years[0], last=last, after="、".join(after) or None)
 
 
 def eps_avg(q: pd.DataFrame, n: int) -> float | None:
