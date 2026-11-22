@@ -62,3 +62,39 @@ def test_common_shares_uses_capital_net(fake_events):
     latest2["capital_net"] = float("nan")
     shares2, _ = sb.common_shares("9999", latest2, pd.DataFrame([latest2]), None)
     assert shares2 is None
+
+
+def _adv_latest(**kw):
+    d = {"period_end": T("2024-09-30"), "capital_stock": 100e8, "capital_net": 80e8,
+         "advance_capital": 20e8, "equity_parent": 1e9}
+    d.update(kw)
+    return pd.Series(d)
+
+
+def test_capital_for_shares_rules():
+    assert sb.capital_for_shares({"capital_stock": 100.0, "capital_net": 80.0, "advance_capital": 20.0}) == 100.0
+    assert sb.capital_for_shares({"capital_stock": 100.0, "capital_net": 80.0,
+                                  "advance_capital": float("nan")}) == 80.0
+    assert math.isnan(sb.capital_for_shares({"capital_stock": 100.0, "capital_net": float("nan")}))
+
+
+def test_common_shares_listed_when_advance_and_listed(fake_events):
+    latest = _adv_latest()
+    listed = 80e8 / 10.0 * 1.10
+    shares, src = sb.common_shares("9999", latest, pd.DataFrame([latest]),
+                                   {"listed_shares": listed}, live=True)
+    assert src == "listed" and math.isclose(shares, listed)
+
+
+def test_common_shares_advance_not_listed_uses_gross(fake_events):
+    latest = _adv_latest()
+    shares, src = sb.common_shares("9999", latest, pd.DataFrame([latest]),
+                                   {"listed_shares": 80e8 / 10.0 * 1.001}, live=True)
+    assert src != "listed" and math.isclose(shares, 100e8 / 10.0)
+
+
+def test_common_shares_advance_history_uses_gross(fake_events):
+    latest = _adv_latest()
+    shares, src = sb.common_shares("9999", latest, pd.DataFrame([latest]),
+                                   {"listed_shares": 80e8 / 10.0 * 1.10}, live=False)
+    assert src != "listed" and math.isclose(shares, 100e8 / 10.0)

@@ -215,7 +215,15 @@ def company_basic(code: str) -> dict | None:
         if d.empty:
             return None
         row = d.iloc[0]
-        return {**{key: float(row.get(key, float("nan")))
+        listed = float("nan")
+        try:
+            u = _read("universe.parquet", code, False)
+            if not u.empty and "listed_shares" in u.columns:
+                listed = float(u.iloc[0]["listed_shares"])
+        except Exception:
+            pass
+        return {"listed_shares": listed,
+                **{key: float(row.get(key, float("nan")))
                    for key in ("par_value", "issued_shares", "preferred_shares", "paid_in_capital")},
                 "asof": pd.Timestamp(row.get("asof"))}
     except Exception:

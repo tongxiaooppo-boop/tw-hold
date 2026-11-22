@@ -32,3 +32,13 @@ def test_screen_deposit_market_cap_uses_capital_net():
     prices = pd.DataFrame({"ticker": ["2330"], "close": [10.0]})
     out = sc.screen_deposit(q, divf, prices=prices, asof=ASOF)
     assert out["market_cap"].iloc[0] == pytest.approx(400.0)
+
+
+def test_cap_basis_gross_when_advance():
+    d = pd.DataFrame({"capital_stock": [1000.0, 1000.0, 1000.0],
+                      "capital_net": [400.0, 400.0, np.nan],
+                      "advance_capital": [600.0, np.nan, 0.0]}, index=["a", "b", "c"])
+    cb = sc._cap_basis(d)
+    assert cb["a"] == 1000.0            # 有預收 → 舊口徑
+    assert cb["b"] == 400.0             # 無預收 → capital_net
+    assert np.isnan(cb["c"])            # capital_net NaN 不退回

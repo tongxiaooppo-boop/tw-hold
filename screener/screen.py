@@ -64,8 +64,15 @@ def _rank_avg(df: pd.DataFrame, cols: dict[str, int]) -> pd.Series:
 
 
 def _cap_basis(d: pd.DataFrame) -> pd.Series:
-    """股數用的股本口徑：有 capital_net（股本−預收股本）就用它，NaN 不退回 capital_stock。"""
-    return d["capital_net"] if "capital_net" in d.columns else d.get("capital_stock", np.nan)
+    """股數用的股本口徑：advance_capital > 0 的列用 capital_stock（舊口徑），其餘用 capital_net（NaN 不退回）；
+    無 capital_net 欄退 capital_stock。"""
+    gross = d["capital_stock"] if "capital_stock" in d.columns else pd.Series(np.nan, index=d.index)
+    if "capital_net" not in d.columns:
+        return gross
+    if "advance_capital" not in d.columns:
+        return d["capital_net"]
+    adv = pd.to_numeric(d["advance_capital"], errors="coerce")
+    return gross.where(adv > 0, d["capital_net"])
 
 
 def _market_cap(row_capital_stock: pd.Series, close: pd.Series) -> pd.Series:

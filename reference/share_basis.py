@@ -68,6 +68,18 @@ def common_equity(ticker: str, latest, basic: dict | None = None) -> float | Non
     return float(equity) if _positive(equity) else None
 
 
+LISTED_TOL = 0.005   # 掛牌股數 > 淨股本股數 × (1+此值) 才算新股已掛牌
+
+
+def capital_for_shares(row):
+    """股數用的股本。advance_capital > 0 → capital_stock（舊口徑，預收按面額當股數，保守）；
+    否則 row.get('capital_net', row.get('capital_stock'))。capital_net 是 NaN 時回 NaN、不退回。"""
+    adv = row.get('advance_capital')
+    if _positive(adv):
+        return row.get('capital_stock')
+    return row.get('capital_net', row.get('capital_stock'))
+
+
 def exchange_outstanding_ratio(ticker, q_rows, exch, upto) -> float | None:
     """Exchange outstanding/capital shares, using only visible, event-free days.
 
@@ -99,7 +111,7 @@ def exchange_outstanding_ratio(ticker, q_rows, exch, upto) -> float | None:
         par = par_value_at(ticker, end, common_par_today(basic))
         pref = basic.get('preferred_shares')
         pref = pref if _positive(pref) else 0.0
-        cap = row.get('capital_net', row.get('capital_stock'))   # 淨股本（扣預收股本）；NaN 不退回
+        cap = capital_for_shares(row)
         cap_shares = cap / par - pref if _positive(cap) and _positive(par) else None
         equity = common_equity(ticker, row, basic)
         bv = float((sample.close / sample.pbr).median())
@@ -116,11 +128,19 @@ def common_shares(ticker: str, latest, quarters: pd.DataFrame,
     Capital base comes first in live mode too: it is the same quarter as the equity, while
     issued_shares is today's count and drifts on CB conversions / capital changes that are not
     in the event table (11/3 r3 check: 42 of 45 such stocks matched the exchange via capital).
+    With advance_capital > 0 in live mode, once the exchange listed_shares exceeds the net-capital
+    share count by LISTED_TOL, the listed count is used directly (src 'listed', no treasury ratio).
     """
     basic = basic or {}
-    base = shares_today_basis(ticker, latest.get('capital_net', latest.get('capital_stock')),
-                              latest['period_end'],
-                              common_par_today(basic), basic.get('preferred_shares'))
+    par, pref_sh = common_par_today(basic), basic.get('preferred_shares')
+    base = shares_today_basis(ticker, capital_for_shares(latest), latest['period_end'], par, pref_sh)
+    if live and _positive(latest.get('advance_capital')):
+        listed = basic.get('listed_shares')
+        net_shares = shares_today_basis(ticker, latest.get('capital_net'), latest['period_end'],
+                                        par, pref_sh)
+        if (_positive(listed) and math.isfinite(listed) and net_shares is not None
+                and _positive(net_shares) and listed > net_shares * (1 + LISTED_TOL)):
+            return float(listed), 'listed'
     src = 'capital'
     if not _positive(base) and live:
         base = basic.get('issued_shares')
