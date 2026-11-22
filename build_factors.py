@@ -399,6 +399,14 @@ def screen_all() -> dict:
     else:
         pool_note = "候選池缺料（需 prices_adj / index_0050 / chips / revenue）"
 
+    from build_lists import HOLDCO   # 函式內 import 避免循環（build_lists 頂層 import build_factors）
+    _has = q[q["eps"].notna() | q["net_income"].notna()]
+    _latest = _has.groupby("ticker")["period_end"].max()
+    holdco_latest = {
+        tk: (pd.Timestamp(_latest[tk]).strftime("%Y-%m-%d") if tk in _latest.index else None)
+        for tk in HOLDCO
+    }
+
     meta_p = BUNDLE_DIR / "_meta.json"
     bundle_meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
     return {
@@ -415,6 +423,7 @@ def screen_all() -> dict:
             "universe_filtered": top500 is not None, "universe_note": uni_note,
             "trading_date": bundle_meta.get("trading_date"),
             "bundle_schema": bundle_meta.get("schema_version"),
+            "holdco_latest": holdco_latest,
         },
     }
 

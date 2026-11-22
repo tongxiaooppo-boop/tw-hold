@@ -187,9 +187,9 @@ MIN_SUCCESS = 0.90    # 分類成功檔數 ÷ 組好輸入檔數；未達 → �
 # 「這季財報到了」的判定欄位：三欄都有值才算（只有空列不算）
 REQUIRED_COLS = ("eps", "revenue", "ni_parent")
 
-# 季末月 → 該季的換股日（月, 日, 年位移）。必須與 build_lists.REBALANCE_MD（3/31、5/15、8/14、11/14）一致；
+# 季末月 → 該季的換股日（月, 日, 年位移）。必須與 build_lists.REBALANCE_MD（3/31、6/1、9/1、12/1）一致；
 # tests 有一致性檢查。分型季更跟價值／定存的季換股同一天上線（使用者 2026-11-01 指定）。
-REBALANCE_FOR_QUARTER = {3: (5, 15, 0), 6: (8, 14, 0), 9: (11, 14, 0), 12: (3, 31, 1)}
+REBALANCE_FOR_QUARTER = {3: (6, 1, 0), 6: (9, 1, 0), 9: (12, 1, 0), 12: (3, 31, 1)}
 
 
 def rebalance_date_for(period_end) -> pd.Timestamp:

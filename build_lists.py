@@ -4,7 +4,7 @@ M0.5 + M2。價值 / 定存兩清單來自 `build_factors.screen_all()`；長波
 
 ## 季表 + 候補（PRD §6.1「月看季換」/ §3.2）
 
-**成分每季凍結**——只在換股日（PRD §6.1：3/31、5/15、8/14、11/14，財報公告後）
+**成分每季凍結**——只在換股日（PRD §6.1：3/31、6/1、9/1、12/1（2026-12-01 起；之前 5/15、8/14、11/14），財報公告後）
 重算 `holdings`（前 15、單一產業 ≤ 40%）。換股日輸出正式「新進 / 移除 + 原因 +
 換手率」。期間內每次 rebuild：`holdings` 的**代號不動**，只用當下資料刷新每檔的
 現價 / verdict / 買價；另外算 `candidates`——「若今天重選誰會進 / 誰會出」，
@@ -71,13 +71,31 @@ def current_rebalance(asof: date) -> date:
     中 ≥ SCHEDULE_SWITCH 的日期，沒有就退回舊表（實際上 asof ≥ 12/1 一定有 2026-12-01）。
     例：2026-11-22→2026-11-14、2026-12-01→2026-12-01、2027-03-30→2026-12-01、2027-05-20→2027-03-31、
     2027-08-31→2027-06-01。"""
-    raise NotImplementedError
+    if asof < SCHEDULE_SWITCH:
+        table = REBALANCE_MD_OLD
+        cands = [date(y, m, d) for y in (asof.year - 1, asof.year) for m, d in table]
+        return max(c for c in cands if c <= asof)
+    cands = [date(y, m, d) for y in (asof.year - 1, asof.year) for m, d in REBALANCE_MD]
+    cands = [c for c in cands if SCHEDULE_SWITCH <= c <= asof]
+    if cands:
+        return max(cands)
+    cands = [date(y, m, d) for y in (asof.year - 1, asof.year) for m, d in REBALANCE_MD_OLD]
+    return max(c for c in cands if c <= asof)
 
 
 def target_quarter_end(rb: date) -> date:
     """換股日要用的財報季末。新表：3/31→前一年 12/31、6/1→3/31、9/1→6/30、12/1→9/30；
     舊表：5/15→3/31、8/14→6/30、11/14→9/30（3/31 同新表）。不在兩表的日期 → ValueError。"""
-    raise NotImplementedError
+    if (rb.month, rb.day) == (3, 31):
+        return date(rb.year - 1, 12, 31)
+    new = {(6, 1): date(rb.year, 3, 31), (9, 1): date(rb.year, 6, 30), (12, 1): date(rb.year, 9, 30)}
+    old = {(5, 15): date(rb.year, 3, 31), (8, 14): date(rb.year, 6, 30), (11, 14): date(rb.year, 9, 30)}
+    key = (rb.month, rb.day)
+    if key in new and rb >= SCHEDULE_SWITCH:
+        return new[key]
+    if key in old and rb < SCHEDULE_SWITCH:
+        return old[key]
+    raise ValueError(f"不是換股日：{rb}")
 
 
 def holdco_missing(holdco_latest: dict[str, str | None], rb: date) -> list[str]:
@@ -89,7 +107,20 @@ def holdco_missing(holdco_latest: dict[str, str | None], rb: date) -> list[str]:
     - 最新季 ≥ tq → 已到；
     - 最新季 == prev → 缺（列入）；
     - 最新季 < prev 或 None → 不算（已下市／合併、或本來就沒資料，例 2888 新光金），不擋換股。"""
-    raise NotImplementedError
+    tq = target_quarter_end(rb)
+    pm = tq.month - 3 if tq.month > 3 else 12
+    py = tq.year if tq.month > 3 else tq.year - 1
+    prev = date(py, pm, 31 if pm in (3, 12) else 30)
+    out = []
+    for tk, latest in holdco_latest.items():
+        if not latest:
+            continue
+        ld = date.fromisoformat(str(latest)[:10])
+        if ld >= tq:
+            continue
+        if ld == prev:
+            out.append(tk)
+    return sorted(out)
 
 
 def rebalance_status(asof: date, held: set[date] | None = None,
@@ -104,7 +135,26 @@ def rebalance_status(asof: date, held: set[date] | None = None,
        - miss 非空且 asof ≥ period + HOLDCO_WAIT_DAYS 天 → stale = miss，停；
     3. 其他 → 停。
     holdco_latest 為 None（測試／舊 context）＝不做金控檢查。waiting／stale 預設空清單。"""
-    raise NotImplementedError
+    held = set() if held is None else held
+    period = current_rebalance(asof)
+    waiting: list[str] = []
+    stale: list[str] = []
+    skip_holdco = False
+    for _ in range(50):
+        if period in held:
+            period = current_rebalance(period - timedelta(days=1))
+            continue
+        if holdco_latest is not None and not skip_holdco and period >= SCHEDULE_SWITCH:
+            miss = holdco_missing(holdco_latest, period)
+            if miss:
+                if asof < period + timedelta(days=HOLDCO_WAIT_DAYS):
+                    waiting = miss
+                    period = current_rebalance(period - timedelta(days=1))
+                    skip_holdco = True
+                    continue
+                stale = miss
+        break
+    return {"period": period, "waiting": waiting, "stale": stale}
 
 
 #: 暫緩換股：檔內列出的換股日（每行一個 ISO 日期，# 開頭為註解）先不換，沿用上一期成分。
@@ -338,9 +388,11 @@ def _write(name: str, payload: dict) -> None:
 
 
 def _build(name: str, df: pd.DataFrame, score: str, cols: list[str],
-           meta: dict, has_industry: bool, asof: date) -> dict:
+           meta: dict, has_industry: bool, asof: date,
+           status: dict | None = None) -> dict:
     prev = _load_prev(name)
-    period = effective_rebalance(asof).isoformat()
+    status = status or rebalance_status(asof, _held_periods())
+    period = status["period"].isoformat()
     prev_period = prev.get("_meta", {}).get("period")
     prev_tks = [h["ticker"] for h in prev.get("holdings", [])]
 
@@ -359,7 +411,9 @@ def _build(name: str, df: pd.DataFrame, score: str, cols: list[str],
 
     return {
         "_meta": {**meta, "period": period, "frozen": frozen,
-                  "n_target": N, "industry_cap": INDUSTRY_CAP},
+                  "n_target": N, "industry_cap": INDUSTRY_CAP,
+                  "holdco_waiting": list(status.get("waiting", [])),
+                  "holdco_stale": list(status.get("stale", []))},
         "holdings": _rows_for(df, holding_tks, score, cols),
         "candidates": _candidates(df, score, holding_tks, has_industry),
         "changes": changes,
@@ -391,6 +445,13 @@ def main() -> int:
     }
     DERIVED.mkdir(parents=True, exist_ok=True)
 
+    status = rebalance_status(asof, _held_periods(), ctx.get("holdco_latest"))
+    if status["waiting"]:
+        wait_until = current_rebalance(asof) + timedelta(days=HOLDCO_WAIT_DAYS)
+        print(f"  金控新季未到齊（{'、'.join(status['waiting'])}），換股延後，最晚 {wait_until.isoformat()}")
+    if status["stale"]:
+        print(f"  已滿 {HOLDCO_WAIT_DAYS} 天照換，沿用舊季：{'、'.join(status['stale'])}")
+
     # 逐檔因子表——三軌體檢頁要用（gitignore、由 rebuild.yml 推 derived-latest release）。
     r["value"].to_parquet(DERIVED / "factors_value.parquet", index=False)
     r["deposit"].to_parquet(DERIVED / "factors_deposit.parquet", index=False)
@@ -411,13 +472,13 @@ def main() -> int:
         meta["split_warning"] = "；".join(split_warn)
 
     _write("value", _build("value", r["value"], "value_score", VALUE_COLS,
-                           meta, has_ind, asof))
+                           meta, has_ind, asof, status))
     _write("deposit", _build("deposit", r["deposit"], "safety_score", DEPOSIT_COLS,
                              {**meta, "warning":
                               "定存線已知偏誤：(1) 金控/金融股被『EPS 近4季非全正』刷掉"
                               "——FinMind 對金融業報不同 XBRL type、EPS/淨利是 NaN"
                               "（PRD §7 / 實驗 B）；(2) 填息率只涵蓋有未還原股價的 ~500 檔。"},
-                             has_ind, asof))
+                             has_ind, asof, status))
     pool = r.get("pool", [])
     pool_prev = {c["ticker"] for c in _load_prev("swing").get("candidates_pool", [])}
     pool_cur = {c["ticker"] for c in pool}

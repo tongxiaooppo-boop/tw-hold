@@ -174,10 +174,10 @@ _WHY_0050 = (
 BACKTEST_NOTES = {
     "value": {
         "logic": ("**這頁在看什麼**：台版 Magic Formula 式因子指數，品質 rank + 便宜 "
-                 "rank，季換股（3/31、5/15、8/14、11/14，財報法定期限後），每檔給買入建議價或"
+                 "rank，季換股（3/31、6/1、9/1、12/1，財報法定期限後），每檔給買入建議價或"
                  "「不推薦」＋原因。\n\n"
                  "**怎麼算的**：F-Score ≥ 6 + Magic Formula 精神（歸一化本益比／"
-                 "盈餘殖利率排序），季換（3/31、5/15、8/14、11/14），前 15、單一"
+                 "盈餘殖利率排序），季換（3/31、6/1、9/1、12/1），前 15、單一"
                  "產業 ≤ 40%。verdict 只由價值買價驅動（PRD §6.3），不做總分排名式"
                  "的推薦。"),
         "glossary": (
@@ -1467,8 +1467,13 @@ def _card_list(kind: str, title: str, payload: dict | None) -> None:
     meta = payload.get("_meta", {})
     bits = [f"資料日期 {meta.get('trading_date', '—')}"]
     if meta.get("period"):
+        _extra = ""
+        if meta.get("holdco_waiting"):
+            _extra += f"（金控 {len(meta['holdco_waiting'])} 家新季財報未到，換股延後）"
+        if meta.get("holdco_stale"):
+            _extra += f"（金控 {'、'.join(meta['holdco_stale'])} 沿用舊一季財報）"
         bits.append(f"本期換股日 {meta['period']}"
-                    + ("（成分凍結）" if meta.get("frozen") else "（本次重算）"))
+                    + ("（成分凍結）" if meta.get("frozen") else "（本次重算）") + _extra)
     bits.append(f"重算 {meta.get('rebuilt_at', '—')}")
     st.caption("　·　".join(bits))
     _disclaimer()
