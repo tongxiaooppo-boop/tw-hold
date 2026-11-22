@@ -1,37 +1,54 @@
-# 【tw-hold】營收成長榜 第 2 輪：只問分歧處（版本 2026-11-20 r2）
+# 【tw-hold】調研：哪些事件會改變發行股數、我們漏了哪些（版本 2026-11-22 r1）
 
 > **專案：tw-hold（`D:\g\claude\tw-hold`，main 分支）。** 指令先 `cd D:\g\claude\tw-hold`。回報覆蓋寫到 `D:\g\claude\tw-hold\collab\from-codex.md`。
-> 只准改 `research/rev_growth_rank_2026-11/` 底下的檔案（可改你上一輪的 `backtest.py`）。不改正式程式、不 commit、不上網。UTF-8 無 BOM，不用 PowerShell 寫檔。
+> 只准新增／修改 `research/share_events_2026-11/` 底下的檔案。不改正式程式、不 commit、**不上網**（需要外部確認的事寫進「待查」，不要猜成事實）。UTF-8 無 BOM，不用 PowerShell 寫檔。暫存檔放同一資料夾、結束前刪掉。
 
-## 已定（不再討論）
-放法 (a) 估值排行頁另一張「月營收成長排行」、不看估值；單月 YoY 排序；YoY>0；去年同月 ≥1 億；排除建材營造（不補位）；最多 30 檔；未公布不沿用舊月。
+## 背景（一段就好）
 
-## 上一輪結果（你的 summary，排除建設股）
-| 定義 | 前30月對月重疊 | 前30被剔 | 母體被剔 |
-|---|---|---|---|
-| 純YoY | 17.0 | 0% | 0% |
-| M1 MoM>0 | 9.8 | 31% | 47% |
-| M2 >自身3年同月均值 | 8.3 | 35% | 53% |
-| M3 >自身3年同月中位 | 8.7 | 34% | 51% |
+估值卡「近 5 年 EPS」有「還原／實際」切換，並在年度下標註股數事件。還原靠 `reference/corporate_actions.py` 的事件表 `SPLITS`（來源 `reference/corporate_actions_resolved.json`，由 `scripts/selfhost_events.py`、`scripts/resolve_splits.py` 產生）。目前事件 type 只有：`ex_both`／`ex_rights`（除權、除權息，m＞1）、`cap_reduction`（減資，m＜1；現金減資 m=None 不還原）、`par_change`（面額變更）、`split`。使用者問：分割、增資／減資、除權、債轉股之外，**還有什麼會改變發行股數**，我們漏了哪些。
 
-另一位獨立評審（Sonnet）提案 **M4：MoM ≤ 當月市場 MoM 中位數 −10 個百分點才剔除**（市場＝當月母體中已有 MoM 者），它小量試算前 30 每月只剔 2.5～7.6 檔、2/3/10 月剔 5.2/5.6/4.4 檔。
+## 要讀的檔案（只准讀這些）
 
-## 第 2 輪只問 3 件
-1. **刪減強度**：所有 MoM 條件都讓榜單月對月重疊從 17 掉到 8～10、前 30 砍掉三分之一。使用者原意是「MoM 做刪減」（刪掉轉弱的），不是「換掉半張榜」。請在同一個 backtest 框架加 M4，並掃寬度：市場中位 −0/−10/−20/−30 個百分點；也掃 M3 加寬版：自身同月中位 −10/−20 個百分點。**另加使用者提案 M5：MoM ≥ −3% 留下（固定門檻），並對照 −5%、−10%**；請特別報 M5 在 1、2 月的被剔比例（Opus 顧慮：固定門檻不扣季節，2 月全市場 MoM>0 只 26%）。若你認為 M5 在大部分月份最好、只有 1～2 月不行，可提「M5 為主＋1/2 月改用 M4」這類混合版並一起試算。
-   - **使用者提案 M6（主推，請重點評估）：M5 −3%，但「農曆新年窗」碰到的月份不做 MoM 刪減、只看 YoY。** 農曆新年窗＝除夕前 3 天～除夕後 6 天（含頭尾，共 10 天）；月份與窗有任一天重疊即視為碰到（例：2025 除夕 1/28 → 1/25～2/3 → 1、2 月都不刪；2026 除夕 2/16 → 2/13～2/22 → 只 2 月不刪）。寫成獨立函式 `lunar_new_year_window(year) -> (start, end)` 與 `months_touching_lny(year) -> list[str 'YYYY-MM']`（之後會搬進正式程式共用），除夕表寫死：
-     `2015-02-18, 2016-02-07, 2017-01-27, 2018-02-15, 2019-02-04, 2020-01-24, 2021-02-11, 2022-01-31, 2023-01-21, 2024-02-09, 2025-01-28, 2026-02-16, 2027-02-05, 2028-01-25, 2029-02-12, 2030-02-02`。
-     **自查**：用 `prices_raw_close.parquet` 的交易日檢查 2019～2026 每年除夕附近都有連續 ≥4 個日曆日休市，不符就回報、不要改表。
-     請報 M6 的：全年與各曆月被剔範圍、前 30 被剔比例、月對月重疊、被剔者下月 YoY 對照；並說明「節後反彈月（例 2026 年 3 月、2025 年 3 月）沒在窗內、MoM 偏高會讓刪減失效」是否構成問題。每個變體報：前 30 被剔比例、月對月重疊、各曆月被剔範圍（最小～最大，看季節是否扣乾淨）。
-   - 補一個對照：被剔掉的那些公司，**下個月**單月 YoY 是否明顯低於留下的（中位數比較）。這是「刪的是不是真的轉弱」的唯一證據，不算報酬。
-2. **推薦一個定義＋寬度**，一句結論＋證據數字。
-3. **題 4 重做**：上一輪用的 `revenue.parquet` 的 `announced` 是整批抓取日（例：2026-10 全標 11/17、2019～2025 全標 2026-05-19），作廢。改用 `data/revenue_mops/2026-10.parquet`（只讀 `ticker, revenue, revenue_prev_month, revenue_last_year, first_seen_at`；只有 2026-10 一個月），用 first_seen_at 模擬 11/5、11/7、11/10 截止時已公布者的前 30 跟最終前 30 的重疊數，並比已公布 vs 未公布者的市值中位數（市值用 `data/upstream/fundamentals/universe.parquet` 的 `market_cap`，母體用其 `in_mktcap500`）。M4 的市場中位數在月初樣本少時會不穩，請順便報 11/5、11/7 時已公布者的 MoM 中位數 vs 最終中位數。
+- `reference/corporate_actions.py` 第 1–170 行（事件格式、`_m`、`_events`）、第 380–440 行（`adjust_eps`）
+- `scripts/selfhost_events.py` 第 139–330 行（官方除權息、減資／面額變更抓取）、第 354–370 行（FinMind 分割）
+- `screener/val_card.py` 裡 `event_label`、`eps_years` 兩個函式（用 grep 找位置，只讀這兩個）
+- 資料（唯讀）：`D:\g\claude\tw-swing\data\fundamentals\balance.parquet`（欄：ticker, period_end, capital_stock＝股本元, …）、`income.parquet`（欄：ticker, period_end, eps, **equity_parent＝歸母淨利**（名字誤導，不是權益）, net_income）、`reference/corporate_actions_resolved.json`
 
-## PROOF_CMD
+## 要做的三件事
+
+### 1. 事件清單（知識整理，不上網）
+台灣上市櫃普通股，**所有會改變流通／發行股數**的事件，至少涵蓋：股票分割／反分割、面額變更、盈餘轉增資／資本公積轉增資（除權）、現金增資（公開／私募）、減資（彌補虧損、現金退還、庫藏股註銷）、可轉債轉換、員工認股權／限制型股票、特別股轉普通股、合併／股份轉換／收購發新股、公司分割（分割減資）、海外存託憑證、庫藏股買回（未註銷）。漏掉的你補。
+
+每一項一列，欄位：事件｜發行股數怎麼變｜**EPS 要不要追溯還原**（依 IAS 33：無對價的股數變動追溯；有對價的用加權平均、不追溯；附特別股利的股份合併等特殊情況寫清楚）｜股價要不要還原｜官方哪裡有公告（寫你確定的資料表名稱；不確定寫「待查」）｜本專案目前有沒有收（對照上面的 type）。
+
+### 2. 用資料掃缺口
+寫 `research/share_events_2026-11/scan.py`：
+- 每檔用 balance 的 `capital_stock` 算季對季變動率；`|變動| ≥ 3%` 的列為「股本跳動」。
+- 對每筆跳動，查 `SPLITS` 該檔在 **前一季季末＋1 天～本季季末** 之間有沒有事件（任何 type，含 m=None）。
+- 輸出 `research/share_events_2026-11/scan.csv`：ticker, period_end, cap_prev, cap_now, chg_pct, has_event, event_types。
+- 印一行摘要：`掃描 N 檔、跳動 M 筆、有事件 A、無事件 B`。
+- 只掃 2021-01-01 起的季度。
+
+### 3. 抽樣判讀無事件的跳動
+從 `has_event=False` 裡依 |chg_pct| 由大到小取前 30 筆，每筆用你的知識判斷最可能是哪種事件（現增／債轉股／合併／員工認股／庫藏股註銷／資料錯誤…），信心高中低。另外用 income 的「歸母淨利 ÷ EPS」隱含股數，看同一季有沒有跟著跳，幫忙判斷是真變動還是資料錯。**不確定就寫不確定**，不要編。
+
+## 產出
+
+`research/share_events_2026-11/survey.md`，固定三節：`## 事件清單`（第 1 件的表）、`## 本專案覆蓋`（掃描摘要＋各類缺口數）、`## 缺口與建議`（每條：缺什麼｜影響多少檔／筆｜建議收或不收｜理由）。全文 ≤ 300 行，白話中文。
+
+## PROOF_CMD（完成前自己跑一次，貼輸出）
+
 ```
-cd D:\g\claude\tw-hold && python research/rev_growth_rank_2026-11/backtest.py && python -c "import pandas as pd; print(pd.read_csv('research/rev_growth_rank_2026-11/out/summary_r2.csv').to_string())"
+cd D:\g\claude\tw-hold && set PYTHONIOENCODING=utf-8 && python research/share_events_2026-11/scan.py && python -c "import pathlib,csv;t=pathlib.Path('research/share_events_2026-11/survey.md').read_text(encoding='utf-8');assert all(k in t for k in ['## 事件清單','## 本專案覆蓋','## 缺口與建議']);r=list(csv.DictReader(open('research/share_events_2026-11/scan.csv',encoding='utf-8')));assert r and {'ticker','period_end','chg_pct','has_event'}<=set(r[0]);print('OK',len(r))"
 ```
-預期：無錯誤；summary_r2.csv 含 M1、M3、M3−10、M3−20、M4−0、M4−10、M4−20、M4−30、M5−3、M5−5、M5−10、M6 各自的被剔比例、重疊、曆月被剔範圍、被剔者 vs 留下者下月 YoY 中位數；另有題 4 的 11/5、11/7、11/10 三列。
+預期：第一行是 `掃描 … 檔、跳動 … 筆、有事件 …、無事件 …`，最後一行 `OK <列數>`。
 
-## 回報格式（≤ 1000 字，不貼程式碼）
-每題：**結論**一句／**證據**（數字）／**信心**高中低／**理由** ≤ 200 字。
-最後：**對使用者 M5（−3%）與 M6（−3%＋農曆窗不刪）的評價**（一段，含 1、2、3 月數字與除夕表自查結果）、**跟 Sonnet M4 的分歧**（沒有寫「無」）、**需要使用者決定的事**（沒有寫「無」）、**PROOF_CMD 實際輸出**（只貼表）。
+## 回報（覆蓋 `collab/from-codex.md`，只填這些欄位，不貼程式碼）
+
+- 完成項：
+- 產出檔案：
+- PROOF_CMD 輸出（原文）：
+- 掃描摘要：
+- 最重要的 3 個缺口（一行一個）：
+- 待查（需要上網或官方確認的）：
+- 需要決定的事：
