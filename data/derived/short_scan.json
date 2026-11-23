@@ -1,26 +1,15 @@
 {
  "_meta": {
   "schema": 1,
-  "asof": "2026-11-20",
-  "scanned": 629,
+  "asof": "2026-11-23",
+  "scanned": 625,
   "passed": 0,
   "has_margin": true,
   "has_chips": true,
   "new_today": 0,
   "tracking_since": "2026-10-02"
  },
- "dropped": [
-  {
-   "ticker": "2540",
-   "name": "愛山林"
-  }
- ],
- "_prev": {
-  "2540": {
-   "first_seen": "2026-11-19",
-   "streak_days": 1,
-   "name": "愛山林"
-  }
- },
+ "dropped": [],
+ "_prev": {},
  "stocks": []
 }
