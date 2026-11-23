@@ -3,10 +3,10 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-11-23",
   "market_date": "2026-11-23",
-  "fetched_at": "2026-11-23T15:23:27+00:00",
+  "fetched_at": "2026-11-23T20:16:32+00:00",
   "total_etfs": 6,
-  "synced_etfs": 5,
-  "stale_etfs": 1,
+  "synced_etfs": 6,
+  "stale_etfs": 0,
   "max_span_days": 1,
   "multi_day_etfs": [],
   "funds": {
@@ -86,86 +86,19 @@
     "premium_skipped": false
    },
    "00406A": {
-    "synced": false,
-    "date": "2026-11-20",
-    "moved_n": 0,
-    "lagging": true,
-    "own": {
-     "prev_date": "2026-11-19",
-     "date": "2026-11-20",
-     "span_days": 1,
-     "moved_n": 18,
-     "buys": [
-      "2059",
-      "2303",
-      "2308",
-      "2345",
-      "2368",
-      "2383",
-      "3008",
-      "3037",
-      "3167",
-      "3189",
-      "3665",
-      "4958",
-      "6147",
-      "6213",
-      "6669",
-      "6715",
-      "8046",
-      "8358"
-     ],
-     "sells": [],
-     "names": {
-      "2059": "川湖科技",
-      "2303": "聯華電子",
-      "2308": "台達電子工業",
-      "2345": "智邦科技",
-      "2368": "金像電子",
-      "2383": "台光電子材料",
-      "3008": "大立光電",
-      "3037": "欣興電子",
-      "3167": "大量科技",
-      "3189": "景碩科技",
-      "3665": "貿聯控股",
-      "4958": "臻鼎科技控股",
-      "6147": "頎邦科技",
-      "6213": "聯茂電子",
-      "6669": "緯穎科技服務",
-      "6715": "嘉基科技",
-      "8046": "南亞電路板",
-      "8358": "金居開發"
-     },
-     "qty": {
-      "2059": 60000,
-      "2303": 1500000,
-      "2308": 350000,
-      "2345": 500000,
-      "2368": 800000,
-      "2383": 200000,
-      "3008": 50000,
-      "3037": 2000000,
-      "3167": 380000,
-      "3189": 1000000,
-      "3665": 100000,
-      "4958": 1200000,
-      "6147": 1200000,
-      "6213": 320000,
-      "6669": 200000,
-      "6715": 300000,
-      "8046": 650000,
-      "8358": 720000
-     },
-     "exit_notes": {}
-    },
-    "aum": 139283511981.0,
-    "aum_prev": 148220725003.0,
-    "navps": 5.859619212646564,
-    "navps_prev": 6.400255983208284,
+    "synced": true,
+    "date": "2026-11-23",
+    "prev_date": "2026-11-20",
+    "span_days": 1,
+    "moved_n": 11,
+    "aum": 149863372307.0,
+    "aum_prev": 139283511981.0,
+    "navps": 6.108877937247998,
+    "navps_prev": 5.859619212646564,
     "close": 6.16,
     "close_date": "2026-11-23",
-    "premium_pct": null,
-    "premium_skipped": true
+    "premium_pct": 0.836848653339311,
+    "premium_skipped": false
    }
   },
   "schema_ok": true
@@ -331,19 +264,21 @@
   "2327": {
    "name": "國巨股份",
    "industry": null,
-   "net_shares": -500000,
-   "net_amount": -155000000,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
+   "net_shares": -2920000,
+   "net_amount": -905200000,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [],
    "sellers": [
+    "00406A",
     "00991A"
    ],
-   "kind": "sell",
+   "kind": "consensus_sell",
    "by_fund": {
-    "00991A": -500000
+    "00991A": -500000,
+    "00406A": -2420000
    },
    "exit_notes": {}
   },
@@ -429,19 +364,21 @@
   "3653": {
    "name": "健策精密",
    "industry": null,
-   "net_shares": 20000,
-   "net_amount": 73700000,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
+   "net_shares": 300000,
+   "net_amount": 1105500000,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [
+    "00406A",
     "00991A"
    ],
    "sellers": [],
-   "kind": "buy",
+   "kind": "consensus_buy",
    "by_fund": {
-    "00991A": 20000
+    "00991A": 20000,
+    "00406A": 280000
    },
    "exit_notes": {}
   },
@@ -467,8 +404,8 @@
   "6805": {
    "name": "富世達股",
    "industry": null,
-   "net_shares": -75000,
-   "net_amount": -109125000,
+   "net_shares": -46000,
+   "net_amount": -66930000,
    "issuer_count": 1,
    "consensus": -1,
    "consensus_strong": false,
@@ -479,7 +416,8 @@
    ],
    "kind": "sell",
    "by_fund": {
-    "00991A": -75000
+    "00991A": -75000,
+    "00406A": 29000
    },
    "exit_notes": {}
   },
@@ -568,22 +506,25 @@
   "5274": {
    "name": "信驊",
    "industry": null,
-   "net_shares": -1900,
-   "net_amount": -14928166,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
+   "net_shares": -156900,
+   "net_amount": -1233228166,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [],
    "sellers": [
+    "00406A",
     "00982A"
    ],
-   "kind": "sell",
+   "kind": "consensus_sell",
    "by_fund": {
-    "00982A": -1900
+    "00982A": -1900,
+    "00406A": -155000
    },
    "exit_notes": {
-    "00982A": "出清"
+    "00982A": "出清",
+    "00406A": "出清"
    }
   },
   "5425": {
@@ -629,21 +570,25 @@
   "3264": {
    "name": "欣銓",
    "industry": null,
-   "net_shares": -167000,
-   "net_amount": -23623391,
-   "issuer_count": 1,
-   "consensus": -1,
-   "consensus_strong": false,
+   "net_shares": -2365000,
+   "net_amount": -322551391,
+   "issuer_count": 2,
+   "consensus": -2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [],
    "sellers": [
+    "00406A",
     "00992A"
    ],
-   "kind": "sell",
+   "kind": "consensus_sell",
    "by_fund": {
-    "00992A": -167000
+    "00992A": -167000,
+    "00406A": -2198000
    },
-   "exit_notes": {}
+   "exit_notes": {
+    "00406A": "出清"
+   }
   },
   "6415": {
    "name": "矽力*-KY",
@@ -682,6 +627,145 @@
     "00992A": -914000
    },
    "exit_notes": {}
+  },
+  "2059": {
+   "name": "川湖科技",
+   "industry": null,
+   "net_shares": 12000,
+   "net_amount": 67680000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 12000
+   },
+   "exit_notes": {}
+  },
+  "2481": {
+   "name": "強茂",
+   "industry": null,
+   "net_shares": -2400000,
+   "net_amount": -211440000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00406A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00406A": -2400000
+   },
+   "exit_notes": {}
+  },
+  "3008": {
+   "name": "大立光電",
+   "industry": null,
+   "net_shares": 80000,
+   "net_amount": 289600000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 80000
+   },
+   "exit_notes": {}
+  },
+  "3017": {
+   "name": "奇鋐科技",
+   "industry": null,
+   "net_shares": 23000,
+   "net_amount": 54395000,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 23000
+   },
+   "exit_notes": {}
+  },
+  "3081": {
+   "name": "聯亞光電工業",
+   "industry": null,
+   "net_shares": -821000,
+   "net_amount": -1120665000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00406A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00406A": -821000
+   },
+   "exit_notes": {
+    "00406A": "出清"
+   }
+  },
+  "6278": {
+   "name": "台灣表面黏著科技",
+   "industry": null,
+   "net_shares": -1428000,
+   "net_amount": -218484000,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00406A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00406A": -1428000
+   },
+   "exit_notes": {
+    "00406A": "出清"
+   }
+  },
+  "6531": {
+   "name": "愛普科技",
+   "industry": null,
+   "net_shares": -163000,
+   "net_amount": -78647500,
+   "issuer_count": 1,
+   "consensus": -1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [],
+   "sellers": [
+    "00406A"
+   ],
+   "kind": "sell",
+   "by_fund": {
+    "00406A": -163000
+   },
+   "exit_notes": {
+    "00406A": "出清"
+   }
   }
  }
 }
