@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "asof": "2026-11-24",
+ "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "scanned": 621,
+   "candidates": [
+    {
+     "t": "3227",
+     "nm": "原相",
+     "px": 188.0,
+     "fs": "2026-11-24",
+     "st": 1
+    },
+    {
+     "t": "5522",
+     "nm": "遠雄",
+     "px": 63.6,
+     "fs": "2026-11-24",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}
