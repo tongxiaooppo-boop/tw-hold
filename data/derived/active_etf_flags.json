@@ -3,10 +3,10 @@
   "source": "自建 PCF（統一／復華／群益／中信官網每日揭露）",
   "anchor_date": "2026-11-24",
   "market_date": "2026-11-24",
-  "fetched_at": "2026-11-24T15:23:04+00:00",
+  "fetched_at": "2026-11-24T19:32:38+00:00",
   "total_etfs": 6,
-  "synced_etfs": 5,
-  "stale_etfs": 1,
+  "synced_etfs": 6,
+  "stale_etfs": 0,
   "max_span_days": 1,
   "multi_day_etfs": [],
   "funds": {
@@ -86,71 +86,18 @@
     "premium_skipped": false
    },
    "00406A": {
-    "synced": false,
-    "date": "2026-11-23",
-    "moved_n": 0,
-    "lagging": true,
-    "own": {
-     "prev_date": "2026-11-20",
-     "date": "2026-11-23",
-     "span_days": 1,
-     "moved_n": 11,
-     "buys": [
-      "2059",
-      "3008",
-      "3017",
-      "3653"
-     ],
-     "sells": [
-      "2327",
-      "2481",
-      "3081",
-      "3264",
-      "5274",
-      "6278",
-      "6531"
-     ],
-     "names": {
-      "2059": "川湖科技",
-      "2327": "國巨*",
-      "2481": "強茂",
-      "3008": "大立光電",
-      "3017": "奇鋐科技",
-      "3081": "聯亞光電工業",
-      "3264": "欣銓科技",
-      "3653": "健策精密工業",
-      "5274": "信驊科技",
-      "6278": "台灣表面黏著科技",
-      "6531": "愛普科技"
-     },
-     "qty": {
-      "2059": 12000,
-      "2327": -2420000,
-      "2481": -2400000,
-      "3008": 80000,
-      "3017": 23000,
-      "3081": -821000,
-      "3264": -2198000,
-      "3653": 280000,
-      "5274": -155000,
-      "6278": -1428000,
-      "6531": -163000
-     },
-     "exit_notes": {
-      "3081": "出清",
-      "3264": "出清",
-      "5274": "出清",
-      "6278": "出清",
-      "6531": "出清"
-     }
-    },
-    "aum": 149863372307.0,
-    "aum_prev": 139283511981.0,
-    "navps": 6.108877937247998,
-    "navps_prev": 5.859619212646564,
-    "close": 6.16,
-    "close_date": "2026-11-23",
-    "premium_pct": 0.836848653339311,
+    "synced": true,
+    "date": "2026-11-24",
+    "prev_date": "2026-11-23",
+    "span_days": 1,
+    "moved_n": 2,
+    "aum": 170586274173.0,
+    "aum_prev": 149863372307.0,
+    "navps": 6.52086658559907,
+    "navps_prev": 6.108877937247998,
+    "close": 6.67,
+    "close_date": "2026-11-24",
+    "premium_pct": 2.2870183348066258,
     "premium_skipped": false
    }
   },
@@ -200,19 +147,21 @@
   "2382": {
    "name": "廣達電腦",
    "industry": null,
-   "net_shares": 1471000,
-   "net_amount": 415557500,
-   "issuer_count": 1,
-   "consensus": 1,
-   "consensus_strong": false,
+   "net_shares": 3525000,
+   "net_amount": 995812500,
+   "issuer_count": 2,
+   "consensus": 2,
+   "consensus_strong": true,
    "span_days": 1,
    "buyers": [
+    "00406A",
     "00991A"
    ],
    "sellers": [],
-   "kind": "buy",
+   "kind": "consensus_buy",
    "by_fund": {
-    "00991A": 1471000
+    "00991A": 1471000,
+    "00406A": 2054000
    },
    "exit_notes": {}
   },
@@ -310,6 +259,25 @@
    "kind": "sell",
    "by_fund": {
     "00992A": -64000
+   },
+   "exit_notes": {}
+  },
+  "2882": {
+   "name": "國泰金融控股",
+   "industry": null,
+   "net_shares": 8341000,
+   "net_amount": 871634500,
+   "issuer_count": 1,
+   "consensus": 1,
+   "consensus_strong": false,
+   "span_days": 1,
+   "buyers": [
+    "00406A"
+   ],
+   "sellers": [],
+   "kind": "buy",
+   "by_fund": {
+    "00406A": 8341000
    },
    "exit_notes": {}
   }
