@@ -1,0 +1,31 @@
+{
+ "schema": 1,
+ "asof": "2026-11-26",
+ "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "scanned": 623,
+   "candidates": [],
+   "revisions": []
+  },
+  "long": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  },
+  "swing": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 0,
+   "candidates": [],
+   "revisions": []
+  }
+ }
+}

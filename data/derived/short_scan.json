@@ -1,35 +1,15 @@
 {
  "_meta": {
   "schema": 1,
-  "asof": "2026-11-25",
-  "scanned": 625,
+  "asof": "2026-11-26",
+  "scanned": 623,
   "passed": 0,
   "has_margin": true,
   "has_chips": true,
   "new_today": 0,
   "tracking_since": "2026-10-02"
  },
- "dropped": [
-  {
-   "ticker": "3227",
-   "name": "原相"
-  },
-  {
-   "ticker": "5522",
-   "name": "遠雄"
-  }
- ],
- "_prev": {
-  "3227": {
-   "first_seen": "2026-11-24",
-   "streak_days": 1,
-   "name": "原相"
-  },
-  "5522": {
-   "first_seen": "2026-11-24",
-   "streak_days": 1,
-   "name": "遠雄"
-  }
- },
+ "dropped": [],
+ "_prev": {},
  "stocks": []
 }
