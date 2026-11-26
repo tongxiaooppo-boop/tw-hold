@@ -1,6 +1,6 @@
 {
   "trading_date": "2026-11-25",
-  "rebuilt_at": "2026-11-25T18:41:32+00:00",
+  "rebuilt_at": "2026-11-26T01:06:46+00:00",
   "bundle_schema": 1,
   "universe_filtered": true,
   "note": "universe.parquet：625 檔",
