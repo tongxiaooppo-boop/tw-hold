@@ -352,7 +352,7 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
         if grp == "div":
             yearly[code] = yearly_yields(pd.Series(g["sp_close"].to_numpy(), index=pd.DatetimeIndex(g["date"])), ev, last)
             div_cash[code] = yearly_cash(ev, last, first)
-        d_re =dca(g, ev, last, True)
+        d_re = dca(g, ev, last, True)
         d_ca = dca(g, ev, last, False)
         b_re = b_ca = None
         if code != BENCH and bench_adj is not None:
