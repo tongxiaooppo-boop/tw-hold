@@ -258,8 +258,9 @@ def test_sort_rows_none_last():
 
 def test_page_slice_and_count():
     rows = [_row(f"{i:05d}") for i in range(20)]
-    assert len(v.page_slice(rows, 1)) == 8 and len(v.page_slice(rows, 3)) == 4 and v.page_slice(rows, 4) == []
-    assert v.page_count(20) == 3 and v.page_count(0) == 1
+    assert len(v.page_slice(rows, 1, 8)) == 8 and len(v.page_slice(rows, 3, 8)) == 4 and v.page_slice(rows, 4, 8) == []
+    assert v.page_count(20, 8) == 3 and v.page_count(0) == 1
+    assert v.page_count(10) == 1                         # 高股息前 10 大一頁放完
 
 
 def test_table_rows_div():

@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-PER_PAGE = 8
+PER_PAGE = 10                  # 高股息只收前 10 大（2026-11-27）→ 一頁放完、不分頁
 
 HEAD: dict[str, list[str]] = {
     "cap": ["代號", "名稱", "收盤", "季線", "半年線", "年線", "近一年報酬"],
