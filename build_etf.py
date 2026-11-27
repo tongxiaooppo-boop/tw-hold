@@ -32,10 +32,13 @@
   "missing": [str],                     # 白名單裡沒有任何價格的代號
   "yearly": {code: {"YYYY": {"rate": float, "partial": bool}}},       # 只有 div 組
   "dca": {code: {"reinvest": DCA|null, "cash": DCA|null,
-                 "bench_reinvest": DCA|null, "bench_cash": DCA|null}}  # bench＝同扣款月份的 0050；0050 自己為 null
+                 "bench_reinvest": DCA|null, "bench_cash": DCA|null}},  # bench＝同扣款月份的 0050；0050 自己為 null
+  "annual": {code: ANNUAL|null}         # 每年年初買一筆（2026-11-27 加）；全部組都有
 }
 DCA = {"start": "YYYY-MM-DD"(第一次買進日), "end": "YYYY-MM-DD"(傳入的 asof＝該檔 last_date), "buys": int,
        "invested": float, "value": float, "irr": float|null, "worst": float}
+ANNUAL = {"start": "YYYY", "years": [{"year": "YYYY", "ret": float, "pnl": float, "partial": bool}, ...由舊到新],
+          "invested": float, "value": float, "bench_value": float|null}   # bench＝同樣年份買 0050；0050 自己為 null
 """
 from __future__ import annotations
 
@@ -256,6 +259,19 @@ def dca(adj: pd.DataFrame, events: pd.DataFrame, asof: pd.Timestamp, reinvest: b
             "invested": float(invested[-1]), "value": float(value[-1]), "irr": xirr(flows), "worst": worst}
 
 
+def annual_lump(adj: pd.DataFrame, asof: pd.Timestamp, amount: float = DCA_AMOUNT,
+                start_year: int | None = None) -> dict | None:
+    """每年年初買一筆 amount 元（配息再投入，用 tr_open／tr_close）。adj 只含該檔。框架 2026-11-27（Opus 定）。
+    - 只用 date ≤ asof 的列。起始年：start_year 給了就用；否則＝第一筆價格年份 + 1（上市當年不算）。
+    - 每個「起始年 ≤ 年 ≤ asof 年」且該年有價格的曆年：買進＝該年第一個交易日 tr_open；
+      年底＝該年最後一個交易日 tr_close（asof 那年＝asof 前最後一列，partial=True；其他年 partial=False）。
+    - ret＝年底 ÷ 買進 − 1；pnl＝amount × ret。
+    - 累計（每年那筆都抱到 asof）：invested＝amount × 年數；value＝Σ amount × tr_close[最後一列] ÷ tr_open[該年買進]。
+    - 沒有任何一年 → None。
+    回傳 ANNUAL 但不含 bench_value（build 補）；start＝第一個有算到的年（字串）。"""
+    raise NotImplementedError
+
+
 def _f(x) -> float | None:
     return None if x is None or x != x else float(x)
 
@@ -263,7 +279,10 @@ def _f(x) -> float | None:
 def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = None) -> dict:
     """組 etf.json。只處理 ETF_UNIVERSE 內的代號；先 check_jumps，有任何訊息 → raise ValueError（整串訊息）。
     bench_*：用 dca(0050, asof＝該檔 last_date, start_month＝該檔 reinvest 結果 start 的月份) 算；
-    該檔 reinvest 為 None → bench 都 None。"""
+    該檔 reinvest 為 None → bench 都 None。
+    annual[code]＝annual_lump(該檔, last)，非 None 時加 bench_value＝annual_lump(0050, last,
+    start_year=int(該檔 start))["value"]（0050 自己、沒有 0050、或結果為 None → null；
+    0050 年數與該檔不同時仍照算，不另對齊）。"""
     prices = prices[prices["ticker"].isin(ETF_UNIVERSE)]
     events = events[events["ticker"].isin(ETF_UNIVERSE)]
     adj = adjust(prices, events)

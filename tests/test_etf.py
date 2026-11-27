@@ -290,3 +290,64 @@ def test_dca_table():
     body = v.dca_table(dca, ["00878", "00940"], {"00878": "國泰"})
     assert body == [[("00878", "國泰"), "2020-02～2026-11", "82", "82.0 萬", "123.4 萬", "+11.2%", "-15.3%",
                      "110.0 萬", "+9.0%", "+15.0%"]]
+
+
+# ---------- 每年年初買一筆（2026-11-27 框架） ----------
+def _annual_px():
+    # 上市 2024-12-31；2025 年初開 10、年底收 12；2026 年初開 12、asof 3/31 收 15
+    p = _px("Y", ["2024-12-31", "2025-01-02", "2025-12-31", "2026-01-02", "2026-03-31"],
+            [10.0, 10.0, 12.0, 12.0, 15.0], opens=[10.0, 10.0, 12.0, 12.0, 15.0])
+    return b.adjust(p, EMPTY_EV)
+
+
+def test_annual_lump_rising():
+    r = b.annual_lump(_annual_px(), T("2026-03-31"))
+    assert r["start"] == "2025"
+    assert [y["year"] for y in r["years"]] == ["2025", "2026"]
+    assert r["years"][0]["ret"] == pytest.approx(0.2) and r["years"][0]["pnl"] == pytest.approx(2000)
+    assert r["years"][0]["partial"] is False
+    assert r["years"][1]["ret"] == pytest.approx(0.25) and r["years"][1]["partial"] is True
+    assert r["invested"] == pytest.approx(20_000)
+    assert r["value"] == pytest.approx(27_500)          # 10000×15/10 + 10000×15/12
+    assert "bench_value" not in r
+
+
+def test_annual_lump_asof_cuts():
+    r = b.annual_lump(_annual_px(), T("2025-12-31"))
+    assert [y["year"] for y in r["years"]] == ["2025"]
+    assert r["years"][0]["partial"] is True and r["value"] == pytest.approx(12_000)
+
+
+def test_annual_lump_none_listed_this_year():
+    assert b.annual_lump(_flat(start="2026-02-02"), T("2026-03-31")) is None
+
+
+def test_annual_lump_start_year_override():
+    r = b.annual_lump(_annual_px(), T("2026-03-31"), start_year=2026)
+    assert r["start"] == "2026" and r["invested"] == pytest.approx(10_000)
+    assert r["value"] == pytest.approx(12_500)
+
+
+def test_build_annual():
+    a = _px("0050", pd.bdate_range("2024-01-02", "2026-03-31"), 10.0)
+    c = _px("0056", pd.bdate_range("2024-01-02", "2026-03-31"), 20.0)
+    out = b.build(pd.concat([a, c], ignore_index=True), EMPTY_EV, now=datetime(2026, 3, 31, tzinfo=timezone.utc))
+    assert set(out["annual"]) == {"0050", "0056"}
+    assert out["annual"]["0050"]["bench_value"] is None
+    assert out["annual"]["0056"]["start"] == "2025"
+    assert out["annual"]["0056"]["bench_value"] == pytest.approx(20_000)
+
+
+def test_annual_table():
+    an = {"0056": {"start": "2008", "years": [], "invested": 190_000.0, "value": 250_000.0, "bench_value": 400_000.0},
+          "00878": {"start": "2021", "years": [], "invested": 60_000.0, "value": 54_000.0, "bench_value": None},
+          "00940": None}
+    body = v.annual_table(an, ["0056", "00878", "00940", "00999"], {"0056": "元大高股息"})
+    assert body == [[("0056", "元大高股息"), "2008", "19.0 萬", "+6.0 萬", "+31.6%", "+110.5%"],
+                    [("00878", "00878"), "2021", "6.0 萬", "-0.6 萬", "-10.0%", "—"]]
+
+
+def test_annual_years_newest_first():
+    d = {"years": [{"year": "2025", "ret": 0.2, "pnl": 2000.0, "partial": False},
+                   {"year": "2026", "ret": -0.05, "pnl": -500.0, "partial": True}]}
+    assert v.annual_years(d, 10_000) == [["2026*", "9,500", "-500", "-5.0%"], ["2025", "12,000", "+2,000", "+20.0%"]]

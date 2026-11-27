@@ -127,3 +127,27 @@ def dca_table(dca: dict, codes: list[str], names: dict[str, str]) -> list[list]:
                     wan(ca["value"]) if ca else "—", fmt_pos(ca["irr"]) if ca else "—",
                     fmt_pos(bn["irr"]) if bn else "—"])
     return out
+
+
+# ── 每年年初買一筆（2026-11-27 框架，Opus 定）──────────────────────────────
+ANNUAL_NOTE = """每年第一個交易日開盤買 {amount:,} 元（配息再投入），看到年底賺賠；上市當年不算，從隔年開始。
+總表的「投入／損益」＝每年那筆都抱到今天的合計；「同期 0050」＝同樣年份改買 0050 的報酬。
+今年還沒過完，標 *。"""
+
+ANNUAL_HEAD = ["代號", "開始", "投入", "損益", "報酬", "同期 0050"]
+ANNUAL_NUM: set[int] = {1, 2, 3, 4, 5}
+ANNUAL_SRC: set[int] = {2}            # 投入：手機收掉（只剩 5 欄，不用往右拉）
+
+ANNUAL_YEAR_HEAD = ["年", "年底市值", "損益", "報酬"]
+
+
+def annual_table(annual: dict, codes: list[str], names: dict[str, str]) -> list[list]:
+    """總表：依 codes 順序，annual[c] 為 None／不存在的略過。
+    列＝[(c, 名稱), start, f"{invested/1e4:,.1f} 萬", f"{(value-invested)/1e4:+,.1f} 萬",
+        fmt_pos(value/invested-1), fmt_pos(bench_value/invested-1) 或 "—"（bench_value 為 None）]。"""
+    raise NotImplementedError
+
+
+def annual_years(d: dict, amount: int) -> list[list]:
+    """單檔逐年直表（新的在上）：[year + ("*" if partial), f"{amount*(1+ret):,.0f}", f"{pnl:+,.0f}", fmt_pos(ret)]。"""
+    raise NotImplementedError
