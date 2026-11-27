@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -108,7 +109,12 @@ def _num_signed(x) -> float | None:
         return None
 
 
-def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame:
+def _is_stock4(code: str) -> bool:
+    return code.isdigit() and len(code) == 4
+
+
+def _rows(table: dict, idx: dict[str, str], market: str, d: str,
+          keep: Callable[[str], bool] = _is_stock4) -> pd.DataFrame:
     """`idx`: 標準欄名 → 官方欄名。用欄名（不是固定位置）取欄，耐改版。
     可選鍵 `sign`／`diff`：漲跌欄（見 `_mark`），有的話把非一般漲跌的列記進 REFMARK 旁表。"""
     fields = table["fields"]
@@ -119,7 +125,7 @@ def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame
     out = []
     for r in table["data"]:
         code = str(r[0]).strip()
-        if not (code.isdigit() and len(code) == 4):
+        if not keep(code):
             continue
         close = _num(r[pos["close"]])
         if close is None:         # 當日無成交價 → 記旁表，不進 raw_prices
@@ -141,7 +147,7 @@ def _rows(table: dict, idx: dict[str, str], market: str, d: str) -> pd.DataFrame
     return pd.DataFrame(out, columns=COLS)
 
 
-def fetch_twse(d: date) -> pd.DataFrame | None:
+def fetch_twse(d: date, keep: Callable[[str], bool] = _is_stock4) -> pd.DataFrame | None:
     """None＝抓取失敗；空表＝休市。"""
     ymd = d.strftime("%Y%m%d")
     j = _get(TWSE.format(d=ymd))
@@ -159,11 +165,11 @@ def fetch_twse(d: date) -> pd.DataFrame | None:
         if t.get("title") and "每日收盤行情" in t["title"] and t.get("data"):
             return _rows(t, {"open": "開盤價", "high": "最高價", "low": "最低價", "close": "收盤價",
                              "volume": "成交股數", "value": "成交金額",
-                             "sign": "漲跌(+/-)", "diff": "漲跌價差"}, "TW", ymd)
+                             "sign": "漲跌(+/-)", "diff": "漲跌價差"}, "TW", ymd, keep)
     return pd.DataFrame(columns=COLS)
 
 
-def fetch_tpex(d: date) -> pd.DataFrame | None:
+def fetch_tpex(d: date, keep: Callable[[str], bool] = _is_stock4) -> pd.DataFrame | None:
     ymd = d.strftime("%Y%m%d")
     j = _get(TPEX.format(d=d.strftime("%Y/%m/%d")))
     if j is None:
@@ -175,7 +181,7 @@ def fetch_tpex(d: date) -> pd.DataFrame | None:
     if not tabs or not tabs[0].get("totalCount") or not tabs[0].get("data"):
         return pd.DataFrame(columns=COLS)           # 休市
     return _rows(tabs[0], {"open": "開盤", "high": "最高", "low": "最低", "close": "收盤",
-                           "volume": "成交股數", "value": "成交金額(元)", "sign": "漲跌"}, "TWO", ymd)
+                           "volume": "成交股數", "value": "成交金額(元)", "sign": "漲跌"}, "TWO", ymd, keep)
 
 
 def collect_day(d: date, market: str = "both") -> pd.DataFrame | None:
