@@ -275,7 +275,9 @@ jobs:
                data/derived/short_scan.json \
                data/derived/stock_class.json \
                data/history/ \
+               data/etf/ \
                reference/corporate_actions_resolved.json; then
+            # data/etf/：ETF 原始日線／除息有新列就要 commit（etf.json 有 generated_at 每次必變，不列入判斷；2026-11-27）
             # data/history/ 也要算：swing 線的 asof 取自 tw-swing 的外部分享檔，隔天就換成下一天，這輪不 commit 就永遠補不回來。
             echo "三清單 + resolved.json + history 皆無實質變更——跳過 commit"; exit 0
           fi
