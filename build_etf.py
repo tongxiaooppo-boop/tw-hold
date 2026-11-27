@@ -44,6 +44,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from reference.etf_universe import (BENCH, DCA_AMOUNT, DCA_MIN_BUYS, ETF_UNIVERSE, GROUPS, JUMP_LIMIT,
@@ -56,41 +57,103 @@ OUT = ROOT / "data" / "derived" / "etf.json"
 
 def load_inputs(etf_dir: Path = ETF_DIR) -> tuple[pd.DataFrame, pd.DataFrame]:
     """讀 prices.parquet、events.parquet；date 轉 datetime64、依 (ticker, date) 排序。"""
-    raise NotImplementedError
+    px = pd.read_parquet(etf_dir / "prices.parquet")
+    ev = pd.read_parquet(etf_dir / "events.parquet")
+    px["date"] = pd.to_datetime(px["date"])
+    ev["date"] = pd.to_datetime(ev["date"])
+    return (px.sort_values(["ticker", "date"]).reset_index(drop=True),
+            ev.sort_values(["ticker", "date"]).reset_index(drop=True))
+
+
+def _suffix_factor(dates: pd.Series, ev_dates: np.ndarray, ev_factors: np.ndarray) -> np.ndarray:
+    """每個 dates 的 Π{事件日 > t} factor。ev_dates 已排序。"""
+    n = len(ev_factors)
+    suffix = np.ones(n + 1)
+    for i in range(n - 1, -1, -1):
+        suffix[i] = suffix[i + 1] * ev_factors[i]
+    idx = np.searchsorted(ev_dates, dates.to_numpy(dtype="datetime64[ns]"), side="right")
+    return suffix[idx]
 
 
 def adjust(prices: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     """回傳 prices 加四欄 tr_open, tr_close, sp_open, sp_close（定義見模組說明）。不改原欄。"""
-    raise NotImplementedError
+    parts = []
+    for tk, g in prices.groupby("ticker", sort=False):
+        g = g.sort_values("date").copy()
+        last = g["date"].iloc[-1]
+        e = events[(events["ticker"] == tk) & (events["date"] <= last)].sort_values("date")
+        ed = e["date"].to_numpy(dtype="datetime64[ns]")
+        f_all = _suffix_factor(g["date"], ed, e["factor"].to_numpy(dtype=float))
+        sf = np.where(e["type"].to_numpy() == "split", e["factor"].to_numpy(dtype=float), 1.0)
+        f_sp = _suffix_factor(g["date"], ed, sf)
+        g["tr_open"] = g["open"].to_numpy(dtype=float) * f_all
+        g["tr_close"] = g["close"].to_numpy(dtype=float) * f_all
+        g["sp_open"] = g["open"].to_numpy(dtype=float) * f_sp
+        g["sp_close"] = g["close"].to_numpy(dtype=float) * f_sp
+        parts.append(g)
+    if not parts:
+        out = prices.copy()
+        for c in ("tr_open", "tr_close", "sp_open", "sp_close"):
+            out[c] = pd.Series(dtype=float)
+        return out
+    return pd.concat(parts, ignore_index=True)
 
 
 def check_jumps(adj: pd.DataFrame) -> list[str]:
     """每檔相鄰兩筆 tr_close 比值超出 JUMP_LIMIT（含邊界外）→ 一條訊息 f"{ticker} {date:%Y-%m-%d} {ratio:.3f}"。"""
-    raise NotImplementedError
+    lo, hi = JUMP_LIMIT
+    msgs = []
+    for tk, g in adj.groupby("ticker", sort=True):
+        g = g.sort_values("date")
+        ratio = g["tr_close"] / g["tr_close"].shift(1)
+        for d, r in zip(g["date"], ratio):
+            if r == r and (r < lo or r > hi):
+                msgs.append(f"{tk} {d:%Y-%m-%d} {r:.3f}")
+    return msgs
 
 
 def ma_position(tr_close: pd.Series, n: int) -> float | None:
     """最後一筆 ÷ 最後 n 筆平均 − 1；不足 n 筆 → None。"""
-    raise NotImplementedError
+    if len(tr_close) < n:
+        return None
+    tail = tr_close.iloc[-n:]
+    return float(tr_close.iloc[-1] / tail.mean() - 1)
 
 
 def ret_1y(tr_close: pd.Series, asof: pd.Timestamp) -> float | None:
     """tr_close（index＝date）在 asof 的值 ÷ 「asof−365 天當天或之前最後一筆」的值 − 1。
     第一筆日期 > asof−365 天 → None。"""
-    raise NotImplementedError
+    s = tr_close[tr_close.index <= asof]
+    cutoff = asof - pd.Timedelta(days=365)
+    if len(s) == 0 or s.index[0] > cutoff:
+        return None
+    base = s[s.index <= cutoff].iloc[-1]
+    return float(s.iloc[-1] / base - 1)
 
 
 def cash_in_current_units(events: pd.DataFrame) -> pd.Series:
     """單一檔的 div 事件，每筆 cash × Π{該事件日期之後的 split factor}，index＝除息日。
     （一拆四後，舊的 1 元現金＝每新股 0.25 元）"""
-    raise NotImplementedError
+    d = events[events["type"] == "div"].sort_values("date")
+    sp = events[events["type"] == "split"]
+    sd = sp["date"].to_numpy(dtype="datetime64[ns]")
+    sf = sp["factor"].to_numpy(dtype=float)
+    vals = []
+    for dt, c in zip(d["date"], d["cash"]):
+        vals.append(float(c) * float(np.prod(sf[sd > np.datetime64(dt, "ns")])) if len(sf) else float(c))
+    return pd.Series(vals, index=pd.DatetimeIndex(d["date"].to_list()), dtype=float)
 
 
 def trailing_yield(events: pd.DataFrame, close: float, asof: pd.Timestamp,
                    first_date: pd.Timestamp) -> tuple[float | None, int | None]:
     """近一年配息率：除息日落在 (asof−365 天, asof] 的 cash_in_current_units 合計 ÷ close，與筆數。
     照日期區間算，13 次就算 13 次。first_date > asof−365 天 → (None, None)。區間內 0 筆 → (0.0, 0)。"""
-    raise NotImplementedError
+    cutoff = asof - pd.Timedelta(days=365)
+    if first_date > cutoff:
+        return None, None
+    c = cash_in_current_units(events)
+    c = c[(c.index > cutoff) & (c.index <= asof)]
+    return float(c.sum() / close), int(len(c))
 
 
 def yearly_yields(sp_close: pd.Series, events: pd.DataFrame, asof: pd.Timestamp,
@@ -98,12 +161,46 @@ def yearly_yields(sp_close: pd.Series, events: pd.DataFrame, asof: pd.Timestamp,
     """最近 `years` 個曆年（含 asof 那年），每年 {"rate", "partial"}：
     rate＝該年除息的 cash_in_current_units 合計 ÷ 該年第一筆 sp_close（上市當年＝上市後第一筆）。
     partial＝上市當年 或 asof 那年。該年沒有任何價格 → 不放這年。"""
-    raise NotImplementedError
+    c = cash_in_current_units(events)
+    listing_year = int(sp_close.index[0].year) if len(sp_close) else None
+    out: dict[str, dict] = {}
+    for y in range(asof.year - years + 1, asof.year + 1):
+        s = sp_close[(sp_close.index.year == y) & (sp_close.index <= asof)]
+        if len(s) == 0:
+            continue
+        cy = c[(c.index.year == y) & (c.index <= asof)]
+        out[str(y)] = {"rate": float(cy.sum() / s.iloc[0]), "partial": bool(y == listing_year or y == asof.year)}
+    return out
 
 
 def xirr(flows: list[tuple[pd.Timestamp, float]]) -> float | None:
     """年化資金加權報酬：Σ amount × (1+r)^(−天數/365) = 0；二分法 r∈[−0.99, 10]，誤差 1e-7。解不出 → None。"""
-    raise NotImplementedError
+    if not flows:
+        return None
+    t0 = min(d for d, _ in flows)
+    pts = [((d - t0).days / 365.0, float(a)) for d, a in flows]
+
+    def f(r: float) -> float:
+        return sum(a * (1.0 + r) ** (-t) for t, a in pts)
+
+    lo, hi = -0.99, 10.0
+    flo, fhi = f(lo), f(hi)
+    if flo == 0:
+        return lo
+    if fhi == 0:
+        return hi
+    if flo * fhi > 0:
+        return None
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        fm = f(mid)
+        if fm == 0 or hi - lo < 1e-9:
+            return float(mid)
+        if flo * fm < 0:
+            hi = mid
+        else:
+            lo, flo = mid, fm
+    return float((lo + hi) / 2)
 
 
 def dca(adj: pd.DataFrame, events: pd.DataFrame, asof: pd.Timestamp, reinvest: bool,
@@ -118,20 +215,110 @@ def dca(adj: pd.DataFrame, events: pd.DataFrame, asof: pd.Timestamp, reinvest: b
     - irr＝xirr（每次買進 −amount、asof 那天 +期末市值）。
     - 買進次數 < DCA_MIN_BUYS → None。
     回傳 DCA dict（見模組說明）。"""
-    raise NotImplementedError
+    a = adj[adj["date"] <= asof].sort_values("date").reset_index(drop=True)
+    n = len(a)
+    if n == 0:
+        return None
+    dates = a["date"]
+    months = dates.dt.strftime("%Y-%m")
+    if start_month is None:
+        start_month = (dates.iloc[0].to_period("M") + 1).strftime("%Y-%m")
+    first_idx = months.drop_duplicates().index            # 每月第一個交易日的位置
+    buy_idx = [i + 1 for i in first_idx if months.iloc[i] >= start_month and i + 1 < n]
+    if len(buy_idx) < DCA_MIN_BUYS:
+        return None
+    open_col, close_col = ("tr_open", "tr_close") if reinvest else ("sp_open", "sp_close")
+    opens = a[open_col].to_numpy(dtype=float)
+    closes = a[close_col].to_numpy(dtype=float)
+    inc = np.zeros(n)
+    cnt = np.zeros(n)
+    for i in buy_idx:
+        inc[i] += amount / opens[i]
+        cnt[i] += 1
+    units = np.cumsum(inc)
+    invested = np.cumsum(cnt) * amount
+    value = units * closes
+    if not reinvest:
+        cash = np.zeros(n)
+        cu = cash_in_current_units(events)
+        dn = dates.to_numpy(dtype="datetime64[ns]")
+        for dt, c in cu.items():
+            k = int(np.searchsorted(dn, np.datetime64(dt, "ns"), side="left"))
+            if k >= n:
+                continue
+            held = units[k - 1] if k > 0 else 0.0
+            cash[k:] += held * c
+        value = value + cash
+    s = buy_idx[0]
+    worst = float(np.min(value[s:] / invested[s:] - 1))
+    flows = [(dates.iloc[i], -float(amount)) for i in buy_idx] + [(dates.iloc[-1], float(value[-1]))]
+    return {"start": f"{dates.iloc[s]:%Y-%m-%d}", "end": f"{asof:%Y-%m-%d}", "buys": len(buy_idx),
+            "invested": float(invested[-1]), "value": float(value[-1]), "irr": xirr(flows), "worst": worst}
+
+
+def _f(x) -> float | None:
+    return None if x is None or x != x else float(x)
 
 
 def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = None) -> dict:
     """組 etf.json。只處理 ETF_UNIVERSE 內的代號；先 check_jumps，有任何訊息 → raise ValueError（整串訊息）。
     bench_*：用 dca(0050, asof＝該檔 last_date, start_month＝該檔 reinvest 結果 start 的月份) 算；
     該檔 reinvest 為 None → bench 都 None。"""
-    raise NotImplementedError
+    prices = prices[prices["ticker"].isin(ETF_UNIVERSE)]
+    events = events[events["ticker"].isin(ETF_UNIVERSE)]
+    adj = adjust(prices, events)
+    msgs = check_jumps(adj)
+    if msgs:
+        raise ValueError("\n".join(msgs))
+    have = set(adj["ticker"].unique())
+    order = [c for g in GROUPS for c in sorted(k for k, (_, gg) in ETF_UNIVERSE.items() if gg == g)]
+    now = now or datetime.now(timezone.utc)
+    rows, yearly, dca_out = [], {}, {}
+    bench_adj = adj[adj["ticker"] == BENCH].sort_values("date") if BENCH in have else None
+    bench_ev = events[events["ticker"] == BENCH]
+    for code in order:
+        if code not in have:
+            continue
+        name, grp = ETF_UNIVERSE[code]
+        g = adj[adj["ticker"] == code].sort_values("date").reset_index(drop=True)
+        ev = events[events["ticker"] == code]
+        last, first = g["date"].iloc[-1], g["date"].iloc[0]
+        close = float(g["close"].iloc[-1])
+        tr = pd.Series(g["tr_close"].to_numpy(), index=pd.DatetimeIndex(g["date"]))
+        y1, yn = (trailing_yield(ev, close, last, first) if grp == "div" else (None, None))
+        rows.append({"code": code, "name": name, "group": grp, "close": close, "last_date": f"{last:%Y-%m-%d}",
+                     "first_date": f"{first:%Y-%m-%d}",
+                     "ma": {str(w): _f(ma_position(tr, w)) for w in MA_WINDOWS},
+                     "ret_1y": _f(ret_1y(tr, last)), "yield_1y": _f(y1), "yield_1y_n": yn})
+        if grp == "div":
+            yearly[code] = yearly_yields(pd.Series(g["sp_close"].to_numpy(), index=pd.DatetimeIndex(g["date"])), ev, last)
+        d_re = dca(g, ev, last, True)
+        d_ca = dca(g, ev, last, False)
+        b_re = b_ca = None
+        if code != BENCH and bench_adj is not None:
+            if d_re is not None:
+                b_re = dca(bench_adj, bench_ev, last, True, start_month=d_re["start"][:7])
+            if d_ca is not None:
+                b_ca = dca(bench_adj, bench_ev, last, False, start_month=d_ca["start"][:7])
+        dca_out[code] = {"reinvest": d_re, "cash": d_ca, "bench_reinvest": b_re, "bench_cash": b_ca}
+    asof = max((r["last_date"] for r in rows), default=None)
+    return {"asof": asof, "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "rows": rows,
+            "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out}
 
 
 def main(argv: list[str] | None = None) -> int:
     """讀 → build → 寫 OUT（先建父目錄；ensure_ascii=False, indent=1）。ValueError → 印到 stderr、回 1、不寫檔。
     路徑一律用 ROOT 相對（CI 的工作目錄不一定是 repo 根）。"""
-    raise NotImplementedError
+    try:
+        px, ev = load_inputs()
+        out = build(px, ev)
+    except ValueError as e:
+        print(f"build_etf 失敗：\n{e}", file=sys.stderr)
+        return 1
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"etf.json asof {out['asof']} rows {len(out['rows'])} missing {out['missing']}")
+    return 0
 
 
 if __name__ == "__main__":
