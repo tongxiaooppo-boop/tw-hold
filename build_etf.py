@@ -209,7 +209,7 @@ def xirr(flows: list[tuple[pd.Timestamp, float]]) -> float | None:
 def dca(adj: pd.DataFrame, events: pd.DataFrame, asof: pd.Timestamp, reinvest: bool,
         amount: float = DCA_AMOUNT, start_month: str | None = None) -> dict | None:
     """單一檔定期定額（adj 只含該檔、已依日期排序；events 只含該檔）。
-    - 扣款日＝每個月第一個交易日；買進＝扣款日的「下一個」交易日開盤；只算買進日 ≤ asof 的。
+    - 買進＝每個月第一個交易日開盤（2026-11-27 使用者定，跟年初回測同口徑）；只算買進日 ≤ asof 的。
     - 起始月：start_month（'YYYY-MM'）給了就用；否則＝第一筆價格所在月的「下個月」。
     - reinvest=True：units += amount / tr_open[買進日]；市值_t＝units_t × tr_close_t。
     - reinvest=False：units += amount / sp_open[買進日]；每個 div 事件日 e，
@@ -227,7 +227,7 @@ def dca(adj: pd.DataFrame, events: pd.DataFrame, asof: pd.Timestamp, reinvest: b
     if start_month is None:
         start_month = (dates.iloc[0].to_period("M") + 1).strftime("%Y-%m")
     first_idx = months.drop_duplicates().index            # 每月第一個交易日的位置
-    buy_idx = [i + 1 for i in first_idx if months.iloc[i] >= start_month and i + 1 < n]
+    buy_idx = [i for i in first_idx if months.iloc[i] >= start_month]
     if len(buy_idx) < DCA_MIN_BUYS:
         return None
     open_col, close_col = ("tr_open", "tr_close") if reinvest else ("sp_open", "sp_close")

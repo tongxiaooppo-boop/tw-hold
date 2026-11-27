@@ -149,7 +149,7 @@ def test_xirr_known():
 def test_dca_reinvest_flat_price():
     r = b.dca(_flat(), EMPTY_EV, T("2026-03-31"), reinvest=True)
     assert r["buys"] == 14                       # 2025-02 ～ 2026-03
-    assert r["start"] == "2025-02-04"            # 2/3 是 2 月第一個交易日（bdate），隔一個交易日
+    assert r["start"] == "2025-02-03"            # 2/3 是 2 月第一個交易日（bdate），當天開盤買
     assert r["end"] == "2026-03-31"
     assert r["invested"] == pytest.approx(140_000)
     assert r["value"] == pytest.approx(140_000)
@@ -160,7 +160,7 @@ def test_dca_reinvest_flat_price():
 def test_dca_cash_dividend_accumulates():
     e = _ev([("X", "2025-03-20", "div", 1.0, 10.0, 9.0, 0.9, "t")])
     r = b.dca(_flat(), e, T("2026-03-31"), reinvest=False)
-    # 2/4、3/4 兩次買進共 2000 單位 → 3/20 除息領 2000 元；sp 價恆 10（合成資料除息日不跌）
+    # 2/3、3/3 兩次買進共 2000 單位 → 3/20 除息領 2000 元；sp 價恆 10（合成資料除息日不跌）
     assert r["value"] == pytest.approx(140_000 + 2_000)
 
 
@@ -178,7 +178,7 @@ def test_dca_worst_after_drop():
 
 def test_dca_start_month_override():
     r = b.dca(_flat(), EMPTY_EV, T("2026-03-31"), reinvest=True, start_month="2025-04")
-    assert r["buys"] == 12 and r["start"] == "2025-04-02"
+    assert r["buys"] == 12 and r["start"] == "2025-04-01"
 
 
 # ---------- build ----------
