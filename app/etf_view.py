@@ -174,4 +174,15 @@ def div_cash_table(div_cash: dict, codes: list[str], names: dict[str, str]) -> t
     """head＝["代號", 年份後兩碼…(由舊到新，取第一個有資料代號的 years key), "平均"]；沒有任何代號有資料 → (["代號"], [])。
     依 codes 順序，div_cash 沒有的代號略過。列＝[(c, 名稱), 每年 f"{v:.2f}" 或 "—",
     平均 f"{avg:.2f}" + ("*" if n < 年數 else "")，avg 為 None → "—"]。"""
-    raise NotImplementedError
+    have = [c for c in codes if c in div_cash]
+    if not have:
+        return ["代號"], []
+    ys = list(div_cash[have[0]]["years"])
+    head = ["代號"] + [y[-2:] for y in ys] + ["平均"]
+    body = []
+    for c in have:
+        d = div_cash[c]
+        avg = d.get("avg")
+        avg_s = "—" if avg is None else f"{avg:.2f}" + ("*" if d["n"] < len(ys) else "")
+        body.append([(c, names.get(c, c))] + [("—" if d["years"].get(y) is None else f"{d['years'][y]:.2f}") for y in ys] + [avg_s])
+    return head, body

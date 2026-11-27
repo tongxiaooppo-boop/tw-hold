@@ -184,7 +184,15 @@ def yearly_cash(events: pd.DataFrame, asof: pd.Timestamp, first_date: pd.Timesta
     - 年份 ≤ first_date 的年（上市當年不完整、更早還沒上市）→ None；之後的年沒除息 → 0.0。
     - avg＝非 None 年份的平均（全 None → None）；n＝非 None 年數。
     回 {"years": {"YYYY": float|None, …由舊到新、一定 `years` 個 key}, "avg": float|None, "n": int}"""
-    raise NotImplementedError
+    c = cash_in_current_units(events)
+    out: dict[str, float | None] = {}
+    for y in range(asof.year - years, asof.year):
+        if y <= first_date.year:
+            out[str(y)] = None
+        else:
+            out[str(y)] = float(c[c.index.year == y].sum())
+    vals = [v for v in out.values() if v is not None]
+    return {"years": out, "avg": float(sum(vals) / len(vals)) if vals else None, "n": len(vals)}
 
 
 def xirr(flows: list[tuple[pd.Timestamp, float]]) -> float | None:
@@ -324,7 +332,7 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
     have = set(adj["ticker"].unique())
     order = [c for g in GROUPS for c in sorted(k for k, (_, gg) in ETF_UNIVERSE.items() if gg == g)]
     now = now or datetime.now(timezone.utc)
-    rows, yearly, dca_out, annual_out = [], {}, {}, {}
+    rows, yearly, dca_out, annual_out, div_cash = [], {}, {}, {}, {}
     bench_adj = adj[adj["ticker"] == BENCH].sort_values("date") if BENCH in have else None
     bench_ev = events[events["ticker"] == BENCH]
     for code in order:
@@ -343,7 +351,8 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
                      "ret_1y": _f(ret_1y(tr, last)), "yield_1y": _f(y1), "yield_1y_n": yn})
         if grp == "div":
             yearly[code] = yearly_yields(pd.Series(g["sp_close"].to_numpy(), index=pd.DatetimeIndex(g["date"])), ev, last)
-        d_re = dca(g, ev, last, True)
+            div_cash[code] = yearly_cash(ev, last, first)
+        d_re =dca(g, ev, last, True)
         d_ca = dca(g, ev, last, False)
         b_re = b_ca = None
         if code != BENCH and bench_adj is not None:
@@ -362,7 +371,8 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
         annual_out[code] = an
     asof = max((r["last_date"] for r in rows), default=None)
     return {"asof": asof, "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "rows": rows,
-            "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out, "annual": annual_out}
+            "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out, "annual": annual_out,
+            "div_cash": div_cash}
 
 
 def main(argv: list[str] | None = None) -> int:

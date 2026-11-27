@@ -3228,11 +3228,12 @@ def _etf_page(data: dict | None) -> None:
     with st.container(key="etf_page"):
         st.subheader("ETF")
         st.caption(f"資料日 {data['asof']}")
-        for g, gname in GROUPS.items():
-            st.markdown(f"#### {gname}")
-            if g == "lev":
+        names = {c: v[0] for c, v in ETF_UNIVERSE.items()}
+        for g, members in etf_view.SHOW_GROUPS.items():
+            st.markdown(f"#### {GROUPS[g]}")
+            if "lev" in members:
                 st.caption(etf_view.LEV_NOTE)
-            rows = [r for r in data["rows"] if r["group"] == g]
+            rows = [r for r in data["rows"] if r["group"] in members]
             pick = st.segmented_control("排序", list(etf_view.SORTS[g]), default="代號", key=f"_etf_sort_{g}") or "代號"
             rows = etf_view.sort_rows(rows, etf_view.SORTS[g][pick])
             if g == "div":
@@ -3243,13 +3244,14 @@ def _etf_page(data: dict | None) -> None:
                                                     key="_etf_page_div") or "1")
                 rows = etf_view.page_slice(rows, page)
             _vtable(etf_view.HEAD[g], etf_view.table_rows(rows, g), num=etf_view.NUM_COLS, src=etf_view.SRC_COLS)
-        names = {c: v[0] for c, v in ETF_UNIVERSE.items()}
+            if g == "div":
+                head, body = etf_view.div_cash_table(data.get("div_cash") or {}, [r["code"] for r in rows], names)
+                if body:
+                    st.markdown(f"**{etf_view.DIV_CASH_TITLE}**")
+                    _vtable(head, body, num=set(range(1, len(head))))
+                    st.caption(etf_view.DIV_CASH_NOTE)
         with st.expander("這些數字怎麼算"):
             st.markdown(etf_view.EXPLAIN)
-        with st.expander("高股息：每年實際配息率"):
-            st.caption(etf_view.YEARLY_NOTE)
-            head, body = etf_view.yearly_table(data["yearly"], [r["code"] for r in data["rows"] if r["group"] == "div"], names)
-            _vtable(head, body, num=set(range(1, len(head))), wide=True)
         with st.expander("每年年初買一萬：回測"):
             st.caption(etf_view.ANNUAL_NOTE.format(amount=DCA_AMOUNT))
             ann = data.get("annual") or {}
