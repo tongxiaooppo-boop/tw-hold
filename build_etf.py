@@ -374,9 +374,27 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
             an["bench_value"] = bv
         annual_out[code] = an
     asof = max((r["last_date"] for r in rows), default=None)
+    dca_from: dict = {}
+    if asof is not None:
+        by_code = {c: (adj[adj["ticker"] == c].sort_values("date").reset_index(drop=True),
+                       events[events["ticker"] == c]) for c in (r["code"] for r in rows)}
+        meta = {r["code"]: (pd.Timestamp(r["last_date"]), pd.Timestamp(r["first_date"])) for r in rows}
+        for yr in range(DCA_FROM_FIRST, int(asof[:4])):
+            ent = {}
+            for c, (gc, evc) in by_code.items():
+                last_c, first_c = meta[c]
+                if not first_c < pd.Timestamp(f"{yr}-01-01"):
+                    continue
+                re_ = dca(gc, evc, last_c, True, start_month=f"{yr}-01")
+                ca_ = dca(gc, evc, last_c, False, start_month=f"{yr}-01")
+                if re_ is None and ca_ is None:
+                    continue
+                ent[c] = {"reinvest": re_, "cash": ca_}
+            if ent:
+                dca_from[str(yr)] = ent
     return {"asof": asof, "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "rows": rows,
             "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out, "annual": annual_out,
-            "div_cash": div_cash}
+            "div_cash": div_cash, "dca_from": dca_from}
 
 
 def main(argv: list[str] | None = None) -> int:

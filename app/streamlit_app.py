@@ -3252,6 +3252,23 @@ def _etf_page(data: dict | None) -> None:
                     st.caption(etf_view.DIV_CASH_NOTE)
         with st.expander("這些數字怎麼算"):
             st.markdown(etf_view.EXPLAIN)
+        with st.expander("定期定額回測"):
+            st.caption(etf_view.DCA2_NOTE.format(amount=DCA_AMOUNT))
+            dca_from = data.get("dca_from") or {}
+            opts = etf_view.dca_start_options(dca_from)
+            c1, c2 = st.columns(2)
+            start = c1.selectbox("從哪時開始", opts, key="_etf_dca_start")
+            mode_lbl = c2.segmented_control("配息", list(etf_view.DCA_MODES), default="再投入", key="_etf_dca_mode") or "再投入"
+            mode = etf_view.DCA_MODES[mode_lbl]
+            codes = [r["code"] for r in data["rows"]]
+            if start == etf_view.DCA_FIRST:
+                body = etf_view.dca2_rows(data.get("dca") or {}, codes, names, mode, True)
+                _vtable(etf_view.DCA2_HEAD_FIRST, body, num=set(range(1, 7)), src=etf_view.DCA2_SRC_FIRST)
+            else:
+                body = etf_view.dca2_rows(dca_from.get(start) or {}, codes, names, mode, False)
+                _vtable(etf_view.DCA2_HEAD_YEAR, body, num=set(range(1, 6)), src=etf_view.DCA2_SRC_YEAR)
+            if not body:
+                st.caption("這個起點沒有資料。")
         with st.expander("每年年初買一萬：回測"):
             st.caption(etf_view.ANNUAL_NOTE.format(amount=DCA_AMOUNT))
             ann = data.get("annual") or {}

@@ -205,7 +205,7 @@ DCA2_SRC_YEAR: set[int] = {1, 2}      # 手機收掉投入、市值 → 4 欄
 
 def dca_start_options(dca_from: dict) -> list[str]:
     """[DCA_FIRST] + dca_from 的年份由舊到新。"""
-    raise NotImplementedError
+    return [DCA_FIRST] + sorted(dca_from)
 
 
 def dca2_rows(entries: dict, codes: list[str], names: dict[str, str], mode: str, first: bool) -> list[list]:
@@ -214,4 +214,20 @@ def dca2_rows(entries: dict, codes: list[str], names: dict[str, str], mode: str,
     first=True（發行起，entries＝etf.json 的 dca）：[(c,名稱), d["start"][:7], wan(invested), fmt_pos(ret), fmt_pos(irr),
         fmt_pos(worst), fmt_pos(entries[c]["bench_"+mode]["irr"]) 或 "—"（bench 為 None）]
     first=False（某年，entries＝dca_from[年]）：[(c,名稱), wan(invested), wan(value), fmt_pos(ret), fmt_pos(irr), fmt_pos(worst)]"""
-    raise NotImplementedError
+    def wan(v: float) -> str:
+        return f"{v / 1e4:,.1f} 萬"
+    out = []
+    for c in codes:
+        e = entries.get(c)
+        d = e.get(mode) if e else None
+        if not d:
+            continue
+        ret = d["value"] / d["invested"] - 1
+        if first:
+            b = e.get("bench_" + mode)
+            out.append([(c, names.get(c, c)), d["start"][:7], wan(d["invested"]), fmt_pos(ret), fmt_pos(d["irr"]),
+                        fmt_pos(d["worst"]), fmt_pos(b["irr"]) if b else "—"])
+        else:
+            out.append([(c, names.get(c, c)), wan(d["invested"]), wan(d["value"]), fmt_pos(ret), fmt_pos(d["irr"]),
+                        fmt_pos(d["worst"])])
+    return out
