@@ -351,3 +351,43 @@ def test_annual_years_newest_first():
     d = {"years": [{"year": "2025", "ret": 0.2, "pnl": 2000.0, "partial": False},
                    {"year": "2026", "ret": -0.05, "pnl": -500.0, "partial": True}]}
     assert v.annual_years(d, 10_000) == [["2026*", "9,500", "-500", "-5.0%"], ["2025", "12,000", "+2,000", "+20.0%"]]
+
+
+# ---------- 高股息近 5 年配息（2026-11-27 框架） ----------
+def test_yearly_cash():
+    e = _ev([("D", "2023-07-10", "div", 0.5, 10.0, 9.5, 0.95, "t"),
+             ("D", "2024-01-10", "div", 0.3, 10.0, 9.7, 0.97, "t"),
+             ("D", "2024-07-10", "div", 0.4, 10.0, 9.6, 0.96, "t"),
+             ("D", "2025-07-10", "div", 0.6, 10.0, 9.4, 0.94, "t"),
+             ("D", "2026-01-10", "div", 9.9, 10.0, 0.1, 0.01, "t")])      # 今年不算
+    r = b.yearly_cash(e, T("2026-03-31"), T("2022-05-02"))
+    assert list(r["years"]) == ["2021", "2022", "2023", "2024", "2025"]
+    assert r["years"]["2021"] is None and r["years"]["2022"] is None
+    assert r["years"]["2023"] == pytest.approx(0.5) and r["years"]["2024"] == pytest.approx(0.7)
+    assert r["avg"] == pytest.approx(0.6) and r["n"] == 3
+
+
+def test_yearly_cash_zero_year_and_split():
+    e = _ev([("D", "2024-07-10", "div", 2.0, 40.0, 38.0, 0.95, "t"),
+             ("D", "2025-03-01", "split", None, 40.0, 10.0, 0.25, "t")])
+    r = b.yearly_cash(e, T("2026-03-31"), T("2020-01-02"))
+    assert r["years"]["2021"] == 0.0 and r["years"]["2024"] == pytest.approx(0.5)   # 一拆四
+    assert r["n"] == 5 and r["avg"] == pytest.approx(0.1)
+
+
+def test_build_div_cash_only_div():
+    a = _px("0050", pd.bdate_range("2024-01-02", "2026-03-31"), 10.0)
+    c = _px("0056", pd.bdate_range("2024-01-02", "2026-03-31"), 20.0)
+    out = b.build(pd.concat([a, c], ignore_index=True), EMPTY_EV, now=datetime(2026, 3, 31, tzinfo=timezone.utc))
+    assert set(out["div_cash"]) == {"0056"}
+    assert out["div_cash"]["0056"]["years"]["2025"] == 0.0 and out["div_cash"]["0056"]["n"] == 1
+
+
+def test_div_cash_table():
+    dc = {"0056": {"years": {"2021": 1.8, "2022": 2.1, "2023": 1.0, "2024": 3.0, "2025": 3.1}, "avg": 2.2, "n": 5},
+          "00940": {"years": {"2021": None, "2022": None, "2023": None, "2024": 0.3, "2025": 0.36}, "avg": 0.33, "n": 2}}
+    head, body = v.div_cash_table(dc, ["0056", "00940", "00999"], {"0056": "元大高股息"})
+    assert head == ["代號", "21", "22", "23", "24", "25", "平均"]
+    assert body == [[("0056", "元大高股息"), "1.80", "2.10", "1.00", "3.00", "3.10", "2.20"],
+                    [("00940", "00940"), "—", "—", "—", "0.30", "0.36", "0.33*"]]
+    assert v.div_cash_table({}, ["0056"], {}) == (["代號"], [])

@@ -22,7 +22,10 @@ SORTS: dict[str, dict[str, str | None]] = {
     "lev": {"代號": None, "年線位置": "ma240", "近一年報酬": "ret_1y"},
 }
 
-LEV_NOTE = "追蹤單日兩倍，長期不等於兩倍。"
+LEV_NOTE = "代號 L 結尾是正 2：追蹤單日兩倍，長期不等於兩倍。"
+
+# 2026-11-27 使用者：正 2 跟市值型放同一張表（etf.json 的 group 不變，只有頁面合併）
+SHOW_GROUPS: dict[str, tuple[str, ...]] = {"cap": ("cap", "lev"), "div": ("div",)}
 
 EXPLAIN = """\
 - **季線／半年線／年線**：收盤比過去 60／120／240 個交易日平均高（＋）或低（－）幾 %。用還原價（配息、分割都還原），所以跟看盤軟體不一定一樣。資料不夠天數顯示「—」。
@@ -160,3 +163,15 @@ def annual_years(d: dict, amount: int) -> list[list]:
     """單檔逐年直表（新的在上）：[year + ("*" if partial), f"{amount*(1+ret):,.0f}", f"{pnl:+,.0f}", fmt_pos(ret)]。"""
     return [[y["year"] + ("*" if y["partial"] else ""), f"{amount * (1 + y['ret']):,.0f}", f"{y['pnl']:+,.0f}",
              fmt_pos(y["ret"])] for y in reversed(d["years"])]
+
+
+# ── 高股息近 5 年配息（元）＋平均（2026-11-27 框架，Opus 定；版型照估值頁 EPS 年份列）──
+DIV_CASH_TITLE = "近 5 年配息（元）"
+DIV_CASH_NOTE = "每年除息現金合計（每單位；分割已換成現在單位）。上市當年不完整不算；標 * 的平均不到 5 年。"
+
+
+def div_cash_table(div_cash: dict, codes: list[str], names: dict[str, str]) -> tuple[list[str], list[list]]:
+    """head＝["代號", 年份後兩碼…(由舊到新，取第一個有資料代號的 years key), "平均"]；沒有任何代號有資料 → (["代號"], [])。
+    依 codes 順序，div_cash 沒有的代號略過。列＝[(c, 名稱), 每年 f"{v:.2f}" 或 "—",
+    平均 f"{avg:.2f}" + ("*" if n < 年數 else "")，avg 為 None → "—"]。"""
+    raise NotImplementedError

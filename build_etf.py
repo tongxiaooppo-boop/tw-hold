@@ -33,7 +33,8 @@
   "yearly": {code: {"YYYY": {"rate": float, "partial": bool}}},       # 只有 div 組
   "dca": {code: {"reinvest": DCA|null, "cash": DCA|null,
                  "bench_reinvest": DCA|null, "bench_cash": DCA|null}},  # bench＝同扣款月份的 0050；0050 自己為 null
-  "annual": {code: ANNUAL|null}         # 每年年初買一筆（2026-11-27 加）；全部組都有
+  "annual": {code: ANNUAL|null},        # 每年年初買一筆（2026-11-27 加）；全部組都有
+  "div_cash": {code: {"years": {"YYYY": float|null}, "avg": float|null, "n": int}}  # 只有 div 組（2026-11-27 加）
 }
 DCA = {"start": "YYYY-MM-DD"(第一次買進日), "end": "YYYY-MM-DD"(傳入的 asof＝該檔 last_date), "buys": int,
        "invested": float, "value": float, "irr": float|null, "worst": float}
@@ -51,7 +52,7 @@ import numpy as np
 import pandas as pd
 
 from reference.etf_universe import (BENCH, DCA_AMOUNT, DCA_MIN_BUYS, ETF_UNIVERSE, GROUPS, JUMP_LIMIT,
-                                    MA_WINDOWS, YEARLY_YIELD_YEARS)
+                                    MA_WINDOWS, YEARLY_YIELD_YEARS, DIV_CASH_YEARS)
 
 ROOT = Path(__file__).resolve().parent
 ETF_DIR = ROOT / "data" / "etf"
@@ -174,6 +175,16 @@ def yearly_yields(sp_close: pd.Series, events: pd.DataFrame, asof: pd.Timestamp,
         cy = c[(c.index.year == y) & (c.index <= asof)]
         out[str(y)] = {"rate": float(cy.sum() / s.iloc[0]), "partial": bool(y == listing_year or y == asof.year)}
     return out
+
+
+def yearly_cash(events: pd.DataFrame, asof: pd.Timestamp, first_date: pd.Timestamp,
+                years: int = DIV_CASH_YEARS) -> dict:
+    """近 `years` 個完整曆年（asof 那年之前；asof=2026 → 2021～2025）每年除息現金合計（元／每單位，
+    用 cash_in_current_units，分割已換成現在單位）。框架 2026-11-27（Opus 定）。
+    - 年份 ≤ first_date 的年（上市當年不完整、更早還沒上市）→ None；之後的年沒除息 → 0.0。
+    - avg＝非 None 年份的平均（全 None → None）；n＝非 None 年數。
+    回 {"years": {"YYYY": float|None, …由舊到新、一定 `years` 個 key}, "avg": float|None, "n": int}"""
+    raise NotImplementedError
 
 
 def xirr(flows: list[tuple[pd.Timestamp, float]]) -> float | None:
@@ -302,7 +313,8 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
     該檔 reinvest 為 None → bench 都 None。
     annual[code]＝annual_lump(該檔, last)，非 None 時加 bench_value＝annual_lump(0050, last,
     start_year=int(該檔 start))["value"]（0050 自己、沒有 0050、或結果為 None → null；
-    0050 年數與該檔不同時仍照算，不另對齊）。"""
+    0050 年數與該檔不同時仍照算，不另對齊）。
+    div_cash[code]＝yearly_cash(該檔 events, last, first)，只有 div 組。"""
     prices = prices[prices["ticker"].isin(ETF_UNIVERSE)]
     events = events[events["ticker"].isin(ETF_UNIVERSE)]
     adj = adjust(prices, events)
