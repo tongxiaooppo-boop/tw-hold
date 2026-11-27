@@ -34,6 +34,7 @@
   "dca": {code: {"reinvest": DCA|null, "cash": DCA|null,
                  "bench_reinvest": DCA|null, "bench_cash": DCA|null}},  # bench＝同扣款月份的 0050；0050 自己為 null
   "annual": {code: ANNUAL|null},        # 每年年初買一筆（2026-11-27 加）；全部組都有
+  "dca_from": {"YYYY": {code: {"reinvest": DCA|null, "cash": DCA|null}}},  # 選起始年定期定額（2026-11-27 加）
   "div_cash": {code: {"years": {"YYYY": float|null}, "avg": float|null, "n": int}}  # 只有 div 組（2026-11-27 加）
 }
 DCA = {"start": "YYYY-MM-DD"(第一次買進日), "end": "YYYY-MM-DD"(傳入的 asof＝該檔 last_date), "buys": int,
@@ -52,7 +53,7 @@ import numpy as np
 import pandas as pd
 
 from reference.etf_universe import (BENCH, DCA_AMOUNT, DCA_MIN_BUYS, ETF_UNIVERSE, GROUPS, JUMP_LIMIT,
-                                    MA_WINDOWS, YEARLY_YIELD_YEARS, DIV_CASH_YEARS)
+                                    MA_WINDOWS, YEARLY_YIELD_YEARS, DIV_CASH_YEARS, DCA_FROM_FIRST)
 
 ROOT = Path(__file__).resolve().parent
 ETF_DIR = ROOT / "data" / "etf"
@@ -322,7 +323,10 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
     annual[code]＝annual_lump(該檔, last)，非 None 時加 bench_value＝annual_lump(0050, last,
     start_year=int(該檔 start))["value"]（0050 自己、沒有 0050、或結果為 None → null；
     0050 年數與該檔不同時仍照算，不另對齊）。
-    div_cash[code]＝yearly_cash(該檔 events, last, first)，只有 div 組。"""
+    div_cash[code]＝yearly_cash(該檔 events, last, first)，只有 div 組。
+    dca_from：Y 從 DCA_FROM_FIRST 到「asof 年 − 1」；只收 first_date < Y-01-01 的代號（那年以前已上市），
+    reinvest／cash＝dca(該檔, events, last, True/False, start_month=f"{Y}-01")；兩個都 None 的代號不放；
+    一個代號都沒有的年份不放。"""
     prices = prices[prices["ticker"].isin(ETF_UNIVERSE)]
     events = events[events["ticker"].isin(ETF_UNIVERSE)]
     adj = adjust(prices, events)

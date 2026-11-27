@@ -391,3 +391,43 @@ def test_div_cash_table():
     assert body == [[("0056", "元大高股息"), "1.80", "2.10", "1.00", "3.00", "3.10", "2.20"],
                     [("00940", "00940"), "—", "—", "—", "0.30", "0.36", "0.33*"]]
     assert v.div_cash_table({}, ["0056"], {}) == (["代號"], [])
+
+
+# ---------- 定期定額可選起點（2026-11-27 框架） ----------
+def test_build_dca_from():
+    a = _px("0050", pd.bdate_range("2024-01-02", "2026-03-31"), 10.0)
+    c = _px("0056", pd.bdate_range("2024-01-02", "2026-03-31"), 20.0)
+    out = b.build(pd.concat([a, c], ignore_index=True), EMPTY_EV, now=datetime(2026, 3, 31, tzinfo=timezone.utc))
+    assert set(out["dca_from"]) == {"2025"}                 # 2024 不算：1/2 才上市，不在 2024-01-01 之前
+    r = out["dca_from"]["2025"]["0056"]["reinvest"]
+    assert r["start"] == "2025-01-01" and r["buys"] == 15   # bdate 把 1/1 當交易日；2025-01～2026-03
+    assert r["invested"] == pytest.approx(150_000) and r["value"] == pytest.approx(150_000)
+    assert out["dca_from"]["2025"]["0050"]["cash"]["buys"] == 15
+
+
+def test_dca_start_options():
+    assert v.dca_start_options({"2025": {}, "2010": {}, "2018": {}}) == ["發行起", "2010", "2018", "2025"]
+    assert v.dca_start_options({}) == ["發行起"]
+
+
+def _d(inv, val, irr, worst, start="2020-02-03"):
+    return {"start": start, "end": "2026-11-27", "buys": 10, "invested": inv, "value": val, "irr": irr, "worst": worst}
+
+
+def test_dca2_rows_first():
+    e = {"00878": {"reinvest": _d(820_000.0, 1_230_000.0, 0.112, -0.153), "cash": _d(820_000.0, 1_100_000.0, 0.09, -0.2),
+                   "bench_reinvest": _d(1, 1, 0.15, 0), "bench_cash": None},
+         "0050": {"reinvest": _d(100_000.0, 150_000.0, 0.2, -0.1), "cash": None, "bench_reinvest": None, "bench_cash": None}}
+    names = {"00878": "國泰"}
+    assert v.dca2_rows(e, ["0050", "00878"], names, "reinvest", True) == [
+        [("0050", "0050"), "2020-02", "10.0 萬", "+50.0%", "+20.0%", "-10.0%", "—"],
+        [("00878", "國泰"), "2020-02", "82.0 萬", "+50.0%", "+11.2%", "-15.3%", "+15.0%"]]
+    assert v.dca2_rows(e, ["0050", "00878"], names, "cash", True) == [
+        [("00878", "國泰"), "2020-02", "82.0 萬", "+34.1%", "+9.0%", "-20.0%", "—"]]
+
+
+def test_dca2_rows_year():
+    e = {"0056": {"reinvest": _d(200_000.0, 300_000.0, 0.08, -0.25), "cash": None}}
+    assert v.dca2_rows(e, ["0050", "0056"], {"0056": "元大高股息"}, "reinvest", False) == [
+        [("0056", "元大高股息"), "20.0 萬", "30.0 萬", "+50.0%", "+8.0%", "-25.0%"]]
+    assert v.dca2_rows(e, ["0056"], {}, "cash", False) == []

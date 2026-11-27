@@ -186,3 +186,32 @@ def div_cash_table(div_cash: dict, codes: list[str], names: dict[str, str]) -> t
         avg_s = "—" if avg is None else f"{avg:.2f}" + ("*" if d["n"] < len(ys) else "")
         body.append([(c, names.get(c, c))] + [("—" if d["years"].get(y) is None else f"{d['years'][y]:.2f}") for y in ys] + [avg_s])
     return head, body
+
+
+# ── 定期定額：可選起點（發行起／某年 1 月起）＋配息切換（2026-11-27 框架，Opus 定）──
+DCA_FIRST = "發行起"
+DCA_MODES: dict[str, str] = {"再投入": "reinvest", "領現金": "cash"}
+
+DCA2_NOTE = """每月第一個交易日開盤買 {amount:,} 元（可買零股）。「發行起」：每檔從上市隔月開始，附同樣月份改買 0050 的年化；
+選年份：從那年 1 月開始，只列那年以前已上市的。
+「再投入」：配息在除息日買回同一檔（近似）；「領現金」：配息留現金，市值含累計現金。
+「最慘帳面」：過程中市值比已投入最多少幾 %。扣款不到 12 次的不列。"""
+
+DCA2_HEAD_FIRST = ["代號", "開始", "投入", "報酬", "年化", "最慘帳面", "同期 0050"]
+DCA2_SRC_FIRST: set[int] = {2, 5}     # 手機收掉投入、最慘 → 5 欄
+DCA2_HEAD_YEAR = ["代號", "投入", "市值", "報酬", "年化", "最慘帳面"]
+DCA2_SRC_YEAR: set[int] = {1, 2}      # 手機收掉投入、市值 → 4 欄
+
+
+def dca_start_options(dca_from: dict) -> list[str]:
+    """[DCA_FIRST] + dca_from 的年份由舊到新。"""
+    raise NotImplementedError
+
+
+def dca2_rows(entries: dict, codes: list[str], names: dict[str, str], mode: str, first: bool) -> list[list]:
+    """mode＝"reinvest"|"cash"。依 codes 順序；entries[c] 不存在或 entries[c][mode] 為 None → 略過。
+    d＝entries[c][mode]；ret＝d["value"]/d["invested"]−1；wan＝f"{v/1e4:,.1f} 萬"。
+    first=True（發行起，entries＝etf.json 的 dca）：[(c,名稱), d["start"][:7], wan(invested), fmt_pos(ret), fmt_pos(irr),
+        fmt_pos(worst), fmt_pos(entries[c]["bench_"+mode]["irr"]) 或 "—"（bench 為 None）]
+    first=False（某年，entries＝dca_from[年]）：[(c,名稱), wan(invested), wan(value), fmt_pos(ret), fmt_pos(irr), fmt_pos(worst)]"""
+    raise NotImplementedError
