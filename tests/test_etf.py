@@ -431,3 +431,24 @@ def test_dca2_rows_year():
     assert v.dca2_rows(e, ["0050", "0056"], {"0056": "元大高股息"}, "reinvest", False) == [
         [("0056", "元大高股息"), "20.0 萬", "30.0 萬", "+50.0%", "+8.0%", "-25.0%"]]
     assert v.dca2_rows(e, ["0056"], {}, "cash", False) == []
+
+
+# ---------- 當年度績效對比（2026-11-27 使用者更正） ----------
+_ANN = {"0050": {"years": [{"year": "2025", "ret": 0.3, "pnl": 3000.0, "partial": False},
+                           {"year": "2026", "ret": 0.1, "pnl": 1000.0, "partial": True}]},
+        "0056": {"years": [{"year": "2025", "ret": -0.05, "pnl": -500.0, "partial": False}]},
+        "00878": {"years": [{"year": "2025", "ret": 0.3, "pnl": 3000.0, "partial": False}]},
+        "009816": None}
+
+
+def test_annual_year_options():
+    assert v.annual_year_options(_ANN) == ["2026", "2025"]
+    assert v.annual_year_options({}) == []
+
+
+def test_annual_by_year_sorted():
+    assert v.annual_by_year(_ANN, "2025", {"0050": "元大台灣50"}, 10_000) == [
+        [("0050", "元大台灣50"), "13,000", "+3,000", "+30.0%"],
+        [("00878", "00878"), "13,000", "+3,000", "+30.0%"],
+        [("0056", "0056"), "9,500", "-500", "-5.0%"]]
+    assert [r[0][0] for r in v.annual_by_year(_ANN, "2026", {}, 10_000)] == ["0050"]

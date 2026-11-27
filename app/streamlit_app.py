@@ -3269,16 +3269,14 @@ def _etf_page(data: dict | None) -> None:
                 _vtable(etf_view.DCA2_HEAD_YEAR, body, num=set(range(1, 6)), src=etf_view.DCA2_SRC_YEAR)
             if not body:
                 st.caption("這個起點沒有資料。")
-        with st.expander("每年年初買一萬：回測"):
-            st.caption(etf_view.ANNUAL_NOTE.format(amount=DCA_AMOUNT))
+        with st.expander("當年度績效：年初買一萬"):
+            st.caption(etf_view.ANNUAL_CMP_NOTE.format(amount=DCA_AMOUNT))
             ann = data.get("annual") or {}
-            codes = [r["code"] for r in data["rows"]]
-            _vtable(etf_view.ANNUAL_HEAD, etf_view.annual_table(ann, codes, names),
-                    num=etf_view.ANNUAL_NUM, src=etf_view.ANNUAL_SRC)
-            have = [c for c in codes if ann.get(c)]
-            if have:
-                pick = st.selectbox("看單檔逐年", have, format_func=lambda c: f"{c} {names.get(c, c)}", key="_etf_annual_pick")
-                _vtable(etf_view.ANNUAL_YEAR_HEAD, etf_view.annual_years(ann[pick], DCA_AMOUNT), num={1, 2, 3})
+            years = etf_view.annual_year_options(ann)
+            if years:
+                yr = st.selectbox("年份", years, format_func=lambda y: f"{y}（到 {data['asof']}）" if y == years[0] and y == data["asof"][:4] else y,
+                                  key="_etf_annual_year")
+                _vtable(etf_view.ANNUAL_CMP_HEAD, etf_view.annual_by_year(ann, yr, names, DCA_AMOUNT), num={1, 2, 3})
         if data.get("missing"):
             st.caption("沒有資料：" + "、".join(f"{c} {ETF_UNIVERSE[c][0]}" for c in data["missing"]))
     _disclaimer()

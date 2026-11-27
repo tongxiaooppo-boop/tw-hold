@@ -231,3 +231,26 @@ def dca2_rows(entries: dict, codes: list[str], names: dict[str, str], mode: str,
             out.append([(c, names.get(c, c)), wan(d["invested"]), wan(d["value"]), fmt_pos(ret), fmt_pos(d["irr"]),
                         fmt_pos(d["worst"])])
     return out
+
+
+# ── 當年度績效對比（2026-11-27 使用者更正：要「選一年、各檔並排比」，不是單檔逐年＋抱到今天）──
+ANNUAL_CMP_NOTE = """該年第一個交易日開盤買 {amount:,} 元（配息再投入），看到年底；今年算到最新資料日。
+只列那年以前已上市的（上市當年不完整不算），依報酬由高到低。"""
+ANNUAL_CMP_HEAD = ["代號", "年底市值", "損益", "報酬"]
+
+
+def annual_year_options(annual: dict) -> list[str]:
+    """所有代號 years 裡出現過的年份，由新到舊。"""
+    return sorted({y["year"] for d in annual.values() if d for y in d["years"]}, reverse=True)
+
+
+def annual_by_year(annual: dict, year: str, names: dict[str, str], amount: int) -> list[list]:
+    """該年有值的代號，依 ret 由高到低（同值依代號）：[(c, 名稱), f"{amount*(1+ret):,.0f}", f"{pnl:+,.0f}", fmt_pos(ret)]。"""
+    got = []
+    for c, d in annual.items():
+        for y in (d or {}).get("years", []):
+            if y["year"] == year:
+                got.append((c, y))
+    got.sort(key=lambda t: (-t[1]["ret"], t[0]))
+    return [[(c, names.get(c, c)), f"{amount * (1 + y['ret']):,.0f}", f"{y['pnl']:+,.0f}", fmt_pos(y["ret"])]
+            for c, y in got]
