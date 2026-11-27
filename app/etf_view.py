@@ -45,27 +45,38 @@ DCA_HEAD = ["代號", "期間", "次數", "已投入", "市值（再投入）", 
 
 def fmt_pos(v: float | None) -> str:
     """+3.1% / −2.0% / —（帶號、一位小數）。"""
-    raise NotImplementedError
+    return "—" if v is None else f"{v * 100:+.1f}%"
 
 
 def fmt_rate(v: float | None) -> str:
     """6.8% / —（不帶號、一位小數）。"""
-    raise NotImplementedError
+    return "—" if v is None else f"{v * 100:.1f}%"
+
+
+def _val(row: dict, key: str):
+    return row["ma"]["240"] if key == "ma240" else row[key]
 
 
 def sort_rows(rows: list[dict], key: str | None) -> list[dict]:
     """key=None → 依代號；'ma240' → 依 row['ma']['240']；其他 → row[key]。數值由大到小，None 排最後（維持代號順序）。"""
-    raise NotImplementedError
+    by_code = sorted(rows, key=lambda r: r["code"])
+    if key is None:
+        return by_code
+    have = [r for r in by_code if _val(r, key) is not None]
+    none = [r for r in by_code if _val(r, key) is None]
+    return sorted(have, key=lambda r: _val(r, key), reverse=True) + none
 
 
 def page_slice(rows: list[dict], page: int, per: int = PER_PAGE) -> list[dict]:
     """page 從 1 起；超出範圍回空 list。"""
-    raise NotImplementedError
+    if page < 1:
+        return []
+    return rows[(page - 1) * per: page * per]
 
 
 def page_count(n: int, per: int = PER_PAGE) -> int:
     """至少 1。"""
-    raise NotImplementedError
+    return max(1, -(-n // per))
 
 
 def table_rows(rows: list[dict], group: str) -> list[list]:
@@ -73,17 +84,46 @@ def table_rows(rows: list[dict], group: str) -> list[list]:
     第 0 欄＝(code, name) tuple（手機在代號下顯示名稱），第 1 欄 name，第 2 欄收盤（千分位、兩位小數），
     第 3～5 欄 ma 60/120/240 用 fmt_pos；cap/lev 第 6 欄 ret_1y 用 fmt_pos；
     div 第 6 欄 yield_1y 用 fmt_rate、第 7 欄 yield_1y_n（None → "—"，否則整數字串）。"""
-    raise NotImplementedError
+    out = []
+    for r in rows:
+        line = [(r["code"], r["name"]), r["name"], f"{r['close']:,.2f}",
+                fmt_pos(r["ma"]["60"]), fmt_pos(r["ma"]["120"]), fmt_pos(r["ma"]["240"])]
+        if group == "div":
+            n = r["yield_1y_n"]
+            line += [fmt_rate(r["yield_1y"]), "—" if n is None else str(int(n))]
+        else:
+            line += [fmt_pos(r["ret_1y"])]
+        out.append(line)
+    return out
 
 
 def yearly_table(yearly: dict, codes: list[str], names: dict[str, str]) -> tuple[list[str], list[list]]:
     """head＝["代號", 由舊到新的年份…]（取所有 codes 出現過的年份聯集）；
     cell＝fmt_rate(rate) + ("*" if partial)；該年沒值 → "—"。第 0 欄＝(code, name) tuple。"""
-    raise NotImplementedError
+    years = sorted({y for c in codes for y in yearly.get(c, {})})
+    body = []
+    for c in codes:
+        cells = []
+        for y in years:
+            cell = yearly.get(c, {}).get(y)
+            cells.append("—" if cell is None else fmt_rate(cell["rate"]) + ("*" if cell["partial"] else ""))
+        body.append([(c, names.get(c, c))] + cells)
+    return ["代號"] + years, body
 
 
 def dca_table(dca: dict, codes: list[str], names: dict[str, str]) -> list[list]:
     """依 DCA_HEAD 組列；reinvest 為 None 的代號整列略過。
     期間＝f"{start[:7]}～{end[:7]}"；已投入／市值用 f"{v/1e4:,.1f} 萬"；年化用 fmt_pos；最慘帳面＝reinvest 的 worst 用 fmt_pos；
     同期 0050＝bench_reinvest 的 irr（None → "—"，0050 自己也是 "—"）。第 0 欄＝(code, name) tuple。"""
-    raise NotImplementedError
+    wan = lambda v: f"{v / 1e4:,.1f} 萬"  # noqa: E731
+    out = []
+    for c in codes:
+        d = dca.get(c)
+        if not d or d.get("reinvest") is None:
+            continue
+        re, ca, bn = d["reinvest"], d.get("cash"), d.get("bench_reinvest")
+        out.append([(c, names.get(c, c)), f"{re['start'][:7]}～{re['end'][:7]}", str(re["buys"]),
+                    wan(re["invested"]), wan(re["value"]), fmt_pos(re["irr"]), fmt_pos(re["worst"]),
+                    wan(ca["value"]) if ca else "—", fmt_pos(ca["irr"]) if ca else "—",
+                    fmt_pos(bn["irr"]) if bn else "—"])
+    return out

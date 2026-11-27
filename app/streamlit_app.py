@@ -26,7 +26,7 @@ for _p in (str(REPO), str(REPO / "app")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from app import refresh_window, val_inputs, val_view
+from app import etf_view, refresh_window, val_inputs, val_view
 from screener import river, val_card
 
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
@@ -3218,6 +3218,45 @@ def _active_summary(fl: dict) -> str:
         '</div></div></div>')
 
 
+def _etf_page(data: dict | None) -> None:
+    """ETF 分頁（市值型／高股息／正 2）：純渲染 data/derived/etf.json，純函式在 app/etf_view.py。"""
+    from reference.etf_universe import DCA_AMOUNT, ETF_UNIVERSE, GROUPS
+    if data is None:
+        st.info("ETF 資料還沒產生")
+        return
+    st.subheader("ETF")
+    st.caption(f"資料日 {data['asof']}")
+    for g, gname in GROUPS.items():
+        st.markdown(f"#### {gname}")
+        if g == "lev":
+            st.caption(etf_view.LEV_NOTE)
+        rows = [r for r in data["rows"] if r["group"] == g]
+        pick = st.segmented_control("排序", list(etf_view.SORTS[g]), default="代號", key=f"_etf_sort_{g}") or "代號"
+        rows = etf_view.sort_rows(rows, etf_view.SORTS[g][pick])
+        if g == "div":
+            n_page = etf_view.page_count(len(rows))
+            page = 1
+            if n_page > 1:
+                page = int(st.segmented_control("頁", [str(i) for i in range(1, n_page + 1)], default="1",
+                                                key="_etf_page_div") or "1")
+            rows = etf_view.page_slice(rows, page)
+        _vtable(etf_view.HEAD[g], etf_view.table_rows(rows, g), num=etf_view.NUM_COLS, src=etf_view.SRC_COLS)
+    names = {c: v[0] for c, v in ETF_UNIVERSE.items()}
+    with st.expander("這些數字怎麼算"):
+        st.markdown(etf_view.EXPLAIN)
+    with st.expander("高股息：每年實際配息率"):
+        st.caption(etf_view.YEARLY_NOTE)
+        head, body = etf_view.yearly_table(data["yearly"], [r["code"] for r in data["rows"] if r["group"] == "div"], names)
+        _vtable(head, body, num=set(range(1, len(head))), wide=True)
+    with st.expander("定期定額回測"):
+        st.caption(etf_view.DCA_NOTE.format(amount=DCA_AMOUNT))
+        body = etf_view.dca_table(data["dca"], [r["code"] for r in data["rows"]], names)
+        _vtable(etf_view.DCA_HEAD, body, num=set(range(2, 10)), wide=True)
+    if data.get("missing"):
+        st.caption("沒有資料：" + "、".join(f"{c} {ETF_UNIVERSE[c][0]}" for c in data["missing"]))
+    _disclaimer()
+
+
 def _active_etf_page() -> None:
     """主動式 ETF 每日動向——那六檔前後兩個交易日的 PCF 差分，日期對齊股票日線。
     純渲染 data/pcf/_index.json + data/derived/active_etf_flags.json，零抓取。
@@ -4202,7 +4241,7 @@ def _macro_compass_page() -> None:
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
 # 2026-11-02 使用者：估值（含月營收的估值價差排序）有疑慮，月營收入口先關；程式保留，改 True 即恢復
 REVENUE_PAGE_ON = False
-NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "估值排行", "月營收", "個股查詢", "多軌體檢", "主動式 ETF"]
+NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "估值排行", "月營收", "個股查詢", "多軌體檢", "ETF", "主動式 ETF"]
        if REVENUE_PAGE_ON or n != "月營收"]
 
 
@@ -4315,6 +4354,8 @@ def main() -> None:
         _stock_page()
     elif nav == "多軌體檢":
         _checklist_page()
+    elif nav == "ETF":
+        _etf_page(_load("etf.json"))
     elif nav == "主動式 ETF":
         _active_etf_page()
     else:

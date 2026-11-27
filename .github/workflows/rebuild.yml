@@ -135,6 +135,16 @@ jobs:
         continue-on-error: true
         run: python build_active_etf_flags.py     # → data/derived/active_etf_flags.json
 
+      - name: ETF 日線＋除權息（白名單）
+        id: etf_track
+        continue-on-error: true
+        run: python scripts/etf_track.py daily --days 10
+
+      - name: ETF 分頁衍生
+        id: etf_build
+        continue-on-error: true
+        run: python build_etf.py
+
       # 短線條件掃描（多軌體檢「⚡ 短線」檢核表掃 universe → 短線頁第四個名單）。
       # 讀主動 ETF 旗標當 context，所以排在旗標之後；掛了不擋三清單（app 沒這支 JSON 就不顯示該區）。
       - name: 短線條件掃描
@@ -253,7 +263,7 @@ jobs:
         run: |
           git config user.name  "tw-hold-bot"
           git config user.email "noreply@github.com"
-          git add data/derived/ data/history/ reference/corporate_actions_resolved.json || true
+          git add data/derived/ data/history/ data/etf/ reference/corporate_actions_resolved.json || true
           # 三張清單 JSON 沒實質變動、resolved.json 沒新增分割、且 PCF 快照/006201 代理無新增 →
           # 整批跳過（不為「只有 _meta.json 的 rebuilt_at / flags 的 fetched_at 變了」留 commit）。
           # revenue_watch.json 不列入判斷：built_at／現價每天必變，列進來等於每天必 commit 1.2MB；
@@ -306,6 +316,12 @@ jobs:
         if: always() && steps.short_scan.outcome == 'failure'
         run: |
           echo "::error::短線條件掃描失敗，short_scan.json 沿用舊檔——看『短線條件掃描』那步的 log"
+          exit 1
+
+      - name: ETF 失敗就讓 job 變紅
+        if: always() && (steps.etf_track.outcome == 'failure' || steps.etf_build.outcome == 'failure')
+        run: |
+          echo "::error::ETF 收集或衍生失敗（沒登記的分割會讓 build_etf 故意失敗，看 log）"
           exit 1
 
       # 私有資料還原失敗 → 今天的 PCF／指數序列沒有推上去（上面已跳過）；讓 job 變紅，才不會「綠燈但資料沒存」。
