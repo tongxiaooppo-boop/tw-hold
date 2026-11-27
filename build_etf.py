@@ -269,7 +269,27 @@ def annual_lump(adj: pd.DataFrame, asof: pd.Timestamp, amount: float = DCA_AMOUN
     - 累計（每年那筆都抱到 asof）：invested＝amount × 年數；value＝Σ amount × tr_close[最後一列] ÷ tr_open[該年買進]。
     - 沒有任何一年 → None。
     回傳 ANNUAL 但不含 bench_value（build 補）；start＝第一個有算到的年（字串）。"""
-    raise NotImplementedError
+    a = adj[adj["date"] <= asof].sort_values("date").reset_index(drop=True)
+    if len(a) == 0:
+        return None
+    if start_year is None:
+        start_year = int(a["date"].iloc[0].year) + 1
+    years_col = a["date"].dt.year
+    last_close = float(a["tr_close"].iloc[-1])
+    asof_year = int(a["date"].iloc[-1].year)
+    years, value = [], 0.0
+    for y in sorted(int(v) for v in years_col.unique()):
+        if y < start_year or y > asof_year:
+            continue
+        g = a[years_col == y]
+        buy = float(g["tr_open"].iloc[0])
+        end = float(g["tr_close"].iloc[-1])
+        ret = end / buy - 1
+        years.append({"year": str(y), "ret": ret, "pnl": amount * ret, "partial": y == asof_year})
+        value += amount * last_close / buy
+    if not years:
+        return None
+    return {"start": years[0]["year"], "years": years, "invested": float(amount * len(years)), "value": float(value)}
 
 
 def _f(x) -> float | None:
@@ -292,7 +312,7 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
     have = set(adj["ticker"].unique())
     order = [c for g in GROUPS for c in sorted(k for k, (_, gg) in ETF_UNIVERSE.items() if gg == g)]
     now = now or datetime.now(timezone.utc)
-    rows, yearly, dca_out = [], {}, {}
+    rows, yearly, dca_out, annual_out = [], {}, {}, {}
     bench_adj = adj[adj["ticker"] == BENCH].sort_values("date") if BENCH in have else None
     bench_ev = events[events["ticker"] == BENCH]
     for code in order:
@@ -320,9 +340,17 @@ def build(prices: pd.DataFrame, events: pd.DataFrame, now: datetime | None = Non
             if d_ca is not None:
                 b_ca = dca(bench_adj, bench_ev, last, False, start_month=d_ca["start"][:7])
         dca_out[code] = {"reinvest": d_re, "cash": d_ca, "bench_reinvest": b_re, "bench_cash": b_ca}
+        an = annual_lump(g, last)
+        if an is not None:
+            bv = None
+            if code != BENCH and bench_adj is not None:
+                bn = annual_lump(bench_adj, last, start_year=int(an["start"]))
+                bv = bn["value"] if bn is not None else None
+            an["bench_value"] = bv
+        annual_out[code] = an
     asof = max((r["last_date"] for r in rows), default=None)
     return {"asof": asof, "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "rows": rows,
-            "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out}
+            "missing": [c for c in order if c not in have], "yearly": yearly, "dca": dca_out, "annual": annual_out}
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -957,6 +957,7 @@ div[data-testid="stMarkdownContainer"] table th{
   .thc-vt th,.thc-vt td{padding:.35rem .4rem;}
   .thc-vt .src{display:none;}          /* 手機：來源欄收掉，改顯示步驟下方的小字 */
   .thc-vt .m-only{display:block;}
+  .st-key-etf_page .thc-vt .note{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:6.5em;}  /* ETF 名稱手機單行、太長截斷 */
 }
 /* 多軌體檢：檢核清單。桌面＝四欄類表格（不動）；手機＝堆疊，狀態永遠靠右可見 */
 .thc-cl{border:1px solid var(--thc-line);border-radius:8px;overflow:hidden;margin:.15rem 0 .1rem;}
@@ -3224,36 +3225,43 @@ def _etf_page(data: dict | None) -> None:
     if data is None:
         st.info("ETF 資料還沒產生")
         return
-    st.subheader("ETF")
-    st.caption(f"資料日 {data['asof']}")
-    for g, gname in GROUPS.items():
-        st.markdown(f"#### {gname}")
-        if g == "lev":
-            st.caption(etf_view.LEV_NOTE)
-        rows = [r for r in data["rows"] if r["group"] == g]
-        pick = st.segmented_control("排序", list(etf_view.SORTS[g]), default="代號", key=f"_etf_sort_{g}") or "代號"
-        rows = etf_view.sort_rows(rows, etf_view.SORTS[g][pick])
-        if g == "div":
-            n_page = etf_view.page_count(len(rows))
-            page = 1
-            if n_page > 1:
-                page = int(st.segmented_control("頁", [str(i) for i in range(1, n_page + 1)], default="1",
-                                                key="_etf_page_div") or "1")
-            rows = etf_view.page_slice(rows, page)
-        _vtable(etf_view.HEAD[g], etf_view.table_rows(rows, g), num=etf_view.NUM_COLS, src=etf_view.SRC_COLS)
-    names = {c: v[0] for c, v in ETF_UNIVERSE.items()}
-    with st.expander("這些數字怎麼算"):
-        st.markdown(etf_view.EXPLAIN)
-    with st.expander("高股息：每年實際配息率"):
-        st.caption(etf_view.YEARLY_NOTE)
-        head, body = etf_view.yearly_table(data["yearly"], [r["code"] for r in data["rows"] if r["group"] == "div"], names)
-        _vtable(head, body, num=set(range(1, len(head))), wide=True)
-    with st.expander("定期定額回測"):
-        st.caption(etf_view.DCA_NOTE.format(amount=DCA_AMOUNT))
-        body = etf_view.dca_table(data["dca"], [r["code"] for r in data["rows"]], names)
-        _vtable(etf_view.DCA_HEAD, body, num=set(range(2, 10)), wide=True)
-    if data.get("missing"):
-        st.caption("沒有資料：" + "、".join(f"{c} {ETF_UNIVERSE[c][0]}" for c in data["missing"]))
+    with st.container(key="etf_page"):
+        st.subheader("ETF")
+        st.caption(f"資料日 {data['asof']}")
+        for g, gname in GROUPS.items():
+            st.markdown(f"#### {gname}")
+            if g == "lev":
+                st.caption(etf_view.LEV_NOTE)
+            rows = [r for r in data["rows"] if r["group"] == g]
+            pick = st.segmented_control("排序", list(etf_view.SORTS[g]), default="代號", key=f"_etf_sort_{g}") or "代號"
+            rows = etf_view.sort_rows(rows, etf_view.SORTS[g][pick])
+            if g == "div":
+                n_page = etf_view.page_count(len(rows))
+                page = 1
+                if n_page > 1:
+                    page = int(st.segmented_control("頁", [str(i) for i in range(1, n_page + 1)], default="1",
+                                                    key="_etf_page_div") or "1")
+                rows = etf_view.page_slice(rows, page)
+            _vtable(etf_view.HEAD[g], etf_view.table_rows(rows, g), num=etf_view.NUM_COLS, src=etf_view.SRC_COLS)
+        names = {c: v[0] for c, v in ETF_UNIVERSE.items()}
+        with st.expander("這些數字怎麼算"):
+            st.markdown(etf_view.EXPLAIN)
+        with st.expander("高股息：每年實際配息率"):
+            st.caption(etf_view.YEARLY_NOTE)
+            head, body = etf_view.yearly_table(data["yearly"], [r["code"] for r in data["rows"] if r["group"] == "div"], names)
+            _vtable(head, body, num=set(range(1, len(head))), wide=True)
+        with st.expander("每年年初買一萬：回測"):
+            st.caption(etf_view.ANNUAL_NOTE.format(amount=DCA_AMOUNT))
+            ann = data.get("annual") or {}
+            codes = [r["code"] for r in data["rows"]]
+            _vtable(etf_view.ANNUAL_HEAD, etf_view.annual_table(ann, codes, names),
+                    num=etf_view.ANNUAL_NUM, src=etf_view.ANNUAL_SRC)
+            have = [c for c in codes if ann.get(c)]
+            if have:
+                pick = st.selectbox("看單檔逐年", have, format_func=lambda c: f"{c} {names.get(c, c)}", key="_etf_annual_pick")
+                _vtable(etf_view.ANNUAL_YEAR_HEAD, etf_view.annual_years(ann[pick], DCA_AMOUNT), num={1, 2, 3})
+        if data.get("missing"):
+            st.caption("沒有資料：" + "、".join(f"{c} {ETF_UNIVERSE[c][0]}" for c in data["missing"]))
     _disclaimer()
 
 

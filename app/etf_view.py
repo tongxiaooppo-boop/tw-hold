@@ -145,9 +145,18 @@ def annual_table(annual: dict, codes: list[str], names: dict[str, str]) -> list[
     """總表：依 codes 順序，annual[c] 為 None／不存在的略過。
     列＝[(c, 名稱), start, f"{invested/1e4:,.1f} 萬", f"{(value-invested)/1e4:+,.1f} 萬",
         fmt_pos(value/invested-1), fmt_pos(bench_value/invested-1) 或 "—"（bench_value 為 None）]。"""
-    raise NotImplementedError
+    out = []
+    for c in codes:
+        d = annual.get(c)
+        if not d:
+            continue
+        inv, val, bv = d["invested"], d["value"], d.get("bench_value")
+        out.append([(c, names.get(c, c)), d["start"], f"{inv / 1e4:,.1f} 萬", f"{(val - inv) / 1e4:+,.1f} 萬",
+                    fmt_pos(val / inv - 1), fmt_pos(bv / inv - 1) if bv is not None else "—"])
+    return out
 
 
 def annual_years(d: dict, amount: int) -> list[list]:
     """單檔逐年直表（新的在上）：[year + ("*" if partial), f"{amount*(1+ret):,.0f}", f"{pnl:+,.0f}", fmt_pos(ret)]。"""
-    raise NotImplementedError
+    return [[y["year"] + ("*" if y["partial"] else ""), f"{amount * (1 + y['ret']):,.0f}", f"{y['pnl']:+,.0f}",
+             fmt_pos(y["ret"])] for y in reversed(d["years"])]
