@@ -428,4 +428,8 @@ def test_回測報告分頁():
     assert not at.exception
     titles = [e.label for e in at.expander]
     assert titles[0].endswith("找策略（每段大跌一份預算）") and "帳戶回測" in titles[1]
-    assert len(titles) == 2 + len(labels)
+    assert len(titles) == len(report_view.REPORTS) + len(labels)
+    # 2026-11-28 下午：每份研究報告都有重點卡，卡片 HTML 有進頁面
+    assert {f for _, f, _ in report_view.REPORTS} <= set(report_view.CARDS)
+    html = " ".join(m.value for m in at.markdown)
+    assert "rp-verdict" in html and html.count("rp-card") == len(report_view.REPORTS)

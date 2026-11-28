@@ -845,14 +845,14 @@ _CSS = """
 .stApp :is(.thc-pill, .thc-flag, .thc-cap, .thc-note, .thc-chip, .thc-details summary, .sw-cols ul,
   div[data-testid="stMarkdownContainer"] table, .thc-vt th, .thc-vt .note, .thc-vt .src, .thc-vt,
   .thc-cl-gate, .ae-hold-table, .ae-hold-table thead th, .mc-stale, .gz-stale, .ir-table th, .ir-tag,
-  .val-sub, .val-hint, .hist-day span, [data-testid="stCaptionContainer"], small),
+  .val-sub, .val-hint, .hist-day span, .rp-eyebrow, [data-testid="stCaptionContainer"], small),
 .stApp :is(.thc-pill, .thc-flag, .thc-cap, .thc-note, .thc-chip, .thc-details summary, .sw-cols ul,
   div[data-testid="stMarkdownContainer"] table, .thc-vt th, .thc-vt .note, .thc-vt .src, .thc-vt,
   .thc-cl-gate, .ae-hold-table, .ae-hold-table thead th, .mc-stale, .gz-stale, .ir-table th, .ir-tag,
-  .val-sub, .val-hint, .hist-day span, [data-testid="stCaptionContainer"], small) *{font-family:var(--thc-sans);}
+  .val-sub, .val-hint, .hist-day span, .rp-eyebrow, [data-testid="stCaptionContainer"], small) *{font-family:var(--thc-sans);}
 /* 等寬數字：各 class 自己寫了 --thc-mono，但權重輸給上面的宋體／黑體規則，這裡再宣告一次（由 _CSS 內 mono 規則整理）。 */
-.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong){font-family:var(--thc-mono);}
-.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong) span{font-family:inherit;}
+.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong, .rp-no){font-family:var(--thc-mono);}
+.stApp :is(.thc-tk, .thc-big, .thc-barcap, .thc-chip b, .sw-risk, .sw-h, .sw-cols li b, .thc-details td:last-child, .thc-vt .n, .thc-cl-hd, .thc-cl-cur, .ae-hold-table td.num, .ae-hold-table th.num, .mc-ticker, .mc-px, .mc-ma, .mc-stat, .gz-ticker, .gz-value, .gz-chg, .gz-pct, .mc-asof, .gz-asof, .ir-val, .val-price, .val-tri strong, .rp-no) span{font-family:inherit;}
 /* 分頁選單（st.radio）前面原生的圓圈勾選標——藏掉，只留文字，雷達徽章疊在文字後面就好。
    結構是 <label data-testid="stRadioOption"><input type=radio hidden><div><div>[圓圈][文字]</div></div></label>；
    圓圈那個 div 沒有 testid，用「跟 stMarkdownContainer 同一排的第一個 div」抓它，不用猜 class 名稱。 */
@@ -1128,6 +1128,26 @@ a.thc-toplink:hover{border-color:var(--thc-soft);color:var(--thc-ink)!important;
 .hist-day{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .hist-day b{font-size:1rem;color:var(--thc-ink);}
 .hist-day span{display:block;font-size:.74rem;color:var(--thc-soft);}
+/* 回測報告分頁（report_view）：頁首建議卡、每份報告重點卡、全文 markdown 的表格／引言／小標 */
+.rp-verdict{margin-bottom:.3rem;}
+.rp-verdict .rp-line{font-size:1rem;font-weight:600;}
+.rp-eyebrow{font-size:.78rem;letter-spacing:.06em;font-weight:700;color:var(--thc-soft);}
+.rp-no{font-family:var(--thc-mono);font-weight:700;font-size:1.1rem;color:var(--thc-accent);}
+.rp-line{font-size:.92rem;line-height:1.6;color:var(--thc-ink);margin-top:.45rem;}
+[class*="st-key-rp_md_"] h4{font-size:1.05rem;margin-top:1.4rem;padding-bottom:.25rem;
+  border-bottom:2px solid rgba(var(--thc-accent-rgb),.35);}
+[class*="st-key-rp_md_"] table{display:block;overflow-x:auto;border-collapse:collapse;font-size:.82rem;}
+[class*="st-key-rp_md_"] th{background:var(--thc-surface2);color:var(--thc-soft);font-weight:600;white-space:nowrap;}
+[class*="st-key-rp_md_"] th,[class*="st-key-rp_md_"] td{padding:.3rem .6rem;border:none;
+  border-bottom:1px solid var(--thc-line);font-variant-numeric:tabular-nums;}
+[class*="st-key-rp_md_"] tbody tr:nth-child(even) td{background:var(--thc-surface2);}
+[class*="st-key-rp_md_"] tbody tr:has(strong) td{background:rgba(var(--thc-accent-rgb),.10);}
+[class*="st-key-rp_md_"] tbody tr:has(strong) td:first-child{box-shadow:inset 3px 0 0 var(--thc-accent);}
+[class*="st-key-rp_md_"] blockquote{border-left:3px solid var(--thc-neutral);background:var(--thc-neutral-bg);
+  padding:.5rem .8rem;border-radius:6px;margin:.4rem 0 .8rem;}
+[class*="st-key-rp_md_"] blockquote p{margin:0;color:var(--thc-ink);}
+[class*="st-key-rp_md_"] ol > li{margin-bottom:.35rem;}
+[class*="st-key-rp_md_"] ol > li strong{color:var(--thc-accent);}
 </style>
 """
 
