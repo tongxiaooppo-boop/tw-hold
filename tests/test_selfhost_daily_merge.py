@@ -215,6 +215,31 @@ def test_只回一半就算官方同列數也不放行_也不去重抓():
     assert cday == pd.Timestamp("2026-10-07") and "raw_prices.TWO" in why and not calls
 
 
+def test_日線融資不放寬_九成二仍退回():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    for name in ("raw_prices", "margin"):
+        merged = {name: _cnt_tbl({**ok, "2026-10-08": 92}, "TWO")}
+        cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+        assert cday == pd.Timestamp("2026-10-07") and f"{name}.TWO" in why
+
+
+def test_法人大跌日七成重抓一致就放行並記入confirmed_2025_04_07型():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 70}, "TWO")}
+    conf = set()
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"), lambda n, mk, d: 70, conf)
+    assert cday == pd.Timestamp("2026-10-08") and not why
+    assert conf == {("inst.TWO", pd.Timestamp("2026-10-08"))}
+
+
+def test_法人五成五不重抓照退():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 55}, "TWO")}
+    calls = []
+    cday, _ = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"), lambda n, mk, d: calls.append(1) or 55)
+    assert cday == pd.Timestamp("2026-10-07") and not calls
+
+
 def test_連續兩天殘缺退到最後一個正常日():
     ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100}
     merged = {"margin": _cnt_tbl({**ok, "2026-10-07": 30, "2026-10-08": 30}, "TW")}

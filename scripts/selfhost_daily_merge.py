@@ -126,11 +126,18 @@ def complete_day(lasts: dict[str, str | None]) -> pd.Timestamp | None:
 
 
 ROWS_LOOKBACK = 5        # 比較對象：該表該市場「實際有資料」的前 5 個交易日（不是日曆日，週末連假不會拉低中位數）
-ROWS_MIN_RATIO = 0.90    # 2026-11-28 由 0.95 降：上櫃法人 11/10～11/27 官方實際 755～808 列，11/27 官方 755 < 800×0.95 被誤擋（重抓仍 755）；
-                         # 要擋的是「只回一半」（例 450／870），90% 仍擋得住
+ROWS_MIN_RATIO = {"inst": 0.90}   # 預設 0.95。2026-11-28：只有法人放寬——上櫃法人 11/10～11/27 官方實際 755～808 列、
+ROWS_MIN_RATIO_DEFAULT = 0.95     # 11/27 官方 755 < 800×0.95 被誤擋；日線、融資 2020 起當日÷前 5 日中位數最低 0.996／0.999，維持 0.95
+ROWS_CONFIRM_FLOOR = {"inst": 0.60}  # 列數不足時向官方重抓；官方列數與手上一致**且** ≥ 中位數 × 此值才放行。
+ROWS_CONFIRM_FLOOR_DEFAULT = 0.75    # 法人 0.60：2025-04-07 關稅大跌日上櫃法人只有中位數 0.695 是真的；「只回一半」照擋
 
-ROWS_CONFIRM_FLOOR = 0.75  # 列數不足時向官方重抓確認；官方列數與手上一致**且**不低於中位數 75% 才放行
-                           # （官方自己只回一半時重抓也一樣，不能靠重抓放行）
+
+def _min_ratio(name: str) -> float:
+    return ROWS_MIN_RATIO.get(name, ROWS_MIN_RATIO_DEFAULT)
+
+
+def _confirm_floor(name: str) -> float:
+    return ROWS_CONFIRM_FLOOR.get(name, ROWS_CONFIRM_FLOOR_DEFAULT)
 
 
 def official_rowcount(name: str, mk: str, day: pd.Timestamp) -> int | None:
@@ -152,7 +159,7 @@ def official_rowcount(name: str, mk: str, day: pd.Timestamp) -> int | None:
 
 
 def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp,
-                          confirm=None) -> tuple[pd.Timestamp, dict[str, str]]:
+                          confirm=None, confirmed: set | None = None) -> tuple[pd.Timestamp, dict[str, str]]:
     """只看最後日期會讓「半邊殘缺」的一天通過（例：上櫃日線只回 450 列、平常約 870，完整日照樣前進，
     約 440 檔上櫃股靜默缺席）。這裡對每個（表, 市場）從 `cday` 往前找第一個「列數 ≥ 前 5 個有資料交易日
     中位數 × ROWS_MIN_RATIO」的日子，整體完整日取最小值。
@@ -161,6 +168,7 @@ def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp,
     的語意；退回太多天才由 selfhost_freshness 亮紅燈。前面不足 3 個交易日可比時視為正常。
     `confirm(name, mk, day) -> 官方列數|None`（2026-11-28 加）：列數不足的那天向官方重抓，列數與手上相同且
     ≥ 中位數 × ROWS_CONFIRM_FLOOR 就當清淡日放行（例 11/27 上櫃法人官方就是 755 列）；None＝不確認。
+    `confirmed`（可選）會被加入 (表.市場, 日) ——寫進 manifest 讓 zip 閘門對同一天不再用列數縮水擋。
     回 (新完整日, {表.市場: 退回原因})。"""
     eff = cday
     why: dict[str, str] = {}
@@ -174,19 +182,21 @@ def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp,
             ok_k = None
             for k in range(len(days) - 1, -1, -1):
                 prev = cnt.iloc[max(0, k - ROWS_LOOKBACK):k]
-                if len(prev) < 3 or cnt.iloc[k] >= ROWS_MIN_RATIO * prev.median():
+                if len(prev) < 3 or cnt.iloc[k] >= _min_ratio(name) * prev.median():
                     ok_k = k
                     break
                 n_have = int(cnt.iloc[k])
-                if confirm is not None and n_have >= ROWS_CONFIRM_FLOOR * prev.median():
+                if confirm is not None and n_have >= _confirm_floor(name) * prev.median():
                     n_off = confirm(name, mk, days[k])
                     if n_off is not None and n_off == n_have:
-                        print(f"  [rows] {name}.{mk} {days[k].date()} {n_have} 列 < 中位數 {prev.median():.0f} × {ROWS_MIN_RATIO}，"
+                        print(f"  [rows] {name}.{mk} {days[k].date()} {n_have} 列 < 中位數 {prev.median():.0f} × {_min_ratio(name)}，"
                               f"官方重抓同為 {n_off} 列 → 清淡日放行")
+                        if confirmed is not None:
+                            confirmed.add((f"{name}.{mk}", days[k]))
                         ok_k = k
                         break
                     print(f"  [rows] {name}.{mk} {days[k].date()} 官方重抓 {n_off} 列、手上 {n_have} 列 → 不放行")
-                why.setdefault(f"{name}.{mk}", f"{days[k].date()} 只有 {int(cnt.iloc[k])} 列 < 前{len(prev)}日中位數 {prev.median():.0f} × {ROWS_MIN_RATIO}")
+                why.setdefault(f"{name}.{mk}", f"{days[k].date()} 只有 {int(cnt.iloc[k])} 列 < 前{len(prev)}日中位數 {prev.median():.0f} × {_min_ratio(name)}")
             if ok_k is None:                       # 整段都比不過（不該發生）：退到最早一天，讓閘門／新鮮度擋
                 ok_k = 0
             eff = min(eff, days[ok_k])
@@ -422,7 +432,8 @@ def main(argv=None) -> int:
         print(f"::error::有資料項完全沒有列，無法決定完整日：{lasts}", file=sys.stderr)
         return 1
     cday_by_date = cday
-    cday, thin = rowcount_complete_day(merged, cday, official_rowcount if a.confirm_thin else None)
+    confirmed: set = set()
+    cday, thin = rowcount_complete_day(merged, cday, official_rowcount if a.confirm_thin else None, confirmed)
     if thin:
         print(f"::warning::完整日由 {cday_by_date.date()} 退回 {cday.date()}（列數不足，半邊殘缺）：{thin}", file=sys.stderr)
     cday_before_dup = cday
@@ -478,7 +489,7 @@ def main(argv=None) -> int:
             h.update(n.encode())
             h.update(pd.util.hash_pandas_object(pd.read_parquet(f), index=False).values.tobytes())
     closed_days, closed_src = closed_days_for_manifest()
-    manifest = {"complete_day": str(cday.date()), "cday_rows": cday_rows(merged, cday), "rowcount_fallback": thin, "closed_days": closed_days, "closed_days_source": closed_src, "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
+    manifest = {"complete_day": str(cday.date()), "cday_rows": cday_rows(merged, cday), "rowcount_fallback": thin, "rows_confirmed": sorted(k for k, d in confirmed if d == cday), "closed_days": closed_days, "closed_days_source": closed_src, "input_hash": h.hexdigest(), "last_dates": lasts, "pending_after_complete_day": pending,
                 "events_through": str(ev_through.date()) if ev_through is not None else None,
                 "events_gap_days": gap_days, "gaps": gaps,
                 "events_from_daily": ev_from_daily,

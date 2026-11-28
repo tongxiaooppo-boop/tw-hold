@@ -139,6 +139,24 @@ def test_完整日列數相對已發佈縮水超過10pct要擋(tmp_path):
     assert not any("raw_prices.TW " in e for e in errs)
 
 
+def test_列數縮水容許依表_法人10pct_日線5pct(tmp_path):
+    p = tmp_path / "a.zip"
+    _zip(p)
+    man = {**MAN, "cday_rows": {"inst.TWO": 755, "raw_prices.TWO": 800}}
+    pub = {"complete_day": "2026-10-06", "cday_rows": {"inst.TWO": 808, "raw_prices.TWO": 862}}   # 都約 -7%
+    errs, _ = zg.check(p, man, RAW, pub)
+    assert any("raw_prices.TWO" in e for e in errs) and not any("inst.TWO" in e for e in errs)
+
+
+def test_merge重抓確認過的鍵不比縮水(tmp_path):
+    p = tmp_path / "a.zip"
+    _zip(p)
+    man = {**MAN, "cday_rows": {"inst.TW": 916}, "rows_confirmed": ["inst.TW"]}
+    pub = {"complete_day": "2026-10-06", "cday_rows": {"inst.TW": 1039}}
+    errs, _ = zg.check(p, man, RAW, pub)
+    assert not any("inst.TW" in e for e in errs)
+
+
 def test_補位未分類不算有產業別_來源全斷時閘門仍要擋(tmp_path):
     """universe 與 carry 都拿不到 → 近期交易個股全被補成『未分類（新上市）』；不能讓補位標籤蒙混過下限。"""
     rows = ["ticker,code,name,market,sector"]

@@ -29,7 +29,8 @@ import pandas as pd
 
 ANCHORS = {"0050": "TW", "2330": "TW", "6488": "TWO"}
 SHRINK_TOL = 0.02
-ROWS_TOL = 0.10            # 完整日各表各市場列數相對已發佈那包的容許縮水（merge 已用 90% 退回，這裡是 zip 層的第二道；2026-11-28 由 0.05 放寬，上櫃法人日間可從 808 掉到 755）
+ROWS_TOL = {"inst": 0.10}  # 完整日各表各市場列數相對已發佈那包的容許縮水，預設 0.05（merge 已退回殘缺日，這裡是 zip 層第二道）；
+ROWS_TOL_DEFAULT = 0.05    # 2026-11-28 只放寬法人（上櫃日間可 808→755）；merge 重抓確認過的鍵（manifest rows_confirmed）不比
 # stock_list 名稱／產業別守門：tw-swing 用 `sector.notna()` 判個股，sector 空掉 = 全宇宙零候選（靜默）
 MIN_SECTOR_ABS = 1500      # 個股約 1,968 檔；低於這個絕對下限一律擋
 MIN_NAMED_ABS = 1800
@@ -114,10 +115,14 @@ def check(zip_path: Path, manifest: dict, raw: pd.DataFrame, published: dict | N
         old = (published.get("zip") or {}).get("price_files")
         if old and stats["price_files"] < old * (1 - SHRINK_TOL):
             errs.append(f"日線檔數縮水：{stats['price_files']} < 已發佈 {old} × {1 - SHRINK_TOL}")
+        confirmed = set(manifest.get("rows_confirmed") or [])
         for k, n in (manifest.get("cday_rows") or {}).items():
+            if k in confirmed:                      # merge 已向官方重抓確認這天就是這麼多列
+                continue
+            tol = ROWS_TOL.get(k.split(".")[0], ROWS_TOL_DEFAULT)
             oldn = (published.get("cday_rows") or {}).get(k)
-            if oldn and n < oldn * (1 - ROWS_TOL):
-                errs.append(f"完整日列數縮水（半邊殘缺？）：{k} {n} < 已發佈完整日 {oldn} × {1 - ROWS_TOL}")
+            if oldn and n < oldn * (1 - tol):
+                errs.append(f"完整日列數縮水（半邊殘缺？）：{k} {n} < 已發佈完整日 {oldn} × {1 - tol}")
         for k, label in (("stock_list_sector", "產業別"), ("stock_list_named", "名稱")):
             oldn = (published.get("zip") or {}).get(k)
             if oldn and stats.get(k, 0) < oldn * (1 - SHRINK_TOL):

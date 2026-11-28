@@ -111,8 +111,11 @@ jobs:
           OLD=$(python -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8')).get('input_hash',''))" "$P/merge_manifest.json" 2>/dev/null || true)
           echo "新 $NEW／已發佈 ${OLD:-（無）}"
           if [ "${{ inputs.force }}" != "true" ] && [ -n "$OLD" ] && [ "$NEW" = "$OLD" ]; then
-            echo "內容沒變，不重做；只更新來源戳記"; echo "skip=true" >> "$GITHUB_OUTPUT"
-            gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            # 有退回（列數不足／融資複本）時不更新戳記：來源沒變也要讓下一班再試（重抓確認可能這次網路失敗）
+            FB=$(python -c "import json,sys; print(len(json.load(open(sys.argv[1],encoding='utf-8')).get('rowcount_fallback') or {}))" "$M/merge_manifest.json")
+            if [ "$FB" = "0" ]; then echo "內容沒變，不重做；只更新來源戳記"; gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+            else echo "內容沒變，不重做；有 $FB 項退回，不更新來源戳記（下一班重試）"; fi
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -161,7 +164,9 @@ jobs:
           gh release upload datapack-selfhost "$M/stock_list_named.csv" --clobber
           gh release upload datapack-selfhost "$M/adjust_log.csv" --clobber
           gh release upload datapack-selfhost "$M/merge_manifest.json" --clobber
-          gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+          FB=$(python -c "import json,sys; print(len(json.load(open(sys.argv[1],encoding='utf-8')).get('rowcount_fallback') or {}))" "$M/merge_manifest.json")
+          if [ "$FB" = "0" ]; then gh release upload datapack-selfhost "$M/source_stamp.txt" --clobber
+          else echo "有 $FB 項退回，不更新來源戳記（下一班重試）"; fi
 
       # B10 事件接力：資料包發佈後通知 tw-swing 跑每日掃描（不吃 GitHub 排程延遲：資料一好就叫 swing）。
       # **開關**：repo 變數 `TRIGGER_SWING` 不是 'true' 就不做任何事；回滾＝刪掉這個變數（不用改程式）。

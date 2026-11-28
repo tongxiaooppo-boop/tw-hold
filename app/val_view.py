@@ -293,7 +293,8 @@ def card_view(card: dict, label: str, meta: Optional[dict]) -> CardView:
                                  (tuple(fmt_eps(r["eps"]) for r in ey["years"]) + (fmt_eps(ey["avg"]),),) + events)
             if events or ey.get("after"):
                 years_note = "舊年度已按現在股數換算（只換算配股、減資、分割）" + (
-                    f"；之後：{ey['after']}，已計入" if ey.get("after") else "")
+                    f"；之後：{ey['after']}" + ("" if all("不還原" in x for x in ey["after"].split("、")) else "，已計入")
+                    if ey.get("after") else "")
             if ey.get("avg_raw") is not None:
                 years_table_raw = VTable(title, "strip", heads,
                                          (tuple(fmt_eps(r.get("eps_raw")) for r in ey["years"])

@@ -144,3 +144,9 @@ def test_val_inputs保留原始EPS():
     from app import val_inputs
     src = inspect.getsource(val_inputs.quarterly)
     assert 'q["eps_raw"] = q["eps"]' in src and src.index("eps_raw") < src.index("adjust_eps(q)")
+
+
+def test_之後只有現金減資_小字不寫已計入(monkeypatch):
+    monkeypatch.setitem(vc.ca.SPLITS, "9999", [dict(date="2026-09-01", type="cap_reduction", m=None, pf=0.9)])
+    v = vv.card_view(_card(vc.eps_years(_with_raw(_q(2019, 2026)), pd.Timestamp("2026-11-22"), "9999")), "9999 測試", None)
+    assert v.eps.years_note == "舊年度已按現在股數換算（只換算配股、減資、分割）；之後：26/09 現金減資（不還原）"
