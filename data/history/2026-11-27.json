@@ -2,6 +2,30 @@
  "schema": 1,
  "asof": "2026-11-27",
  "lines": {
+  "short": {
+   "origin": "live",
+   "status": "ok",
+   "note": "",
+   "n": 2,
+   "scanned": 622,
+   "candidates": [
+    {
+     "t": "1477",
+     "nm": "聚陽",
+     "px": 235.0,
+     "fs": "2026-11-27",
+     "st": 1
+    },
+    {
+     "t": "2504",
+     "nm": "國產",
+     "px": 32.65,
+     "fs": "2026-11-27",
+     "st": 1
+    }
+   ],
+   "revisions": []
+  },
   "long": {
    "origin": "live",
    "status": "ok",
