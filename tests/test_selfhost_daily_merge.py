@@ -168,6 +168,20 @@ def test_列數正常或小幅波動不退回():
     assert cday == pd.Timestamp("2026-10-08") and not why
 
 
+def test_上櫃法人清淡日94趴不退回_2026_11_27實例():
+    base = {"2026-11-20": 808, "2026-11-23": 800, "2026-11-24": 804, "2026-11-25": 781, "2026-11-26": 773}
+    merged = {"inst": _cnt_tbl({**base, "2026-11-27": 755}, "TWO")}           # 755／800＝94.4%，官方真實值
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-11-27"))
+    assert cday == pd.Timestamp("2026-11-27") and not why
+
+
+def test_只回八成五仍要退回():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 85}, "TWO")}
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"))
+    assert cday == pd.Timestamp("2026-10-07") and "inst.TWO" in why
+
+
 def test_連續兩天殘缺退到最後一個正常日():
     ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100}
     merged = {"margin": _cnt_tbl({**ok, "2026-10-07": 30, "2026-10-08": 30}, "TW")}

@@ -126,7 +126,9 @@ def complete_day(lasts: dict[str, str | None]) -> pd.Timestamp | None:
 
 
 ROWS_LOOKBACK = 5        # 比較對象：該表該市場「實際有資料」的前 5 個交易日（不是日曆日，週末連假不會拉低中位數）
-ROWS_MIN_RATIO = 0.95    # 實測 openapi 10/06～10/14：法人上櫃最低約為中位數的 0.988，95% 夠用，不要調 98%
+ROWS_MIN_RATIO = 0.90    # 2026-11-28 由 0.95 降：上櫃法人 11/10～11/27 官方實際 755～808 列，11/27 官方 755 < 800×0.95 被誤擋（重抓仍 755）；
+                         # 要擋的是「只回一半」（例 450／870），90% 仍擋得住
+
 
 
 def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> tuple[pd.Timestamp, dict[str, str]]:

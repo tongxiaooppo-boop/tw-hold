@@ -129,7 +129,7 @@ def test_zip缺stock_list要擋(tmp_path):
     assert any("stock_list" in e for e in errs)
 
 
-def test_完整日列數相對已發佈縮水超過5pct要擋(tmp_path):
+def test_完整日列數相對已發佈縮水超過10pct要擋(tmp_path):
     p = tmp_path / "a.zip"
     _zip(p)
     man = {**MAN, "cday_rows": {"raw_prices.TWO": 400, "raw_prices.TW": 1090}}

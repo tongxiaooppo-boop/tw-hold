@@ -29,7 +29,7 @@ import pandas as pd
 
 ANCHORS = {"0050": "TW", "2330": "TW", "6488": "TWO"}
 SHRINK_TOL = 0.02
-ROWS_TOL = 0.05            # 完整日各表各市場列數相對已發佈那包的容許縮水（merge 已用 95% 退回，這裡是 zip 層的第二道）
+ROWS_TOL = 0.10            # 完整日各表各市場列數相對已發佈那包的容許縮水（merge 已用 90% 退回，這裡是 zip 層的第二道；2026-11-28 由 0.05 放寬，上櫃法人日間可從 808 掉到 755）
 # stock_list 名稱／產業別守門：tw-swing 用 `sector.notna()` 判個股，sector 空掉 = 全宇宙零候選（靜默）
 MIN_SECTOR_ABS = 1500      # 個股約 1,968 檔；低於這個絕對下限一律擋
 MIN_NAMED_ABS = 1800
