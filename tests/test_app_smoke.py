@@ -433,3 +433,8 @@ def test_回測報告分頁():
     assert {f for _, f, _ in report_view.REPORTS} <= set(report_view.CARDS)
     html = " ".join(m.value for m in at.markdown)
     assert "rp-verdict" in html and html.count("rp-card") == len(report_view.REPORTS)
+    # 2026-11-28 晚：個股波段 v6——md 裡兩個圖表標記都有資料、切段後兩張圖
+    parts = report_view.split_report(report_view.read_report("swing_stock_v6.md"))
+    keys = [v for k, v in parts if k == "chart"]
+    assert keys == ["nav", "oos"] and set(keys) <= set(report_view.read_charts("swing_stock_v6.md"))
+    assert "chart:" not in html
