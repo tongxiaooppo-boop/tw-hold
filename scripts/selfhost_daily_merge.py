@@ -129,15 +129,38 @@ ROWS_LOOKBACK = 5        # 比較對象：該表該市場「實際有資料」�
 ROWS_MIN_RATIO = 0.90    # 2026-11-28 由 0.95 降：上櫃法人 11/10～11/27 官方實際 755～808 列，11/27 官方 755 < 800×0.95 被誤擋（重抓仍 755）；
                          # 要擋的是「只回一半」（例 450／870），90% 仍擋得住
 
+ROWS_CONFIRM_FLOOR = 0.75  # 列數不足時向官方重抓確認；官方列數與手上一致**且**不低於中位數 75% 才放行
+                           # （官方自己只回一半時重抓也一樣，不能靠重抓放行）
 
 
-def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -> tuple[pd.Timestamp, dict[str, str]]:
+def official_rowcount(name: str, mk: str, day: pd.Timestamp) -> int | None:
+    """向官方重抓該表該市場那一天，回列數；抓不到或不支援回 None（＝無法確認，照舊退回）。"""
+    d = pd.Timestamp(day).date()
+    try:
+        if name in ("inst", "margin"):
+            import selfhost_chips as sc
+            df = sc.SOURCES[name][2][mk](d)
+        elif name == "raw_prices":
+            import selfhost_raw_prices as rp
+            df = (rp.fetch_twse if mk == "TW" else rp.fetch_tpex)(d)
+        else:
+            return None
+    except Exception as e:  # noqa: BLE001 — 確認失敗只是不放行，不該讓整支併入失敗
+        print(f"::warning::重抓確認 {name}.{mk} {d} 失敗：{e}", file=sys.stderr)
+        return None
+    return None if df is None else len(df)
+
+
+def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp,
+                          confirm=None) -> tuple[pd.Timestamp, dict[str, str]]:
     """只看最後日期會讓「半邊殘缺」的一天通過（例：上櫃日線只回 450 列、平常約 870，完整日照樣前進，
     約 440 檔上櫃股靜默缺席）。這裡對每個（表, 市場）從 `cday` 往前找第一個「列數 ≥ 前 5 個有資料交易日
-    中位數 × 0.95」的日子，整體完整日取最小值。
+    中位數 × ROWS_MIN_RATIO」的日子，整體完整日取最小值。
 
     **退回而不是失敗**：殘缺的那天落到 `pending_after_complete_day`（完整日之後不收），延續「只發佈完整日」
     的語意；退回太多天才由 selfhost_freshness 亮紅燈。前面不足 3 個交易日可比時視為正常。
+    `confirm(name, mk, day) -> 官方列數|None`（2026-11-28 加）：列數不足的那天向官方重抓，列數與手上相同且
+    ≥ 中位數 × ROWS_CONFIRM_FLOOR 就當清淡日放行（例 11/27 上櫃法人官方就是 755 列）；None＝不確認。
     回 (新完整日, {表.市場: 退回原因})。"""
     eff = cday
     why: dict[str, str] = {}
@@ -154,6 +177,15 @@ def rowcount_complete_day(merged: dict[str, pd.DataFrame], cday: pd.Timestamp) -
                 if len(prev) < 3 or cnt.iloc[k] >= ROWS_MIN_RATIO * prev.median():
                     ok_k = k
                     break
+                n_have = int(cnt.iloc[k])
+                if confirm is not None and n_have >= ROWS_CONFIRM_FLOOR * prev.median():
+                    n_off = confirm(name, mk, days[k])
+                    if n_off is not None and n_off == n_have:
+                        print(f"  [rows] {name}.{mk} {days[k].date()} {n_have} 列 < 中位數 {prev.median():.0f} × {ROWS_MIN_RATIO}，"
+                              f"官方重抓同為 {n_off} 列 → 清淡日放行")
+                        ok_k = k
+                        break
+                    print(f"  [rows] {name}.{mk} {days[k].date()} 官方重抓 {n_off} 列、手上 {n_have} 列 → 不放行")
                 why.setdefault(f"{name}.{mk}", f"{days[k].date()} 只有 {int(cnt.iloc[k])} 列 < 前{len(prev)}日中位數 {prev.median():.0f} × {ROWS_MIN_RATIO}")
             if ok_k is None:                       # 整段都比不過（不該發生）：退到最早一天，讓閘門／新鮮度擋
                 ok_k = 0
@@ -366,6 +398,7 @@ def main(argv=None) -> int:
     ap.add_argument("--weekly-dir", default=str(SH))
     ap.add_argument("--daily-dir", default=str(SH))
     ap.add_argument("--out-dir", default=str(SH / "merged"))
+    ap.add_argument("--confirm-thin", action="store_true", help="列數不足的日子向官方重抓確認（CI 用；本機測試不連網）")
     ap.add_argument("--weekly-corp-updated", default="", help="週收集事件表（corp_actions.parquet）的資產更新時間 ISO（UTC）；"
                     "用來判斷每日事件列與週收集誰較新。沒給就用週收集日線最後一天 21:00 UTC 當代理")
     a = ap.parse_args(argv)
@@ -389,7 +422,7 @@ def main(argv=None) -> int:
         print(f"::error::有資料項完全沒有列，無法決定完整日：{lasts}", file=sys.stderr)
         return 1
     cday_by_date = cday
-    cday, thin = rowcount_complete_day(merged, cday)
+    cday, thin = rowcount_complete_day(merged, cday, official_rowcount if a.confirm_thin else None)
     if thin:
         print(f"::warning::完整日由 {cday_by_date.date()} 退回 {cday.date()}（列數不足，半邊殘缺）：{thin}", file=sys.stderr)
     cday_before_dup = cday

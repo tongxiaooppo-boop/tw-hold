@@ -182,6 +182,39 @@ def test_只回八成五仍要退回():
     assert cday == pd.Timestamp("2026-10-07") and "inst.TWO" in why
 
 
+def test_重抓確認官方同列數就放行():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 85}, "TWO")}
+    calls = []
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"),
+                                         lambda n, mk, d: calls.append((n, mk, d)) or 85)
+    assert cday == pd.Timestamp("2026-10-08") and not why
+    assert calls == [("inst", "TWO", pd.Timestamp("2026-10-08"))]
+
+
+def test_重抓官方較多就不放行():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 85}, "TWO")}
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"), lambda n, mk, d: 98)
+    assert cday == pd.Timestamp("2026-10-07") and "inst.TWO" in why
+
+
+def test_重抓失敗回None就不放行():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"inst": _cnt_tbl({**ok, "2026-10-08": 85}, "TWO")}
+    cday, _ = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"), lambda n, mk, d: None)
+    assert cday == pd.Timestamp("2026-10-07")
+
+
+def test_只回一半就算官方同列數也不放行_也不去重抓():
+    ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100, "2026-10-07": 100}
+    merged = {"raw_prices": _cnt_tbl({**ok, "2026-10-08": 50}, "TWO")}
+    calls = []
+    cday, why = dm.rowcount_complete_day(merged, pd.Timestamp("2026-10-08"),
+                                         lambda n, mk, d: calls.append(1) or 50)
+    assert cday == pd.Timestamp("2026-10-07") and "raw_prices.TWO" in why and not calls
+
+
 def test_連續兩天殘缺退到最後一個正常日():
     ok = {"2026-10-01": 100, "2026-10-02": 100, "2026-10-05": 100, "2026-10-06": 100}
     merged = {"margin": _cnt_tbl({**ok, "2026-10-07": 30, "2026-10-08": 30}, "TW")}
