@@ -410,3 +410,22 @@ def test_growth_rank_section_有資料():
     app._growth_rank_section({"growth": {"month": "2026-10", "published": 1, "total": 1,
         "provisional": True, "excluded_construction": 0, "rows": [
             {"ticker": "2330", "name": "台積電", "rev_m_yoy": 0.3, "rev_mom": -0.05, "mom_warn": True}]}})
+
+
+def test_回測報告分頁():
+    """2026-11-28：回測報告分頁——研究報告兩份在上、各分頁回測在下，原分頁不變。"""
+    import sys
+    sys.path.insert(0, "app")
+    import streamlit_app as app
+    from app import report_view
+    assert app.NAV[-1] == "回測報告"
+    for _, fname, _ in report_view.REPORTS:
+        assert (report_view.REPORT_DIR / fname).exists(), fname
+    labels = [l for l, _ in report_view.app_backtests(app.BACKTEST_NOTES)]
+    assert labels and set(labels) <= {"短線", "長波段", "價值", "定存"}
+    at = _run()
+    at.radio(key="_nav").set_value("回測報告").run()
+    assert not at.exception
+    titles = [e.label for e in at.expander]
+    assert titles[0].endswith("找策略（每段大跌一份預算）") and "帳戶回測" in titles[1]
+    assert len(titles) == 2 + len(labels)

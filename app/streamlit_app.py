@@ -26,7 +26,7 @@ for _p in (str(REPO), str(REPO / "app")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from app import etf_view, refresh_window, val_inputs, val_view
+from app import etf_view, refresh_window, report_view, val_inputs, val_view
 from screener import river, val_card
 
 LOCAL_ADVANCED = bool(os.environ.get("FINMIND_TOKEN")) or (REPO / ".env").exists()
@@ -4266,7 +4266,7 @@ def _macro_compass_page() -> None:
 APP_NAME = "股市雷達"          # repo 仍叫 tw-hold；網頁表頭用這個（非投顧語氣，2026-09-11 改名）
 # 2026-11-02 使用者：估值（含月營收的估值價差排序）有疑慮，月營收入口先關；程式保留，改 True 即恢復
 REVENUE_PAGE_ON = False
-NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "估值排行", "月營收", "個股查詢", "多軌體檢", "ETF", "主動式 ETF"]
+NAV = [n for n in ["總經導航", "短線", "長波段", "價值", "定存", "估值排行", "月營收", "個股查詢", "多軌體檢", "ETF", "主動式 ETF", "回測報告"]
        if REVENUE_PAGE_ON or n != "月營收"]
 
 
@@ -4383,6 +4383,8 @@ def main() -> None:
         _etf_page(_load("etf.json"))
     elif nav == "主動式 ETF":
         _active_etf_page()
+    elif nav == "回測報告":      # 2026-11-28：研究報告在上、各分頁回測在下；原分頁不變
+        report_view.render(st, BACKTEST_NOTES)
     else:
         _macro_compass_page()
 
